@@ -10,37 +10,62 @@ Fletcher will be built as an **OpenClaw Channel Plugin** (`@openclaw/channel-liv
 - Single deployment
 - Access to all OpenClaw features
 
-## Monorepo Structure
+## Monorepo Structure (Following Industry Best Practices)
+
+This structure follows the **package-centric + app-centric hybrid** pattern, which is the industry standard for monorepos containing both libraries and applications.
+
+### Why This Structure?
+
+**`packages/`** - Reusable libraries (published to registries)
+- Contains code that will be **published** (npm, pub.dev, etc.)
+- Used by: Nx, Turborepo, pnpm workspaces, Lerna, Yarn workspaces
+- Example: `@openclaw/channel-livekit` - published to npm
+
+**`apps/`** - Deployable applications (end-user products)
+- Contains **buildable and deployable** applications
+- NOT published to package registries
+- Example: `mobile` - Flutter app distributed via app stores
+
+**Not Recommended**:
+- ❌ Organizing by language (`typescript/`, `dart/`) - Provides no functional meaning
+- ❌ Flat structure (`plugin/`, `app/` at root) - Doesn't scale, unclear purpose
+- ❌ Everything in `packages/` - Confuses libraries with applications
+
+### References
+- [Nx Monorepo Structure](https://nx.dev/blog/setup-a-monorepo-with-pnpm-workspaces-and-speed-it-up-with-nx)
+- [Monorepo Tools Guide](https://monorepo.tools/)
+- [Multi-language Monorepo Management](https://graphite.com/guides/managing-multiple-languages-in-a-monorepo)
 
 ```
 fletcher/
-├── packages/
-│   ├── openclaw-channel-livekit/     # OpenClaw channel plugin (npm package)
-│   │   ├── package.json              # @openclaw/channel-livekit - MANAGED BY BUN
-│   │   ├── tsconfig.json
-│   │   ├── node_modules/             # Bun workspace (isolated mode)
-│   │   ├── src/
-│   │   │   ├── index.ts              # Plugin entry point
-│   │   │   ├── channel.ts            # Channel implementation
-│   │   │   ├── config.ts             # Configuration schema
-│   │   │   ├── livekit/
-│   │   │   │   ├── connection.ts     # LiveKit room management
-│   │   │   │   ├── participant.ts    # Participant handling
-│   │   │   │   └── audio.ts          # Audio track management
-│   │   │   ├── pipeline/
-│   │   │   │   ├── stt.ts            # Speech-to-text
-│   │   │   │   ├── tts.ts            # Text-to-speech
-│   │   │   │   └── buffer.ts         # Audio buffering
-│   │   │   └── types.ts              # TypeScript types
-│   │   ├── skills/                   # Optional OpenClaw skills
-│   │   │   └── voice-call/
-│   │   │       └── SKILL.md
-│   │   ├── tests/
-│   │   │   ├── unit/
-│   │   │   └── integration/
-│   │   └── README.md
-│   │
-│   └── fletcher-app/                 # Flutter mobile app - INDEPENDENT
+├── packages/                         # Reusable libraries (published to npm)
+│   └── openclaw-channel-livekit/     # OpenClaw channel plugin
+│       ├── package.json              # @openclaw/channel-livekit - MANAGED BY BUN
+│       ├── tsconfig.json
+│       ├── node_modules/             # Bun workspace (isolated mode)
+│       ├── src/
+│       │   ├── index.ts              # Plugin entry point
+│       │   ├── channel.ts            # Channel implementation
+│       │   ├── config.ts             # Configuration schema
+│       │   ├── livekit/
+│       │   │   ├── connection.ts     # LiveKit room management
+│       │   │   ├── participant.ts    # Participant handling
+│       │   │   └── audio.ts          # Audio track management
+│       │   ├── pipeline/
+│       │   │   ├── stt.ts            # Speech-to-text
+│       │   │   ├── tts.ts            # Text-to-speech
+│       │   │   └── buffer.ts         # Audio buffering
+│       │   └── types.ts              # TypeScript types
+│       ├── skills/                   # Optional OpenClaw skills
+│       │   └── voice-call/
+│       │       └── SKILL.md
+│       ├── tests/
+│       │   ├── unit/
+│       │   └── integration/
+│       └── README.md
+│
+├── apps/                             # Deployable applications
+│   └── mobile/                       # Flutter mobile app
 │       ├── pubspec.yaml              # Dart/Flutter packages - MANAGED BY PUB
 │       ├── .dart_tool/               # Flutter tooling (NOT Bun)
 │       ├── lib/
@@ -94,32 +119,33 @@ Using Bun's built-in package manager for monorepo:
 
 ### Monorepo Setup
 - [ ] Initialize git repository
-- [ ] Create monorepo structure with packages/ directory
-- [ ] Set up Bun workspace with isolated mode (plugin only)
+- [ ] Create monorepo structure: `packages/` and `apps/` directories
+- [ ] Set up Bun workspace with isolated mode (for packages/ only)
 - [ ] Create root package.json with workspace and strict mode configuration
 - [ ] Create .gitignore:
   - [ ] JavaScript: node_modules/, dist/, .env, bun.lockb
   - [ ] Flutter: .dart_tool/, build/, *.g.dart, .flutter-plugins*
-- [ ] Run `bun install` to initialize plugin workspace (will use isolated installs)
+- [ ] Run `bun install` to initialize workspace (will use isolated installs)
 - [ ] Verify strict mode with `bun pm ls` (should show isolated structure)
 
 ### OpenClaw Plugin Package
-- [ ] Create packages/openclaw-channel-livekit/
-- [ ] Initialize package.json with openclaw.extensions
-- [ ] Set up TypeScript configuration
+- [ ] Create packages/openclaw-channel-livekit/ directory
+- [ ] Initialize package.json with openclaw.extensions field
+- [ ] Set up TypeScript configuration (tsconfig.json)
 - [ ] Create src/ directory structure
-- [ ] Add dependencies with `bun add livekit-server-sdk @deepgram/sdk @cartesia/cartesia-js`
+- [ ] Add dependencies: `bun add livekit-server-sdk @deepgram/sdk @cartesia/cartesia-js @sinclair/typebox`
 - [ ] Set up ESLint + Prettier for TypeScript
 - [ ] Create README.md with installation guide
+- [ ] **Note**: This is a library/package that will be published to npm
 
-### Flutter App Package (Independent - Not in Bun Workspace)
-- [ ] Create packages/fletcher-app/
-- [ ] Initialize Flutter project: `flutter create flutter-app` then move to packages/
+### Flutter Mobile Application (Independent - Not in Bun Workspace)
+- [ ] Create apps/mobile/ directory
+- [ ] Initialize Flutter project: `flutter create --org com.fletcher --project-name fletcher apps/mobile`
 - [ ] Add livekit_client dependency to pubspec.yaml
 - [ ] Set up directory structure (screens, services, widgets)
 - [ ] Configure Flutter linting (analysis_options.yaml)
 - [ ] Create README.md with setup instructions
-- [ ] **Note**: Does NOT use package.json, NOT managed by Bun, uses pub instead
+- [ ] **Note**: This is an application (not a library) - uses pub, not Bun
 
 ### Shared Configuration
 - [ ] Create tsconfig.base.json for shared TS settings
@@ -205,26 +231,28 @@ Thumbs.db
 
 ### Structure
 ```
-packages/
-├── openclaw-channel-livekit/   # JavaScript - Managed by Bun
-│   ├── package.json
-│   └── node_modules/
+fletcher/
+├── packages/                           # Reusable libraries
+│   └── openclaw-channel-livekit/       # Plugin - Managed by Bun
+│       ├── package.json
+│       └── node_modules/
 │
-└── fletcher-app/               # Dart - Managed by Flutter pub
-    ├── pubspec.yaml
-    └── .dart_tool/
+└── apps/                               # Deployable applications
+    └── mobile/                         # Flutter app - Managed by pub
+        ├── pubspec.yaml
+        └── .dart_tool/
 ```
 
 ### Implications
-- **Workspaces config**: Only includes `packages/openclaw-channel-livekit`
-- **Bun strict mode**: Only affects the plugin package, not Flutter app
-- **Dependencies**: Install separately for each
+- **Workspaces config**: Only includes `packages/*` (just the plugin)
+- **Bun strict mode**: Only affects packages in `packages/`, not apps in `apps/`
+- **Dependencies**: Install separately for each ecosystem
   ```bash
-  # Plugin dependencies
+  # Plugin dependencies (JavaScript/TypeScript)
   bun install
 
-  # Flutter app dependencies (in separate terminal)
-  cd packages/fletcher-app && flutter pub get
+  # Mobile app dependencies (Dart/Flutter) - in separate terminal
+  cd apps/mobile && flutter pub get
   ```
 
 ## Strict Dependency Isolation (Plugin Only)
@@ -275,20 +303,22 @@ Bun uses the standard `workspaces` field with strict mode enabled:
   "description": "Voice-first bridge for OpenClaw using LiveKit",
   "repository": "dremonkey/openclaw-plugin-livekit",
   "license": "MIT",
-  "workspaces": ["packages/openclaw-channel-livekit"],
+  "workspaces": ["packages/*"],
   "bun": {
     "install": {
       "linker": "isolated"
     }
   },
   "scripts": {
-    "build": "bun run --filter '*' build",
-    "test": "bun run --filter '*' test",
-    "lint": "bun run --filter '*' lint",
+    "build": "bun --cwd packages/openclaw-channel-livekit run build",
+    "test": "bun --cwd packages/openclaw-channel-livekit run test",
+    "lint": "bun --cwd packages/openclaw-channel-livekit run lint",
     "format": "prettier --write '**/*.{ts,tsx,js,json,md}'",
     "plugin:dev": "bun --cwd packages/openclaw-channel-livekit run dev",
     "plugin:build": "bun --cwd packages/openclaw-channel-livekit run build",
-    "app:dev": "cd packages/fletcher-app && flutter run"
+    "mobile:dev": "cd apps/mobile && flutter run",
+    "mobile:build:android": "cd apps/mobile && flutter build apk",
+    "mobile:build:ios": "cd apps/mobile && flutter build ios"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
@@ -345,23 +375,23 @@ Bun uses the standard `workspaces` field with strict mode enabled:
 
 ### Local Development
 ```bash
-# Install all dependencies (root and all workspaces)
+# Install all dependencies (root and all packages/*)
 bun install
 
-# Build plugin
+# Develop plugin (watch mode)
 bun run plugin:dev
 
 # Build plugin (one-time)
 bun run plugin:build
 
 # Run Flutter app (separate terminal)
-bun run app:dev
-# Or directly: cd packages/fletcher-app && flutter run
+bun run mobile:dev
+# Or directly: cd apps/mobile && flutter run
 
-# Run tests
-bun test
+# Run plugin tests
+bun run test
 
-# Lint everything
+# Lint plugin code
 bun run lint
 ```
 
@@ -377,24 +407,65 @@ bun add @openclaw/channel-livekit
 
 ### Bun Workspace Commands
 ```bash
-# Install dependency in specific package
+# Install dependency in plugin package
 bun add --cwd packages/openclaw-channel-livekit some-package
 
-# Run script in specific package
+# Run script in plugin package
 bun --cwd packages/openclaw-channel-livekit run build
 
-# Run script in all packages
-bun run --filter '*' build
+# List all workspace packages
+bun pm ls
 ```
 
+## Multi-Language Monorepo Considerations
+
+### Language Separation
+- **JavaScript/TypeScript** (packages/*): Managed by Bun, builds with `tsc`
+- **Dart/Flutter** (apps/*): Managed by Flutter pub, builds with `flutter build`
+- **No shared dependencies** between languages - completely independent
+
+### Build Orchestration
+Each language uses its own build tool:
+```bash
+# Plugin build (TypeScript → JavaScript)
+bun --cwd packages/openclaw-channel-livekit run build
+
+# Mobile build (Dart → APK/IPA)
+cd apps/mobile && flutter build apk
+```
+
+### CI/CD Strategy
+- Separate workflows for packages and apps
+- Use path filters to only run relevant builds:
+  ```yaml
+  # .github/workflows/plugin-ci.yml
+  on:
+    push:
+      paths:
+        - 'packages/**'
+
+  # .github/workflows/mobile-ci.yml
+  on:
+    push:
+      paths:
+        - 'apps/mobile/**'
+  ```
+
+### Versioning Strategy
+- **Plugin**: Semantic versioning (npm standard)
+- **Mobile app**: Platform-specific versioning (versionCode/CFBundleVersion)
+- **Independent releases**: Each can be released separately
+
 ## Success Criteria
-- ✅ Monorepo structure created with proper workspace configuration
+- ✅ Monorepo structure follows industry best practices (`packages/` + `apps/`)
 - ✅ Plugin package follows OpenClaw plugin conventions
-- ✅ Flutter app properly structured
-- ✅ CI/CD pipelines run on push/PR
-- ✅ Linting and formatting enforced
+- ✅ Flutter app properly structured in `apps/`
+- ✅ Bun workspace only includes JavaScript/TypeScript packages
+- ✅ CI/CD pipelines use path filters for efficient builds
+- ✅ Linting and formatting enforced per-language
 - ✅ Documentation complete and clear
 - ✅ Examples provided for easy setup
+- ✅ Multi-language setup allows independent development and releases
 
 ## Notes
 
@@ -429,9 +500,12 @@ bun run --filter '*' build
 # List all installed packages
 bun pm ls
 
-# Check what packages are accessible in a workspace
+# Check what packages are accessible in plugin
 bun --cwd packages/openclaw-channel-livekit pm ls
 
-# View dependency tree
+# View full dependency tree
 bun pm ls --all
+
+# Check if isolated mode is active (look for configVersion: 1)
+cat bun.lockb | head -20
 ```
