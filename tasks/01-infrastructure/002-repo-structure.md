@@ -16,8 +16,9 @@ Fletcher will be built as an **OpenClaw Channel Plugin** (`@openclaw/channel-liv
 fletcher/
 ├── packages/
 │   ├── openclaw-channel-livekit/     # OpenClaw channel plugin (npm package)
-│   │   ├── package.json              # @openclaw/channel-livekit
+│   │   ├── package.json              # @openclaw/channel-livekit - MANAGED BY BUN
 │   │   ├── tsconfig.json
+│   │   ├── node_modules/             # Bun workspace (isolated mode)
 │   │   ├── src/
 │   │   │   ├── index.ts              # Plugin entry point
 │   │   │   ├── channel.ts            # Channel implementation
@@ -39,8 +40,9 @@ fletcher/
 │   │   │   └── integration/
 │   │   └── README.md
 │   │
-│   └── fletcher-app/                 # Flutter mobile app
-│       ├── pubspec.yaml
+│   └── fletcher-app/                 # Flutter mobile app - INDEPENDENT
+│       ├── pubspec.yaml              # Dart/Flutter packages - MANAGED BY PUB
+│       ├── .dart_tool/               # Flutter tooling (NOT Bun)
 │       ├── lib/
 │       │   ├── main.dart
 │       │   ├── screens/
@@ -72,8 +74,9 @@ fletcher/
 │       └── app-ci.yml                # CI for Flutter app
 │
 ├── package.json                      # Workspace root (with workspaces field)
+├── bun.lockb                         # Bun lockfile
 ├── tsconfig.base.json                # Shared TypeScript config
-├── .gitignore
+├── .gitignore                        # Both JS and Flutter ignores
 ├── LICENSE
 └── README.md
 ```
@@ -85,16 +88,20 @@ Using Bun's built-in package manager for monorepo:
 - 4-8x faster installs than pnpm
 - Unified runtime and package manager
 - Simpler toolchain (one tool instead of two)
+- **Strict mode enabled** - Isolated installs prevent phantom dependencies
 
 ## Implementation Checklist
 
 ### Monorepo Setup
 - [ ] Initialize git repository
 - [ ] Create monorepo structure with packages/ directory
-- [ ] Set up Bun workspaces
-- [ ] Create root package.json with workspace configuration
-- [ ] Create .gitignore (node_modules, .env, etc.)
-- [ ] Run `bun install` to initialize workspace
+- [ ] Set up Bun workspace with isolated mode (plugin only)
+- [ ] Create root package.json with workspace and strict mode configuration
+- [ ] Create .gitignore:
+  - [ ] JavaScript: node_modules/, dist/, .env, bun.lockb
+  - [ ] Flutter: .dart_tool/, build/, *.g.dart, .flutter-plugins*
+- [ ] Run `bun install` to initialize plugin workspace (will use isolated installs)
+- [ ] Verify strict mode with `bun pm ls` (should show isolated structure)
 
 ### OpenClaw Plugin Package
 - [ ] Create packages/openclaw-channel-livekit/
@@ -105,13 +112,14 @@ Using Bun's built-in package manager for monorepo:
 - [ ] Set up ESLint + Prettier for TypeScript
 - [ ] Create README.md with installation guide
 
-### Flutter App Package
+### Flutter App Package (Independent - Not in Bun Workspace)
 - [ ] Create packages/fletcher-app/
-- [ ] Initialize Flutter project (flutter create)
-- [ ] Add livekit_client dependency
+- [ ] Initialize Flutter project: `flutter create flutter-app` then move to packages/
+- [ ] Add livekit_client dependency to pubspec.yaml
 - [ ] Set up directory structure (screens, services, widgets)
 - [ ] Configure Flutter linting (analysis_options.yaml)
 - [ ] Create README.md with setup instructions
+- [ ] **Note**: Does NOT use package.json, NOT managed by Bun, uses pub instead
 
 ### Shared Configuration
 - [ ] Create tsconfig.base.json for shared TS settings
@@ -126,11 +134,42 @@ Using Bun's built-in package manager for monorepo:
 - [ ] Document Flutter app setup
 - [ ] Add contribution guidelines
 
-### Examples
+### Examples & Configuration Files
 - [ ] Create examples/ directory
 - [ ] Add example openclaw.json configuration
 - [ ] Add docker-compose.yml for LiveKit server
 - [ ] Add example .env file (with placeholders)
+- [ ] Create .gitignore with both JS and Flutter patterns:
+```gitignore
+# JavaScript / TypeScript (Bun/Node)
+node_modules/
+dist/
+*.log
+.env
+.env.local
+bun.lockb
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+*.g.dart
+*.freezed.dart
+pubspec.lock
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+```
 
 ### CI/CD (GitHub Actions)
 - [ ] Create .github/workflows/ directory
@@ -155,11 +194,79 @@ Using Bun's built-in package manager for monorepo:
   - [ ] Run Flutter analyze on Dart files
   - [ ] Run Prettier
 
+## Flutter App Independence
+
+**Important**: The Flutter app (Dart) is **NOT part of the Bun workspace**.
+
+### Why?
+- Flutter uses `pubspec.yaml` + `pub` package manager (Dart ecosystem)
+- Bun workspaces only manage JavaScript/TypeScript packages (package.json)
+- These are two separate ecosystems that don't interact
+
+### Structure
+```
+packages/
+├── openclaw-channel-livekit/   # JavaScript - Managed by Bun
+│   ├── package.json
+│   └── node_modules/
+│
+└── fletcher-app/               # Dart - Managed by Flutter pub
+    ├── pubspec.yaml
+    └── .dart_tool/
+```
+
+### Implications
+- **Workspaces config**: Only includes `packages/openclaw-channel-livekit`
+- **Bun strict mode**: Only affects the plugin package, not Flutter app
+- **Dependencies**: Install separately for each
+  ```bash
+  # Plugin dependencies
+  bun install
+
+  # Flutter app dependencies (in separate terminal)
+  cd packages/fletcher-app && flutter pub get
+  ```
+
+## Strict Dependency Isolation (Plugin Only)
+
+The OpenClaw plugin uses **Bun isolated mode** (like pnpm) for strict dependency management:
+
+### What This Means
+- ✅ **Prevents phantom dependencies** - Can only import packages declared in package.json
+- ✅ **Catches missing dependencies early** - Fails immediately, not in production
+- ✅ **Better for publishing** - Plugin works reliably for users
+- ✅ **Reproducible builds** - Same dependencies every time
+
+### How It Works
+```bash
+# Isolated mode uses symlinks (like pnpm)
+node_modules/
+├── .bin/
+├── express -> .bun/install/cache/...     # Only declared deps get symlinks
+└── your-package/
+```
+
+Instead of hoisting everything to root, only explicitly declared dependencies are accessible.
+
+### Handling "Cannot Find Module" Errors
+
+If you see errors like:
+```
+Error: Cannot find module 'body-parser'
+```
+
+**Solution**: Add the missing dependency to package.json:
+```bash
+bun add --cwd packages/openclaw-channel-livekit body-parser
+```
+
+This is actually **good** - it forces you to declare all dependencies correctly!
+
 ## Workspace Configuration
 
 ### Root package.json
 
-Bun uses the standard `workspaces` field (compatible with npm/pnpm/yarn):
+Bun uses the standard `workspaces` field with strict mode enabled:
 ```json
 {
   "name": "fletcher",
@@ -168,7 +275,12 @@ Bun uses the standard `workspaces` field (compatible with npm/pnpm/yarn):
   "description": "Voice-first bridge for OpenClaw using LiveKit",
   "repository": "dremonkey/openclaw-plugin-livekit",
   "license": "MIT",
-  "workspaces": ["packages/*"],
+  "workspaces": ["packages/openclaw-channel-livekit"],
+  "bun": {
+    "install": {
+      "linker": "isolated"
+    }
+  },
   "scripts": {
     "build": "bun run --filter '*' build",
     "test": "bun run --filter '*' test",
@@ -285,10 +397,41 @@ bun run --filter '*' build
 - ✅ Examples provided for easy setup
 
 ## Notes
-- Use Bun as runtime and package manager (unified toolchain)
+
+### General
+- Use Bun as runtime and package manager (unified toolchain) **for plugin only**
 - Bun workspaces are compatible with npm/pnpm/yarn workspace format
 - Plugin should be published to npm as `@openclaw/channel-livekit`
 - Flutter app is for end users, not published to npm
 - Keep plugin dependencies minimal (bundle size matters)
-- Document system requirements (Bun >= 1.0.0, Flutter version, etc.)
+- Document system requirements (Bun >= 1.0.0, Flutter >= 3.x, etc.)
 - Bun's workspace support uses `--cwd` flag instead of pnpm's `--filter`
+
+### Flutter App (Dart/Flutter Ecosystem)
+- **NOT part of Bun workspace** - Uses Flutter's pub package manager
+- Uses `pubspec.yaml` instead of `package.json`
+- Managed independently with `flutter pub get`
+- Has its own `.dart_tool/` and build artifacts
+- Bun strict mode does NOT apply to Flutter app
+- Both packages can coexist in same monorepo without interaction
+
+### Strict Mode (Isolated Installs)
+- **Enabled by default** via `bun.install.linker: "isolated"` in root package.json
+- Prevents phantom dependencies (can only import declared packages)
+- Uses symlink-based isolation like pnpm
+- If you get "Cannot find module" errors, add the package to dependencies
+- This is a **feature, not a bug** - ensures clean dependency graph
+- Makes plugin more reliable when published to npm
+- Lockfile will have `configVersion: 1` (indicates isolated mode)
+
+### Debugging Dependency Issues
+```bash
+# List all installed packages
+bun pm ls
+
+# Check what packages are accessible in a workspace
+bun --cwd packages/openclaw-channel-livekit pm ls
+
+# View dependency tree
+bun pm ls --all
+```
