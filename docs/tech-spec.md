@@ -4,13 +4,15 @@
 
 ---
 
-## 1. The OpenClaw Plugin (Backend)
-- **Runtime:** Bun (TypeScript).
-- **Library:** `livekit-server-sdk`.
-- **Function:** 
-    - Acts as a participants in a LiveKit room.
-    - Handles real-time audio streams (STT ➔ OpenClaw Logic ➔ TTS).
-    - Integrates with the Vercel AI SDK for orchestration.
+## 1. The OpenClaw Channel Plugin (Backend)
+- **Type:** OpenClaw Channel Plugin (`@openclaw/channel-livekit`)
+- **Runtime:** Bun (TypeScript)
+- **Library:** `livekit-server-sdk`
+- **Function:**
+    - Acts as a channel in OpenClaw Gateway (like Telegram, WhatsApp)
+    - Acts as a participant in LiveKit rooms
+    - Handles real-time audio streams (STT ➔ OpenClaw Core ➔ TTS)
+    - Integrates directly with OpenClaw's message routing and conversation management
 
 ## 2. The Fletcher App (Mobile)
 - **Framework:** Flutter (Dart).
