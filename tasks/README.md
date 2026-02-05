@@ -14,27 +14,27 @@ See [Architecture Comparison](../docs/architecture-comparison.md) for detailed a
 
 ## Epics
 
-### 1. [Infrastructure](./01-infrastructure)
+### 1. [Infrastructure](./01-infrastructure) ✅
 Setting up the development environment, LiveKit server, and monorepo structure.
 
 **Tasks:**
-- 001: Setup LiveKit server (local or cloud)
-- 002: Repository structure & CI/CD
+- [x] 001: Setup LiveKit server (local or cloud)
+- [x] 002: Repository structure & CI/CD
 
 ### 2. [OpenClaw Channel Plugin](./02-livekit-agent)
 The LiveKit channel plugin (`@openclaw/channel-livekit`) that integrates voice capabilities into OpenClaw.
 
 **Tasks:**
-- 001: Initialize OpenClaw channel plugin
-- 002: Implement audio pipeline (STT/TTS)
-- 004: Channel plugin approach (implementation guide)
+- [ ] 001: Initialize OpenClaw channel plugin
+- [ ] 002: Implement audio pipeline (STT/TTS)
+- [ ] 004: Channel plugin approach (implementation guide)
 
 ### 3. [Flutter App](./03-flutter-app)
 The mobile client for real-time voice interaction and visualization.
 
 **Tasks:**
-- 001: Initialize Flutter app
-- 002: Implement Amber Heartbeat visualizer
+- [ ] 001: Initialize Flutter app
+- [ ] 002: Implement Amber Heartbeat visualizer
 
 ## Development Path
 
