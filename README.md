@@ -69,4 +69,36 @@ See the [Architecture Comparison](./docs/architecture-comparison.md) for detaile
 
 ## Getting Started
 
+### Prerequisites
+
+To develop for Fletcher, you'll need the following tools:
+
+- **Docker & Docker Compose:** For running the local LiveKit server and other infrastructure.
+- **Bun:** The fast JavaScript runtime for the OpenClaw plugin backend.
+- **Flutter:** The UI toolkit for building the mobile application.
+- **Nix (Optional):** If you use Nix, a `flake.nix` is provided for a reproducible development environment.
+
+### Quick Setup
+
+We provide a setup script to automate the environment preparation:
+
+```bash
+./scripts/setup.sh
+```
+
+This script will check for prerequisites and start the local infrastructure.
+
+## Local Infrastructure
+
+Fletcher uses LiveKit for real-time audio. You can start a local LiveKit instance using Docker:
+
+```bash
+docker compose up -d
+```
+
+The server will be available at `http://localhost:7880`. Use the default keys provided in `livekit.yaml` for development.
+
+## Project Roadmap
+
 See the [tasks roadmap](./tasks/README.md) for development progress and next steps.
+

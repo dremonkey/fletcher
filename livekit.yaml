@@ -1,0 +1,7 @@
+port: 7880
+bind_addresses:
+  - ""
+keys:
+  devkey: secret
+logging:
+  level: info
