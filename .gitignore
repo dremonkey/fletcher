@@ -1,0 +1,28 @@
+# JavaScript / TypeScript (Bun/Node)
+node_modules/
+dist/
+*.log
+.env
+.env.local
+bun.lockb
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+*.g.dart
+*.freezed.dart
+pubspec.lock
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

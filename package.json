@@ -1,0 +1,36 @@
+{
+  "name": "fletcher",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Voice-first bridge for OpenClaw using LiveKit",
+  "repository": "dremonkey/openclaw-plugin-livekit",
+  "license": "MIT",
+  "workspaces": ["packages/*"],
+  "bun": {
+    "install": {
+      "linker": "isolated"
+    }
+  },
+  "scripts": {
+    "build": "bun --cwd packages/openclaw-channel-livekit run build",
+    "test": "bun --cwd packages/openclaw-channel-livekit run test",
+    "lint": "bun --cwd packages/openclaw-channel-livekit run lint",
+    "format": "prettier --write '**/*.{ts,tsx,js,json,md}'",
+    "plugin:dev": "bun --cwd packages/openclaw-channel-livekit run dev",
+    "plugin:build": "bun --cwd packages/openclaw-channel-livekit run build",
+    "mobile:dev": "cd apps/mobile && flutter run",
+    "mobile:build:android": "cd apps/mobile && flutter build apk",
+    "mobile:build:ios": "cd apps/mobile && flutter build ios"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "prettier": "^3.0.0",
+    "eslint": "^8.0.0",
+    "husky": "^8.0.0",
+    "lint-staged": "^15.0.0"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}

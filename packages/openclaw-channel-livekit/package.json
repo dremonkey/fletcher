@@ -1,0 +1,32 @@
+{
+  "name": "@openclaw/channel-livekit",
+  "version": "1.0.0",
+  "description": "LiveKit voice channel for OpenClaw",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "openclaw": {
+    "extensions": ["dist/index.js"],
+    "channel": {
+      "id": "livekit",
+      "label": "LiveKit Voice",
+      "blurb": "Real-time voice conversations with <1.5s latency"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "bun test",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "livekit-server-sdk": "^2.0.0",
+    "@deepgram/sdk": "^3.0.0",
+    "@cartesia/cartesia-js": "^1.0.0",
+    "@sinclair/typebox": "^0.32.0"
+  },
+  "devDependencies": {
+  },
+  "peerDependencies": {
+    "openclaw": ">=2.0.0"
+  }
+}
