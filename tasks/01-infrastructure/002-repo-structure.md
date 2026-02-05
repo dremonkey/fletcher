@@ -71,36 +71,37 @@ fletcher/
 │       ├── plugin-ci.yml             # CI for plugin
 │       └── app-ci.yml                # CI for Flutter app
 │
-├── package.json                      # Workspace root
-├── pnpm-workspace.yaml               # pnpm workspaces config
+├── package.json                      # Workspace root (with workspaces field)
 ├── tsconfig.base.json                # Shared TypeScript config
 ├── .gitignore
 ├── LICENSE
 └── README.md
 ```
 
-## Package Manager: pnpm
+## Package Manager: Bun
 
-Using pnpm for better monorepo support:
-- Efficient disk space usage
-- Strict dependency resolution
-- Better workspace support than npm/yarn
+Using Bun's built-in package manager for monorepo:
+- Native workspace support (same format as npm/pnpm/yarn)
+- 4-8x faster installs than pnpm
+- Unified runtime and package manager
+- Simpler toolchain (one tool instead of two)
 
 ## Implementation Checklist
 
 ### Monorepo Setup
 - [ ] Initialize git repository
 - [ ] Create monorepo structure with packages/ directory
-- [ ] Set up pnpm workspaces
+- [ ] Set up Bun workspaces
 - [ ] Create root package.json with workspace configuration
 - [ ] Create .gitignore (node_modules, .env, etc.)
+- [ ] Run `bun install` to initialize workspace
 
 ### OpenClaw Plugin Package
 - [ ] Create packages/openclaw-channel-livekit/
 - [ ] Initialize package.json with openclaw.extensions
 - [ ] Set up TypeScript configuration
 - [ ] Create src/ directory structure
-- [ ] Add dependencies (livekit-server-sdk, etc.)
+- [ ] Add dependencies with `bun add livekit-server-sdk @deepgram/sdk @cartesia/cartesia-js`
 - [ ] Set up ESLint + Prettier for TypeScript
 - [ ] Create README.md with installation guide
 
@@ -156,13 +157,9 @@ Using pnpm for better monorepo support:
 
 ## Workspace Configuration
 
-### pnpm-workspace.yaml
-```yaml
-packages:
-  - 'packages/*'
-```
-
 ### Root package.json
+
+Bun uses the standard `workspaces` field (compatible with npm/pnpm/yarn):
 ```json
 {
   "name": "fletcher",
@@ -171,13 +168,15 @@ packages:
   "description": "Voice-first bridge for OpenClaw using LiveKit",
   "repository": "dremonkey/openclaw-plugin-livekit",
   "license": "MIT",
+  "workspaces": ["packages/*"],
   "scripts": {
-    "build": "pnpm -r build",
-    "test": "pnpm -r test",
-    "lint": "pnpm -r lint",
+    "build": "bun run --filter '*' build",
+    "test": "bun run --filter '*' test",
+    "lint": "bun run --filter '*' lint",
     "format": "prettier --write '**/*.{ts,tsx,js,json,md}'",
-    "plugin:dev": "pnpm --filter @openclaw/channel-livekit dev",
-    "app:dev": "pnpm --filter fletcher-app run"
+    "plugin:dev": "bun --cwd packages/openclaw-channel-livekit run dev",
+    "plugin:build": "bun --cwd packages/openclaw-channel-livekit run build",
+    "app:dev": "cd packages/fletcher-app && flutter run"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
@@ -188,8 +187,7 @@ packages:
     "lint-staged": "^15.0.0"
   },
   "engines": {
-    "node": ">=20.0.0",
-    "pnpm": ">=8.0.0"
+    "bun": ">=1.0.0"
   }
 }
 ```
@@ -235,30 +233,46 @@ packages:
 
 ### Local Development
 ```bash
-# Install all dependencies
-pnpm install
+# Install all dependencies (root and all workspaces)
+bun install
 
 # Build plugin
-pnpm plugin:dev
+bun run plugin:dev
+
+# Build plugin (one-time)
+bun run plugin:build
 
 # Run Flutter app (separate terminal)
-pnpm app:dev
+bun run app:dev
+# Or directly: cd packages/fletcher-app && flutter run
 
 # Run tests
-pnpm test
+bun test
 
 # Lint everything
-pnpm lint
+bun run lint
 ```
 
 ### Testing Plugin with OpenClaw
 ```bash
 # Link plugin to local OpenClaw installation
 cd path/to/openclaw
-pnpm link ../fletcher/packages/openclaw-channel-livekit
+bun link ../fletcher/packages/openclaw-channel-livekit
 
 # Or install from npm (after publishing)
-pnpm add @openclaw/channel-livekit
+bun add @openclaw/channel-livekit
+```
+
+### Bun Workspace Commands
+```bash
+# Install dependency in specific package
+bun add --cwd packages/openclaw-channel-livekit some-package
+
+# Run script in specific package
+bun --cwd packages/openclaw-channel-livekit run build
+
+# Run script in all packages
+bun run --filter '*' build
 ```
 
 ## Success Criteria
@@ -271,8 +285,10 @@ pnpm add @openclaw/channel-livekit
 - ✅ Examples provided for easy setup
 
 ## Notes
-- Use Bun as runtime for TypeScript (faster than Node)
+- Use Bun as runtime and package manager (unified toolchain)
+- Bun workspaces are compatible with npm/pnpm/yarn workspace format
 - Plugin should be published to npm as `@openclaw/channel-livekit`
 - Flutter app is for end users, not published to npm
 - Keep plugin dependencies minimal (bundle size matters)
-- Document system requirements (Bun version, Flutter version, etc.)
+- Document system requirements (Bun >= 1.0.0, Flutter version, etc.)
+- Bun's workspace support uses `--cwd` flag instead of pnpm's `--filter`

@@ -179,14 +179,14 @@ Configuration is defined in OpenClaw's `openclaw.json` file:
 cd path/to/openclaw/extensions
 git clone https://github.com/dremonkey/openclaw-plugin-livekit channel-livekit
 cd channel-livekit
-pnpm install
-pnpm build
+bun install
+bun run build
 ```
 
 ### For Production
 ```bash
 # Install from npm
-pnpm add @openclaw/channel-livekit
+bun add @openclaw/channel-livekit
 ```
 
 ## Success Criteria
