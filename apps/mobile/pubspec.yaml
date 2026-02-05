@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   livekit_client: ^2.5.0
+  permission_handler: ^11.3.0
 
 dev_dependencies:
   flutter_test:
