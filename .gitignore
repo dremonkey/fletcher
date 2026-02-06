@@ -26,3 +26,6 @@ pubspec.lock
 # OS
 .DS_Store
 Thumbs.db
+
+# Nix / direnv
+.direnv/

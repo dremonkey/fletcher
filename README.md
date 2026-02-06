@@ -71,22 +71,71 @@ See the [Architecture Comparison](./docs/architecture-comparison.md) for detaile
 
 ### Prerequisites
 
-To develop for Fletcher, you'll need the following tools:
+#### System-Level (install once)
 
-- **Docker & Docker Compose:** For running the local LiveKit server and other infrastructure.
-- **Bun:** The fast JavaScript runtime for the OpenClaw plugin backend.
-- **Flutter:** The UI toolkit for building the mobile application.
-- **Nix (Optional):** If you use Nix, a `flake.nix` is provided for a reproducible development environment.
+**Docker & Docker Compose** — Required for running the local LiveKit server.
+
+- **NixOS:** Add to your `configuration.nix`:
+  ```nix
+  virtualisation.docker.enable = true;
+  users.users.<your-username>.extraGroups = [ "docker" ];
+  ```
+  Then rebuild with `sudo nixos-rebuild switch`.
+- **macOS:** Install [Colima](https://github.com/abiosoft/colima) (recommended) or [Docker Desktop](https://docker.com/products/docker-desktop):
+  ```bash
+  brew install colima docker docker-compose
+  colima start
+  ```
+
+**Nix (recommended)** — Provides all other development dependencies automatically.
+
+- **NixOS:** Already installed.
+- **macOS:** Install via the [Determinate Nix Installer](https://github.com/DeterminateSystems/nix-installer):
+  ```bash
+  curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
+  ```
+
+#### Repo-Level (provided by `nix develop`)
+
+If you have Nix installed, all other dependencies are provided automatically:
+
+- **Bun** — JavaScript runtime for the OpenClaw plugin backend
+- **Flutter** — UI toolkit for the mobile application
+- **Android SDK & Studio** — For Android development
+
+#### Without Nix
+
+If you prefer not to use Nix, install these manually:
+
+- **Bun:** https://bun.sh
+- **Flutter:** https://flutter.dev/docs/get-started/install
 
 ### Quick Setup
 
-We provide a setup script to automate the environment preparation:
+If you use **Nix**, entering the development shell will automatically provide all necessary dependencies (Flutter, Android Studio, Bun, etc.):
+
+```bash
+nix develop
+```
+
+*Note: The first run will take some time to download Flutter, Android SDK, and other dependencies. Subsequent runs are nearly instant thanks to Nix store caching and nix-direnv's environment cache.*
+
+#### Automatic Environment (Recommended)
+To automatically load the environment when you `cd` into this directory, we **highly recommend** using `nix-direnv`. It provides instant environment switching and prevents your dependencies from being garbage collected.
+
+**NixOS Installation:**
+Add `direnv` and `nix-direnv` to your configuration or home-manager, then:
+```bash
+echo "use flake" > .envrc
+direnv allow
+```
+
+#### Initialize Services
+After entering the shell, run the setup script to check prerequisites and start the local infrastructure:
 
 ```bash
 ./scripts/setup.sh
 ```
-
-This script will check for prerequisites and start the local infrastructure.
 
 ## Local Infrastructure
 
