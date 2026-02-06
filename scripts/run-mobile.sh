@@ -5,6 +5,7 @@ set -euo pipefail
 AVD_NAME="${AVD_NAME:-pixel_9}"
 DEVICE_ID="${DEVICE_ID:-emulator-5554}"
 BOOT_TIMEOUT="${BOOT_TIMEOUT:-120}"
+GPU_MODE="${GPU_MODE:-host}"  # host, swiftshader_indirect, or auto
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -52,8 +53,8 @@ start_emulator() {
         return 0
     fi
 
-    log "Starting emulator: $AVD_NAME"
-    emulator -avd "$AVD_NAME" -no-snapshot-load &
+    log "Starting emulator: $AVD_NAME (gpu: $GPU_MODE)"
+    emulator -avd "$AVD_NAME" -no-snapshot-load -gpu "$GPU_MODE" &
     EMULATOR_PID=$!
 
     # Wait for device to appear

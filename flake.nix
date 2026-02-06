@@ -61,6 +61,13 @@
             # NixOS: Use system GPU drivers instead of emulator's bundled libs
             export ANDROID_EMULATOR_USE_SYSTEM_LIBS=1
 
+            # NixOS: Force Vulkan to use NVK (Mesa's open-source NVIDIA Vulkan driver)
+            export VK_ICD_FILENAMES=/run/opengl-driver/share/vulkan/icd.d/nouveau_icd.x86_64.json
+            export VK_DRIVER_FILES=/run/opengl-driver/share/vulkan/icd.d/nouveau_icd.x86_64.json
+
+            # NixOS: Add libGL and other OpenGL/Vulkan libraries to path
+            export LD_LIBRARY_PATH=${pkgs.libglvnd}/lib:${pkgs.vulkan-loader}/lib:/run/opengl-driver/lib:$LD_LIBRARY_PATH
+
             # NixOS: Use aapt2 from Nix SDK (Gradle's downloaded binary won't run on NixOS)
             # Generate local.properties with the correct aapt2 path for this Nix store
             if [ -d "apps/mobile/android" ]; then
