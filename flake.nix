@@ -42,6 +42,10 @@
             android-studio
             androidSdk
             nil # Nix language server for editor support
+
+            # GPU acceleration for Android emulator
+            libglvnd
+            vulkan-loader
           ];
 
           shellHook = ''
@@ -53,6 +57,9 @@
 
             # Add Android SDK tools to PATH
             export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/tools/bin:$PATH"
+
+            # NixOS: Use system GPU drivers instead of emulator's bundled libs
+            export ANDROID_EMULATOR_USE_SYSTEM_LIBS=1
 
             # NixOS: Use aapt2 from Nix SDK (Gradle's downloaded binary won't run on NixOS)
             # Generate local.properties with the correct aapt2 path for this Nix store
