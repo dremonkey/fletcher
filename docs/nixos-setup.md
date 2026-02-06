@@ -2,69 +2,71 @@
 
 This guide covers NixOS-specific configuration for Fletcher development.
 
+> **Using direnv?** If you have direnv + nix-direnv configured, the environment activates automatically when you `cd` into the project. You can skip `nix develop` prefixes throughout this guide. After `flake.nix` changes, run `direnv reload` or re-enter the directory.
+
 ## System Configuration
 
-### With Flakes
+### 1. Enable nix-ld (Required)
 
-If you're using a flake-based NixOS configuration, add to your `configuration.nix` module:
+Gradle downloads pre-compiled binaries (like `aapt2`) that expect a traditional Linux filesystem. On NixOS, these fail because `/lib64/ld-linux-x86-64.so.2` doesn't exist. **nix-ld** provides a compatibility shim that makes these binaries work.
 
-```nix
-{ config, pkgs, ... }:
-
-{
-  # Docker for LiveKit server
-  virtualisation.docker.enable = true;
-
-  # KVM for Android emulator hardware acceleration
-  boot.kernelModules = [ "kvm-intel" ];  # Use "kvm-amd" for AMD CPUs
-
-  # Add your user to required groups
-  users.users.<your-username>.extraGroups = [
-    "docker"  # Run docker without sudo
-    "kvm"     # Android emulator hardware acceleration
-  ];
-}
-```
-
-Then rebuild and reboot:
-
-```bash
-sudo nixos-rebuild switch --flake .#<your-hostname>
-reboot
-```
-
-### Without Flakes
-
-Add the same configuration to your `/etc/nixos/configuration.nix`:
+Add this to your NixOS configuration:
 
 ```nix
-{ config, pkgs, ... }:
-
-{
-  # Docker for LiveKit server
-  virtualisation.docker.enable = true;
-
-  # KVM for Android emulator hardware acceleration
-  boot.kernelModules = [ "kvm-intel" ];  # Use "kvm-amd" for AMD CPUs
-
-  # Add your user to required groups
-  users.users.<your-username>.extraGroups = [
-    "docker"  # Run docker without sudo
-    "kvm"     # Android emulator hardware acceleration
-  ];
-}
+programs.nix-ld.enable = true;
 ```
 
-Then rebuild and reboot:
+Then rebuild:
 
 ```bash
 sudo nixos-rebuild switch
+```
+
+**Why nix-ld?** It's lightweight (just a stub at `/lib64/`) and fixes this class of problem system-wide — useful for Android development, VS Code extensions, and other tools that download binaries at runtime.
+
+| Alternative | Trade-off |
+|-------------|-----------|
+| FHS wrapper | Per-project, heavier setup |
+| steam-run | Full chroot, overkill |
+| patchelf | Manual patching per binary, fragile |
+
+### 2. Enable Docker and KVM
+
+Add to your `configuration.nix` (flake or traditional):
+
+```nix
+{ config, pkgs, ... }:
+
+{
+  # Docker for LiveKit server
+  virtualisation.docker.enable = true;
+
+  # KVM for Android emulator hardware acceleration
+  boot.kernelModules = [ "kvm-intel" ];  # Use "kvm-amd" for AMD CPUs
+
+  # Add your user to required groups
+  users.users.<your-username>.extraGroups = [
+    "docker"  # Run docker without sudo
+    "kvm"     # Android emulator hardware acceleration
+  ];
+}
+```
+
+Then rebuild and reboot:
+
+```bash
+# With flakes
+sudo nixos-rebuild switch --flake .#<your-hostname>
+
+# Without flakes
+sudo nixos-rebuild switch
+
 reboot
 ```
 
-## Verify Setup
+### 3. Verify System Setup
 
-After rebooting, verify everything is configured correctly:
+After rebooting:
 
 ```bash
 # Check Docker
@@ -79,28 +81,41 @@ groups | grep -E "(docker|kvm)"
 
 ## Development Environment
 
-The project uses a Nix flake to provide all development dependencies. With `nix-direnv` configured, the environment loads automatically when you enter the directory.
+The project uses a Nix flake to provide all development dependencies.
 
 ### First-Time Setup
 
 ```bash
 cd fletcher
-direnv allow
+direnv allow  # If using direnv
+# OR
+nix develop   # Manual shell
 ```
 
-The first load will download Flutter, Android SDK, and other dependencies. Subsequent loads are instant due to caching.
+The first load downloads Flutter, Android SDK, and other dependencies. Subsequent loads are instant due to caching.
 
-### Manual Shell (without direnv)
+### Android Licenses
+
+The `flake.nix` includes `android_sdk.accept_license = true`, which pre-accepts licenses during the Nix build. However, Flutter's license check doesn't recognize Nix's pre-accepted licenses, so you need to run this once:
 
 ```bash
-nix develop
+flutter doctor --android-licenses
 ```
+
+Press **'y'** for every prompt until it finishes.
+
+**When to re-run licenses:**
+- After adding new SDK components to `flake.nix` (new platform versions, build tools, etc.)
+- After major Android SDK updates in nixpkgs
+- If you see "Android license status unknown" errors
+
+You generally don't need to re-run for minor nixpkgs updates or when the SDK version stays the same.
 
 ## Android Emulator
 
 ### Create an AVD
 
-The `avdmanager` tool has compatibility issues with JDK 17 (JAXB was removed). Create the AVD manually instead:
+The `avdmanager` tool has compatibility issues with JDK 17 (JAXB was removed). Create the AVD manually:
 
 ```bash
 # Create AVD directories
@@ -167,28 +182,75 @@ emulator -list-avds
 ### Run the Emulator
 
 ```bash
+# Standard
 emulator -avd pixel_9
-```
 
-Or run headless for CI/testing:
-
-```bash
+# Headless for CI/testing
 emulator -avd pixel_9 -no-window -no-audio -no-boot-anim
 ```
 
 With KVM enabled, the emulator should show "Fast Virtualization" in the title bar or startup logs.
 
+### Run the Flutter App
+
+Once the emulator is running:
+
+```bash
+cd apps/mobile
+flutter run -d emulator-5554
+```
+
+Or use the convenience script that handles everything:
+
+```bash
+bun run mobile:dev
+```
+
+Once the app launches, you're ready for development with hot reload (`r` to reload, `R` to restart).
+
 ## Troubleshooting
+
+### "Could not start dynamically linked executable" / aapt2 daemon failed
+
+You need to enable `programs.nix-ld.enable = true` in your NixOS configuration. See System Configuration above.
+
+### "Failed to install SDK components" (CMake, build-tools, etc.)
+
+Gradle cannot download into the read-only Nix store. Add the missing component to `flake.nix` in `composeAndroidPackages`:
+
+```nix
+androidComposition = pkgs.androidenv.composeAndroidPackages {
+  buildToolsVersions = [ "34.0.0" "35.0.0" ];  # Add version here
+  cmakeVersions = [ "3.22.1" ];                 # Add CMake versions
+  # ...
+};
+```
+
+### "NDK not found"
+
+Point Flutter to the Nix-provided NDK:
+
+```bash
+flutter config --android-ndk $ANDROID_NDK_HOME
+```
+
+### "No devices found"
+
+Check the emulator is listed:
+
+```bash
+adb devices
+```
 
 ### "Permission denied" on /dev/kvm
 
-You're not in the `kvm` group. Add yourself and log out/in:
+You're not in the `kvm` group:
 
 ```bash
 groups | grep kvm  # Should show kvm
 ```
 
-If not, verify your `configuration.nix` and rebuild.
+If not, verify your `configuration.nix` includes the group and rebuild.
 
 ### Emulator is slow (no hardware acceleration)
 
