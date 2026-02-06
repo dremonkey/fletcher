@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Generate a LiveKit access token for development testing.
+ * Automatically updates apps/mobile/.env with the new token.
  *
  * Usage:
  *   bun run token:generate
@@ -9,6 +10,8 @@
  */
 
 import { AccessToken } from "livekit-server-sdk";
+import { readFileSync, writeFileSync, existsSync } from "fs";
+import { join, dirname } from "path";
 
 const LIVEKIT_URL = process.env.LIVEKIT_URL;
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
@@ -55,9 +58,45 @@ token.addGrant({
 
 const jwt = await token.toJwt();
 
+// Update the mobile app's .env file
+const scriptDir = dirname(new URL(import.meta.url).pathname);
+const mobileEnvPath = join(scriptDir, "..", "apps", "mobile", ".env");
+
+function updateEnvFile(filePath: string, key: string, value: string): void {
+  let content = "";
+  if (existsSync(filePath)) {
+    content = readFileSync(filePath, "utf-8");
+  }
+
+  const lines = content.split("\n");
+  let found = false;
+  const updatedLines = lines.map((line) => {
+    if (line.startsWith(`${key}=`)) {
+      found = true;
+      return `${key}=${value}`;
+    }
+    return line;
+  });
+
+  if (!found) {
+    updatedLines.push(`${key}=${value}`);
+  }
+
+  // Remove empty trailing lines and ensure single newline at end
+  const result = updatedLines.filter((line, i, arr) =>
+    line !== "" || i < arr.length - 1
+  ).join("\n") + "\n";
+
+  writeFileSync(filePath, result);
+}
+
+updateEnvFile(mobileEnvPath, "LIVEKIT_URL", LIVEKIT_URL);
+updateEnvFile(mobileEnvPath, "LIVEKIT_TOKEN", jwt);
+
 console.log("\n--- LiveKit Token Generated ---\n");
 console.log(`URL:      ${LIVEKIT_URL}`);
 console.log(`Room:     ${roomName}`);
 console.log(`Identity: ${identity}`);
 console.log(`Expires:  24 hours\n`);
 console.log(`Token:\n${jwt}\n`);
+console.log(`Updated:  apps/mobile/.env\n`);

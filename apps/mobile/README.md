@@ -61,12 +61,9 @@ flutter doctor
    ```bash
    bun run token:generate
    ```
+   This automatically updates `apps/mobile/.env` with the URL and token.
 
-3. **Configure the app** - Edit `lib/main.dart`:
-   ```dart
-   const String livekitUrl = 'wss://YOUR-PROJECT.livekit.cloud';  // From .env
-   const String livekitToken = 'YOUR_TOKEN_HERE';                  // From step 2
-   ```
+> **Note:** The app loads credentials from `.env` at runtime using `flutter_dotenv`. Tokens expire after 24 hours, so run `bun run token:generate` to refresh. In production, the app will fetch tokens from the backend API instead.
 
 ## Running the App
 
@@ -136,6 +133,6 @@ lib/
 - On iOS: The permission dialog should appear on first launch
 
 **LiveKit connection failed**
-- Verify your LiveKit URL and token are correct
-- Check that the token hasn't expired (24h default)
-- Generate a new token: `bun run token:generate`
+- Generate a fresh token: `bun run token:generate`
+- Check that `.env` contains valid `LIVEKIT_URL` and `LIVEKIT_TOKEN`
+- Tokens expire after 24 hours

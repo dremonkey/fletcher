@@ -84,6 +84,10 @@ main() {
 
     log "Starting Fletcher mobile development environment"
 
+    # Generate fresh LiveKit token
+    log "Generating LiveKit token..."
+    bun run --cwd "$PROJECT_ROOT" token:generate
+
     start_emulator
 
     log "Launching Flutter app..."

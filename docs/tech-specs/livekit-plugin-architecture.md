@@ -203,6 +203,7 @@ To achieve the <1.5s target, the following strategies are employed:
 - [ ] Implement LiveKit Agent worker entry point.
 - [ ] Implement basic OpenClaw `Channel` class structure.
 - [ ] Define `configSchema` (JSON Schema) in `openclaw.plugin.json` for plugin settings (LiveKit URL, API keys, TTS provider/voice configuration).
+- [ ] Implement token endpoint (`POST /livekit/token`) for mobile clients to request short-lived access tokens (API secret stays server-side).
 
 ### Phase 2: Audio Inbound (STT)
 - [ ] Configure Deepgram plugin with agent worker.

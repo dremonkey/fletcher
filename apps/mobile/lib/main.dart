@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'screens/conversation_screen.dart';
 
-// TODO: Replace with your LiveKit credentials
-// Generate a token with: bun run token:generate
-const String livekitUrl = 'wss://YOUR-PROJECT.livekit.cloud';
-const String livekitToken = 'YOUR_TOKEN_HERE';
-
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Load environment variables from .env file
+  await dotenv.load(fileName: '.env');
 
   // Force dark status bar
   SystemChrome.setSystemUIOverlayStyle(
@@ -27,6 +26,9 @@ class FletcherApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final livekitUrl = dotenv.env['LIVEKIT_URL'] ?? '';
+    final livekitToken = dotenv.env['LIVEKIT_TOKEN'] ?? '';
+
     return MaterialApp(
       title: 'Fletcher',
       debugShowCheckedModeBanner: false,
@@ -38,7 +40,7 @@ class FletcherApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF0D0D0D),
         useMaterial3: true,
       ),
-      home: const ConversationScreen(
+      home: ConversationScreen(
         livekitUrl: livekitUrl,
         token: livekitToken,
       ),
