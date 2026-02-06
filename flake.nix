@@ -38,6 +38,7 @@
             jdk17
             android-studio
             androidSdk
+            nil # Nix language server for editor support
           ];
 
           shellHook = ''
