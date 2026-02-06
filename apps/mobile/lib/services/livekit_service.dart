@@ -50,7 +50,7 @@ class LiveKitService extends ChangeNotifier {
           adaptiveStream: true,
           dynacast: true,
           defaultAudioPublishOptions: AudioPublishOptions(
-            audioBitrate: AudioPresets.music,
+            // audioBitrate: AudioPresets.music,
           ),
         ),
       );

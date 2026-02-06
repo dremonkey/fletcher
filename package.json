@@ -18,7 +18,8 @@
     "format": "prettier --write '**/*.{ts,tsx,js,json,md}'",
     "plugin:dev": "bun --cwd packages/openclaw-channel-livekit run dev",
     "plugin:build": "bun --cwd packages/openclaw-channel-livekit run build",
-    "mobile:dev": "cd apps/mobile && flutter run",
+    "mobile:dev": "./scripts/run-mobile.sh",
+    "mobile:run": "cd apps/mobile && flutter run",
     "mobile:build:android": "cd apps/mobile && flutter build apk",
     "mobile:build:ios": "cd apps/mobile && flutter build ios",
     "token:generate": "bun run scripts/generate-token.ts"

@@ -16,9 +16,12 @@
         };
 
         androidComposition = pkgs.androidenv.composeAndroidPackages {
-          buildToolsVersions = [ "34.0.0" "36.0.0" ];
+          buildToolsVersions = [ "34.0.0" "35.0.0" "36.0.0" ];
           platformVersions = [ "34" "36" ];
-          abiVersions = [ "x86_64" ];
+          abiVersions = [ "x86_64" "arm64-v8a" ];
+          includeNDK = true;
+          ndkVersion = "28.2.13676358";
+          cmakeVersions = [ "3.22.1" ];
           includeEmulator = true;
           includeSystemImages = true;
           systemImageTypes = [ "google_apis_playstore" ];
@@ -44,11 +47,19 @@
           shellHook = ''
             export ANDROID_HOME=${androidSdk}/libexec/android-sdk
             export ANDROID_SDK_ROOT=$ANDROID_HOME
+            export ANDROID_NDK_HOME="$ANDROID_HOME/ndk-bundle"
             export JAVA_HOME=${pkgs.jdk17.home}
             export CHROME_EXECUTABLE=${pkgs.google-chrome}/bin/google-chrome
-            
+
             # Add Android SDK tools to PATH
             export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/tools/bin:$PATH"
+
+            # NixOS: Use aapt2 from Nix SDK (Gradle's downloaded binary won't run on NixOS)
+            # Generate local.properties with the correct aapt2 path for this Nix store
+            if [ -d "apps/mobile/android" ]; then
+              echo "android.aapt2FromMavenOverride=$ANDROID_HOME/build-tools/35.0.0/aapt2" > apps/mobile/android/local.properties
+              echo "sdk.dir=$ANDROID_HOME" >> apps/mobile/android/local.properties
+            fi
 
             echo "Fletcher Dev Environment Loaded"
             echo "Bun version: $(bun --version)"
