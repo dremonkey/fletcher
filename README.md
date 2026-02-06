@@ -75,12 +75,7 @@ See the [Architecture Comparison](./docs/architecture-comparison.md) for detaile
 
 **Docker & Docker Compose** — Required for running the local LiveKit server.
 
-- **NixOS:** Add to your `configuration.nix`:
-  ```nix
-  virtualisation.docker.enable = true;
-  users.users.<your-username>.extraGroups = [ "docker" ];
-  ```
-  Then rebuild with `sudo nixos-rebuild switch`.
+- **NixOS:** See the [NixOS Setup Guide](./docs/nixos-setup.md) for complete instructions (Docker, KVM for emulator acceleration, etc.).
 - **macOS:** Install [Colima](https://github.com/abiosoft/colima) (recommended) or [Docker Desktop](https://docker.com/products/docker-desktop):
   ```bash
   brew install colima docker docker-compose
