@@ -1,36 +1,47 @@
 # Fletcher
 
-A high-performance voice-first bridge for OpenClaw using LiveKit.
+An OpenClaw channel plugin that enables real-time voice conversations via LiveKit.
 
 ## Overview
 
-Fletcher enables real-time voice interactions with OpenClaw through a LiveKit-powered audio pipeline, targeting sub-1.5 second latency for natural conversations.
+Fletcher is a **LiveKit channel plugin for OpenClaw** that provides voice interaction capabilities with sub-1.5 second latency. It integrates directly into OpenClaw as a native channel (similar to Telegram or WhatsApp channels), handling the complete audio pipeline from speech-to-text through to text-to-speech.
+
+This repository contains:
+
+1. **OpenClaw LiveKit Plugin** (primary) — The channel plugin that runs within OpenClaw Gateway
+2. **Example Flutter App** — A minimal mobile client for testing and demonstrating the plugin
 
 ## Architecture
 
-### OpenClaw LiveKit Plugin (Backend)
+### OpenClaw LiveKit Plugin (`packages/openclaw-channel-livekit`)
+
+The main component of this repository. A TypeScript plugin that:
 
 - **Runtime:** Bun (TypeScript)
 - **Library:** `livekit-server-sdk`
 - **Function:**
   - Acts as a participant in a LiveKit room
-  - Handles real-time audio streams (STT � OpenClaw Logic � TTS)
+  - Handles real-time audio streams (STT → OpenClaw Logic → TTS)
   - Integrates with the Vercel AI SDK for orchestration
+  - Implements the OpenClaw channel plugin interface
 
-### Fletcher App (Mobile)
+### Example Mobile App (`apps/mobile`)
+
+A minimal Flutter application for testing the plugin. Not intended as a production app.
 
 - **Framework:** Flutter (Dart)
 - **Library:** `livekit_client`
-- **Function:**
-  - Simple, one-button (or no-button) interface to join a family room
-  - Displays voice intensity via the "Amber Heartbeat" visualizer
+- **Purpose:** Test client for plugin development
+- **Features:**
+  - One-button interface to join a LiveKit room
+  - "Amber Heartbeat" audio visualizer for voice intensity feedback
 
 ## Audio Pipeline (Target: <1.5s)
 
-1. **Mobile App:** Captures audio � Streams to LiveKit Server
-2. **Plugin:** Receives stream � Fast-STT (Deepgram/Groq) � OpenClaw Brain
-3. **Plugin:** Brain Response � Fast-TTS (Cartesia/ElevenLabs Turbo) � LiveKit Server
-4. **Mobile App:** Receives audio stream � Playback
+1. **Mobile App:** Captures audio → Streams to LiveKit Server
+2. **Plugin:** Receives stream → Fast-STT (Deepgram/Groq) → OpenClaw Brain
+3. **Plugin:** Brain Response → Fast-TTS (Cartesia/ElevenLabs Turbo) → LiveKit Server
+4. **Mobile App:** Receives audio stream → Playback
 
 ## Setup Requirements
 
@@ -55,17 +66,15 @@ Fletcher uses a bring-your-own-key (BYOK) model for AI services. You'll need to 
 - **Repository:** `dremonkey/openclaw-plugin-livekit`
 - **Contribution:** Docker Compose configuration provided for plug-and-play community setup
 
-## Architecture Options
+## Why a Channel Plugin?
 
-Fletcher can be built in three different ways:
+Fletcher is built as an **OpenClaw Channel Plugin** (not a standalone service or tool plugin). This approach provides:
 
-1. **External Agent** - Standalone service that communicates with OpenClaw via API/MCP
-2. **OpenClaw Channel Plugin** ⭐ - Deep integration as a native OpenClaw channel (like Telegram/WhatsApp)
-3. **OpenClaw Tool Plugin** - Voice capabilities as tools the agent can invoke
+- **Deep Integration:** Direct access to OpenClaw core, skills, tools, and memory
+- **Automatic Management:** OpenClaw handles conversation state and routing
+- **Unified Deployment:** Runs within the OpenClaw Gateway process
 
-See the [Architecture Comparison](./docs/architecture-comparison.md) for detailed analysis and recommendations.
-
-**Recommended Approach:** Build as an OpenClaw Channel Plugin for deep integration, automatic conversation management, and unified deployment.
+For background on this architectural decision, see the [Architecture Comparison](./docs/architecture-comparison.md).
 
 ## Getting Started
 
@@ -94,16 +103,16 @@ See the [Architecture Comparison](./docs/architecture-comparison.md) for detaile
 
 If you have Nix installed, all other dependencies are provided automatically:
 
-- **Bun** — JavaScript runtime for the OpenClaw plugin backend
-- **Flutter** — UI toolkit for the mobile application
-- **Android SDK & Studio** — For Android development
+- **Bun** — JavaScript runtime for the plugin (required)
+- **Flutter** — For the example mobile app only (optional)
+- **Android SDK & Studio** — For Android development (optional)
 
 #### Without Nix
 
 If you prefer not to use Nix, install these manually:
 
-- **Bun:** https://bun.sh
-- **Flutter:** https://flutter.dev/docs/get-started/install
+- **Bun:** https://bun.sh (required for plugin development)
+- **Flutter:** https://flutter.dev/docs/get-started/install (only if testing with the example app)
 
 ### Quick Setup
 
