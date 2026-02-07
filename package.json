@@ -12,12 +12,12 @@
     }
   },
   "scripts": {
-    "build": "bun --cwd packages/openclaw-channel-livekit run build",
-    "test": "bun --cwd packages/openclaw-channel-livekit run test",
-    "lint": "bun --cwd packages/openclaw-channel-livekit run lint",
+    "build": "bun workspaces run build",
+    "test": "bun workspaces run test",
+    "lint": "bun workspaces run lint",
     "format": "prettier --write '**/*.{ts,tsx,js,json,md}'",
-    "plugin:dev": "bun --cwd packages/openclaw-channel-livekit run dev",
-    "plugin:build": "bun --cwd packages/openclaw-channel-livekit run build",
+    "channel:dev": "bun --cwd packages/openclaw-channel-livekit run dev",
+    "brain:dev": "bun --cwd packages/livekit-agent-openclaw run dev",
     "mobile:dev": "./scripts/run-mobile.sh",
     "mobile:run": "cd apps/mobile && flutter run",
     "mobile:build:android": "cd apps/mobile && flutter build apk",
