@@ -22,9 +22,11 @@
     "mobile:run": "cd apps/mobile && flutter run",
     "mobile:build:android": "cd apps/mobile && flutter build apk",
     "mobile:build:ios": "cd apps/mobile && flutter build ios",
-    "token:generate": "bun run scripts/generate-token.ts"
+    "token:generate": "bun run scripts/generate-token.ts",
+    "agent:dev": "bun run scripts/run-agent.ts"
   },
   "devDependencies": {
+    "@livekit/rtc-node": "^0.12.0",
     "@types/node": "^20.0.0",
     "eslint": "^8.0.0",
     "husky": "^8.0.0",

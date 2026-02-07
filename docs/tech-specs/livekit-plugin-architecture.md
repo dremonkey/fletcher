@@ -10,19 +10,48 @@ The `openclaw-plugin-livekit` package is an OpenClaw Channel Plugin designed to 
 ## 2. Integration: OpenClaw Channel Interface
 The plugin registers a LiveKit channel with the OpenClaw Gateway via the plugin API.
 
-### Registration:
+### Plugin Entry Point:
 ```typescript
-export default (api) => {
-  api.registerChannel({
-    id: 'livekit',
-    name: 'LiveKit Voice',
-    // Channel implementation
-  });
+// index.ts
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import { livekitPlugin } from "./src/channel.js";
+import { setLivekitRuntime } from "./src/runtime.js";
+
+const plugin = {
+  id: "livekit",
+  name: "LiveKit Voice",
+  description: "Real-time voice conversations with <1.5s latency",
+  configSchema: livekitConfigSchema,  // TypeBox schema
+  register(api: OpenClawPluginApi) {
+    // Store runtime for later access (messaging, config, etc.)
+    setLivekitRuntime(api.runtime);
+    api.registerChannel({ plugin: livekitPlugin });
+  },
 };
+
+export default plugin;
+```
+
+### Runtime Access Pattern:
+```typescript
+// src/runtime.ts
+import type { PluginRuntime } from "openclaw/plugin-sdk";
+
+let runtime: PluginRuntime | undefined;
+
+export function setLivekitRuntime(r: PluginRuntime) {
+  runtime = r;
+}
+
+export function getLivekitRuntime(): PluginRuntime {
+  if (!runtime) throw new Error("LiveKit runtime not initialized");
+  return runtime;
+}
 ```
 
 ### Key Responsibilities:
-- **Registration:** Registers itself as `livekit` channel type via `api.registerChannel()`.
+- **Registration:** Exports plugin object with `register()` method that calls `api.registerChannel()`.
+- **Runtime Storage:** Stores `api.runtime` for later access to OpenClaw messaging, config, etc.
 - **Message Routing:**
     - Incoming STT results are converted into OpenClaw `Message` objects and routed to the agent.
     - Outgoing text responses from the agent are converted into audio via the TTS pipeline and published to the LiveKit room.
@@ -57,9 +86,68 @@ Room "room_abc" → conversationId "conv_xyz"
 | Room empties | Conversation persists; next join resumes it |
 | New room | New conversation created |
 
-### Channel Interface:
-- `send(message)`: Called by OpenClaw when the agent responds. Triggers the TTS pipeline for a specific conversation.
-- `on('message')`: Emitted to OpenClaw when the STT pipeline completes a transcription from a participant.
+### ChannelPlugin Implementation:
+The channel implements the `ChannelPlugin` interface with adapters:
+
+```typescript
+// src/channel.ts
+import type { ChannelPlugin } from "openclaw/plugin-sdk";
+
+export const livekitPlugin: ChannelPlugin = {
+  id: "livekit",
+  meta: {
+    label: "LiveKit Voice",
+    docsPath: "/docs/channels/livekit",
+    icon: "microphone",
+  },
+  capabilities: {
+    chatTypes: ["direct", "channel"],  // Room = channel, 1:1 = direct
+    reactions: false,
+    threads: false,
+    media: false,      // Audio only, no file attachments
+    audio: true,       // Voice is the primary modality
+    realtime: true,    // Sub-second latency
+  },
+  config: {
+    // Account resolution, listing, etc.
+    listAccountIds: (cfg) => listLivekitAccountIds(cfg),
+    resolveAccount: (cfg, accountId) => resolveLivekitAccount({ cfg, accountId }),
+    isConfigured: (account) => Boolean(account.url && account.apiKey),
+  },
+  security: {
+    // DM policy (pairing, allowlist, open)
+    resolveDmPolicy: ({ account }) => ({
+      policy: account.dm?.policy ?? "pairing",
+      allowFrom: account.dm?.allowFrom ?? [],
+    }),
+  },
+  gateway: {
+    // Lifecycle: start/stop the LiveKit agent worker
+    start: async ({ account }) => { /* Connect to LiveKit, start agent */ },
+    stop: async ({ account }) => { /* Disconnect, cleanup */ },
+  },
+  outbound: {
+    // Send message → TTS → LiveKit audio track
+    send: async ({ target, message }) => {
+      await synthesizeAndPublish(target.roomId, message.text);
+    },
+  },
+  messaging: {
+    // STT transcription → OpenClaw message
+    // (Wired internally via LiveKit agent events)
+  },
+};
+```
+
+### Adapter Summary:
+| Adapter | Purpose |
+|---------|---------|
+| `gateway.start/stop` | Lifecycle: connect/disconnect LiveKit agent worker |
+| `outbound.send` | Agent response → TTS → publish audio to room |
+| `messaging` | STT transcription → route to OpenClaw brain |
+| `config` | Account resolution and configuration |
+| `security` | DM policy (pairing, allowlist, open) |
+| `capabilities` | Declare channel features (audio, realtime) |
 
 ---
 
@@ -200,10 +288,18 @@ To achieve the <1.5s target, the following strategies are employed:
 ### Phase 1: Infrastructure & Agent Setup
 - [ ] Initialize `openclaw-plugin-livekit` package with Bun.
 - [ ] Install `@livekit/agents`, `@livekit/agents-plugin-deepgram`, `@livekit/agents-plugin-cartesia`, `@livekit/agents-plugin-elevenlabs`.
-- [ ] Implement LiveKit Agent worker entry point.
-- [ ] Implement basic OpenClaw `Channel` class structure.
-- [ ] Define `configSchema` (JSON Schema) in `openclaw.plugin.json` for plugin settings (LiveKit URL, API keys, TTS provider/voice configuration).
-- [ ] Implement token endpoint (`POST /livekit/token`) for mobile clients to request short-lived access tokens (API secret stays server-side).
+- [ ] Implement plugin entry point (`index.ts`) with `register()` method.
+- [ ] Implement runtime storage pattern (`src/runtime.ts`).
+- [ ] Implement `ChannelPlugin` with required adapters (`src/channel.ts`).
+- [ ] Define `configSchema` using TypeBox for plugin settings (LiveKit URL, API keys, TTS provider/voice configuration).
+- [ ] Implement token endpoint via `api.registerHttpRoute()` for mobile clients to request short-lived access tokens (API secret stays server-side).
+
+### Phase 1.5: Test Infrastructure
+- [ ] Set up vitest configuration.
+- [ ] Create mock `OpenClawPluginApi` for testing without OpenClaw.
+- [ ] Create mock `PluginRuntime` for simulating message routing.
+- [ ] Create mock STT/TTS providers for deterministic tests.
+- [ ] Write unit tests for plugin registration.
 
 ### Phase 2: Audio Inbound (STT)
 - [ ] Configure Deepgram plugin with agent worker.

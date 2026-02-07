@@ -279,3 +279,39 @@ This is a known issue with JDK 17+ where JAXB was removed. Use the manual AVD cr
 Android Studio needs a project open first. Either:
 1. Open `apps/mobile` in Android Studio, then Device Manager will be enabled
 2. Use the command line to create AVDs (recommended on NixOS)
+
+### Native Node Module Errors (libstdc++.so.6)
+
+Some packages like `@livekit/rtc-node` require native C++ libraries. If you see:
+
+```
+libstdc++.so.6: cannot open shared object file: No such file or directory
+```
+
+**Solution 1: Reload the Nix shell** (recommended)
+
+The `flake.nix` includes `stdenv.cc.cc.lib` which provides the C++ runtime:
+
+```bash
+exit
+nix develop
+```
+
+**Solution 2: Set LD_LIBRARY_PATH manually**
+
+Find a 64-bit GCC runtime library:
+
+```bash
+# Find available gcc libs and check architecture
+for lib in $(find /nix/store -name "libstdc++.so.6" 2>/dev/null | head -10); do
+  arch=$(file -L "$lib" 2>/dev/null | grep -o "64-bit" || echo "32-bit")
+  echo "$arch: $lib"
+done
+
+# Use a 64-bit version
+export LD_LIBRARY_PATH=/nix/store/<hash>-gcc-<version>-lib/lib:$LD_LIBRARY_PATH
+```
+
+**Wrong ELF Class Error**
+
+If you see `wrong ELF class: ELFCLASS32`, you're loading a 32-bit library. Use a 64-bit version from the output above.

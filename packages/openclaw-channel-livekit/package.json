@@ -15,16 +15,24 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "bun test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run test/unit/",
+    "test:integration": "vitest run test/integration/",
+    "test:coverage": "vitest run --coverage",
     "lint": "eslint src --ext .ts"
   },
   "dependencies": {
+    "@livekit/agents": "^1.0.0",
+    "@livekit/agents-plugin-deepgram": "^1.0.0",
+    "@livekit/agents-plugin-cartesia": "^1.0.0",
+    "@livekit/rtc-node": "^0.12.0",
     "livekit-server-sdk": "^2.0.0",
-    "@deepgram/sdk": "^3.0.0",
-    "@cartesia/cartesia-js": "^1.0.0",
     "@sinclair/typebox": "^0.32.0"
   },
   "devDependencies": {
+    "vitest": "^2.0.0",
+    "@types/node": "^20.0.0"
   },
   "peerDependencies": {
     "openclaw": ">=2.0.0"
