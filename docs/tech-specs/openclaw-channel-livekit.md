@@ -1,13 +1,63 @@
-# Technical Specification: openclaw-plugin-livekit
+# Technical Specification: openclaw-channel-livekit
 
 ## 1. Overview
-The `openclaw-plugin-livekit` package is an OpenClaw Channel Plugin designed to provide high-performance, low-latency voice interaction via [LiveKit](https://livekit.io/). It enables OpenClaw agents to participate in LiveKit rooms as real-time voice participants, bridging the gap between standard text-based message routing and high-fidelity audio streams.
+The `openclaw-channel-livekit` package is an OpenClaw Channel Plugin designed to provide high-performance, low-latency voice interaction via [LiveKit](https://livekit.io/). It enables OpenClaw agents to participate in LiveKit rooms as real-time voice participants, bridging the gap between standard text-based message routing and high-fidelity audio streams.
 
 **Target Latency:** < 1.5 seconds glass-to-glass (Audio In -> Agent Processing -> Audio Out).
 
 ---
 
-## 2. Integration: OpenClaw Channel Interface
+## 2. Modular Architecture
+
+Fletcher uses a "nested plugin" architecture that separates the communication channel from the reasoning engine. This allows each layer to be used independently or together.
+
+### The Three Levels
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Level 1: OpenClaw Channel Plugin                           │
+│  (@knittt/openclaw-channel-livekit)                         │
+│  Role: Connectivity & Transport                             │
+│  - Connects OpenClaw to LiveKit rooms                       │
+│  - Manages RTC tracks (audio/video)                         │
+│  - Implements OpenClaw Channel API                          │
+├─────────────────────────────────────────────────────────────┤
+│  Level 2: LiveKit Agent Runtime                             │
+│  (@livekit/agents framework)                                │
+│  Role: Orchestration                                        │
+│  - Entry point for the agent process                        │
+│  - Orchestrates Levels 1 and 3                              │
+│  - Handles room events (participant joined/left)            │
+├─────────────────────────────────────────────────────────────┤
+│  Level 3: OpenClaw LLM Plugin                               │
+│  (@knittt/livekit-agent-openclaw)                           │
+│  Role: Intelligence & Reasoning                             │
+│  - Wraps OpenClaw reasoning interface (the "Brain")         │
+│  - Provides standard LLM interface to LiveKit Agents        │
+│  - Can be used in ANY LiveKit Agent project                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Boundary Definitions
+
+| Feature | Level 1 (Channel) | Level 2 (Agent) | Level 3 (Brain) |
+| :--- | :--- | :--- | :--- |
+| **Media Handling** | Encodes/Decodes Opus/VP8 | Forwards buffers | N/A |
+| **State Management** | Channel session state | Global app state | Conversation context |
+| **External Tools** | N/A | Injects local tools | Tool-calling logic |
+| **LLM Calls** | N/A | N/A | Executes OpenClaw requests |
+
+### Modularity Goals
+
+1. **Standalone Brain:** A developer building a standard LiveKit agent can `npm install @knittt/livekit-agent-openclaw` and use OpenClaw's reasoning without needing the Fletcher channel infrastructure.
+
+2. **Pluggable Channels:** OpenClaw can swap Level 1 for a WhatsApp or Discord plugin while keeping Level 3 constant.
+
+**This document specifies Level 1 (the Channel Plugin).** See [livekit-agent-openclaw](./livekit-agent-openclaw.md) for the Level 3 specification.
+
+---
+
+## 3. Integration: OpenClaw Channel Interface
 The plugin registers a LiveKit channel with the OpenClaw Gateway via the plugin API.
 
 ### Plugin Entry Point:
@@ -151,7 +201,7 @@ export const livekitPlugin: ChannelPlugin = {
 
 ---
 
-## 3. Audio Pipeline: STT/TTS Orchestration
+## 4. Audio Pipeline: STT/TTS Orchestration
 The pipeline uses the `@livekit/agents` framework (Node.js) to orchestrate audio flow. This framework provides built-in support for VAD, interruption handling, and STT/TTS plugin integration.
 
 ### Framework: @livekit/agents
@@ -242,7 +292,7 @@ The agent's voice is configured via the plugin `configSchema`:
 
 ---
 
-## 4. Room Management
+## 5. Room Management
 The plugin acts as a "Bot Participant" within LiveKit, managed by the `@livekit/agents` framework.
 
 ### LiveKit Agent Lifecycle:
@@ -261,7 +311,7 @@ The plugin acts as a "Bot Participant" within LiveKit, managed by the `@livekit/
 
 ---
 
-## 5. Latency Strategy
+## 6. Latency Strategy
 To achieve the <1.5s target, the following strategies are employed:
 
 1. **Edge VAD for Interruptions:**
@@ -283,7 +333,7 @@ To achieve the <1.5s target, the following strategies are employed:
 
 ---
 
-## 6. Task Breakdown & Implementation Checklist
+## 7. Task Breakdown & Implementation Checklist
 
 ### Phase 1: Infrastructure & Agent Setup
 - [ ] Initialize `openclaw-plugin-livekit` package with Bun.
