@@ -21,20 +21,47 @@ Setting up the development environment, LiveKit server, and monorepo structure.
 - [x] 001: Setup LiveKit server (local or cloud)
 - [x] 002: Repository structure & CI/CD
 
-### 2. [OpenClaw Channel Plugin](./02-livekit-agent)
+### 2. [OpenClaw Channel Plugin](./02-livekit-agent) 🔄
 The LiveKit channel plugin (`@openclaw/channel-livekit`) that integrates voice capabilities into OpenClaw.
 
 **Tasks:**
-- [ ] 001: Initialize OpenClaw channel plugin
-- [ ] 002: Implement audio pipeline (STT/TTS)
-- [ ] 004: Channel plugin approach (implementation guide)
+- [x] 001: Initialize OpenClaw channel plugin ✅
+- [~] 002: Implement audio pipeline (STT/TTS) - structure done, provider integration TODO
+- [x] 004: Channel plugin approach (implementation guide)
 
-### 3. [Flutter App](./03-flutter-app)
+**Implemented:**
+- Full plugin structure with OpenClaw adapters (config, security, gateway, outbound, status)
+- VoiceAgent with state machine (idle/listening/thinking/speaking)
+- STT/TTS provider interfaces with Deepgram/Cartesia/ElevenLabs config
+- Multi-account support with environment variable fallback
+
+**Remaining:**
+- Actual Deepgram WebSocket integration (placeholder exists)
+- Actual Cartesia/ElevenLabs API integration (placeholder exists)
+- Audio track publishing to LiveKit room
+- End-to-end latency validation
+
+### 3. [Flutter App](./03-flutter-app) ✅
 The mobile client for real-time voice interaction and visualization.
 
 **Tasks:**
-- [ ] 001: Initialize Flutter app
-- [ ] 002: Implement Amber Heartbeat visualizer
+- [x] 001: Initialize Flutter app ✅
+- [x] 002: Implement Amber Heartbeat visualizer ✅
+
+**Implemented:**
+- Full Flutter app with livekit_client integration
+- AmberOrb visualizer with all conversation states
+- Real-time audio level monitoring (50ms polling)
+- Mute toggle, auto-connect, dark theme
+
+### 4. [Standalone Brain Plugin](./04-livekit-agent-plugin) 🔄
+A standalone LLM plugin (`@knittt/livekit-agent-openclaw`) that bridges LiveKit agents to the OpenClaw Gateway via OpenAI-compatible API.
+
+**Progress:**
+- [x] Phase 1: Foundation (OpenClawLLM, OpenClawChatStream)
+- [x] Phase 2: OpenClaw Integration (client, auth, session management, message mapping)
+- [~] Phase 3: Advanced Features (tool mapping done, async resolution pending)
+- [ ] Phase 4: Testing & Distribution (unit tests done, integration tests pending)
 
 ## Development Path
 

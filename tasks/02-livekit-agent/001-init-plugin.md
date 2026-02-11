@@ -43,9 +43,9 @@ await room.connect(LIVEKIT_URL, token);
 
 ## Implementation Checklist
 
-### Plugin Package Setup
-- [ ] Create plugin package structure in `packages/openclaw-channel-livekit/`
-- [ ] Initialize package.json with openclaw.extensions field
+### Plugin Package Setup ✅
+- [x] Create plugin package structure in `packages/openclaw-channel-livekit/`
+- [x] Initialize package.json with openclaw.extensions field
   ```json
   {
     "name": "@openclaw/channel-livekit",
@@ -55,92 +55,86 @@ await room.connect(LIVEKIT_URL, token);
     }
   }
   ```
-- [ ] Set up TypeScript configuration (tsconfig.json)
-- [ ] Install core dependencies:
-  - [ ] `livekit-server-sdk` - LiveKit client SDK
-  - [ ] `@sinclair/typebox` - Configuration schema validation
-  - [ ] `@deepgram/sdk` - Speech-to-text
-  - [ ] `@cartesia/cartesia-js` - Text-to-speech
-- [ ] Add OpenClaw as devDependency/peerDependency
-  ```json
-  {
-    "devDependencies": { "openclaw": "workspace:*" },
-    "peerDependencies": { "openclaw": ">=2.0.0" }
-  }
-  ```
+- [x] Set up TypeScript configuration (tsconfig.json)
+- [x] Install core dependencies:
+  - [x] `@livekit/agents`, `@livekit/rtc-node`, `livekit-server-sdk`
+  - [x] `@sinclair/typebox` - Configuration schema validation
+  - [x] `@livekit/agents-plugin-deepgram` - Speech-to-text
+  - [x] `@livekit/agents-plugin-cartesia` - Text-to-speech
+- [x] Add OpenClaw as peerDependency (`openclaw: ">=2.0.0"`)
 
-### Plugin Entry Point
-- [ ] Create src/index.ts as plugin entry point
-- [ ] Export plugin function: `export default function(api: PluginAPI)`
-- [ ] Define channel plugin interface:
-  - [ ] id: 'livekit'
-  - [ ] name: 'LiveKit Voice Channel'
-  - [ ] configSchema: TypeBox schema for validation
-  - [ ] register(api): Plugin initialization function
+### Plugin Entry Point ✅
+- [x] Create src/index.ts as plugin entry point
+- [x] Export plugin with `id`, `name`, `description`, `configSchema`, `register(api)`
+- [x] Define channel plugin interface:
+  - [x] id: 'livekit'
+  - [x] name: 'LiveKit Voice'
+  - [x] configSchema: TypeBox schema for validation
+  - [x] register(api): Plugin initialization function
 
-### Configuration Schema
-- [ ] Define TypeBox schema for channel config
-  - [ ] enabled: boolean
-  - [ ] url: string (LiveKit server URL)
-  - [ ] apiKey: string
-  - [ ] apiSecret: string
-  - [ ] roomName: string
-  - [ ] dmPolicy: 'open' | 'pairing' | 'allowlist'
-  - [ ] stt: { provider, apiKey, model }
-  - [ ] tts: { provider, apiKey, voice }
+### Configuration Schema ✅
+- [x] Define TypeBox schema for channel config (src/config.ts)
+  - [x] Multi-account support with accounts record
+  - [x] enabled: boolean
+  - [x] url: string (LiveKit server URL)
+  - [x] apiKey: string
+  - [x] apiSecret: string
+  - [x] roomPrefix: string
+  - [x] dmPolicy: 'open' | 'pairing' | 'allowlist'
+  - [x] stt: { provider, apiKey, deepgram config }
+  - [x] tts: { provider, apiKey, cartesia/elevenlabs config }
+- [x] Environment variable fallback (LIVEKIT_URL, DEEPGRAM_API_KEY, etc.)
 
-### Channel Implementation
-- [ ] Create src/channel.ts with LiveKitChannel class
-- [ ] Implement connect() method
-  - [ ] Load config from api.config.channels.livekit
-  - [ ] Connect to LiveKit server
-  - [ ] Join specified room
-  - [ ] Handle connection errors and reconnection
-- [ ] Implement participant event handlers:
-  - [ ] `participantConnected` - Subscribe to new participant's audio
-  - [ ] `participantDisconnected` - Clean up resources
-  - [ ] `trackSubscribed` - Start processing audio from track
-  - [ ] `trackUnsubscribed` - Stop processing
-- [ ] Set bot metadata (name: "OpenClaw Assistant", type: "bot")
+### Channel Implementation ✅
+- [x] Create src/channel.ts with livekitPlugin object
+- [x] Implement gateway.startAccount() / stopAccount()
+  - [x] Load config via resolveLivekitAccount()
+  - [x] Connect to LiveKit server via connectToRoom()
+  - [x] Generate agent token
+  - [x] Handle connection errors and abort signal
+- [x] Implement participant event handlers (src/livekit/participant.ts):
+  - [x] ParticipantTracker with onJoin/onLeave callbacks
+  - [x] Speaker creation from RemoteParticipant
+- [x] Set bot metadata (identity: "agent-{accountId}")
 
-### OpenClaw Integration
-- [ ] Register channel with OpenClaw:
-  - [ ] Call api.channels.register('livekit', channelInstance)
-- [ ] Handle incoming transcriptions:
-  - [ ] Listen to channel.on('transcription') events
-  - [ ] Send to OpenClaw: api.gateway.handleMessage()
-  - [ ] Include userId, text, timestamp, metadata
-- [ ] Handle outgoing responses:
-  - [ ] Listen to api.on('message:send') events
-  - [ ] Filter for channel === 'livekit'
-  - [ ] Call channel.speak() to generate TTS
-- [ ] Handle typing indicators:
-  - [ ] Listen to api.on('typing:start') events
-  - [ ] Show "speaking" state in LiveKit room
+### OpenClaw Integration ✅
+- [x] Register channel with OpenClaw via api.registerChannel()
+- [x] Handle incoming transcriptions (VoiceAgent.handleTranscription):
+  - [x] Call runtime.gateway.handleMessage()
+  - [x] Include channel, conversationId, text, sender
+- [x] Handle outgoing responses (outbound.sendText):
+  - [x] Calls agent.say() to generate TTS
+- [x] Config adapters: listAccountIds, resolveAccount, etc.
+- [x] Security adapter: resolveDmPolicy with allowFrom
 
-### Audio Track Management
-- [ ] Subscribe to audio tracks from human participants
-- [ ] Create audio track for bot's responses
-- [ ] Publish bot's audio track to room
-- [ ] Implement track enable/disable logic
+### Audio Track Management (Partial)
+- [x] VoiceAgent class with state machine (idle/listening/thinking/speaking)
+- [x] STT/TTS provider initialization
+- [ ] Full audio track subscription from participants
+- [ ] Audio chunk publishing to room
 
-### Access Control
-- [ ] Implement isAllowed() method
-  - [ ] Check dmPolicy (open/pairing/allowlist)
-  - [ ] For allowlist: check config.allowFrom
-  - [ ] For pairing: check api.gateway.isPaired()
-- [ ] Disconnect unauthorized participants
+### Access Control ✅
+- [x] DM policy configuration (open/pairing/allowlist)
+- [x] allowFrom array support
+- [x] security.resolveDmPolicy() adapter
 
 ### Testing
-- [ ] Create "Hello World" test:
-  - [ ] Plugin loads when OpenClaw starts
-  - [ ] Channel joins LiveKit room
-  - [ ] Detects human participant
-  - [ ] Sends pre-recorded "Hello" audio message
-  - [ ] Verifies audio is received by human client
-- [ ] Test with both local and cloud LiveKit servers
+- [ ] Set up vitest configuration
+- [ ] Create mock OpenClawPluginApi for testing without OpenClaw
+- [ ] Create mock STT/TTS providers for deterministic tests
+- [ ] Create "Hello World" integration test
+- [ ] Test with local/cloud LiveKit servers
 - [ ] Verify connection resilience (reconnect on disconnect)
 - [ ] Test access control (allowlist, pairing)
+
+### Token Endpoint (for mobile clients)
+- [ ] Implement token endpoint via `api.registerHttpRoute()`
+- [ ] Mobile clients request short-lived access tokens
+- [ ] API secret stays server-side
+
+---
+
+**Technical Spec:** [`docs/specs/02-livekit-agent/spec.md`](../../docs/specs/02-livekit-agent/spec.md)
 
 ## Configuration
 

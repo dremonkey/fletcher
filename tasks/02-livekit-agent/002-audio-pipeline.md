@@ -191,49 +191,41 @@ for await (const audioChunk of ttsStream) {
 
 ## Implementation Checklist
 
-### STT Integration
-- [ ] Install STT provider SDK:
-  - [ ] Deepgram: `@deepgram/sdk`
-  - [ ] OR Groq: `groq-sdk`
-- [ ] Implement audio buffer management
-- [ ] Create WebSocket connection to STT service
-- [ ] Handle audio chunk streaming from LiveKit
-- [ ] Process interim and final transcription results
-- [ ] Implement VAD or use provider's endpointing
-- [ ] Add error handling and reconnection logic
+### STT Integration (Partial)
+- [x] Install STT provider SDK (@livekit/agents-plugin-deepgram)
+- [x] STTProvider interface (src/pipeline/stt.ts)
+- [x] createSTT() factory function
+- [x] TranscriptAccumulator for partial/final handling
+- [x] shouldRouteToAgent() logic (isFinal && speechFinal)
+- [ ] **TODO**: Actual Deepgram WebSocket integration (placeholder exists)
+- [ ] Audio buffer management
+- [ ] VAD or provider endpointing
 
-### OpenClaw Core Integration
-- [ ] Implement transcription event handler
-  - [ ] Listen to channel.on('transcription')
-  - [ ] Call api.gateway.handleMessage() with transcription
-  - [ ] Include channelUserId, text, timestamp, metadata
-- [ ] Implement message send handler
-  - [ ] Listen to api.on('message:send')
-  - [ ] Filter for channel === 'livekit'
-  - [ ] Call channel.speak() to generate and play TTS
-- [ ] Implement typing indicators (optional)
-  - [ ] Listen to api.on('typing:start')
-  - [ ] Show "bot is speaking" state in room
-- [ ] Add error handling for OpenClaw events
-- [ ] Log all message flows for debugging
+### OpenClaw Core Integration ✅
+- [x] Implement transcription event handler (VoiceAgent.handleTranscription)
+  - [x] Call runtime.gateway.handleMessage()
+  - [x] Include channel, conversationId, text, sender
+- [x] Implement message send handler (outbound.sendText)
+  - [x] Filter for accountId
+  - [x] Call agent.say() to generate and play TTS
+- [x] State machine for bot state (idle/listening/thinking/speaking)
+- [x] Logging via getLivekitLogger()
 
-### TTS Integration
-- [ ] Install TTS provider SDK:
-  - [ ] Cartesia: `@cartesia/cartesia-js`
-  - [ ] OR ElevenLabs: `elevenlabs`
-- [ ] Create WebSocket connection to TTS service
-- [ ] Stream brain output text to TTS
-- [ ] Handle audio chunk streaming from TTS
-- [ ] Resample audio if needed (to 48kHz for LiveKit)
-- [ ] Publish audio chunks to LiveKit track
-- [ ] Implement streaming buffering for smooth playback
+### TTS Integration (Partial)
+- [x] Install TTS provider SDK (@livekit/agents-plugin-cartesia)
+- [x] TTSProvider interface (src/pipeline/tts.ts)
+- [x] createTTS() factory with Cartesia/ElevenLabs support
+- [x] AudioFormat constants and duration calculation
+- [ ] **TODO**: Actual Cartesia/ElevenLabs API integration (placeholder exists)
+- [ ] Resample audio to 48kHz for LiveKit
+- [ ] Streaming buffering for smooth playback
 
-### Audio Track Management
-- [ ] Create audio track for agent responses
-- [ ] Implement audio format conversion utilities
-- [ ] Handle track state (speaking/silent)
-- [ ] Add interrupt detection (user talks while agent speaks)
-- [ ] Implement graceful audio cutoff on interrupt
+### Audio Track Management (Partial)
+- [x] VoiceAgent.say() method for TTS output
+- [ ] Create/publish audio track for agent responses
+- [ ] Audio format conversion utilities
+- [ ] Interrupt detection
+- [ ] Graceful audio cutoff
 
 ### Latency Monitoring
 - [ ] Add timing metrics at each pipeline stage
@@ -297,3 +289,7 @@ Configuration is defined in OpenClaw's `openclaw.json`:
 - ✅ Multiple participants can interact simultaneously
 - ✅ Pipeline recovers from service failures
 - ✅ Conversation context maintained by OpenClaw automatically
+
+---
+
+**Technical Spec:** [`docs/specs/02-livekit-agent/spec.md`](../../docs/specs/02-livekit-agent/spec.md)
