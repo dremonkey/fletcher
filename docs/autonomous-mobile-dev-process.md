@@ -42,7 +42,7 @@ Once the test is green, Static generates evidence for the main session:
 
 - **Eyes:** `adb exec-out screencap` serves as the agent's eyes.
 - **Hands:** `flutter_test` and `integration_test` packages serve as the agent's hands.
-- **Memory:** `docs/tech-specs/` serves as the project's long-term technical memory.
+- **Memory:** `docs/specs/` serves as the project's long-term technical memory.
 
 ---
 

@@ -9,10 +9,11 @@
   ],
   "scripts": {
     "build": "tsc",
-    "dev": "tsc -w"
+    "dev": "tsc -w",
+    "test": "bun test"
   },
   "dependencies": {
-    "livekit-agents": "latest"
+    "@livekit/agents": "^1.0.0"
   },
   "devDependencies": {
     "typescript": "^5.0.0"
