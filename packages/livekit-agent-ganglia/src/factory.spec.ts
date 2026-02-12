@@ -6,7 +6,7 @@ import {
   createGanglia,
   type GangliaLLM,
 } from './factory.js';
-import type { GangliaSessionInfo } from './types.js';
+import type { GangliaSessionInfo } from './ganglia-types.js';
 
 // Mock LLM class for testing
 class MockLLM implements Partial<GangliaLLM> {

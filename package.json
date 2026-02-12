@@ -17,7 +17,7 @@
     "lint": "bun workspaces run lint",
     "format": "prettier --write '**/*.{ts,tsx,js,json,md}'",
     "channel:dev": "bun --cwd packages/openclaw-channel-livekit run dev",
-    "brain:dev": "bun --cwd packages/livekit-agent-openclaw run dev",
+    "brain:dev": "bun --cwd packages/livekit-agent-ganglia run dev",
     "mobile:dev": "./scripts/run-mobile.sh",
     "mobile:run": "cd apps/mobile && flutter run",
     "mobile:build:android": "cd apps/mobile && flutter build apk",

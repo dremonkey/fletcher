@@ -30,7 +30,7 @@ Fletcher uses a "nested plugin" architecture that separates the communication ch
 │  - Handles room events (participant joined/left)            │
 ├─────────────────────────────────────────────────────────────┤
 │  Level 3: OpenClaw LLM Plugin                               │
-│  (@knittt/livekit-agent-openclaw)                           │
+│  (@knittt/livekit-agent-ganglia)                           │
 │  Role: Intelligence & Reasoning                             │
 │  - Wraps OpenClaw reasoning interface (the "Brain")         │
 │  - Provides standard LLM interface to LiveKit Agents        │
@@ -49,7 +49,7 @@ Fletcher uses a "nested plugin" architecture that separates the communication ch
 
 ### Modularity Goals
 
-1. **Standalone Brain:** A developer building a standard LiveKit agent can `npm install @knittt/livekit-agent-openclaw` and use OpenClaw's reasoning without needing the Fletcher channel infrastructure.
+1. **Standalone Brain:** A developer building a standard LiveKit agent can `npm install @knittt/livekit-agent-ganglia` and use OpenClaw's reasoning without needing the Fletcher channel infrastructure.
 
 2. **Pluggable Channels:** OpenClaw can swap Level 1 for a WhatsApp or Discord plugin while keeping Level 3 constant.
 

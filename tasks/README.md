@@ -55,7 +55,7 @@ The mobile client for real-time voice interaction and visualization.
 - Mute toggle, auto-connect, dark theme
 
 ### 4. [Standalone Brain Plugin](./04-livekit-agent-plugin) 🔄
-A standalone LLM plugin (`@knittt/livekit-agent-openclaw`) that bridges LiveKit agents to the OpenClaw Gateway via OpenAI-compatible API.
+A unified LLM plugin (`@knittt/livekit-agent-ganglia`) that bridges LiveKit agents to OpenClaw or Nanoclaw via OpenAI-compatible API.
 
 **Tasks:**
 - [~] 001: Standalone Brain Plugin (Phases 1-2 complete, Phase 3-5 in progress)
@@ -68,13 +68,13 @@ A standalone LLM plugin (`@knittt/livekit-agent-openclaw`) that bridges LiveKit 
 - [ ] Phase 4: Testing & Distribution (unit tests done, integration tests pending)
 
 **Progress (002 - Pluggable Brain):**
-- [ ] Phase 1: Abstraction ⬅️ START HERE
-  - Create `livekit-brain-interface` package (types, factory)
-  - Refactor `livekit-agent-openclaw` to use interface
-- [ ] Phase 2: Nanoclaw API Layer
-  - Create `/add-openai-api` skill for Nanoclaw
+- [x] Phase 1: Abstraction ✅
+  - Renamed `livekit-agent-openclaw` → `livekit-agent-ganglia` (unified package)
+  - Added ganglia types, factory, events, and tool-interceptor to unified package
+- [x] Phase 2: Nanoclaw API Layer ✅
+  - Created `/add-openai-api` skill for Nanoclaw
   - Cross-channel history via unified timestamp query
-- [ ] Phase 3: Fletcher Integration
+- [~] Phase 3: Fletcher Integration (tool interceptor done, data channel publishing pending)
 - [ ] Phase 4: Testing & Validation
 
 ## Development Path

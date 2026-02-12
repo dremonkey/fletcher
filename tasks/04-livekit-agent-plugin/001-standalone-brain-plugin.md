@@ -1,7 +1,7 @@
-# Task List: Standalone Brain Plugin (`@knittt/livekit-agent-openclaw`)
+# Task List: Standalone Brain Plugin (`@knittt/livekit-agent-ganglia`)
 
 ## Phase 1: Foundation ✅
-- [x] Initialize TypeScript project in `packages/livekit-agent-openclaw`.
+- [x] Initialize TypeScript project in `packages/livekit-agent-ganglia`.
 - [x] Define the `OpenClawLLM` class extending `livekit.agents.llm.LLM`.
 - [x] Implement `OpenClawChatStream` for managing streaming responses.
 

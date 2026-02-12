@@ -1,7 +1,7 @@
 {
-  "name": "@knittt/livekit-ganglia-interface",
+  "name": "@knittt/livekit-agent-ganglia",
   "version": "0.1.0",
-  "description": "Shared interface for pluggable LLM backends (ganglia) in LiveKit voice agents.",
+  "description": "A unified LiveKit Agents LLM plugin supporting OpenClaw and Nanoclaw backends.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

@@ -55,7 +55,7 @@ Fletcher uses a **package-centric + app-centric hybrid** monorepo pattern:
 fletcher/
 ├── packages/                    # Reusable libraries (npm)
 │   ├── openclaw-channel-livekit/   # Channel plugin (TypeScript/Bun)
-│   └── livekit-agent-openclaw/     # Brain plugin (TypeScript/Bun)
+│   └── livekit-agent-ganglia/     # Brain plugin (TypeScript/Bun)
 ├── apps/                        # Deployable applications
 │   └── mobile/                     # Flutter app (Dart)
 ├── docs/

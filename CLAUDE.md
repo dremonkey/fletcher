@@ -9,7 +9,7 @@ This project (Fletcher) is an OpenClaw channel plugin for real-time voice conver
 
 ## Project Structure
 - `packages/openclaw-channel-livekit`: The primary OpenClaw channel plugin.
-- `packages/livekit-agent-openclaw`: The Standalone Brain Plugin (bridges LiveKit to OpenClaw Gateway).
+- `packages/livekit-agent-ganglia`: The unified Brain Plugin (bridges LiveKit to OpenClaw/Nanoclaw).
 - `apps/mobile`: Example Flutter app for testing.
 
 ## Documentation & Specs
@@ -22,10 +22,11 @@ This project (Fletcher) is an OpenClaw channel plugin for real-time voice conver
 - **Co-location Rule:** Unit tests MUST live directly alongside their corresponding source files (e.g., `src/client.ts` and `src/client.spec.ts`). Do NOT use a separate `__tests__/` directory.
 - Test files should use `.spec.ts` or `.test.ts` extensions.
 
-## Brain Bridge (`livekit-agent-openclaw`)
-- This package implements `OpenClawLLM` (extending `livekit.agents.llm.LLM`).
-- It talks to the local OpenClaw Gateway (default `http://localhost:8080`) using an OpenAI-compatible streaming endpoint.
-- Authentication uses `OPENCLAW_API_KEY`.
+## Brain Bridge (`livekit-agent-ganglia`)
+- This package implements `GangliaLLM` (extending `livekit.agents.llm.LLM`).
+- Supports multiple backends: OpenClaw (multi-user) and Nanoclaw (single-user).
+- Switch backends via `GANGLIA_TYPE` env var (`openclaw` or `nanoclaw`).
+- Authentication: `OPENCLAW_API_KEY` for OpenClaw, none for Nanoclaw (localhost).
 
 ## Environment Notes
 - Workspace root: `/home/ahanyu/code/fletcher`

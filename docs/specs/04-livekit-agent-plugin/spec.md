@@ -1,8 +1,8 @@
-# Technical Specification: livekit-agent-openclaw
+# Technical Specification: livekit-agent-ganglia
 
 ## 1. Overview
 
-The `@knittt/livekit-agent-openclaw` package is a **LiveKit Agents LLM plugin** that wraps OpenClaw's reasoning interface (the "Brain") for use in any LiveKit Agent project. This is **Level 3** of the Fletcher modular architecture.
+The `@knittt/livekit-agent-ganglia` package is a **LiveKit Agents LLM plugin** that wraps OpenClaw's reasoning interface (the "Brain") for use in any LiveKit Agent project. This is **Level 3** of the Fletcher modular architecture.
 
 Unlike the channel plugin (Level 1), this package has no dependency on OpenClaw's channel infrastructure. It provides a standard LLM interface that the `@livekit/agents` framework can use for voice agent orchestration.
 
@@ -15,8 +15,8 @@ See [Channel Plugin Spec](../02-livekit-agent/spec.md) for the Level 1 specifica
 ## 2. Package Identity
 
 ```
-Package: @knittt/livekit-agent-openclaw
-Location: packages/livekit-agent-openclaw
+Package: @knittt/livekit-agent-ganglia
+Location: packages/livekit-agent-ganglia
 Runtime: Bun (TypeScript)
 Dependencies:
   - @livekit/agents (peer)
@@ -255,7 +255,7 @@ OPENCLAW_DEFAULT_CONVERSATION_ID=conv_xyz789
 ### Programmatic Configuration
 
 ```typescript
-import { OpenClawLLM } from "@knittt/livekit-agent-openclaw";
+import { OpenClawLLM } from "@knittt/livekit-agent-ganglia";
 
 const llm = new OpenClawLLM({
   apiUrl: process.env.OPENCLAW_API_URL!,
@@ -268,7 +268,7 @@ const llm = new OpenClawLLM({
 
 ```typescript
 import { VoicePipelineAgent } from "@livekit/agents";
-import { OpenClawLLM } from "@knittt/livekit-agent-openclaw";
+import { OpenClawLLM } from "@knittt/livekit-agent-ganglia";
 import { DeepgramSTT } from "@livekit/agents-plugin-deepgram";
 import { CartesiaTTS } from "@livekit/agents-plugin-cartesia";
 

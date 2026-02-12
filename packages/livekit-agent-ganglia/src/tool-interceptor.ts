@@ -11,7 +11,7 @@
  *
  * @example
  * ```typescript
- * import { ToolInterceptor } from '@knittt/livekit-ganglia-interface';
+ * import { ToolInterceptor } from '@knittt/livekit-agent-ganglia';
  *
  * const interceptor = new ToolInterceptor((event) => {
  *   room.localParticipant.publishData(JSON.stringify(event), { reliable: true });

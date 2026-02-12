@@ -19,19 +19,8 @@
         "vitest": "^4.0.18",
       },
     },
-    "packages/livekit-agent-openclaw": {
-      "name": "@knittt/livekit-agent-openclaw",
-      "version": "0.1.0",
-      "dependencies": {
-        "@knittt/livekit-ganglia-interface": "workspace:*",
-        "@livekit/agents": "^1.0.0",
-      },
-      "devDependencies": {
-        "typescript": "^5.0.0",
-      },
-    },
-    "packages/livekit-ganglia-interface": {
-      "name": "@knittt/livekit-ganglia-interface",
+    "packages/livekit-agent-ganglia": {
+      "name": "@knittt/livekit-agent-ganglia",
       "version": "0.1.0",
       "dependencies": {
         "@livekit/agents": "^1.0.0",
@@ -327,9 +316,7 @@
 
     "@keyv/serialize": ["@keyv/serialize@1.1.1", "", {}, "sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA=="],
 
-    "@knittt/livekit-agent-openclaw": ["@knittt/livekit-agent-openclaw@workspace:packages/livekit-agent-openclaw"],
-
-    "@knittt/livekit-ganglia-interface": ["@knittt/livekit-ganglia-interface@workspace:packages/livekit-ganglia-interface"],
+    "@knittt/livekit-agent-ganglia": ["@knittt/livekit-agent-ganglia@workspace:packages/livekit-agent-ganglia"],
 
     "@kwsites/file-exists": ["@kwsites/file-exists@1.1.1", "", { "dependencies": { "debug": "^4.1.1" } }, "sha512-m9/5YGR18lIwxSFDwfE3oA7bWuq9kdau6ugN4H2rJeyhFQZcG9AgSHkQtSD15a8WvTgfz9aikZMrKPHvbpqFiw=="],
 

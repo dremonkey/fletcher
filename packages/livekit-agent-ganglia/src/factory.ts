@@ -2,11 +2,11 @@
  * Ganglia Factory
  *
  * Creates LLM instances based on configuration.
- * Dynamically imports the appropriate backend package.
+ * Both OpenClaw and Nanoclaw backends are included in this package.
  */
 
 import type { llm } from '@livekit/agents';
-import type { GangliaConfig, GangliaSessionInfo } from './types.js';
+import type { GangliaConfig, GangliaSessionInfo } from './ganglia-types.js';
 
 /**
  * Extended LLM interface with session management.
@@ -31,16 +31,13 @@ const registry = new Map<string, () => Promise<new (config: any) => GangliaLLM>>
 
 /**
  * Registers a ganglia implementation.
- * Called by backend packages to make themselves available.
+ * Called by backend implementations to make themselves available.
  *
  * @example
  * ```typescript
- * // In livekit-agent-openclaw/src/index.ts
- * import { registerGanglia } from '@knittt/livekit-ganglia-interface';
- * registerGanglia('openclaw', async () => {
- *   const { OpenClawLLM } = await import('./llm.js');
- *   return OpenClawLLM;
- * });
+ * // In llm.ts
+ * import { registerGanglia } from './factory.js';
+ * registerGanglia('openclaw', async () => OpenClawLLM);
  * ```
  */
 export function registerGanglia(
@@ -68,49 +65,15 @@ export async function createGanglia(config: GangliaConfig): Promise<GangliaLLM> 
   const factory = registry.get(config.type);
 
   if (!factory) {
-    // Try dynamic import as fallback
-    const llmClass = await tryDynamicImport(config.type);
-    if (!llmClass) {
-      throw new Error(
-        `Unknown ganglia type: ${config.type}. ` +
-          `Available types: ${Array.from(registry.keys()).join(', ') || 'none registered'}. ` +
-          `Make sure to import the backend package before calling createGanglia().`,
-      );
-    }
-    return new llmClass(config[config.type as keyof typeof config]);
+    throw new Error(
+      `Unknown ganglia type: ${config.type}. ` +
+        `Available types: ${Array.from(registry.keys()).join(', ') || 'none registered'}. ` +
+        `Make sure the backend is registered before calling createGanglia().`,
+    );
   }
 
   const LLMClass = await factory();
   return new LLMClass(config[config.type as keyof typeof config]);
-}
-
-/**
- * Attempts to dynamically import a ganglia backend package.
- */
-async function tryDynamicImport(
-  type: string,
-): Promise<(new (config: any) => GangliaLLM) | null> {
-  const packageNames: Record<string, string> = {
-    openclaw: '@knittt/livekit-agent-openclaw',
-    nanoclaw: '@knittt/livekit-agent-nanoclaw',
-  };
-
-  const packageName = packageNames[type];
-  if (!packageName) return null;
-
-  try {
-    const module = await import(packageName);
-    // Look for the LLM class - try common export patterns
-    return (
-      module.default?.LLM ||
-      module.LLM ||
-      module[`${type.charAt(0).toUpperCase()}${type.slice(1)}LLM`] ||
-      null
-    );
-  } catch {
-    // Package not installed
-    return null;
-  }
 }
 
 /**
@@ -152,7 +115,7 @@ export async function createGangliaFromEnv(): Promise<GangliaLLM> {
     return createGanglia({
       type: 'nanoclaw',
       nanoclaw: {
-        url: process.env.NANOCLAW_URL || 'http://localhost:3000',
+        url: process.env.NANOCLAW_URL || 'http://localhost:18789',
         channelPrefix: process.env.NANOCLAW_CHANNEL_PREFIX || 'lk',
       },
     });

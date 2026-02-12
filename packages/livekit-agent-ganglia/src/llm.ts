@@ -1,9 +1,6 @@
 import { llm, APIConnectOptions } from '@livekit/agents';
-import {
-  type GangliaLLM,
-  type GangliaSessionInfo,
-  registerGanglia,
-} from '@knittt/livekit-ganglia-interface';
+import { type GangliaLLM, registerGanglia } from './factory.js';
+import { type GangliaSessionInfo } from './ganglia-types.js';
 import { OpenClawClient } from './client.js';
 import {
   OpenClawConfig,

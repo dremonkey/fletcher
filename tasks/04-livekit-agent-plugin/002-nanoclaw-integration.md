@@ -49,7 +49,7 @@ LiveKit Server <--> Fletcher Worker
                     BrainAdapter
                     /          \
            OpenClawLLM      NanoclawLLM
-    (livekit-agent-openclaw)  (livekit-agent-nanoclaw)
+    (livekit-agent-ganglia)  (livekit-agent-ganglia)
                |                |
         OpenClaw Gateway   Nanoclaw API Layer
                            (via /add-openai-api skill)
@@ -65,13 +65,13 @@ packages/
 │   │   ├── factory.ts           # createBrain()
 │   │   └── index.ts
 │   └── package.json
-├── livekit-agent-openclaw/      # OpenClaw implementation
+├── livekit-agent-ganglia/      # OpenClaw implementation
 │   ├── src/
 │   │   ├── client.ts
 │   │   ├── llm.ts               # OpenClawLLM
 │   │   └── index.ts
 │   └── package.json             # depends on livekit-ganglia-interface
-└── livekit-agent-nanoclaw/      # Nanoclaw implementation (if needed)
+└── livekit-agent-ganglia/      # Nanoclaw implementation (if needed)
     └── ...                      # May just be config if API is OpenAI-compatible
 ```
 
@@ -90,7 +90,7 @@ Create the shared interface package and refactor OpenClaw to use it.
 - [x] Export all types and factory from `index.ts`.
 - [x] Unit tests for factory and events.
 
-### 1.2 Refactor `livekit-agent-openclaw` ✅
+### 1.2 Refactor `livekit-agent-ganglia` ✅
 - [x] Add dependency on `livekit-ganglia-interface`.
 - [x] `OpenClawLLM` implements `GangliaLLM` interface.
 - [x] Added `gangliaType()` method returning `'openclaw'`.
@@ -101,14 +101,14 @@ Create the shared interface package and refactor OpenClaw to use it.
 ### 1.3 Update Worker (Deferred)
 
 No standalone worker/agent application exists yet in this repo. When one is created:
-- [ ] Import from `@knittt/livekit-ganglia-interface`.
+- [ ] Import from `@knittt/livekit-agent-ganglia`.
 - [ ] Use `createGangliaFromEnv()` for config-driven backend selection.
 - [ ] Set `GANGLIA_TYPE=openclaw|nanoclaw` to switch backends.
 
 **Usage example:**
 ```typescript
-import { createGangliaFromEnv } from '@knittt/livekit-ganglia-interface';
-import '@knittt/livekit-agent-openclaw'; // Registers 'openclaw' with factory
+import { createGangliaFromEnv } from '@knittt/livekit-agent-ganglia';
+import '@knittt/livekit-agent-ganglia'; // Registers 'openclaw' with factory
 
 const llm = await createGangliaFromEnv(); // Uses GANGLIA_TYPE env var
 ```
@@ -274,8 +274,8 @@ If Nanoclaw's API is sufficiently OpenAI-compatible:
 
 If API differences require custom handling:
 
-#### 3.1 Create `livekit-agent-nanoclaw` Package
-- [ ] Initialize `packages/livekit-agent-nanoclaw` with TypeScript.
+#### 3.1 Create `livekit-agent-ganglia` Package
+- [ ] Initialize `packages/livekit-agent-ganglia` with TypeScript.
 - [ ] Add dependency on `livekit-ganglia-interface`.
 
 #### 3.2 NanoclawLLM
@@ -312,7 +312,7 @@ If API differences require custom handling:
 
 ### Core Integration
 - [ ] `livekit-ganglia-interface` package with shared types and factory.
-- [ ] `livekit-agent-openclaw` refactored to use interface.
+- [ ] `livekit-agent-ganglia` refactored to use interface.
 - [ ] Nanoclaw `/add-openai-api` skill created and working.
 - [ ] Worker switches backends via `BRAIN_TYPE` env var.
 - [ ] No code changes required to switch backends.

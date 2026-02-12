@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the architecture and implementation plan for integrating Nanoclaw as an alternative "brain" for the Fletcher voice interface. Currently, Fletcher uses `@knittt/livekit-agent-openclaw` to connect to OpenClaw. We will generalize this to support Nanoclaw, making the backend pluggable.
+This document outlines the architecture and implementation plan for integrating Nanoclaw as an alternative "brain" for the Fletcher voice interface. Currently, Fletcher uses `@knittt/livekit-agent-ganglia` to connect to OpenClaw. We will generalize this to support Nanoclaw, making the backend pluggable.
 
 ## Key Differences: OpenClaw vs Nanoclaw
 
@@ -83,9 +83,9 @@ packages/
 │   ├── src/types.ts             # BrainConfig, BrainSessionInfo
 │   ├── src/factory.ts           # createBrain()
 │   └── package.json
-├── livekit-agent-openclaw/      # OpenClaw implementation
+├── livekit-agent-ganglia/      # OpenClaw implementation
 │   └── ...
-└── livekit-agent-nanoclaw/      # Nanoclaw implementation (optional)
+└── livekit-agent-ganglia/      # Nanoclaw implementation (optional)
     └── ...                      # May not be needed if API is identical
 ```
 
@@ -235,7 +235,7 @@ When the API receives a request:
 
 ### Phase 1: Abstraction
 1. Create `livekit-ganglia-interface` package with types and factory
-2. Refactor `livekit-agent-openclaw` to use interface
+2. Refactor `livekit-agent-ganglia` to use interface
 3. Update worker to use `createBrain()` factory
 4. Verify OpenClaw still works (regression test)
 

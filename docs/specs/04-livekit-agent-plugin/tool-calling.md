@@ -1,7 +1,7 @@
 # Technical Specification: Tool-Calling Support in Fletcher Brain Bridge
 
 **Status:** Draft / Phase 3 Proposal  
-**Project:** `@knittt/livekit-agent-openclaw` (Fletcher Brain Bridge)  
+**Project:** `@knittt/livekit-agent-ganglia` (Fletcher Brain Bridge)  
 **Target Latency:** < 1.5s (Turn-Around Time)
 
 ## 1. Objectives

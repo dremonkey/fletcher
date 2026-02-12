@@ -13,7 +13,7 @@ specs/
 │   └── testing-strategy.md     # Testing approach without OpenClaw
 ├── 03-flutter-app/             # Mobile App (apps/mobile)
 │   └── ux.md                   # UI/UX specification
-├── 04-livekit-agent-plugin/    # Brain Plugin (@knittt/livekit-agent-openclaw)
+├── 04-livekit-agent-plugin/    # Brain Plugin (@knittt/livekit-agent-ganglia)
 │   ├── spec.md                 # Main technical spec
 │   └── tool-calling.md         # Tool/skill calling feature
 └── architecture-comparison.md  # Cross-cutting architecture decisions
@@ -31,9 +31,10 @@ specs/
 ### Mobile App (`apps/mobile`)
 - [UX Spec](./03-flutter-app/ux.md) - Amber orb visualizer, voice-first design
 
-### Brain Plugin (`packages/livekit-agent-openclaw`)
-- [Main Spec](./04-livekit-agent-plugin/spec.md) - LiveKit Agents LLM plugin for OpenClaw
+### Brain Plugin (`packages/livekit-agent-ganglia`)
+- [Main Spec](./04-livekit-agent-plugin/spec.md) - LiveKit Agents LLM plugin for OpenClaw/Nanoclaw
 - [Tool Calling](./04-livekit-agent-plugin/tool-calling.md) - Voice-enabled skill/tool execution
+- [Nanoclaw Integration](./04-livekit-agent-plugin/nanoclaw-integration.md) - Pluggable brain architecture
 
 ### Cross-Cutting
 - [Architecture Comparison](./architecture-comparison.md) - Three integration approaches compared

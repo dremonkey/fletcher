@@ -1,11 +1,11 @@
 /**
- * Livekit Ganglia Interface
+ * Livekit Agent Ganglia
  *
- * Shared interface for pluggable LLM backends in LiveKit voice agents.
+ * A unified LiveKit Agents LLM plugin supporting OpenClaw and Nanoclaw backends.
  *
  * @example
  * ```typescript
- * import { createGanglia, createGangliaFromEnv } from '@knittt/livekit-ganglia-interface';
+ * import { createGanglia, createGangliaFromEnv, OpenClawLLM } from '@knittt/livekit-agent-ganglia';
  *
  * // From explicit config
  * const llm = await createGanglia({
@@ -15,18 +15,21 @@
  *
  * // From environment variables
  * const llm = await createGangliaFromEnv();
+ *
+ * // Direct instantiation
+ * const llm = new OpenClawLLM({ baseUrl: 'http://localhost:8080' });
  * ```
  */
 
-// Types
+// Ganglia Types
 export type {
   GangliaConfig,
   GangliaSessionInfo,
   GangliaType,
-  OpenClawConfig,
-  NanoclawConfig,
+  OpenClawConfig as GangliaOpenClawConfig,
+  NanoclawConfig as GangliaNanoclawConfig,
   ConfigFor,
-} from './types.js';
+} from './ganglia-types.js';
 
 // Factory
 export {
@@ -79,3 +82,18 @@ export type {
   EventEmitter,
   ToolInterceptorConfig,
 } from './tool-interceptor.js';
+
+// OpenClaw Implementation
+export { OpenClawLLM } from './llm.js';
+export { extractSessionFromContext } from './llm.js';
+export { OpenClawClient, generateSessionId, buildSessionHeaders } from './client.js';
+export * from './types/index.js';
+
+/**
+ * Default OpenClaw LLM instance
+ */
+export const openclaw = {
+  LLM: OpenClawLLM,
+};
+
+export default openclaw;
