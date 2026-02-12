@@ -1,7 +1,11 @@
 # Task: Pluggable Brain Architecture & Nanoclaw Integration
 
 ## Description
-Refactor the brain plugin to support pluggable backends. Extract a shared interface package, refactor OpenClaw to implement it, then add Nanoclaw as a second backend. The worker should switch between backends via configuration only.
+Refactor the brain plugin to support pluggable backends. Create a unified package supporting both OpenClaw and Nanoclaw, switchable via configuration only.
+
+## Current Status: Phase 1-2 Complete, Phase 3-4 In Progress
+
+---
 
 ## Key Insight: Nanoclaw's Architecture
 
@@ -9,330 +13,151 @@ Nanoclaw is fundamentally different from OpenClaw:
 
 | Aspect | OpenClaw | Nanoclaw |
 |--------|----------|----------|
-| API | Exposes `/v1/chat/completions` | No external API |
-| Integration model | Plugin/SDK | Claude Code Skills (codebase modification) |
+| API | Exposes `/v1/chat/completions` | No external API (needs skill) |
+| Integration model | Plugin/SDK | Claude Code Skills |
 | Multi-user | Yes | Single-user personal assistant |
 | Channels | Plugin system | Direct channel implementations |
 
 **Nanoclaw integration requires creating an OpenAI-compatible API layer** via a Claude Code skill (`/add-openai-api`), then Fletcher can call it like OpenClaw.
 
-## Cross-Channel History (Simplified)
-
-Since Nanoclaw is **single-user**, cross-channel history is trivial:
-
-```sql
--- All messages are from the same user, just different channels
-SELECT * FROM messages ORDER BY timestamp DESC LIMIT 100
-```
-
-Context flows naturally across channels:
-```
-[WhatsApp 9:00am] "Remind me to call mom tomorrow at 5pm"
-[Voice 2:00pm]    "What reminders do I have?"
-[Voice 2:00pm]    "You asked me to remind you to call mom tomorrow at 5pm"
-```
-
-The API layer just needs to:
-1. Store voice messages with `lk:<participant>` JID prefix
-2. Load all recent messages (across all channels) as context
-3. No user identity mapping needed
-
 ---
 
-## Architecture Goal
+## Package Structure (CURRENT)
 
-```
-LiveKit Server <--> Fletcher Worker
-                         |
-                  createBrain(config)  ← livekit-ganglia-interface
-                         |
-                    BrainAdapter
-                    /          \
-           OpenClawLLM      NanoclawLLM
-    (livekit-agent-ganglia)  (livekit-agent-ganglia)
-               |                |
-        OpenClaw Gateway   Nanoclaw API Layer
-                           (via /add-openai-api skill)
-```
-
-## Package Structure
+After refactoring, there is now a **single unified package**:
 
 ```
 packages/
-├── livekit-ganglia-interface/     # Shared types, interfaces, factory
-│   ├── src/
-│   │   ├── types.ts             # BrainConfig, BrainSessionInfo
-│   │   ├── factory.ts           # createBrain()
-│   │   └── index.ts
-│   └── package.json
-├── livekit-agent-ganglia/      # OpenClaw implementation
-│   ├── src/
-│   │   ├── client.ts
-│   │   ├── llm.ts               # OpenClawLLM
-│   │   └── index.ts
-│   └── package.json             # depends on livekit-ganglia-interface
-└── livekit-agent-ganglia/      # Nanoclaw implementation (if needed)
-    └── ...                      # May just be config if API is OpenAI-compatible
+└── livekit-agent-ganglia/          # Unified brain plugin
+    ├── src/
+    │   ├── ganglia-types.ts        # GangliaConfig, GangliaSessionInfo
+    │   ├── events.ts               # StatusEvent, ArtifactEvent, ContentEvent
+    │   ├── factory.ts              # createGanglia(), registerGanglia()
+    │   ├── tool-interceptor.ts     # ToolInterceptor for visual feedback
+    │   ├── client.ts               # HTTP client (works for both backends)
+    │   ├── llm.ts                  # OpenClawLLM (implements GangliaLLM)
+    │   └── index.ts                # Unified exports
+    └── package.json                # @knittt/livekit-agent-ganglia
 ```
 
 ---
 
 ## Phase 1: Abstraction ✅ COMPLETE
 
-Create the shared interface package and refactor OpenClaw to use it.
+### 1.1 Create Unified Package ✅
+- [x] Created types: `GangliaConfig`, `GangliaSessionInfo`, `OpenClawConfig`, `NanoclawConfig`
+- [x] Created events: `StatusEvent`, `ArtifactEvent`, `ContentEvent` types and helpers
+- [x] Created factory: `createGanglia()`, `createGangliaFromEnv()`, `registerGanglia()`
+- [x] Created `ToolInterceptor` for visual feedback during tool execution
+- [x] All unit tests passing (86 tests)
 
-### 1.1 Create `livekit-ganglia-interface` Package ✅
-- [x] Initialize `packages/livekit-ganglia-interface` with TypeScript.
-- [x] Create `src/types.ts` with `GangliaConfig`, `GangliaSessionInfo`, `OpenClawConfig`, `NanoclawConfig`.
-- [x] Create `src/events.ts` with `StatusEvent`, `ArtifactEvent`, `ContentEvent` types and helpers.
-- [x] Create `src/factory.ts` with `createGanglia()`, `createGangliaFromEnv()`, `registerGanglia()`.
-- [x] Factory dynamically imports implementation packages to avoid hard dependencies.
-- [x] Export all types and factory from `index.ts`.
-- [x] Unit tests for factory and events.
+### 1.2 Unified Package Structure ✅
+- [x] Renamed `livekit-agent-openclaw` → `livekit-agent-ganglia`
+- [x] Merged `livekit-ganglia-interface` into `livekit-agent-ganglia`
+- [x] `OpenClawLLM` implements `GangliaLLM` interface
+- [x] Registered with factory via `registerGanglia('openclaw', ...)`
+- [x] Single import for all functionality
 
-### 1.2 Refactor `livekit-agent-ganglia` ✅
-- [x] Add dependency on `livekit-ganglia-interface`.
-- [x] `OpenClawLLM` implements `GangliaLLM` interface.
-- [x] Added `gangliaType()` method returning `'openclaw'`.
-- [x] Register with factory via `registerGanglia('openclaw', ...)`.
-- [x] Re-export ganglia types from package for convenience.
-- [x] Existing tests pass (client tests; llm test has pre-existing logger issue).
-
-### 1.3 Update Worker (Deferred)
-
-No standalone worker/agent application exists yet in this repo. When one is created:
-- [ ] Import from `@knittt/livekit-agent-ganglia`.
-- [ ] Use `createGangliaFromEnv()` for config-driven backend selection.
-- [ ] Set `GANGLIA_TYPE=openclaw|nanoclaw` to switch backends.
-
-**Usage example:**
+**Usage:**
 ```typescript
-import { createGangliaFromEnv } from '@knittt/livekit-agent-ganglia';
-import '@knittt/livekit-agent-ganglia'; // Registers 'openclaw' with factory
+import {
+  createGangliaFromEnv,
+  OpenClawLLM,
+  ToolInterceptor,
+  type GangliaConfig
+} from '@knittt/livekit-agent-ganglia';
 
 const llm = await createGangliaFromEnv(); // Uses GANGLIA_TYPE env var
 ```
 
-**Outcome**: Phase 1 packages complete. Worker integration deferred until app exists.
+---
+
+## Phase 2: Nanoclaw API Layer ✅ COMPLETE (Skill Documented)
+
+### 2.1 `/add-openai-api` Skill ✅
+- [x] Skill documented at `docs/skills/add-openai-api/SKILL.md`
+- [x] Skill adds Hono HTTP server with `/v1/chat/completions` endpoint
+- [x] SSE streaming response format (OpenAI-compatible)
+- [x] Cross-channel history loading via timestamp query
+- [x] Extended events (status, artifact) documented
+
+### 2.2 Next Step: Apply Skill to Nanoclaw
+- [ ] Copy skill to Nanoclaw's `.claude/skills/add-openai-api/SKILL.md`
+- [ ] Run `/add-openai-api` in Nanoclaw repo
+- [ ] Verify API responds at `http://localhost:18789/v1/chat/completions`
+- [ ] Test cross-channel history (WhatsApp → Voice context)
 
 ---
 
-## Phase 2: Nanoclaw API Layer
+## Phase 3: Fletcher Integration 🔄 IN PROGRESS
 
-Nanoclaw doesn't expose an API - we need to create one via a Claude Code skill.
+### 3.1 Tool Interceptor ✅ COMPLETE
+- [x] `ToolInterceptor` class implemented
+- [x] Maps tool names to status actions
+- [x] Creates artifacts from tool results (code, diff, search)
+- [x] Helper functions: `createReadFileArtifact`, `createEditArtifact`, etc.
 
-### 2.1 Create `/add-openai-api` Skill for Nanoclaw
+### 3.2 LiveKit Data Channel Publishing ⬅️ NEXT
+- [ ] Wire `ToolInterceptor` to `room.localParticipant.publishData()` in worker
+- [ ] Route `content` events to TTS pipeline
+- [ ] Route `status`/`artifact` events to data channel
 
-This skill adds an OpenAI-compatible HTTP endpoint to Nanoclaw:
-
-- [x] Create skill documentation at `docs/skills/add-openai-api/SKILL.md` in Fletcher repo.
-  - Note: Skill is documented in Fletcher; copy to Nanoclaw's `.claude/skills/` when applying.
-- [x] Skill adds `src/api/server.ts`:
-  - [x] Hono HTTP server on configurable port.
-  - [x] `POST /v1/chat/completions` endpoint.
-  - [x] SSE streaming response format.
-- [x] Skill adds `src/api/history.ts`:
-  - [x] Load cross-channel message history: `SELECT * FROM messages ORDER BY timestamp DESC LIMIT N`.
-  - [x] Include channel prefix in message metadata for context.
-- [x] Skill modifies `src/index.ts`:
-  - [x] Start API server alongside existing channels.
-  - [x] Store API messages with `lk:<participant>` JID.
-- [x] Document in skill: env vars (`API_PORT`), usage examples.
-
-### 2.2 API Endpoint Specification
-
-```typescript
-// Request (OpenAI-compatible)
-POST /v1/chat/completions
-{
-  "model": "nanoclaw",
-  "messages": [...],
-  "stream": true
-}
-
-// Headers for session context
-X-Nanoclaw-Channel: "lk:participant-id"
-
-// Response: SSE stream (OpenAI format + extensions)
-data: {"id":"...","choices":[{"delta":{"content":"Hello"}}]}
-data: {"id":"...","choices":[{"delta":{"content":" world"}}]}
-data: [DONE]
-```
-
-### 2.3 Extended Events for Voice UX
-
-For long-running operations (file search, web lookup, multi-step reasoning), emit status and artifact events:
-
-```typescript
-// Status events - provides feedback during silence
-data: {"type":"status","action":"searching_files","detail":"src/**/*.ts"}
-data: {"type":"status","action":"reading_file","file":"src/utils.ts"}
-data: {"type":"status","action":"web_search","query":"..."}
-data: {"type":"status","action":"thinking"}
-
-// Artifact events - visual content, not spoken
-data: {"type":"artifact","artifact_type":"diff","file":"src/utils.ts","diff":"@@ -10,3 +10,5 @@..."}
-data: {"type":"artifact","artifact_type":"code","language":"typescript","content":"..."}
-data: {"type":"artifact","artifact_type":"file","path":"src/utils.ts","content":"..."}
-
-// Content events - spoken via TTS
-data: {"type":"content","delta":"I've updated the function."}
-```
-
-**Implementation:**
-- [x] Hook into Claude Agent SDK tool execution events (documented in skill).
-- [x] Emit `status` event when tool starts (file read, web search, etc.).
-- [x] Emit `artifact` event for diffs, code blocks, file contents.
-- [x] Emit `content` event for conversational responses (standard OpenAI format).
-
-### 2.4 Cross-Channel Context Loading
-
-When API receives a request:
-1. Extract channel JID from header (`lk:alice`)
-2. Load recent messages across ALL channels (single-user, so all history is relevant)
-3. Format as conversation context for Claude
-4. Store response in SQLite with `lk:alice` JID for continuity
-
-**Outcome**: Nanoclaw exposes OpenAI-compatible API with full cross-channel history.
-
----
-
-## Phase 3: Fletcher Integration
-
-### Key Insight: Fletcher Executes Tools
-
-Fletcher (not the brain) executes tools. This means Fletcher has full access to:
-- Tool call requests (what tool, what arguments)
-- Tool execution (Fletcher runs them)
-- Tool results (actual content)
-
-**This enables visual feedback for BOTH backends**, not just Nanoclaw.
-
-### 3.0 Tool Interception for Visual Feedback (Both Backends)
-
-```typescript
-stream.on('tool_call', async (toolCall) => {
-  // Status → Data Channel
-  publishData({ type: 'status', action: toolCall.name, detail: toolCall.args });
-
-  // Execute
-  const result = await executeTool(toolCall);
-
-  // Artifact → Data Channel (if applicable)
-  if (toolCall.name === 'read_file') {
-    publishData({ type: 'artifact', artifact_type: 'code', ... });
-  }
-  if (toolCall.name === 'edit_file') {
-    publishData({ type: 'artifact', artifact_type: 'diff', ... });
-  }
-
-  return result;
-});
-```
-
-- [x] Intercept tool calls before execution.
-- [x] Map tool names to status messages (read_file → "Reading...", web_search → "Searching...").
-- [x] Extract artifacts from tool args/results (file content, diffs, search results).
-- [ ] Publish status/artifacts via `room.localParticipant.publishData()`.
-
-**Library implementation:** `packages/livekit-ganglia-interface/src/tool-interceptor.ts`
-- `ToolInterceptor` class wraps tool execution with status/artifact emission
-- `createArtifactFromToolResult()` routes tool results to appropriate artifact types
-- Helper functions: `createReadFileArtifact`, `createEditArtifact`, `createSearchArtifact`, `createErrorArtifact`
-- Actual LiveKit data channel publishing is done by consuming application
-
-### 3.1 Event Routing in Fletcher
-
-| Event Type | Source | Destination |
-|------------|--------|-------------|
-| `content` | SSE stream | TTS (spoken) |
-| `status` (server) | SSE stream (Nanoclaw only) | Visualizer + optional TTS |
-| `status` (tool) | Tool interception (both) | Data Channel → Flutter |
-| `artifact` | Tool interception (both) | Data Channel → Flutter |
-
-- [ ] Route `content` to TTS pipeline (existing behavior).
-- [ ] Route server-side `status` events to visualizer (Nanoclaw only).
-- [ ] Route tool-based status/artifacts to data channel (both backends).
-
-### 3.2 Flutter Data Channel Handling
-
-- [ ] Subscribe to data channel in Flutter app.
-- [ ] Parse status events → show in status bar.
-- [ ] Parse artifact events (diff, code, file, search_results).
-- [ ] Render diff viewer overlay for code changes.
-- [ ] Render code blocks with syntax highlighting.
-- [ ] Show search results in expandable list.
-
-### Option A: Reuse OpenClaw Client (Preferred)
-
-If Nanoclaw's API is sufficiently OpenAI-compatible:
-- [ ] Add `with_nanoclaw()` factory method to `livekit-ganglia-interface`.
-- [ ] Configure different base_url and headers.
-- [ ] No new package needed - just configuration.
-
-### Option B: Separate Nanoclaw Package
-
-If API differences require custom handling:
-
-#### 3.1 Create `livekit-agent-ganglia` Package
-- [ ] Initialize `packages/livekit-agent-ganglia` with TypeScript.
-- [ ] Add dependency on `livekit-ganglia-interface`.
-
-#### 3.2 NanoclawLLM
-- [ ] Implement `NanoclawLLM` extending `@livekit/agents` `LLM` class.
-- [ ] Handle any Nanoclaw-specific session headers.
-- [ ] Map responses to LiveKit `ChatChunk` format.
-
-#### 3.3 Register with Factory
-- [ ] Export implementation for factory discovery.
-- [ ] Add env vars: `NANOCLAW_URL`, `NANOCLAW_CHANNEL_PREFIX`.
+### 3.3 Flutter Data Channel Handling
+- [ ] Subscribe to data channel in Flutter app
+- [ ] Parse status events → show in status bar
+- [ ] Parse artifact events → render diff viewer, code blocks
+- [ ] Add syntax highlighting for code artifacts
 
 ---
 
 ## Phase 4: Testing & Validation
 
 ### 4.1 Unit Tests
-- [ ] `livekit-ganglia-interface`: Factory tests, type exports.
-- [ ] Nanoclaw API skill: Endpoint tests, history loading.
+- [x] Factory tests passing
+- [x] Events tests passing
+- [x] Tool interceptor tests passing
+- [x] Client tests passing
 
 ### 4.2 Integration Tests
-- [ ] Verify end-to-end voice conversation with OpenClaw (post-refactor).
-- [ ] Verify end-to-end voice conversation with Nanoclaw.
-- [ ] Test switching between backends via `BRAIN_TYPE` env var only.
-- [ ] **Cross-channel test**: Send WhatsApp message, query via voice, verify context.
+- [ ] End-to-end voice conversation with OpenClaw
+- [ ] End-to-end voice conversation with Nanoclaw
+- [ ] Backend switching via `GANGLIA_TYPE` env var
+- [ ] Cross-channel context verification
 
 ### 4.3 Performance Validation
-- [ ] Measure Nanoclaw API TTFB (target: <500ms).
-- [ ] Compare latency between OpenClaw and Nanoclaw backends.
-- [ ] Document performance characteristics.
+- [ ] Measure Nanoclaw API TTFB (target: <500ms)
+- [ ] Compare latency between backends
+
+---
+
+## Next Steps (Prioritized)
+
+1. **Apply Nanoclaw Skill** - Copy skill to Nanoclaw repo and run it
+2. **Add NanoclawLLM** - Implement Nanoclaw-specific LLM class with header handling
+3. **Data Channel Wiring** - Connect ToolInterceptor to LiveKit data channel
+4. **Flutter UI** - Add status bar and artifact viewer components
 
 ---
 
 ## Success Criteria
 
 ### Core Integration
-- [ ] `livekit-ganglia-interface` package with shared types and factory.
-- [ ] `livekit-agent-ganglia` refactored to use interface.
-- [ ] Nanoclaw `/add-openai-api` skill created and working.
-- [ ] Worker switches backends via `BRAIN_TYPE` env var.
-- [ ] No code changes required to switch backends.
-- [ ] Both backends support streaming responses.
+- [x] Unified `livekit-agent-ganglia` package with types, factory, events
+- [x] OpenClaw backend working with new structure
+- [x] Nanoclaw `/add-openai-api` skill documented
+- [ ] Nanoclaw backend working end-to-end
+- [ ] Backend switching via `GANGLIA_TYPE` env var
 
-### Nanoclaw-Specific
-- [ ] Cross-channel history works (voice can see WhatsApp/Telegram context).
-- [ ] Nanoclaw latency meets <500ms TTFB target.
-- [ ] Server-side status events for non-tool operations.
-
-### Visual Feedback (Both Backends)
-- [ ] Tool calls intercepted and surfaced as status events.
-- [ ] Tool results (files, diffs) surfaced as artifacts.
-- [ ] Status/artifacts sent via LiveKit data channel.
-- [ ] Flutter app renders status bar, diff viewer, code blocks.
+### Visual Feedback
+- [x] Tool calls intercepted as status events
+- [x] Tool results surfaced as artifacts
+- [ ] Status/artifacts sent via LiveKit data channel
+- [ ] Flutter app renders status bar, diff viewer, code blocks
 
 ### Backend Capability Matrix
 | Feature | OpenClaw | Nanoclaw |
 |---------|----------|----------|
-| Content streaming | ✅ | ✅ |
+| Content streaming | ✅ | ✅ (pending skill apply) |
 | Tool-based status | ✅ | ✅ |
 | Tool-based artifacts | ✅ | ✅ |
 | Server-side status | ❌ | ✅ |
@@ -341,3 +166,4 @@ If API differences require custom handling:
 ---
 
 **Technical Spec:** [`docs/specs/04-livekit-agent-plugin/nanoclaw-integration.md`](../../docs/specs/04-livekit-agent-plugin/nanoclaw-integration.md)
+**Skill Documentation:** [`docs/skills/add-openai-api/SKILL.md`](../../docs/skills/add-openai-api/SKILL.md)

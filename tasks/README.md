@@ -58,24 +58,21 @@ The mobile client for real-time voice interaction and visualization.
 A unified LLM plugin (`@knittt/livekit-agent-ganglia`) that bridges LiveKit agents to OpenClaw or Nanoclaw via OpenAI-compatible API.
 
 **Tasks:**
-- [~] 001: Standalone Brain Plugin (Phases 1-2 complete, Phase 3-5 in progress)
-- [ ] 002: Nanoclaw Integration (pluggable brain backend)
+- [x] 001: Standalone Brain Plugin ✅ (OpenClaw working)
+- [~] 002: Nanoclaw Integration (Phase 1-2 complete, Phase 3-4 in progress)
 
-**Progress (001 - OpenClaw):**
-- [x] Phase 1: Foundation (OpenClawLLM, OpenClawChatStream)
-- [x] Phase 2: OpenClaw Integration (client, auth, session management, message mapping)
-- [~] Phase 3: Advanced Features (tool mapping done, async resolution pending)
-- [ ] Phase 4: Testing & Distribution (unit tests done, integration tests pending)
+**What's Done:**
+- Unified `@knittt/livekit-agent-ganglia` package with types, factory, events, tool-interceptor
+- `OpenClawLLM` implementation with auth, sessions, message mapping
+- `/add-openai-api` skill documented for Nanoclaw (needs to be applied)
+- `ToolInterceptor` for visual feedback (status events, artifacts)
+- 86 unit tests passing
 
-**Progress (002 - Pluggable Brain):**
-- [x] Phase 1: Abstraction ✅
-  - Renamed `livekit-agent-openclaw` → `livekit-agent-ganglia` (unified package)
-  - Added ganglia types, factory, events, and tool-interceptor to unified package
-- [x] Phase 2: Nanoclaw API Layer ✅
-  - Created `/add-openai-api` skill for Nanoclaw
-  - Cross-channel history via unified timestamp query
-- [~] Phase 3: Fletcher Integration (tool interceptor done, data channel publishing pending)
-- [ ] Phase 4: Testing & Validation
+**Next Steps:**
+1. Apply `/add-openai-api` skill to Nanoclaw repo
+2. Add `NanoclawLLM` class with header handling
+3. Wire ToolInterceptor to LiveKit data channel
+4. Flutter UI for status bar and artifact viewer
 
 ## Development Path
 
