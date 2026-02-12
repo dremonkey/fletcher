@@ -12,6 +12,11 @@ This project (Fletcher) is an OpenClaw channel plugin for real-time voice conver
 - `packages/livekit-agent-openclaw`: The Standalone Brain Plugin (bridges LiveKit to OpenClaw Gateway).
 - `apps/mobile`: Example Flutter app for testing.
 
+## Documentation & Specs
+- Technical specs and integration documents belong in `docs/specs/`.
+- Specs are organized by component (mirroring `tasks/` structure): `01-infrastructure/`, `02-livekit-agent/`, `03-flutter-app/`, `04-livekit-agent-plugin/`.
+- Do NOT leave spec files in the project root. Move them to the appropriate `docs/specs/` subdirectory.
+
 ## Testing Standards
 - Use `bun:test` for all TypeScript/JavaScript unit tests.
 - **Co-location Rule:** Unit tests MUST live directly alongside their corresponding source files (e.g., `src/client.ts` and `src/client.spec.ts`). Do NOT use a separate `__tests__/` directory.
