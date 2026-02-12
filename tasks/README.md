@@ -57,11 +57,25 @@ The mobile client for real-time voice interaction and visualization.
 ### 4. [Standalone Brain Plugin](./04-livekit-agent-plugin) 🔄
 A standalone LLM plugin (`@knittt/livekit-agent-openclaw`) that bridges LiveKit agents to the OpenClaw Gateway via OpenAI-compatible API.
 
-**Progress:**
+**Tasks:**
+- [~] 001: Standalone Brain Plugin (Phases 1-2 complete, Phase 3-5 in progress)
+- [ ] 002: Nanoclaw Integration (pluggable brain backend)
+
+**Progress (001 - OpenClaw):**
 - [x] Phase 1: Foundation (OpenClawLLM, OpenClawChatStream)
 - [x] Phase 2: OpenClaw Integration (client, auth, session management, message mapping)
 - [~] Phase 3: Advanced Features (tool mapping done, async resolution pending)
 - [ ] Phase 4: Testing & Distribution (unit tests done, integration tests pending)
+
+**Progress (002 - Pluggable Brain):**
+- [ ] Phase 1: Abstraction ⬅️ START HERE
+  - Create `livekit-brain-interface` package (types, factory)
+  - Refactor `livekit-agent-openclaw` to use interface
+- [ ] Phase 2: Nanoclaw API Layer
+  - Create `/add-openai-api` skill for Nanoclaw
+  - Cross-channel history via unified timestamp query
+- [ ] Phase 3: Fletcher Integration
+- [ ] Phase 4: Testing & Validation
 
 ## Development Path
 
