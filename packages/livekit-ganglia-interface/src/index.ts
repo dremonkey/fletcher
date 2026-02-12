@@ -60,3 +60,22 @@ export {
   statusFromToolCall,
   toolToStatusAction,
 } from './events.js';
+
+// Tool Interception
+export {
+  ToolInterceptor,
+  createToolInterceptor,
+  createReadFileArtifact,
+  createEditArtifact,
+  createSearchArtifact,
+  createErrorArtifact,
+  createArtifactFromToolResult,
+} from './tool-interceptor.js';
+
+export type {
+  ToolCall,
+  ToolResult,
+  ToolExecutor,
+  EventEmitter,
+  ToolInterceptorConfig,
+} from './tool-interceptor.js';

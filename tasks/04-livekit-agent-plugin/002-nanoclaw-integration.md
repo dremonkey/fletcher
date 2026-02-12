@@ -125,18 +125,19 @@ Nanoclaw doesn't expose an API - we need to create one via a Claude Code skill.
 
 This skill adds an OpenAI-compatible HTTP endpoint to Nanoclaw:
 
-- [ ] Create skill at `.claude/skills/add-openai-api/SKILL.md` in Nanoclaw repo.
-- [ ] Skill adds `src/api/server.ts`:
-  - [ ] Express/Hono HTTP server on configurable port.
-  - [ ] `POST /v1/chat/completions` endpoint.
-  - [ ] SSE streaming response format.
-- [ ] Skill adds `src/api/history.ts`:
-  - [ ] Load cross-channel message history: `SELECT * FROM messages ORDER BY timestamp DESC LIMIT N`.
-  - [ ] Include channel prefix in message metadata for context.
-- [ ] Skill modifies `src/index.ts`:
-  - [ ] Start API server alongside existing channels.
-  - [ ] Store API messages with `lk:<participant>` JID.
-- [ ] Document in skill: env vars (`API_PORT`), usage examples.
+- [x] Create skill documentation at `docs/skills/add-openai-api/SKILL.md` in Fletcher repo.
+  - Note: Skill is documented in Fletcher; copy to Nanoclaw's `.claude/skills/` when applying.
+- [x] Skill adds `src/api/server.ts`:
+  - [x] Hono HTTP server on configurable port.
+  - [x] `POST /v1/chat/completions` endpoint.
+  - [x] SSE streaming response format.
+- [x] Skill adds `src/api/history.ts`:
+  - [x] Load cross-channel message history: `SELECT * FROM messages ORDER BY timestamp DESC LIMIT N`.
+  - [x] Include channel prefix in message metadata for context.
+- [x] Skill modifies `src/index.ts`:
+  - [x] Start API server alongside existing channels.
+  - [x] Store API messages with `lk:<participant>` JID.
+- [x] Document in skill: env vars (`API_PORT`), usage examples.
 
 ### 2.2 API Endpoint Specification
 
@@ -179,10 +180,10 @@ data: {"type":"content","delta":"I've updated the function."}
 ```
 
 **Implementation:**
-- [ ] Hook into Claude Agent SDK tool execution events.
-- [ ] Emit `status` event when tool starts (file read, web search, etc.).
-- [ ] Emit `artifact` event for diffs, code blocks, file contents.
-- [ ] Emit `content` event for conversational responses (standard OpenAI format).
+- [x] Hook into Claude Agent SDK tool execution events (documented in skill).
+- [x] Emit `status` event when tool starts (file read, web search, etc.).
+- [x] Emit `artifact` event for diffs, code blocks, file contents.
+- [x] Emit `content` event for conversational responses (standard OpenAI format).
 
 ### 2.4 Cross-Channel Context Loading
 
@@ -229,10 +230,16 @@ stream.on('tool_call', async (toolCall) => {
 });
 ```
 
-- [ ] Intercept tool calls before execution.
-- [ ] Map tool names to status messages (read_file → "Reading...", web_search → "Searching...").
-- [ ] Extract artifacts from tool args/results (file content, diffs, search results).
+- [x] Intercept tool calls before execution.
+- [x] Map tool names to status messages (read_file → "Reading...", web_search → "Searching...").
+- [x] Extract artifacts from tool args/results (file content, diffs, search results).
 - [ ] Publish status/artifacts via `room.localParticipant.publishData()`.
+
+**Library implementation:** `packages/livekit-ganglia-interface/src/tool-interceptor.ts`
+- `ToolInterceptor` class wraps tool execution with status/artifact emission
+- `createArtifactFromToolResult()` routes tool results to appropriate artifact types
+- Helper functions: `createReadFileArtifact`, `createEditArtifact`, `createSearchArtifact`, `createErrorArtifact`
+- Actual LiveKit data channel publishing is done by consuming application
 
 ### 3.1 Event Routing in Fletcher
 
