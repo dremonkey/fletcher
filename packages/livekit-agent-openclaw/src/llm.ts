@@ -1,4 +1,9 @@
 import { llm, APIConnectOptions } from '@livekit/agents';
+import {
+  type GangliaLLM,
+  type GangliaSessionInfo,
+  registerGanglia,
+} from '@anthropic/livekit-ganglia-interface';
 import { OpenClawClient } from './client.js';
 import {
   OpenClawConfig,
@@ -73,7 +78,7 @@ export function extractSessionFromContext(
   return session;
 }
 
-export class OpenClawLLM extends LLMBase {
+export class OpenClawLLM extends LLMBase implements GangliaLLM {
   private client: OpenClawClient;
   private _model: string;
 
@@ -81,6 +86,13 @@ export class OpenClawLLM extends LLMBase {
     super();
     this.client = new OpenClawClient(config);
     this._model = config.model || 'openclaw-gateway';
+  }
+
+  /**
+   * Returns the ganglia type identifier.
+   */
+  gangliaType(): string {
+    return 'openclaw';
   }
 
   label(): string {
@@ -101,8 +113,8 @@ export class OpenClawLLM extends LLMBase {
   /**
    * Sets the default session for all subsequent chat requests.
    */
-  setDefaultSession(session: LiveKitSessionInfo): void {
-    this.client.setDefaultSession(session);
+  setDefaultSession(session: LiveKitSessionInfo | GangliaSessionInfo): void {
+    this.client.setDefaultSession(session as LiveKitSessionInfo);
   }
 
   chat({
@@ -254,3 +266,6 @@ class OpenClawChatStream extends LLMStream {
     }
   }
 }
+
+// Register with ganglia factory
+registerGanglia('openclaw', async () => OpenClawLLM as any);

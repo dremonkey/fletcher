@@ -79,7 +79,7 @@ Messages are stored with their channel JID, enabling channel-specific queries if
 
 ```
 packages/
-├── livekit-brain-interface/     # Shared types, factory
+├── livekit-ganglia-interface/     # Shared types, factory
 │   ├── src/types.ts             # BrainConfig, BrainSessionInfo
 │   ├── src/factory.ts           # createBrain()
 │   └── package.json
@@ -234,7 +234,7 @@ When the API receives a request:
 ## Implementation Phases
 
 ### Phase 1: Abstraction
-1. Create `livekit-brain-interface` package with types and factory
+1. Create `livekit-ganglia-interface` package with types and factory
 2. Refactor `livekit-agent-openclaw` to use interface
 3. Update worker to use `createBrain()` factory
 4. Verify OpenClaw still works (regression test)

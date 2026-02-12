@@ -44,7 +44,7 @@ The API layer just needs to:
 ```
 LiveKit Server <--> Fletcher Worker
                          |
-                  createBrain(config)  ← livekit-brain-interface
+                  createBrain(config)  ← livekit-ganglia-interface
                          |
                     BrainAdapter
                     /          \
@@ -59,7 +59,7 @@ LiveKit Server <--> Fletcher Worker
 
 ```
 packages/
-├── livekit-brain-interface/     # Shared types, interfaces, factory
+├── livekit-ganglia-interface/     # Shared types, interfaces, factory
 │   ├── src/
 │   │   ├── types.ts             # BrainConfig, BrainSessionInfo
 │   │   ├── factory.ts           # createBrain()
@@ -70,59 +70,50 @@ packages/
 │   │   ├── client.ts
 │   │   ├── llm.ts               # OpenClawLLM
 │   │   └── index.ts
-│   └── package.json             # depends on livekit-brain-interface
+│   └── package.json             # depends on livekit-ganglia-interface
 └── livekit-agent-nanoclaw/      # Nanoclaw implementation (if needed)
     └── ...                      # May just be config if API is OpenAI-compatible
 ```
 
 ---
 
-## Phase 1: Abstraction ⬅️ START HERE
+## Phase 1: Abstraction ✅ COMPLETE
 
 Create the shared interface package and refactor OpenClaw to use it.
 
-### 1.1 Create `livekit-brain-interface` Package
-- [ ] Initialize `packages/livekit-brain-interface` with TypeScript.
-- [ ] Create `src/types.ts`:
-  ```typescript
-  export interface BrainSessionInfo {
-    roomName?: string;
-    participantIdentity?: string;
-    customSessionId?: string;
-  }
+### 1.1 Create `livekit-ganglia-interface` Package ✅
+- [x] Initialize `packages/livekit-ganglia-interface` with TypeScript.
+- [x] Create `src/types.ts` with `GangliaConfig`, `GangliaSessionInfo`, `OpenClawConfig`, `NanoclawConfig`.
+- [x] Create `src/events.ts` with `StatusEvent`, `ArtifactEvent`, `ContentEvent` types and helpers.
+- [x] Create `src/factory.ts` with `createGanglia()`, `createGangliaFromEnv()`, `registerGanglia()`.
+- [x] Factory dynamically imports implementation packages to avoid hard dependencies.
+- [x] Export all types and factory from `index.ts`.
+- [x] Unit tests for factory and events.
 
-  export interface OpenClawConfig {
-    endpoint: string;
-    token: string;
-  }
+### 1.2 Refactor `livekit-agent-openclaw` ✅
+- [x] Add dependency on `livekit-ganglia-interface`.
+- [x] `OpenClawLLM` implements `GangliaLLM` interface.
+- [x] Added `gangliaType()` method returning `'openclaw'`.
+- [x] Register with factory via `registerGanglia('openclaw', ...)`.
+- [x] Re-export ganglia types from package for convenience.
+- [x] Existing tests pass (client tests; llm test has pre-existing logger issue).
 
-  export interface NanoclawConfig {
-    url: string;
-    // Nanoclaw is single-user, so no auth token needed (local only)
-  }
+### 1.3 Update Worker (Deferred)
 
-  export type BrainConfig =
-    | { type: 'openclaw'; openclaw: OpenClawConfig }
-    | { type: 'nanoclaw'; nanoclaw: NanoclawConfig };
-  ```
-- [ ] Create `src/factory.ts` with `createBrain(config: BrainConfig): LLM`.
-- [ ] Factory dynamically imports implementation packages to avoid hard dependencies.
-- [ ] Export all types and factory from `index.ts`.
+No standalone worker/agent application exists yet in this repo. When one is created:
+- [ ] Import from `@anthropic/livekit-ganglia-interface`.
+- [ ] Use `createGangliaFromEnv()` for config-driven backend selection.
+- [ ] Set `GANGLIA_TYPE=openclaw|nanoclaw` to switch backends.
 
-### 1.2 Refactor `livekit-agent-openclaw`
-- [ ] Add dependency on `livekit-brain-interface`.
-- [ ] Import types from interface package instead of defining locally.
-- [ ] Export `OpenClawLLM` as the implementation.
-- [ ] Register with factory (export a `register` function or use convention).
-- [ ] Verify existing tests still pass.
+**Usage example:**
+```typescript
+import { createGangliaFromEnv } from '@anthropic/livekit-ganglia-interface';
+import '@knittt/livekit-agent-openclaw'; // Registers 'openclaw' with factory
 
-### 1.3 Update Worker
-- [ ] Update `agent.ts` to import from `livekit-brain-interface`.
-- [ ] Use `createBrain()` instead of direct `OpenClawLLM` instantiation.
-- [ ] Load config from environment variables (`BRAIN_TYPE`, defaults to `openclaw`).
-- [ ] Verify OpenClaw still works end-to-end (regression test).
+const llm = await createGangliaFromEnv(); // Uses GANGLIA_TYPE env var
+```
 
-**Outcome**: OpenClaw works exactly as before, but through the new abstraction layer.
+**Outcome**: Phase 1 packages complete. Worker integration deferred until app exists.
 
 ---
 
@@ -268,7 +259,7 @@ stream.on('tool_call', async (toolCall) => {
 ### Option A: Reuse OpenClaw Client (Preferred)
 
 If Nanoclaw's API is sufficiently OpenAI-compatible:
-- [ ] Add `with_nanoclaw()` factory method to `livekit-brain-interface`.
+- [ ] Add `with_nanoclaw()` factory method to `livekit-ganglia-interface`.
 - [ ] Configure different base_url and headers.
 - [ ] No new package needed - just configuration.
 
@@ -278,7 +269,7 @@ If API differences require custom handling:
 
 #### 3.1 Create `livekit-agent-nanoclaw` Package
 - [ ] Initialize `packages/livekit-agent-nanoclaw` with TypeScript.
-- [ ] Add dependency on `livekit-brain-interface`.
+- [ ] Add dependency on `livekit-ganglia-interface`.
 
 #### 3.2 NanoclawLLM
 - [ ] Implement `NanoclawLLM` extending `@livekit/agents` `LLM` class.
@@ -294,7 +285,7 @@ If API differences require custom handling:
 ## Phase 4: Testing & Validation
 
 ### 4.1 Unit Tests
-- [ ] `livekit-brain-interface`: Factory tests, type exports.
+- [ ] `livekit-ganglia-interface`: Factory tests, type exports.
 - [ ] Nanoclaw API skill: Endpoint tests, history loading.
 
 ### 4.2 Integration Tests
@@ -313,7 +304,7 @@ If API differences require custom handling:
 ## Success Criteria
 
 ### Core Integration
-- [ ] `livekit-brain-interface` package with shared types and factory.
+- [ ] `livekit-ganglia-interface` package with shared types and factory.
 - [ ] `livekit-agent-openclaw` refactored to use interface.
 - [ ] Nanoclaw `/add-openai-api` skill created and working.
 - [ ] Worker switches backends via `BRAIN_TYPE` env var.

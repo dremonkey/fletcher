@@ -1,7 +1,7 @@
 {
-  "name": "@knittt/livekit-agent-openclaw",
+  "name": "@anthropic/livekit-ganglia-interface",
   "version": "0.1.0",
-  "description": "A first-class LiveKit Agents plugin wrapping the OpenClaw reasoning interface.",
+  "description": "Shared interface for pluggable LLM backends (ganglia) in LiveKit voice agents.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -13,8 +13,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@livekit/agents": "^1.0.0",
-    "@anthropic/livekit-ganglia-interface": "workspace:*"
+    "@livekit/agents": "^1.0.0"
   },
   "devDependencies": {
     "typescript": "^5.0.0"
