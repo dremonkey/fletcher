@@ -36,7 +36,7 @@ const registry = new Map<string, () => Promise<new (config: any) => GangliaLLM>>
  * @example
  * ```typescript
  * // In livekit-agent-openclaw/src/index.ts
- * import { registerGanglia } from '@anthropic/livekit-ganglia-interface';
+ * import { registerGanglia } from '@knittt/livekit-ganglia-interface';
  * registerGanglia('openclaw', async () => {
  *   const { OpenClawLLM } = await import('./llm.js');
  *   return OpenClawLLM;
@@ -92,7 +92,7 @@ async function tryDynamicImport(
 ): Promise<(new (config: any) => GangliaLLM) | null> {
   const packageNames: Record<string, string> = {
     openclaw: '@knittt/livekit-agent-openclaw',
-    nanoclaw: '@anthropic/livekit-agent-nanoclaw',
+    nanoclaw: '@knittt/livekit-agent-nanoclaw',
   };
 
   const packageName = packageNames[type];

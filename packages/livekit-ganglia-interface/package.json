@@ -1,5 +1,5 @@
 {
-  "name": "@anthropic/livekit-ganglia-interface",
+  "name": "@knittt/livekit-ganglia-interface",
   "version": "0.1.0",
   "description": "Shared interface for pluggable LLM backends (ganglia) in LiveKit voice agents.",
   "main": "dist/index.js",

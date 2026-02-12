@@ -101,13 +101,13 @@ Create the shared interface package and refactor OpenClaw to use it.
 ### 1.3 Update Worker (Deferred)
 
 No standalone worker/agent application exists yet in this repo. When one is created:
-- [ ] Import from `@anthropic/livekit-ganglia-interface`.
+- [ ] Import from `@knittt/livekit-ganglia-interface`.
 - [ ] Use `createGangliaFromEnv()` for config-driven backend selection.
 - [ ] Set `GANGLIA_TYPE=openclaw|nanoclaw` to switch backends.
 
 **Usage example:**
 ```typescript
-import { createGangliaFromEnv } from '@anthropic/livekit-ganglia-interface';
+import { createGangliaFromEnv } from '@knittt/livekit-ganglia-interface';
 import '@knittt/livekit-agent-openclaw'; // Registers 'openclaw' with factory
 
 const llm = await createGangliaFromEnv(); // Uses GANGLIA_TYPE env var

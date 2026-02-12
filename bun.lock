@@ -23,7 +23,7 @@
       "name": "@knittt/livekit-agent-openclaw",
       "version": "0.1.0",
       "dependencies": {
-        "@anthropic/livekit-ganglia-interface": "workspace:*",
+        "@knittt/livekit-ganglia-interface": "workspace:*",
         "@livekit/agents": "^1.0.0",
       },
       "devDependencies": {
@@ -31,7 +31,7 @@
       },
     },
     "packages/livekit-ganglia-interface": {
-      "name": "@anthropic/livekit-ganglia-interface",
+      "name": "@knittt/livekit-ganglia-interface",
       "version": "0.1.0",
       "dependencies": {
         "@livekit/agents": "^1.0.0",
@@ -64,8 +64,6 @@
     "@agentclientprotocol/sdk": ["@agentclientprotocol/sdk@0.13.1", "", { "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-6byvu+F/xc96GBkdAx4hq6/tB3vT63DSBO4i3gYCz8nuyZMerVFna2Gkhm8EHNpZX0J9DjUxzZCW+rnHXUg0FA=="],
 
     "@anthropic-ai/sdk": ["@anthropic-ai/sdk@0.71.2", "", { "dependencies": { "json-schema-to-ts": "^3.1.1" }, "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" }, "optionalPeers": ["zod"], "bin": { "anthropic-ai-sdk": "bin/cli" } }, "sha512-TGNDEUuEstk/DKu0/TflXAEt+p+p/WhTlFzEnoosvbaDU2LTjm42igSdlL0VijrKpWejtOKxX0b8A7uc+XiSAQ=="],
-
-    "@anthropic/livekit-ganglia-interface": ["@anthropic/livekit-ganglia-interface@workspace:packages/livekit-ganglia-interface"],
 
     "@aws-crypto/crc32": ["@aws-crypto/crc32@5.2.0", "", { "dependencies": { "@aws-crypto/util": "^5.2.0", "@aws-sdk/types": "^3.222.0", "tslib": "^2.6.2" } }, "sha512-nLbCWqQNgUiwwtFsen1AdzAtvuLRsQS8rYgMuxCrdKf9kOssamGLuPwyTY9wyYblNr9+1XM8v6zoDTPPSIeANg=="],
 
@@ -330,6 +328,8 @@
     "@keyv/serialize": ["@keyv/serialize@1.1.1", "", {}, "sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA=="],
 
     "@knittt/livekit-agent-openclaw": ["@knittt/livekit-agent-openclaw@workspace:packages/livekit-agent-openclaw"],
+
+    "@knittt/livekit-ganglia-interface": ["@knittt/livekit-ganglia-interface@workspace:packages/livekit-ganglia-interface"],
 
     "@kwsites/file-exists": ["@kwsites/file-exists@1.1.1", "", { "dependencies": { "debug": "^4.1.1" } }, "sha512-m9/5YGR18lIwxSFDwfE3oA7bWuq9kdau6ugN4H2rJeyhFQZcG9AgSHkQtSD15a8WvTgfz9aikZMrKPHvbpqFiw=="],
 

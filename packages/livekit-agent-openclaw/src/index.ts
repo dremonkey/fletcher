@@ -7,7 +7,7 @@ export {
   type GangliaLLM,
   type GangliaConfig,
   type GangliaSessionInfo,
-} from '@anthropic/livekit-ganglia-interface';
+} from '@knittt/livekit-ganglia-interface';
 
 export { OpenClawLLM };
 export { extractSessionFromContext } from './llm.js';

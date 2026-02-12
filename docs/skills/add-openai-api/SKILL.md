@@ -175,64 +175,67 @@ export async function loadCrossChannelHistory(limit: number = 100): Promise<Hist
   const db = getDatabase();
 
   // Load all recent messages across all channels
-  // Messages are stored with JID prefixes like:
+  // Messages are stored with chat_jid prefixes like:
   // - WhatsApp: 1234567890@s.whatsapp.net
   // - Telegram: tg:123456789
   // - LiveKit/Voice: lk:participant-id
+  //
+  // Note: Nanoclaw uses is_from_me (0=user, 1=assistant) not a role column
   const rows = db.query(`
     SELECT
-      jid,
-      role,
+      chat_jid,
+      is_from_me,
       content,
       timestamp
     FROM messages
     ORDER BY timestamp DESC
     LIMIT ?
   `).all(limit) as Array<{
-    jid: string;
-    role: string;
+    chat_jid: string;
+    is_from_me: number;
     content: string;
-    timestamp: number;
+    timestamp: string;
   }>;
 
   // Reverse to get chronological order
   const messages = rows.reverse();
 
   return messages.map(row => ({
-    role: row.role as 'user' | 'assistant' | 'system',
+    role: row.is_from_me ? 'assistant' : 'user',
     content: row.content,
-    channel: extractChannelFromJid(row.jid),
-    timestamp: row.timestamp
+    channel: extractChannelFromJid(row.chat_jid),
+    timestamp: parseInt(row.timestamp, 10)
   }));
 }
 
 /**
  * Store a message from the API channel.
  *
- * @param jid - The JID for this session (e.g., "lk:participant-id")
- * @param role - Message role ('user' or 'assistant')
+ * @param chatJid - The JID for this session (e.g., "lk:participant-id")
+ * @param isFromMe - Whether the message is from the assistant (true) or user (false)
  * @param content - Message content
  */
 export async function storeApiMessage(
-  jid: string,
-  role: 'user' | 'assistant',
+  chatJid: string,
+  isFromMe: boolean,
   content: string
 ): Promise<void> {
   const db = getDatabase();
+  const id = `api-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
   db.run(`
-    INSERT INTO messages (jid, role, content, timestamp)
-    VALUES (?, ?, ?, ?)
-  `, [jid, role, content, Date.now()]);
+    INSERT INTO messages (id, chat_jid, sender, content, timestamp, is_from_me)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `, [id, chatJid, isFromMe ? 'assistant' : 'user', content, Date.now().toString(), isFromMe ? 1 : 0]);
 }
 
 /**
- * Extract channel type from JID.
+ * Extract channel type from chat_jid.
  */
-function extractChannelFromJid(jid: string): string {
-  if (jid.includes('@s.whatsapp.net')) return 'whatsapp';
-  if (jid.startsWith('tg:')) return 'telegram';
-  if (jid.startsWith('lk:')) return 'livekit';
+function extractChannelFromJid(chatJid: string): string {
+  if (chatJid.includes('@s.whatsapp.net')) return 'whatsapp';
+  if (chatJid.startsWith('tg:')) return 'telegram';
+  if (chatJid.startsWith('lk:')) return 'livekit';
   return 'unknown';
 }
 
@@ -400,7 +403,7 @@ export async function runConversationStreaming(
   // Store incoming user message
   const userMessage = messages[messages.length - 1];
   if (userMessage.role === 'user') {
-    await storeApiMessage(channelJid, 'user', userMessage.content);
+    await storeApiMessage(channelJid, false, userMessage.content);
   }
 
   let fullResponse = '';
@@ -429,7 +432,7 @@ export async function runConversationStreaming(
   }
 
   // Store assistant response
-  await storeApiMessage(channelJid, 'assistant', fullResponse);
+  await storeApiMessage(channelJid, true, fullResponse);
 }
 ```
 

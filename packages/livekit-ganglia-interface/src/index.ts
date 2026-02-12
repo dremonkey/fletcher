@@ -5,7 +5,7 @@
  *
  * @example
  * ```typescript
- * import { createGanglia, createGangliaFromEnv } from '@anthropic/livekit-ganglia-interface';
+ * import { createGanglia, createGangliaFromEnv } from '@knittt/livekit-ganglia-interface';
  *
  * // From explicit config
  * const llm = await createGanglia({

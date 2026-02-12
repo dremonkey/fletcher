@@ -3,7 +3,7 @@ import {
   type GangliaLLM,
   type GangliaSessionInfo,
   registerGanglia,
-} from '@anthropic/livekit-ganglia-interface';
+} from '@knittt/livekit-ganglia-interface';
 import { OpenClawClient } from './client.js';
 import {
   OpenClawConfig,
