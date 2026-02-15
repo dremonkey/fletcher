@@ -16,6 +16,8 @@ specs/
 ├── 04-livekit-agent-plugin/    # Brain Plugin (@knittt/livekit-agent-ganglia)
 │   ├── spec.md                 # Main technical spec
 │   └── tool-calling.md         # Tool/skill calling feature
+├── 05-latency-optimization/    # Voice pipeline latency optimization
+│   └── spec.md                 # Overlapped STT/LLM, preemptive generation
 └── architecture-comparison.md  # Cross-cutting architecture decisions
 ```
 
@@ -35,6 +37,9 @@ specs/
 - [Main Spec](./04-livekit-agent-plugin/spec.md) - LiveKit Agents LLM plugin for OpenClaw/Nanoclaw
 - [Tool Calling](./04-livekit-agent-plugin/tool-calling.md) - Voice-enabled skill/tool execution
 - [Nanoclaw Integration](./04-livekit-agent-plugin/nanoclaw-integration.md) - Pluggable brain architecture
+
+### Latency Optimization
+- [Main Spec](./05-latency-optimization/spec.md) - Overlapped STT/LLM pipeline, preemptive generation, endpointing tuning
 
 ### Cross-Cutting
 - [Architecture Comparison](./architecture-comparison.md) - Three integration approaches compared
