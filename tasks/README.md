@@ -26,20 +26,14 @@ The LiveKit channel plugin (`@openclaw/channel-livekit`) that integrates voice c
 
 **Tasks:**
 - [x] 001: Initialize OpenClaw channel plugin ✅
-- [~] 002: Implement audio pipeline (STT/TTS) - structure done, provider integration TODO
+- [x] 002: Implement audio pipeline (STT/TTS) ✅ — wired to SDK + Ganglia
 - [x] 004: Channel plugin approach (implementation guide)
 
 **Implemented:**
 - Full plugin structure with OpenClaw adapters (config, security, gateway, outbound, status)
-- VoiceAgent with state machine (idle/listening/thinking/speaking)
-- STT/TTS provider interfaces with Deepgram/Cartesia/ElevenLabs config
+- VoiceAgent wired to `@livekit/agents` SDK (deepgram.STT, cartesia.TTS, voice.AgentSession)
+- Ganglia LLM as brain via `@knittt/livekit-agent-ganglia`
 - Multi-account support with environment variable fallback
-
-**Remaining:**
-- Actual Deepgram WebSocket integration (placeholder exists)
-- Actual Cartesia/ElevenLabs API integration (placeholder exists)
-- Audio track publishing to LiveKit room
-- End-to-end latency validation
 
 ### 3. [Flutter App](./03-flutter-app) ✅
 The mobile client for real-time voice interaction and visualization.
@@ -53,26 +47,43 @@ The mobile client for real-time voice interaction and visualization.
 - AmberOrb visualizer with all conversation states
 - Real-time audio level monitoring (50ms polling)
 - Mute toggle, auto-connect, dark theme
+- Ganglia data channel subscription (`ganglia-events` topic)
+- StatusBar widget showing agent actions (reading, searching, editing)
+- ArtifactViewer for diffs, code blocks, search results, errors
 
 ### 4. [Standalone Brain Plugin](./04-livekit-agent-plugin) 🔄
 A unified LLM plugin (`@knittt/livekit-agent-ganglia`) that bridges LiveKit agents to OpenClaw or Nanoclaw via OpenAI-compatible API.
 
 **Tasks:**
 - [x] 001: Standalone Brain Plugin ✅ (OpenClaw working)
-- [~] 002: Nanoclaw Integration (Phase 1-2 complete, Phase 3-4 in progress)
+- [~] 002: Nanoclaw Integration (Phase 1-3 complete, Phase 4 in progress)
 
 **What's Done:**
 - Unified `@knittt/livekit-agent-ganglia` package with types, factory, events, tool-interceptor
 - `OpenClawLLM` implementation with auth, sessions, message mapping
+- `NanoclawLLM` implementation with JID-based channel headers
+- Backend switching via `GANGLIA_TYPE` env var (openclaw | nanoclaw)
 - `/add-openai-api` skill documented for Nanoclaw (needs to be applied)
 - `ToolInterceptor` for visual feedback (status events, artifacts)
-- 86 unit tests passing
+- Flutter UI: `StatusBar` widget and `ArtifactViewer` (diff, code, search results)
+- Data channel subscription for `ganglia-events` topic
+- 127 unit tests passing
 
 **Next Steps:**
 1. Apply `/add-openai-api` skill to Nanoclaw repo
-2. Add `NanoclawLLM` class with header handling
-3. Wire ToolInterceptor to LiveKit data channel
-4. Flutter UI for status bar and artifact viewer
+2. Integration tests with both backends
+3. Syntax highlighting for code artifacts (optional)
+
+### 5. [Latency Optimization](./05-latency-optimization) 📋
+Pipeline optimizations to reduce voice-to-voice latency from ~1.4s to <0.8s.
+
+**Tasks:**
+- [ ] 001: Enable preemptive generation & tune endpointing (Phase 1)
+- [ ] 002: Add latency instrumentation & metrics (Phase 1b)
+- [ ] 003: Streaming interim transcripts to LLM (Phase 2)
+- [ ] 004: TTS pre-warming validation (Phase 3)
+
+**Spec:** [docs/specs/05-latency-optimization/spec.md](../docs/specs/05-latency-optimization/spec.md)
 
 ## Development Path
 
