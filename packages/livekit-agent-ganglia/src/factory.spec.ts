@@ -76,3 +76,54 @@ describe('isGangliaAvailable', () => {
     expect(isGangliaAvailable('notregistered')).toBe(false);
   });
 });
+
+describe('Backend Registration', () => {
+  it('openclaw backend is registered after import', async () => {
+    // Import the llm module to trigger registration
+    await import('./llm.js');
+    expect(isGangliaAvailable('openclaw')).toBe(true);
+  });
+
+  it('nanoclaw backend is registered after import', async () => {
+    // Import the nanoclaw module to trigger registration
+    await import('./nanoclaw.js');
+    expect(isGangliaAvailable('nanoclaw')).toBe(true);
+  });
+
+  it('both backends are available via index', async () => {
+    // Import from index to ensure both are loaded
+    const ganglia = await import('./index.js');
+
+    expect(ganglia.isGangliaAvailable('openclaw')).toBe(true);
+    expect(ganglia.isGangliaAvailable('nanoclaw')).toBe(true);
+    expect(ganglia.getRegisteredTypes()).toContain('openclaw');
+    expect(ganglia.getRegisteredTypes()).toContain('nanoclaw');
+  });
+
+  it('createGanglia works for openclaw', async () => {
+    await import('./llm.js');
+    const llm = await createGanglia({
+      type: 'openclaw',
+      openclaw: {
+        endpoint: 'http://localhost:8080',
+        token: 'test-token',
+      },
+    });
+
+    expect(llm.gangliaType()).toBe('openclaw');
+    expect(llm.label()).toBe('openclaw');
+  });
+
+  it('createGanglia works for nanoclaw', async () => {
+    await import('./nanoclaw.js');
+    const llm = await createGanglia({
+      type: 'nanoclaw',
+      nanoclaw: {
+        url: 'http://localhost:18789',
+      },
+    });
+
+    expect(llm.gangliaType()).toBe('nanoclaw');
+    expect(llm.label()).toBe('nanoclaw');
+  });
+});

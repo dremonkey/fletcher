@@ -3,7 +3,7 @@
 ## Description
 Refactor the brain plugin to support pluggable backends. Create a unified package supporting both OpenClaw and Nanoclaw, switchable via configuration only.
 
-## Current Status: Phase 1-2 Complete, Phase 3-4 In Progress
+## Current Status: Phase 1-3 Complete, Phase 4 In Progress
 
 ---
 
@@ -34,8 +34,10 @@ packages/
     │   ├── events.ts               # StatusEvent, ArtifactEvent, ContentEvent
     │   ├── factory.ts              # createGanglia(), registerGanglia()
     │   ├── tool-interceptor.ts     # ToolInterceptor for visual feedback
-    │   ├── client.ts               # HTTP client (works for both backends)
+    │   ├── client.ts               # OpenClawClient (HTTP client)
     │   ├── llm.ts                  # OpenClawLLM (implements GangliaLLM)
+    │   ├── nanoclaw-client.ts      # NanoclawClient (HTTP client with JID headers)
+    │   ├── nanoclaw.ts             # NanoclawLLM (implements GangliaLLM)
     │   └── index.ts                # Unified exports
     └── package.json                # @knittt/livekit-agent-ganglia
 ```
@@ -49,7 +51,7 @@ packages/
 - [x] Created events: `StatusEvent`, `ArtifactEvent`, `ContentEvent` types and helpers
 - [x] Created factory: `createGanglia()`, `createGangliaFromEnv()`, `registerGanglia()`
 - [x] Created `ToolInterceptor` for visual feedback during tool execution
-- [x] All unit tests passing (86 tests)
+- [x] All unit tests passing (129 tests)
 
 ### 1.2 Unified Package Structure ✅
 - [x] Renamed `livekit-agent-openclaw` → `livekit-agent-ganglia`
@@ -61,13 +63,28 @@ packages/
 **Usage:**
 ```typescript
 import {
+  createGanglia,
   createGangliaFromEnv,
   OpenClawLLM,
+  NanoclawLLM,
   ToolInterceptor,
   type GangliaConfig
 } from '@knittt/livekit-agent-ganglia';
 
-const llm = await createGangliaFromEnv(); // Uses GANGLIA_TYPE env var
+// From environment (GANGLIA_TYPE=openclaw|nanoclaw)
+const llm = await createGangliaFromEnv();
+
+// Explicit OpenClaw
+const openclawLlm = await createGanglia({
+  type: 'openclaw',
+  openclaw: { endpoint: 'http://localhost:8080', token: '...' },
+});
+
+// Explicit Nanoclaw
+const nanoclawLlm = await createGanglia({
+  type: 'nanoclaw',
+  nanoclaw: { url: 'http://localhost:18789' },
+});
 ```
 
 ---
@@ -89,7 +106,7 @@ const llm = await createGangliaFromEnv(); // Uses GANGLIA_TYPE env var
 
 ---
 
-## Phase 3: Fletcher Integration 🔄 IN PROGRESS
+## Phase 3: Fletcher Integration ✅ COMPLETE
 
 ### 3.1 Tool Interceptor ✅ COMPLETE
 - [x] `ToolInterceptor` class implemented
@@ -97,26 +114,41 @@ const llm = await createGangliaFromEnv(); // Uses GANGLIA_TYPE env var
 - [x] Creates artifacts from tool results (code, diff, search)
 - [x] Helper functions: `createReadFileArtifact`, `createEditArtifact`, etc.
 
-### 3.2 LiveKit Data Channel Publishing ⬅️ NEXT
-- [ ] Wire `ToolInterceptor` to `room.localParticipant.publishData()` in worker
-- [ ] Route `content` events to TTS pipeline
-- [ ] Route `status`/`artifact` events to data channel
+### 3.2 NanoclawLLM Implementation ✅ COMPLETE
+- [x] `NanoclawLLM` class extending `llm.LLM` and implementing `GangliaLLM`
+- [x] `NanoclawClient` with JID-based channel headers (`X-Nanoclaw-Channel`)
+- [x] `generateChannelJid()` for session-to-JID mapping
+- [x] `extractNanoclawSession()` for LiveKit context extraction
+- [x] Registered with factory via `registerGanglia('nanoclaw', ...)`
+- [x] Unit tests passing (nanoclaw.spec.ts, nanoclaw-client.spec.ts)
 
-### 3.3 Flutter Data Channel Handling
-- [ ] Subscribe to data channel in Flutter app
-- [ ] Parse status events → show in status bar
-- [ ] Parse artifact events → render diff viewer, code blocks
-- [ ] Add syntax highlighting for code artifacts
+### 3.3 LiveKit Data Channel Publishing ✅ COMPLETE
+- [x] Wire `ToolInterceptor` to `room.localParticipant.publishData()` in worker
+- [x] Example voice agent script: `scripts/voice-agent.ts`
+- [x] `wrapToolsWithInterceptor()` helper to intercept tool execution
+- [x] Events published to data channel with topic `ganglia-events`
+- [x] NPM scripts: `bun run voice:dev`, `bun run voice:connect --room <name>`
+- [ ] Route `content` events to TTS pipeline (handled by @livekit/agents framework)
+- [ ] Route `status`/`artifact` events to data channel (done via ToolInterceptor)
+
+### 3.4 Flutter Data Channel Handling ✅ COMPLETE
+- [x] Subscribe to data channel in Flutter app (`DataReceivedEvent` listener)
+- [x] Parse status events → show in status bar (`StatusBar` widget)
+- [x] Parse artifact events → render diff viewer, code blocks (`ArtifactViewer` widget)
+- [~] Add syntax highlighting for code artifacts (basic monospace rendering, no syntax highlighting yet)
 
 ---
 
 ## Phase 4: Testing & Validation
 
-### 4.1 Unit Tests
-- [x] Factory tests passing
+### 4.1 Unit Tests ✅ COMPLETE
+- [x] Factory tests passing (including backend registration tests)
 - [x] Events tests passing
 - [x] Tool interceptor tests passing
-- [x] Client tests passing
+- [x] OpenClaw client tests passing
+- [x] OpenClaw LLM tests passing
+- [x] Nanoclaw client tests passing
+- [x] Nanoclaw LLM tests passing
 
 ### 4.2 Integration Tests
 - [ ] End-to-end voice conversation with OpenClaw
@@ -132,10 +164,12 @@ const llm = await createGangliaFromEnv(); // Uses GANGLIA_TYPE env var
 
 ## Next Steps (Prioritized)
 
-1. **Apply Nanoclaw Skill** - Copy skill to Nanoclaw repo and run it
-2. **Add NanoclawLLM** - Implement Nanoclaw-specific LLM class with header handling
-3. **Data Channel Wiring** - Connect ToolInterceptor to LiveKit data channel
-4. **Flutter UI** - Add status bar and artifact viewer components
+1. ~~**Add NanoclawLLM** - Implement Nanoclaw-specific LLM class with header handling~~ ✅ DONE
+2. ~~**Data Channel Wiring** - Connect ToolInterceptor to LiveKit data channel~~ ✅ DONE
+3. ~~**Flutter UI** - Add status bar and artifact viewer components~~ ✅ DONE
+4. **Apply Nanoclaw Skill** - Copy skill to Nanoclaw repo and run it
+5. **Integration Tests** - End-to-end tests with both backends
+6. **Syntax Highlighting** - Add code syntax highlighting to artifact viewer (optional)
 
 ---
 
@@ -145,14 +179,15 @@ const llm = await createGangliaFromEnv(); // Uses GANGLIA_TYPE env var
 - [x] Unified `livekit-agent-ganglia` package with types, factory, events
 - [x] OpenClaw backend working with new structure
 - [x] Nanoclaw `/add-openai-api` skill documented
-- [ ] Nanoclaw backend working end-to-end
-- [ ] Backend switching via `GANGLIA_TYPE` env var
+- [x] NanoclawLLM class implemented with JID-based headers
+- [x] Backend switching via `GANGLIA_TYPE` env var (code complete, needs e2e test)
+- [ ] Nanoclaw backend working end-to-end (needs skill applied to Nanoclaw)
 
 ### Visual Feedback
 - [x] Tool calls intercepted as status events
 - [x] Tool results surfaced as artifacts
-- [ ] Status/artifacts sent via LiveKit data channel
-- [ ] Flutter app renders status bar, diff viewer, code blocks
+- [x] Status/artifacts sent via LiveKit data channel (topic: `ganglia-events`)
+- [x] Flutter app renders status bar, diff viewer, code blocks
 
 ### Backend Capability Matrix
 | Feature | OpenClaw | Nanoclaw |
@@ -162,6 +197,9 @@ const llm = await createGangliaFromEnv(); // Uses GANGLIA_TYPE env var
 | Tool-based artifacts | ✅ | ✅ |
 | Server-side status | ❌ | ✅ |
 | Cross-channel history | ❌ | ✅ |
+| Proactive outbound | ❌ | ❌ |
+
+**Note:** Both backends are user-initiated only. Neither can proactively "call" the user (e.g., wake-up alarms). See `docs/skills/add-openai-api/SKILL.md` for workarounds.
 
 ---
 

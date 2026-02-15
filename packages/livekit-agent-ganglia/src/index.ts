@@ -5,19 +5,26 @@
  *
  * @example
  * ```typescript
- * import { createGanglia, createGangliaFromEnv, OpenClawLLM } from '@knittt/livekit-agent-ganglia';
+ * import { createGanglia, createGangliaFromEnv, OpenClawLLM, NanoclawLLM } from '@knittt/livekit-agent-ganglia';
  *
- * // From explicit config
+ * // From explicit config (OpenClaw)
  * const llm = await createGanglia({
  *   type: 'openclaw',
  *   openclaw: { endpoint: 'http://localhost:8080', token: '...' },
  * });
  *
- * // From environment variables
+ * // From explicit config (Nanoclaw)
+ * const llm = await createGanglia({
+ *   type: 'nanoclaw',
+ *   nanoclaw: { url: 'http://localhost:18789' },
+ * });
+ *
+ * // From environment variables (GANGLIA_TYPE=openclaw|nanoclaw)
  * const llm = await createGangliaFromEnv();
  *
  * // Direct instantiation
- * const llm = new OpenClawLLM({ baseUrl: 'http://localhost:8080' });
+ * const openclawLlm = new OpenClawLLM({ baseUrl: 'http://localhost:8080' });
+ * const nanoclawLlm = new NanoclawLLM({ url: 'http://localhost:18789' });
  * ```
  */
 
@@ -84,16 +91,31 @@ export type {
 } from './tool-interceptor.js';
 
 // OpenClaw Implementation
-export { OpenClawLLM } from './llm.js';
+import { OpenClawLLM } from './llm.js';
+export { OpenClawLLM };
 export { extractSessionFromContext } from './llm.js';
 export { OpenClawClient, generateSessionId, buildSessionHeaders } from './client.js';
 export * from './types/index.js';
 
+// Nanoclaw Implementation
+import { NanoclawLLM } from './nanoclaw.js';
+export { NanoclawLLM };
+export { extractNanoclawSession } from './nanoclaw.js';
+export { NanoclawClient, generateChannelJid } from './nanoclaw-client.js';
+export type { NanoclawChatOptions } from './nanoclaw-client.js';
+
 /**
- * Default OpenClaw LLM instance
+ * OpenClaw LLM namespace
  */
 export const openclaw = {
   LLM: OpenClawLLM,
+};
+
+/**
+ * Nanoclaw LLM namespace
+ */
+export const nanoclaw = {
+  LLM: NanoclawLLM,
 };
 
 export default openclaw;
