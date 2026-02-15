@@ -15,23 +15,20 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:unit": "vitest run test/unit/",
-    "test:integration": "vitest run test/integration/",
-    "test:coverage": "vitest run --coverage",
+    "test": "bun test",
     "lint": "eslint src --ext .ts"
   },
   "dependencies": {
     "@livekit/agents": "^1.0.0",
     "@livekit/agents-plugin-deepgram": "^1.0.0",
     "@livekit/agents-plugin-cartesia": "^1.0.0",
-    "@livekit/rtc-node": "^0.12.0",
+    "@livekit/rtc-node": "^0.13.0",
+    "@knittt/livekit-agent-ganglia": "workspace:*",
     "livekit-server-sdk": "^2.0.0",
     "@sinclair/typebox": "^0.32.0"
   },
   "devDependencies": {
-    "vitest": "^2.0.0",
+    "@types/bun": "latest",
     "@types/node": "^20.0.0"
   },
   "peerDependencies": {

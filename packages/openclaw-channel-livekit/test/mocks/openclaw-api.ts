@@ -1,15 +1,10 @@
 /**
  * Mock OpenClawPluginApi for testing without a running OpenClaw instance.
- *
- * Based on OpenClaw's plugin API interface from src/plugins/types.ts
  */
-import { vi } from "vitest";
+import { mock } from "bun:test";
 import { createMockRuntime, type MockRuntime } from "./runtime.js";
 import { createMockLogger, type MockLogger } from "./logger.js";
 
-/**
- * Registered channel plugin shape (simplified for testing)
- */
 export interface MockChannelPlugin {
   id: string;
   meta?: {
@@ -31,9 +26,6 @@ export interface MockChannelPlugin {
   [key: string]: unknown;
 }
 
-/**
- * Mock plugin configuration
- */
 export interface MockPluginConfig {
   channels?: {
     livekit?: {
@@ -54,11 +46,7 @@ export interface MockPluginConfig {
   };
 }
 
-/**
- * Extended mock API with test helpers
- */
 export interface MockPluginApi {
-  // Standard API fields
   id: string;
   name: string;
   version?: string;
@@ -69,23 +57,20 @@ export interface MockPluginApi {
   runtime: MockRuntime;
   logger: MockLogger;
 
-  // Registration methods (mocked)
-  registerChannel: ReturnType<typeof vi.fn>;
-  registerTool: ReturnType<typeof vi.fn>;
-  registerHook: ReturnType<typeof vi.fn>;
-  registerHttpHandler: ReturnType<typeof vi.fn>;
-  registerHttpRoute: ReturnType<typeof vi.fn>;
-  registerGatewayMethod: ReturnType<typeof vi.fn>;
-  registerCli: ReturnType<typeof vi.fn>;
-  registerService: ReturnType<typeof vi.fn>;
-  registerProvider: ReturnType<typeof vi.fn>;
-  registerCommand: ReturnType<typeof vi.fn>;
+  registerChannel: ReturnType<typeof mock>;
+  registerTool: ReturnType<typeof mock>;
+  registerHook: ReturnType<typeof mock>;
+  registerHttpHandler: ReturnType<typeof mock>;
+  registerHttpRoute: ReturnType<typeof mock>;
+  registerGatewayMethod: ReturnType<typeof mock>;
+  registerCli: ReturnType<typeof mock>;
+  registerService: ReturnType<typeof mock>;
+  registerProvider: ReturnType<typeof mock>;
+  registerCommand: ReturnType<typeof mock>;
 
-  // Utilities
-  resolvePath: ReturnType<typeof vi.fn>;
-  on: ReturnType<typeof vi.fn>;
+  resolvePath: ReturnType<typeof mock>;
+  on: ReturnType<typeof mock>;
 
-  // Test helpers (not part of real API)
   _registeredChannels: Map<string, MockChannelPlugin>;
   _registeredHooks: Map<string, Array<(...args: unknown[]) => unknown>>;
   _getChannel: (id: string) => MockChannelPlugin | undefined;
@@ -97,20 +82,6 @@ export interface CreateMockPluginApiOptions {
   runtime?: Partial<MockRuntime>;
 }
 
-/**
- * Create a mock OpenClawPluginApi for testing.
- *
- * Usage:
- * ```typescript
- * const mockApi = createMockPluginApi();
- * plugin.register(mockApi);
- *
- * // Verify channel was registered
- * expect(mockApi.registerChannel).toHaveBeenCalled();
- * const channel = mockApi._getChannel("livekit");
- * expect(channel).toBeDefined();
- * ```
- */
 export function createMockPluginApi(
   options: CreateMockPluginApiOptions = {}
 ): MockPluginApi {
@@ -131,12 +102,12 @@ export function createMockPluginApi(
     runtime: mockRuntime,
     logger: mockLogger,
 
-    registerChannel: vi.fn((registration: { plugin: MockChannelPlugin } | MockChannelPlugin) => {
+    registerChannel: mock((registration: { plugin: MockChannelPlugin } | MockChannelPlugin) => {
       const plugin = "plugin" in registration ? registration.plugin : registration;
       registeredChannels.set(plugin.id, plugin);
     }),
 
-    registerHook: vi.fn((events: string | string[], handler: (...args: unknown[]) => unknown) => {
+    registerHook: mock((events: string | string[], handler: (...args: unknown[]) => unknown) => {
       const eventList = Array.isArray(events) ? events : [events];
       for (const event of eventList) {
         const handlers = registeredHooks.get(event) ?? [];
@@ -145,18 +116,17 @@ export function createMockPluginApi(
       }
     }),
 
-    registerTool: vi.fn(),
-    registerHttpHandler: vi.fn(),
-    registerHttpRoute: vi.fn(),
-    registerGatewayMethod: vi.fn(),
-    registerCli: vi.fn(),
-    registerService: vi.fn(),
-    registerProvider: vi.fn(),
-    registerCommand: vi.fn(),
-    resolvePath: vi.fn((input: string) => input),
-    on: vi.fn(),
+    registerTool: mock(() => {}),
+    registerHttpHandler: mock(() => {}),
+    registerHttpRoute: mock(() => {}),
+    registerGatewayMethod: mock(() => {}),
+    registerCli: mock(() => {}),
+    registerService: mock(() => {}),
+    registerProvider: mock(() => {}),
+    registerCommand: mock(() => {}),
+    resolvePath: mock((input: string) => input),
+    on: mock(() => {}),
 
-    // Test helpers
     _registeredChannels: registeredChannels,
     _registeredHooks: registeredHooks,
 

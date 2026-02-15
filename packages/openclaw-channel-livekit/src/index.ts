@@ -52,6 +52,9 @@ export type {
   Speaker,
 } from "./types.js";
 
+export { VoiceAgent } from "./livekit/audio.js";
+export type { VoiceAgentConfig } from "./livekit/audio.js";
+
 export {
   listLivekitAccountIds,
   resolveLivekitAccount,

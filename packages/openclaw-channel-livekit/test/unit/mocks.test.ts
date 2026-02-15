@@ -1,7 +1,7 @@
 /**
  * Unit tests to verify mock implementations work correctly.
  */
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, mock } from "bun:test";
 import {
   createMockPluginApi,
   createMockRuntime,
@@ -41,7 +41,7 @@ describe("Mock Implementations", () => {
 
     it("should track registered hooks", async () => {
       const api = createMockPluginApi();
-      const handler = vi.fn();
+      const handler = mock(() => {});
 
       api.registerHook("message:send", handler);
 
@@ -83,7 +83,7 @@ describe("Mock Implementations", () => {
 
     it("should support event emission", () => {
       const runtime = createMockRuntime();
-      const handler = vi.fn();
+      const handler = mock(() => {});
 
       runtime._onEvent("message:send", handler);
       runtime._emitEvent("message:send", { text: "test" });
@@ -93,7 +93,7 @@ describe("Mock Implementations", () => {
 
     it("should simulate brain responses", () => {
       const runtime = createMockRuntime();
-      const handler = vi.fn();
+      const handler = mock(() => {});
 
       runtime._onEvent("message:send", handler);
       runtime._simulateBrainResponse("conv-123", "I am the agent");
@@ -188,12 +188,9 @@ describe("Mock Implementations", () => {
 
       tts._simulateError(new Error("API limit exceeded"));
 
-      await expect(async () => {
+      expect(async () => {
         await collectAudioChunks(tts.synthesize("Test"));
-      }).rejects.toThrow("API limit exceeded");
+      }).toThrow("API limit exceeded");
     });
   });
 });
-
-// Import vi for the hook test
-import { vi } from "vitest";

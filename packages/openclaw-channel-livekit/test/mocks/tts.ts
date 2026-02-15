@@ -1,9 +1,9 @@
 /**
  * Mock TTS (Text-to-Speech) provider for testing.
  *
- * Simulates Cartesia/ElevenLabs audio synthesis without actual API calls.
+ * Simulates Cartesia SDK TTS behavior without actual API calls.
  */
-import { vi } from "vitest";
+import { mock } from "bun:test";
 
 export interface TTSSynthesisOptions {
   voiceId?: string;
@@ -12,15 +12,8 @@ export interface TTSSynthesisOptions {
 }
 
 export interface MockTTSProvider {
-  /**
-   * Synthesize text to audio stream.
-   */
   synthesize: (text: string, options?: TTSSynthesisOptions) => AsyncGenerator<Buffer>;
-
-  /**
-   * Close the TTS connection.
-   */
-  close: ReturnType<typeof vi.fn>;
+  close: ReturnType<typeof mock>;
 
   // Test helpers
   _calls: Array<{ text: string; options?: TTSSynthesisOptions }>;
@@ -44,15 +37,13 @@ export function createMockTTS(): MockTTSProvider {
         throw error;
       }
 
-      // Yield audio chunks
       for (const chunk of audioChunks) {
         yield chunk;
       }
     },
 
-    close: vi.fn(),
+    close: mock(() => {}),
 
-    // Test helpers
     _calls: calls,
     _audioChunks: audioChunks,
 
@@ -68,9 +59,6 @@ export function createMockTTS(): MockTTSProvider {
   return provider;
 }
 
-/**
- * Collect all chunks from a TTS synthesis stream.
- */
 export async function collectAudioChunks(
   stream: AsyncGenerator<Buffer>
 ): Promise<Buffer[]> {

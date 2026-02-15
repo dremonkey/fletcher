@@ -1,9 +1,7 @@
 /**
  * Mock PluginRuntime for testing.
- *
- * The runtime provides access to OpenClaw's core messaging and state management.
  */
-import { vi } from "vitest";
+import { mock } from "bun:test";
 import { EventEmitter } from "events";
 
 export interface MockMessage {
@@ -22,25 +20,19 @@ export interface MockConversation {
   metadata?: Record<string, unknown>;
 }
 
-/**
- * Mock runtime with test helpers
- */
 export interface MockRuntime {
-  // Core messaging
-  sendMessage: ReturnType<typeof vi.fn>;
-  getConversation: ReturnType<typeof vi.fn>;
-  createConversation: ReturnType<typeof vi.fn>;
+  sendMessage: ReturnType<typeof mock>;
+  getConversation: ReturnType<typeof mock>;
+  createConversation: ReturnType<typeof mock>;
 
-  // Config access
   config: {
-    loadConfig: ReturnType<typeof vi.fn>;
+    loadConfig: ReturnType<typeof mock>;
   };
 
-  // Channel-specific runtime (e.g., channel.livekit.sendAudio)
   channel: {
     livekit: {
-      sendAudio: ReturnType<typeof vi.fn>;
-      getRoom: ReturnType<typeof vi.fn>;
+      sendAudio: ReturnType<typeof mock>;
+      getRoom: ReturnType<typeof mock>;
     };
   };
 
@@ -61,11 +53,10 @@ export function createMockRuntime(
   const events = new EventEmitter();
 
   const runtime: MockRuntime = {
-    sendMessage: vi.fn(async (conversationId: string, text: string, sender?: MockMessage["sender"]) => {
+    sendMessage: mock(async (conversationId: string, text: string, sender?: MockMessage["sender"]) => {
       const message: MockMessage = { conversationId, text, sender };
       sentMessages.push(message);
 
-      // Add to conversation if it exists
       const conversation = conversations.get(conversationId);
       if (conversation) {
         conversation.messages.push(message);
@@ -74,28 +65,27 @@ export function createMockRuntime(
       return { success: true, messageId: `msg-${Date.now()}` };
     }),
 
-    getConversation: vi.fn(async (id: string) => {
+    getConversation: mock(async (id: string) => {
       return conversations.get(id) ?? { id, messages: [] };
     }),
 
-    createConversation: vi.fn(async (id: string, metadata?: Record<string, unknown>) => {
+    createConversation: mock(async (id: string, metadata?: Record<string, unknown>) => {
       const conversation: MockConversation = { id, messages: [], metadata };
       conversations.set(id, conversation);
       return conversation;
     }),
 
     config: {
-      loadConfig: vi.fn(() => ({})),
+      loadConfig: mock(() => ({})),
     },
 
     channel: {
       livekit: {
-        sendAudio: vi.fn(),
-        getRoom: vi.fn(),
+        sendAudio: mock(() => {}),
+        getRoom: mock(() => {}),
       },
     },
 
-    // Test helpers
     _sentMessages: sentMessages,
     _conversations: conversations,
     _events: events,

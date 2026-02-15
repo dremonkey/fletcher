@@ -1,14 +1,20 @@
 /**
- * Voice agent implementation using LiveKit AgentSession.
+ * Voice agent implementation using @livekit/agents SDK + Ganglia.
  *
- * Handles the STT → OpenClaw → TTS pipeline.
+ * Uses deepgram.STT, cartesia.TTS, and ganglia LLM to handle the full
+ * audio pipeline. The SDK's voice.AgentSession manages STT → LLM → TTS routing.
  */
-import type { Room, RemoteParticipant } from "@livekit/rtc-node";
-import { getLivekitRuntime, getLivekitLogger } from "../runtime.js";
-import { ParticipantTracker, createSpeaker } from "./participant.js";
-import { createSTT } from "../pipeline/stt.js";
-import { createTTS } from "../pipeline/tts.js";
-import type { ResolvedLivekitAccount, Speaker } from "../types.js";
+import type { Room } from "@livekit/rtc-node";
+import { voice } from "@livekit/agents";
+import * as deepgram from "@livekit/agents-plugin-deepgram";
+import * as cartesia from "@livekit/agents-plugin-cartesia";
+import {
+  createGanglia,
+  type GangliaLLM,
+} from "@knittt/livekit-agent-ganglia";
+import { getLivekitLogger } from "../runtime.js";
+import { ParticipantTracker } from "./participant.js";
+import type { ResolvedLivekitAccount } from "../types.js";
 
 /**
  * Voice agent configuration.
@@ -26,12 +32,11 @@ type AgentState = "idle" | "listening" | "thinking" | "speaking";
 /**
  * Voice agent for handling real-time voice conversations.
  *
- * Pipeline:
- * 1. Receive audio from participant via LiveKit
- * 2. Transcribe via STT (Deepgram)
- * 3. Route transcription to OpenClaw brain
- * 4. Synthesize response via TTS (Cartesia)
- * 5. Publish audio back to LiveKit room
+ * Delegates the full audio pipeline to the @livekit/agents SDK:
+ * - deepgram.STT for speech-to-text
+ * - cartesia.TTS for text-to-speech
+ * - Ganglia LLM for the brain (OpenClaw or Nanoclaw)
+ * - voice.AgentSession orchestrates the pipeline
  */
 export class VoiceAgent {
   private roomId: string;
@@ -41,9 +46,12 @@ export class VoiceAgent {
   private state: AgentState = "idle";
   private isRunning = false;
 
-  // Pipeline components (will be initialized on start)
-  private stt: ReturnType<typeof createSTT> | null = null;
-  private tts: ReturnType<typeof createTTS> | null = null;
+  // SDK components
+  private sttInstance: deepgram.STT | null = null;
+  private ttsInstance: cartesia.TTS | null = null;
+  private llmInstance: GangliaLLM | null = null;
+  private agent: voice.Agent | null = null;
+  private session: voice.AgentSession | null = null;
 
   constructor(config: VoiceAgentConfig) {
     this.roomId = config.roomId;
@@ -67,97 +75,89 @@ export class VoiceAgent {
 
     log.info(`Starting voice agent for room ${this.roomId}`);
 
-    // Initialize participant tracker
+    // Create STT from account config
+    this.sttInstance = new deepgram.STT({
+      model: this.account.stt.deepgram.model as any,
+      language: this.account.stt.deepgram.language,
+      apiKey: this.account.stt.apiKey,
+    });
+
+    // Create TTS from account config
+    this.ttsInstance = new cartesia.TTS({
+      model: this.account.tts.cartesia.model,
+      voice: this.account.tts.cartesia.voiceId,
+      speed: this.account.tts.cartesia.speed as any,
+      emotion: this.account.tts.cartesia.emotion
+        ? [this.account.tts.cartesia.emotion]
+        : undefined,
+      apiKey: this.account.tts.apiKey,
+    });
+
+    // Create Ganglia LLM
+    this.llmInstance = await createGanglia({
+      type: "openclaw",
+      openclaw: {
+        endpoint: this.account.url,
+        token: this.account.apiKey,
+      },
+    });
+
+    // Create the voice agent definition
+    this.agent = new voice.Agent({
+      instructions: "You are a helpful voice assistant.",
+      llm: this.llmInstance,
+      stt: this.sttInstance,
+      tts: this.ttsInstance,
+    });
+
+    // Set up participant tracking — start session when a participant joins
     this.participantTracker = new ParticipantTracker(room, {
       onJoin: (participant) => {
         log.info(`Participant joined: ${participant.identity}`);
-        // Optionally send a greeting
+        this.startSession(room);
       },
       onLeave: (participant) => {
         log.info(`Participant left: ${participant.identity}`);
       },
     });
 
-    // Initialize STT
-    this.stt = createSTT(this.account.stt);
-
-    // Initialize TTS
-    this.tts = createTTS(this.account.tts);
-
-    // Set up audio track handling
-    await this.setupAudioPipeline();
+    // Start session if participants are already in the room
+    const existing = this.participantTracker.getParticipants();
+    if (existing.length > 0) {
+      this.startSession(room);
+    }
 
     log.info(`Voice agent started for room ${this.roomId}`);
   }
 
   /**
-   * Set up the audio processing pipeline.
+   * Start a voice.AgentSession connected to the room.
    */
-  private async setupAudioPipeline(): Promise<void> {
+  private async startSession(room: Room): Promise<void> {
     const log = getLivekitLogger();
 
-    if (!this.room) {
-      throw new Error("Room not connected");
-    }
-
-    // Subscribe to participant audio tracks
-    // In a real implementation, this would:
-    // 1. Subscribe to audio tracks from participants
-    // 2. Pipe audio to STT
-    // 3. Handle transcription events
-    // 4. Route to OpenClaw
-    // 5. Synthesize and publish response
-
-    log.debug("Audio pipeline setup complete (placeholder)");
-
-    // TODO: Implement full audio pipeline when @livekit/agents types are available
-    // The implementation would look like:
-    //
-    // for (const participant of this.room.remoteParticipants.values()) {
-    //   for (const track of participant.trackPublications.values()) {
-    //     if (track.kind === TrackKind.AUDIO && track.track) {
-    //       await this.processAudioTrack(participant, track.track);
-    //     }
-    //   }
-    // }
-  }
-
-  /**
-   * Handle a transcription from STT.
-   */
-  private async handleTranscription(
-    text: string,
-    speaker: Speaker,
-    isFinal: boolean
-  ): Promise<void> {
-    const log = getLivekitLogger();
-    const runtime = getLivekitRuntime();
-
-    if (!isFinal) {
-      // Partial transcription - could show typing indicator
-      log.debug(`Partial transcription from ${speaker.id}: ${text}`);
+    if (this.session) {
+      log.debug("Session already active, skipping");
       return;
     }
 
-    log.info(`Final transcription from ${speaker.id}: ${text}`);
-    this.state = "thinking";
+    if (!this.agent) {
+      log.warn("Cannot start session - agent not initialized");
+      return;
+    }
 
     try {
-      // Route to OpenClaw brain
-      const response = await runtime.gateway.handleMessage({
-        channel: "livekit",
-        conversationId: this.roomId,
-        text,
-        sender: speaker,
+      this.session = new voice.AgentSession({
+        stt: this.sttInstance ?? undefined,
+        tts: this.ttsInstance ?? undefined,
+        llm: this.llmInstance ?? undefined,
       });
 
-      if (response?.text) {
-        await this.say(response.text);
-      }
+      await this.session.start({ agent: this.agent, room });
+      log.info("Voice session started");
     } catch (error) {
-      log.error(`Error handling transcription: ${error}`);
-    } finally {
-      this.state = "listening";
+      log.error(`Error starting voice session: ${error}`);
+      this.session = null;
     }
   }
 
@@ -167,8 +167,8 @@ export class VoiceAgent {
   async say(text: string): Promise<void> {
     const log = getLivekitLogger();
 
-    if (!this.tts || !this.room) {
-      log.warn("Cannot say - TTS or room not initialized");
+    if (!this.session) {
+      log.warn("Cannot say - no active session");
       return;
     }
 
@@ -176,17 +176,7 @@ export class VoiceAgent {
     this.state = "speaking";
 
     try {
-      // Synthesize text to audio
-      const audioStream = this.tts.synthesize(text);
-
-      // Publish audio chunks to room
-      for await (const chunk of audioStream) {
-        // TODO: Publish audio chunk to room
-        // await this.publishAudioChunk(chunk);
-        log.debug(`Audio chunk: ${chunk.length} bytes`);
-      }
-
-      log.debug("Finished speaking");
+      this.session.say(text);
     } catch (error) {
       log.error(`Error speaking: ${error}`);
     } finally {
@@ -223,15 +213,9 @@ export class VoiceAgent {
     this.isRunning = false;
     this.state = "idle";
 
-    // Clean up components
-    if (this.stt) {
-      this.stt.close();
-      this.stt = null;
-    }
-
-    if (this.tts) {
-      this.tts.close();
-      this.tts = null;
+    if (this.session) {
+      await this.session.close();
+      this.session = null;
     }
 
     if (this.participantTracker) {
@@ -239,6 +223,10 @@ export class VoiceAgent {
       this.participantTracker = null;
     }
 
+    this.agent = null;
+    this.sttInstance = null;
+    this.ttsInstance = null;
+    this.llmInstance = null;
     this.room = null;
 
     log.info(`Voice agent stopped for room ${this.roomId}`);

@@ -147,15 +147,6 @@ export interface TranscriptionResult {
 }
 
 /**
- * Voice agent configuration.
- */
-export interface VoiceAgentConfig {
-  roomId: string;
-  stt: STTConfig;
-  tts: TTSConfig;
-}
-
-/**
  * Active room session tracking.
  */
 export interface RoomSession {

@@ -1,9 +1,9 @@
 /**
  * Mock STT (Speech-to-Text) provider for testing.
  *
- * Simulates Deepgram/Groq transcription without actual API calls.
+ * Simulates Deepgram SDK STT behavior without actual API calls.
  */
-import { vi } from "vitest";
+import { mock } from "bun:test";
 
 export interface TranscriptEvent {
   text: string;
@@ -14,15 +14,8 @@ export interface TranscriptEvent {
 }
 
 export interface MockSTTProvider {
-  /**
-   * Process audio stream and yield transcription events.
-   */
   transcribe: (audioStream: AsyncIterable<Buffer>) => AsyncGenerator<TranscriptEvent>;
-
-  /**
-   * Close the STT connection.
-   */
-  close: ReturnType<typeof vi.fn>;
+  close: ReturnType<typeof mock>;
 
   // Test helpers
   _calls: Buffer[][];
@@ -44,16 +37,14 @@ export function createMockSTT(): MockSTTProvider {
       }
       calls.push(chunks);
 
-      // Yield any pending simulated transcriptions
       for (const t of pendingTranscriptions) {
         yield t;
       }
       pendingTranscriptions.length = 0;
     },
 
-    close: vi.fn(),
+    close: mock(() => {}),
 
-    // Test helpers
     _calls: calls,
     _pendingTranscriptions: pendingTranscriptions,
 
@@ -89,9 +80,6 @@ export function createMockSTT(): MockSTTProvider {
   return provider;
 }
 
-/**
- * Create a mock audio stream for testing.
- */
 export async function* createTestAudioStream(
   chunks: number = 10,
   chunkSize: number = 1024

@@ -1,13 +1,13 @@
 /**
  * Mock PluginLogger for testing.
  */
-import { vi } from "vitest";
+import { mock } from "bun:test";
 
 export interface MockLogger {
-  info: ReturnType<typeof vi.fn>;
-  debug: ReturnType<typeof vi.fn>;
-  warn: ReturnType<typeof vi.fn>;
-  error: ReturnType<typeof vi.fn>;
+  info: ReturnType<typeof mock>;
+  debug: ReturnType<typeof mock>;
+  warn: ReturnType<typeof mock>;
+  error: ReturnType<typeof mock>;
 
   // Test helpers
   _logs: Array<{ level: string; message: string; args: unknown[] }>;
@@ -18,7 +18,7 @@ export function createMockLogger(): MockLogger {
   const logs: Array<{ level: string; message: string; args: unknown[] }> = [];
 
   const createLogFn = (level: string) =>
-    vi.fn((message: string, ...args: unknown[]) => {
+    mock((message: string, ...args: unknown[]) => {
       logs.push({ level, message, args });
     });
 

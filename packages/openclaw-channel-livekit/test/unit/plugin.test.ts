@@ -1,7 +1,7 @@
 /**
  * Unit tests for LiveKit plugin registration.
  */
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach } from "bun:test";
 import { createMockPluginApi, type MockPluginApi } from "../mocks/index.js";
 import plugin from "../../src/index.js";
 import { clearRuntime } from "../../src/runtime.js";
@@ -10,7 +10,6 @@ describe("LiveKit Plugin", () => {
   let mockApi: MockPluginApi;
 
   beforeEach(() => {
-    // Clear runtime state between tests
     clearRuntime();
 
     mockApi = createMockPluginApi({
@@ -62,9 +61,7 @@ describe("LiveKit Plugin", () => {
 
     it("should set runtime during registration", () => {
       plugin.register(mockApi as any);
-
       // Runtime should be set (we can verify by checking no error is thrown)
-      // The actual runtime check would require importing getLivekitRuntime
     });
   });
 
