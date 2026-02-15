@@ -57,7 +57,24 @@ tasks/
 ├── 01-infrastructure/        # ✅ Complete
 ├── 02-livekit-agent/         # Channel plugin tasks
 ├── 03-flutter-app/           # ✅ Complete
-└── 04-livekit-agent-plugin/  # Brain plugin tasks
+├── 04-livekit-agent-plugin/  # Brain plugin tasks
+└── 05-latency-optimization/  # Voice pipeline latency tasks
 ```
 
 **Before finishing a session:** If you made implementation progress, update the corresponding task file in `tasks/`.
+
+## Commit Discipline (IMPORTANT)
+Commit early and often. Do NOT batch up large amounts of work into a single mega-commit at the end.
+
+**When to commit:**
+- After adding or updating docs/specs (commit the docs before moving on)
+- After a feature or refactor is working and tests pass
+- After deleting/renaming files (commit the structural change separately)
+- After migrating test frameworks or updating dependencies
+- Before starting a different area of work (e.g., commit ganglia changes before starting flutter changes)
+
+**How to commit:**
+- Group related changes into logical commits (one concern per commit)
+- Use conventional commit prefixes: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`
+- Include scope when clear: `feat(ganglia):`, `refactor(channel):`, `docs(tasks):`
+- Keep commit messages concise — 1-2 sentence summary of *why*, not *what*
