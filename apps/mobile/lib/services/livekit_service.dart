@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -16,6 +17,7 @@ class LiveKitService extends ChangeNotifier {
   bool get isMuted => _isMuted;
 
   Timer? _audioLevelTimer;
+  Timer? _statusClearTimer;
 
   Future<bool> requestPermissions() async {
     final status = await Permission.microphone.request();
@@ -89,6 +91,51 @@ class LiveKitService extends ChangeNotifier {
         debugPrint('Subscribed to audio track');
       }
     });
+
+    // Subscribe to ganglia events via data channel
+    _listener?.on<DataReceivedEvent>((event) {
+      _handleDataReceived(event);
+    });
+  }
+
+  /// Handles data received from the voice agent via data channel
+  void _handleDataReceived(DataReceivedEvent event) {
+    // Only process ganglia-events topic
+    if (event.topic != 'ganglia-events') return;
+
+    try {
+      final jsonStr = utf8.decode(event.data);
+      final json = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final eventType = json['type'] as String?;
+
+      if (eventType == 'status') {
+        final statusEvent = StatusEvent.fromJson(json);
+        _updateState(currentStatus: statusEvent);
+        debugPrint('[Ganglia] Status: ${statusEvent.displayText}');
+
+        // Clear status after 5 seconds of inactivity
+        _statusClearTimer?.cancel();
+        _statusClearTimer = Timer(const Duration(seconds: 5), () {
+          _updateState(clearStatus: true);
+        });
+      } else if (eventType == 'artifact') {
+        final artifactEvent = ArtifactEvent.fromJson(json);
+        final newArtifacts = [..._state.artifacts, artifactEvent];
+        // Keep only last 10 artifacts
+        if (newArtifacts.length > 10) {
+          newArtifacts.removeAt(0);
+        }
+        _updateState(artifacts: newArtifacts);
+        debugPrint('[Ganglia] Artifact: ${artifactEvent.displayTitle}');
+      }
+    } catch (e) {
+      debugPrint('Failed to parse ganglia event: $e');
+    }
+  }
+
+  /// Clears all artifacts from the state
+  void clearArtifacts() {
+    _updateState(artifacts: []);
   }
 
   void _startAudioLevelMonitoring() {
@@ -176,6 +223,9 @@ class LiveKitService extends ChangeNotifier {
     double? aiAudioLevel,
     String? errorMessage,
     List<TranscriptEntry>? transcript,
+    StatusEvent? currentStatus,
+    bool clearStatus = false,
+    List<ArtifactEvent>? artifacts,
   }) {
     _state = _state.copyWith(
       status: status,
@@ -183,12 +233,16 @@ class LiveKitService extends ChangeNotifier {
       aiAudioLevel: aiAudioLevel,
       errorMessage: errorMessage,
       transcript: transcript,
+      currentStatus: currentStatus,
+      clearStatus: clearStatus,
+      artifacts: artifacts,
     );
     notifyListeners();
   }
 
   Future<void> disconnect() async {
     _audioLevelTimer?.cancel();
+    _statusClearTimer?.cancel();
     _listener?.dispose();
     await _room?.disconnect();
     _room = null;

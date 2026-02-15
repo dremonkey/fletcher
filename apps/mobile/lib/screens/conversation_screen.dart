@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../models/conversation_state.dart';
 import '../services/livekit_service.dart';
 import '../widgets/amber_orb.dart';
+import '../widgets/artifact_viewer.dart';
 import '../widgets/mute_toggle.dart';
+import '../widgets/status_bar.dart';
 
 class ConversationScreen extends StatefulWidget {
   final String livekitUrl;
@@ -71,6 +73,33 @@ class _ConversationScreenState extends State<ConversationScreen> {
               right: 0,
               child: Center(
                 child: _buildStatusIndicator(state),
+              ),
+            ),
+
+            // Ganglia status bar (shows what the agent is doing)
+            Positioned(
+              top: 60,
+              left: 16,
+              right: 16,
+              child: Center(
+                child: StatusBar(status: state.currentStatus),
+              ),
+            ),
+
+            // Artifact chip (tap to open artifact drawer)
+            Positioned(
+              bottom: 120,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: ArtifactChip(
+                  count: state.artifacts.length,
+                  onTap: () => showArtifactDrawer(
+                    context,
+                    artifacts: state.artifacts,
+                    onClear: _liveKitService.clearArtifacts,
+                  ),
+                ),
               ),
             ),
 
