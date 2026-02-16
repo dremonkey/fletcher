@@ -53,7 +53,7 @@ The `tasks/` directory contains the project roadmap and must stay accurate.
 **Structure:**
 ```
 tasks/
-├── README.md                 # Overview with epic status
+├── SUMMARY.md                # Overview with epic status (keep in sync!)
 ├── 01-infrastructure/        # ✅ Complete
 ├── 02-livekit-agent/         # Channel plugin tasks
 ├── 03-flutter-app/           # ✅ Complete
@@ -62,6 +62,8 @@ tasks/
 ```
 
 **Before finishing a session:** If you made implementation progress, update the corresponding task file in `tasks/`.
+
+**IMPORTANT — Keep SUMMARY.md in sync:** When updating any task file status (marking items `[x]`, `[~]`, or `[ ]`), also update `tasks/SUMMARY.md` to reflect the change. The SUMMARY is the single source of truth for project-wide progress and must match the individual task files.
 
 ## Commit Discipline (IMPORTANT)
 Commit early and often. Do NOT batch up large amounts of work into a single mega-commit at the end.

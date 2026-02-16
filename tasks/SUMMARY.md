@@ -25,8 +25,8 @@ Setting up the development environment, LiveKit server, and monorepo structure.
 The LiveKit channel plugin (`@openclaw/channel-livekit`) that integrates voice capabilities into OpenClaw.
 
 **Tasks:**
-- [x] 001: Initialize OpenClaw channel plugin ✅
-- [x] 002: Implement audio pipeline (STT/TTS) ✅ — wired to SDK + Ganglia
+- [~] 001: Initialize OpenClaw channel plugin — plugin structure and OpenClaw integration done; testing & token endpoint remaining
+- [~] 002: Implement audio pipeline (STT/TTS) — wired to SDK + Ganglia; actual provider integration, audio track management, latency monitoring remaining
 - [x] 004: Channel plugin approach (implementation guide)
 
 **Implemented:**
@@ -34,6 +34,14 @@ The LiveKit channel plugin (`@openclaw/channel-livekit`) that integrates voice c
 - VoiceAgent wired to `@livekit/agents` SDK (deepgram.STT, cartesia.TTS, voice.AgentSession)
 - Ganglia LLM as brain via `@knittt/livekit-agent-ganglia`
 - Multi-account support with environment variable fallback
+- STT/TTS provider interfaces and factory functions
+- OpenClaw core integration (handleMessage, outbound.sendText, state machine)
+
+**Remaining:**
+- Unit/integration tests for channel plugin (mock providers, hello-world test)
+- Token endpoint for mobile clients (`api.registerHttpRoute()`)
+- Full audio track subscription and chunk publishing
+- Latency monitoring and metrics
 
 ### 3. [Flutter App](./03-flutter-app) ✅
 The mobile client for real-time voice interaction and visualization.
@@ -55,10 +63,10 @@ The mobile client for real-time voice interaction and visualization.
 A unified LLM plugin (`@knittt/livekit-agent-ganglia`) that bridges LiveKit agents to OpenClaw or Nanoclaw via OpenAI-compatible API.
 
 **Tasks:**
-- [x] 001: Standalone Brain Plugin ✅ (OpenClaw working)
-- [~] 002: Nanoclaw Integration (Phase 1-3 complete, Phase 4 in progress)
+- [~] 001: Standalone Brain Plugin — OpenClaw working, unit tests passing; advanced features (async tools, context injection) and documentation remaining
+- [~] 002: Nanoclaw Integration — Phase 1-3 complete, Phase 4 (integration tests) in progress
 
-**What's Done:**
+**Implemented:**
 - Unified `@knittt/livekit-agent-ganglia` package with types, factory, events, tool-interceptor
 - `OpenClawLLM` implementation with auth, sessions, message mapping
 - `NanoclawLLM` implementation with JID-based channel headers
@@ -67,12 +75,17 @@ A unified LLM plugin (`@knittt/livekit-agent-ganglia`) that bridges LiveKit agen
 - `ToolInterceptor` for visual feedback (status events, artifacts)
 - Flutter UI: `StatusBar` widget and `ArtifactViewer` (diff, code, search results)
 - Data channel subscription for `ganglia-events` topic
-- 127 unit tests passing
+- 129 unit tests passing
 
-**Next Steps:**
+**Remaining:**
 1. Apply `/add-openai-api` skill to Nanoclaw repo
-2. Integration tests with both backends
-3. Syntax highlighting for code artifacts (optional)
+2. Integration tests with both backends (end-to-end voice conversation)
+3. Error handling and retry tests (network failures, rate limits)
+4. Async tool resolution support
+5. Context injection (LiveKit room metadata → OpenClaw context)
+6. Package README and documentation
+7. CI/CD for npm publishing
+8. Syntax highlighting for code artifacts (optional)
 
 ### 5. [Latency Optimization](./05-latency-optimization) 📋
 Pipeline optimizations to reduce voice-to-voice latency from ~1.4s to <0.8s.
@@ -87,18 +100,18 @@ Pipeline optimizations to reduce voice-to-voice latency from ~1.4s to <0.8s.
 
 ## Development Path
 
-1. **Phase 1: Infrastructure**
+1. **Phase 1: Infrastructure** ✅
    - Set up monorepo with pnpm workspaces
    - Create plugin package structure
    - Set up LiveKit server (local or cloud)
 
-2. **Phase 2: Channel Plugin**
+2. **Phase 2: Channel Plugin** 🔄
    - Implement OpenClaw channel plugin interface
    - Integrate LiveKit connection
    - Build STT → OpenClaw → TTS pipeline
    - Achieve <1.5s latency target
 
-3. **Phase 3: Flutter App**
+3. **Phase 3: Flutter App** ✅
    - Create mobile app with LiveKit client
    - Implement Amber Heartbeat visualizer
    - One-button interface to join room
