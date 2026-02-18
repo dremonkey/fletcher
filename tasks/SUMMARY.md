@@ -20,14 +20,16 @@ Setting up the development environment, LiveKit server, and monorepo structure.
 **Tasks:**
 - [x] 001: Setup LiveKit server (local or cloud)
 - [x] 002: Repository structure & CI/CD
+- [x] 003: Bootstrap script (cross-platform)
 
 ### 2. [OpenClaw Channel Plugin](./02-livekit-agent) 🔄
 The LiveKit channel plugin (`@openclaw/channel-livekit`) that integrates voice capabilities into OpenClaw.
 
 **Tasks:**
-- [~] 001: Initialize OpenClaw channel plugin — plugin structure and OpenClaw integration done; testing & token endpoint remaining
+- [~] 001: Initialize OpenClaw channel plugin — plugin structure and OpenClaw integration done; testing remaining
 - [~] 002: Implement audio pipeline (STT/TTS) — wired to SDK + Ganglia; actual provider integration, audio track management, latency monitoring remaining
 - [x] 004: Channel plugin approach (implementation guide)
+- [x] 005: Token generation endpoint (Sovereign Pairing) ✅
 
 **Implemented:**
 - Full plugin structure with OpenClaw adapters (config, security, gateway, outbound, status)
@@ -36,10 +38,10 @@ The LiveKit channel plugin (`@openclaw/channel-livekit`) that integrates voice c
 - Multi-account support with environment variable fallback
 - STT/TTS provider interfaces and factory functions
 - OpenClaw core integration (handleMessage, outbound.sendText, state machine)
+- **Token Endpoint:** `/fletcher/token` with Ed25519 signature verification (Sovereign Pairing)
 
 **Remaining:**
 - Unit/integration tests for channel plugin (mock providers, hello-world test)
-- Token endpoint for mobile clients (`api.registerHttpRoute()`)
 - Full audio track subscription and chunk publishing
 - Latency monitoring and metrics
 
@@ -97,6 +99,28 @@ Pipeline optimizations to reduce voice-to-voice latency from ~1.4s to <0.8s.
 - [ ] 004: TTS pre-warming validation (Phase 3)
 
 **Spec:** [docs/specs/05-latency-optimization/spec.md](../docs/specs/05-latency-optimization/spec.md)
+
+### 6. [Voice Fingerprinting (Sovereign ID)](./06-voice-fingerprinting) 📋
+Local-first voice identification and context injection.
+
+**Tasks:**
+- [ ] 001: Research & Prototype (Spike)
+- [ ] 002: Core Library Implementation (`@fletcher/voice-key`)
+- [ ] 003: LiveKit Integration
+- [ ] 004: Context Injection
+- [ ] 005: Enrollment UI/Flow
+
+**Spec:** [docs/specs/06-voice-fingerprinting/spec.md](../docs/specs/06-voice-fingerprinting/spec.md)
+
+### 7. [Sovereign Pairing](./07-sovereign-pairing) ✅
+Signature-based authentication protocol (Ed25519) for edge devices.
+
+**Tasks:**
+- [x] 001: Create Protocol Specification
+- [x] 002: Implement Token Endpoint (`/fletcher/token`)
+- [x] 003: Integrate with LiveKit Channel Plugin
+
+**Spec:** [docs/specs/07-sovereign-pairing.md](../docs/specs/07-sovereign-pairing.md)
 
 ## Development Path
 

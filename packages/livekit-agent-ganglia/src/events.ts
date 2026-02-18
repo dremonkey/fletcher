@@ -37,6 +37,7 @@ export interface StatusEvent {
 export type ArtifactType =
   | 'diff'
   | 'code'
+  | 'markdown'
   | 'file'
   | 'search_results'
   | 'error';
@@ -75,6 +76,17 @@ export interface CodeArtifact extends BaseArtifact {
   file?: string;
   /** Starting line number (for context) */
   startLine?: number;
+}
+
+/**
+ * Markdown artifact - displays rich text content.
+ */
+export interface MarkdownArtifact extends BaseArtifact {
+  artifact_type: 'markdown';
+  /** Markdown content */
+  content: string;
+  /** Optional file path */
+  path?: string;
 }
 
 /**
@@ -122,6 +134,7 @@ export interface ErrorArtifact extends BaseArtifact {
 export type ArtifactEvent =
   | DiffArtifact
   | CodeArtifact
+  | MarkdownArtifact
   | FileArtifact
   | SearchResultsArtifact
   | ErrorArtifact;

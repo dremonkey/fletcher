@@ -90,6 +90,9 @@ export type {
   ToolInterceptorConfig,
 } from './tool-interceptor.js';
 
+// Event Interception (Protocol)
+export { EventInterceptor, type EventInterceptorConfig } from './event-interceptor.js';
+
 // OpenClaw Implementation
 import { OpenClawLLM } from './llm.js';
 export { OpenClawLLM };

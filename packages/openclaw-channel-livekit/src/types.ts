@@ -156,6 +156,27 @@ export interface RoomSession {
   startedAt: Date;
 }
 
+import type { IncomingMessage, ServerResponse } from "http";
+
+/**
+ * HTTP Route definition for plugin API registration.
+ */
+export interface HttpRoute {
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  path: string;
+  handler: (req: IncomingMessage, res: ServerResponse) => Promise<void> | void;
+}
+
+/**
+ * OpenClaw Plugin API interface.
+ */
+export interface OpenClawPluginApi {
+  runtime: PluginRuntime;
+  logger: PluginLogger;
+  registerChannel: (registration: { plugin: unknown }) => void;
+  registerHttpRoute: (route: HttpRoute) => void;
+}
+
 /**
  * Plugin runtime interface (subset of what we use from OpenClaw).
  * This helps with type safety without depending on openclaw types directly.

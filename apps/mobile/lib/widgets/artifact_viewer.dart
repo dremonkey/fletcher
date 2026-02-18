@@ -255,6 +255,8 @@ class _ArtifactDrawerState extends State<ArtifactDrawer> {
         return Icons.difference_rounded;
       case ArtifactType.code:
         return Icons.code_rounded;
+      case ArtifactType.markdown:
+        return Icons.description_rounded;
       case ArtifactType.file:
         return Icons.description_outlined;
       case ArtifactType.searchResults:
@@ -285,6 +287,8 @@ class _ArtifactContent extends StatelessWidget {
     switch (artifact.artifactType) {
       case ArtifactType.diff:
         return _DiffViewer(artifact: artifact);
+      case ArtifactType.markdown:
+        return _MarkdownViewer(artifact: artifact);
       case ArtifactType.code:
       case ArtifactType.file:
         return _CodeViewer(artifact: artifact);
@@ -477,6 +481,65 @@ class _CodeViewer extends StatelessWidget {
                 ],
               );
             },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Displays markdown content as text (until flutter_markdown is added).
+class _MarkdownViewer extends StatelessWidget {
+  final ArtifactEvent artifact;
+
+  const _MarkdownViewer({required this.artifact});
+
+  @override
+  Widget build(BuildContext context) {
+    final content = artifact.content ?? '';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // File header
+        if (artifact.path != null || artifact.title != null)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: const Color(0xFF1F1F1F),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.markdown_rounded,
+                  size: 14,
+                  color: Color(0xFF6B7280),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  artifact.path ?? artifact.title ?? 'Markdown',
+                  style: const TextStyle(
+                    color: Color(0xFF9CA3AF),
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        // Markdown content
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: SelectableText(
+              content,
+              style: const TextStyle(
+                color: Color(0xFFE5E7EB),
+                fontSize: 14,
+                fontFamily: 'monospace',
+                height: 1.6,
+              ),
+            ),
           ),
         ),
       ],

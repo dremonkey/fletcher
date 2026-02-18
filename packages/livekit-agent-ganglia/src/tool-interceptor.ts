@@ -28,6 +28,7 @@ import {
   type ArtifactEvent,
   type CodeArtifact,
   type FileArtifact,
+  type MarkdownArtifact,
   type DiffArtifact,
   type SearchResultsArtifact,
   type ErrorArtifact,
@@ -153,7 +154,7 @@ function matchesToolName(toolName: string, ...names: string[]): boolean {
 export function createReadFileArtifact(
   toolCall: ToolCall,
   result: ToolResult,
-): CodeArtifact | FileArtifact | undefined {
+): CodeArtifact | MarkdownArtifact | FileArtifact | undefined {
   if (!result.success || typeof result.content !== 'string') {
     return undefined;
   }
@@ -165,6 +166,17 @@ export function createReadFileArtifact(
 
   const language = detectLanguage(filePath);
   const content = result.content;
+
+  // Handle Markdown specifically
+  if (language === 'markdown') {
+    return {
+      type: 'artifact',
+      artifact_type: 'markdown',
+      content,
+      path: filePath,
+      title: filePath.split('/').pop(),
+    };
+  }
 
   // Use CodeArtifact for source code files, FileArtifact for others
   if (language) {

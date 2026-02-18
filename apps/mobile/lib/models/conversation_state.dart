@@ -108,6 +108,7 @@ class StatusEvent {
 enum ArtifactType {
   diff,
   code,
+  markdown,
   file,
   searchResults,
   error,
@@ -209,6 +210,8 @@ class ArtifactEvent {
 
   static ArtifactType _parseArtifactType(String type) {
     switch (type) {
+      case 'markdown':
+        return ArtifactType.markdown;
       case 'diff':
         return ArtifactType.diff;
       case 'code':
@@ -229,6 +232,8 @@ class ArtifactEvent {
     switch (artifactType) {
       case ArtifactType.diff:
         return file ?? 'Changes';
+      case ArtifactType.markdown:
+        return path ?? 'Document';
       case ArtifactType.code:
         return file ?? 'Code';
       case ArtifactType.file:

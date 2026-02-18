@@ -19,6 +19,9 @@ class LiveKitService extends ChangeNotifier {
   Timer? _audioLevelTimer;
   Timer? _statusClearTimer;
 
+  // Buffer for reassembling chunked messages
+  final Map<String, List<String?>> _chunks = {};
+
   Future<bool> requestPermissions() async {
     final status = await Permission.microphone.request();
     return status.isGranted;
@@ -108,28 +111,76 @@ class LiveKitService extends ChangeNotifier {
       final json = jsonDecode(jsonStr) as Map<String, dynamic>;
       final eventType = json['type'] as String?;
 
-      if (eventType == 'status') {
-        final statusEvent = StatusEvent.fromJson(json);
-        _updateState(currentStatus: statusEvent);
-        debugPrint('[Ganglia] Status: ${statusEvent.displayText}');
-
-        // Clear status after 5 seconds of inactivity
-        _statusClearTimer?.cancel();
-        _statusClearTimer = Timer(const Duration(seconds: 5), () {
-          _updateState(clearStatus: true);
-        });
-      } else if (eventType == 'artifact') {
-        final artifactEvent = ArtifactEvent.fromJson(json);
-        final newArtifacts = [..._state.artifacts, artifactEvent];
-        // Keep only last 10 artifacts
-        if (newArtifacts.length > 10) {
-          newArtifacts.removeAt(0);
-        }
-        _updateState(artifacts: newArtifacts);
-        debugPrint('[Ganglia] Artifact: ${artifactEvent.displayTitle}');
+      if (eventType == 'chunk') {
+        _handleChunk(json);
+        return;
       }
+
+      _processGangliaEvent(json);
     } catch (e) {
-      debugPrint('Failed to parse ganglia event: $e');
+      debugPrint('[Ganglia] Failed to parse event: $e');
+    }
+  }
+
+  void _handleChunk(Map<String, dynamic> chunk) {
+    final transferId = chunk['transfer_id'] as String;
+    final chunkIndex = chunk['chunk_index'] as int;
+    final totalChunks = chunk['total_chunks'] as int;
+    final data = chunk['data'] as String; // Base64 encoded
+
+    // Initialize buffer if needed
+    if (!_chunks.containsKey(transferId)) {
+      _chunks[transferId] = List<String?>.filled(totalChunks, null);
+    }
+
+    // Store chunk
+    _chunks[transferId]![chunkIndex] = data;
+
+    // Check if complete
+    if (_chunks[transferId]!.every((c) => c != null)) {
+      debugPrint('[Ganglia] Reassembling chunked message $transferId');
+      
+      try {
+        final allBytes = <int>[];
+        for (final part in _chunks[transferId]!) {
+          allBytes.addAll(base64Decode(part!));
+        }
+        
+        final reassembledJsonStr = utf8.decode(allBytes);
+        final reassembledJson = jsonDecode(reassembledJsonStr) as Map<String, dynamic>;
+        
+        _processGangliaEvent(reassembledJson);
+      } catch (e) {
+        debugPrint('[Ganglia] Failed to reassemble chunks: $e');
+      } finally {
+        // Cleanup
+        _chunks.remove(transferId);
+      }
+    }
+  }
+
+  void _processGangliaEvent(Map<String, dynamic> json) {
+    final eventType = json['type'] as String?;
+
+    if (eventType == 'status') {
+      final statusEvent = StatusEvent.fromJson(json);
+      _updateState(currentStatus: statusEvent);
+      debugPrint('[Ganglia] Status: ${statusEvent.displayText}');
+
+      // Clear status after 5 seconds of inactivity
+      _statusClearTimer?.cancel();
+      _statusClearTimer = Timer(const Duration(seconds: 5), () {
+        _updateState(clearStatus: true);
+      });
+    } else if (eventType == 'artifact') {
+      final artifactEvent = ArtifactEvent.fromJson(json);
+      final newArtifacts = [..._state.artifacts, artifactEvent];
+      // Keep only last 10 artifacts
+      if (newArtifacts.length > 10) {
+        newArtifacts.removeAt(0);
+      }
+      _updateState(artifacts: newArtifacts);
+      debugPrint('[Ganglia] Artifact: ${artifactEvent.displayTitle}');
     }
   }
 

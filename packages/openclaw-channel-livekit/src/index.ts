@@ -7,16 +7,8 @@
 import { LivekitConfigSchema } from "./config.js";
 import { setLivekitRuntime, setLivekitLogger } from "./runtime.js";
 import { livekitPlugin } from "./channel.js";
-import type { PluginRuntime, PluginLogger } from "./types.js";
-
-/**
- * OpenClaw Plugin API interface (minimal typing for registration).
- */
-interface OpenClawPluginApi {
-  runtime: PluginRuntime;
-  logger: PluginLogger;
-  registerChannel: (registration: { plugin: unknown }) => void;
-}
+import { handleTokenRequest } from "./auth.js";
+import type { OpenClawPluginApi } from "./types.js";
 
 /**
  * LiveKit channel plugin definition.
@@ -37,6 +29,13 @@ const plugin = {
 
     // Register the channel plugin
     api.registerChannel({ plugin: livekitPlugin });
+
+    // Register token generation route (Sovereign Pairing)
+    api.registerHttpRoute({
+      method: "POST",
+      path: "/fletcher/token",
+      handler: handleTokenRequest,
+    });
   },
 };
 
