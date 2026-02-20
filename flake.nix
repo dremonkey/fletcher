@@ -15,6 +15,8 @@
           };
         };
 
+        isLinux = pkgs.stdenv.isLinux;
+
         androidComposition = pkgs.androidenv.composeAndroidPackages {
           buildToolsVersions = [ "34.0.0" "35.0.0" "36.0.0" ];
           platformVersions = [ "34" "36" ];
@@ -22,8 +24,8 @@
           includeNDK = true;
           ndkVersion = "28.2.13676358";
           cmakeVersions = [ "3.22.1" ];
-          includeEmulator = true;
-          includeSystemImages = true;
+          includeEmulator = isLinux;
+          includeSystemImages = isLinux;
           systemImageTypes = [ "google_apis_playstore" ];
           includeSources = true;
           includeExtras = [ "extras;google;m2repository" "extras;android;m2repository" ];
@@ -39,14 +41,13 @@
             docker
             docker-compose
             jdk17
-            android-studio
             androidSdk
             nil # Nix language server for editor support
-
+          ] ++ pkgs.lib.optionals isLinux [
+            android-studio
             # GPU acceleration for Android emulator
             libglvnd
             vulkan-loader
-
             # C++ runtime for native Node modules (like @livekit/rtc-node)
             stdenv.cc.cc.lib
           ];
@@ -56,10 +57,12 @@
             export ANDROID_SDK_ROOT=$ANDROID_HOME
             export ANDROID_NDK_HOME="$ANDROID_HOME/ndk-bundle"
             export JAVA_HOME=${pkgs.jdk17.home}
-            export CHROME_EXECUTABLE=${pkgs.google-chrome}/bin/google-chrome
 
             # Add Android SDK tools to PATH
             export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/tools/bin:$PATH"
+
+          '' + pkgs.lib.optionalString isLinux ''
+            export CHROME_EXECUTABLE=${pkgs.google-chrome}/bin/google-chrome
 
             # NixOS: Use system GPU drivers instead of emulator's bundled libs
             export ANDROID_EMULATOR_USE_SYSTEM_LIBS=1
@@ -78,10 +81,11 @@
               echo "android.aapt2FromMavenOverride=$ANDROID_HOME/build-tools/35.0.0/aapt2" > apps/mobile/android/local.properties
               echo "sdk.dir=$ANDROID_HOME" >> apps/mobile/android/local.properties
             fi
+          '' + ''
 
             echo "Fletcher Dev Environment Loaded"
             echo "Bun version: $(bun --version)"
-            echo "Flutter version: $(flutter --version | head -n 1)"
+            echo "Flutter version: $(flutter --version 2>/dev/null | head -n 1)"
             echo "Android SDK: $ANDROID_HOME"
             echo "Java Home: $JAVA_HOME"
           '';
