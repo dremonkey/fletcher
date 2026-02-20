@@ -4,7 +4,20 @@ A minimal, voice-first conversational interface for OpenClaw. Features a single 
 
 ## Prerequisites
 
-### 1. Flutter SDK
+### Option A: Nix (Recommended)
+
+The repo includes a `flake.nix` that provides Flutter, Bun, Android SDK, and JDK automatically. From the repo root:
+
+```bash
+# direnv will activate automatically if you have it, otherwise:
+nix develop
+```
+
+This handles everything except Xcode and CocoaPods (macOS-only, see below).
+
+### Option B: Manual Install
+
+#### 1. Flutter SDK
 
 Install Flutter following the official guide: https://docs.flutter.dev/get-started/install
 
@@ -13,41 +26,45 @@ Verify installation:
 flutter doctor
 ```
 
-### 2. Android Studio (for Android development)
+#### 2. Android Studio (for Android development, Linux only)
+
+On **NixOS**, Android Studio and the SDK are provided by the Nix flake. On **macOS**, use Xcode + iOS Simulator instead (Android Studio is not available via Nix on macOS).
+
+For manual (non-Nix) setups:
 
 1. **Download Android Studio**: https://developer.android.com/studio
-
-2. **Install Android SDK** (via Android Studio):
-   - Open Android Studio → Settings → Languages & Frameworks → Android SDK
-   - Install Android SDK (API 34 recommended)
-   - Install Android SDK Command-line Tools
-   - Install Android SDK Build-Tools
-
-3. **Create an Android Emulator**:
-   - Open Android Studio → Tools → Device Manager
-   - Click "Create Device"
-   - Select a phone (e.g., Pixel 7)
-   - Download a system image (API 34 recommended)
-   - Finish setup
-
-4. **Set environment variables** (add to `~/.bashrc` or `~/.zshrc`):
+2. **Install Android SDK** (via Android Studio → Settings → Languages & Frameworks → Android SDK)
+3. **Create an Android Emulator** (via Android Studio → Tools → Device Manager)
+4. **Set environment variables** (add to `~/.zshrc`):
    ```bash
    export ANDROID_HOME=$HOME/Android/Sdk
    export PATH=$PATH:$ANDROID_HOME/emulator
    export PATH=$PATH:$ANDROID_HOME/platform-tools
    ```
-
-5. **Verify setup**:
+5. **Accept licenses**:
    ```bash
-   flutter doctor --android-licenses  # Accept licenses
-   flutter doctor                      # Should show Android toolchain ✓
+   flutter doctor --android-licenses
    ```
 
-### 3. Xcode (for iOS development, macOS only)
+### macOS: Xcode + CocoaPods (required for iOS)
 
-1. Install Xcode from the App Store
-2. Run: `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`
-3. Run: `sudo xcodebuild -runFirstLaunch`
+1. **Install Xcode** from the App Store:
+   ```bash
+   open "macappstore://apps.apple.com/app/xcode/id497799835"
+   ```
+2. **Configure Xcode command-line tools**:
+   ```bash
+   sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+   sudo xcodebuild -runFirstLaunch
+   ```
+3. **Install CocoaPods**:
+   ```bash
+   brew install cocoapods
+   ```
+4. **Verify**:
+   ```bash
+   flutter doctor  # Should show Xcode ✓ and CocoaPods ✓
+   ```
 
 ## Setup
 
