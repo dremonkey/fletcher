@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import '../models/conversation_state.dart';
 
 /// A chip that indicates artifacts are available.
@@ -488,7 +489,7 @@ class _CodeViewer extends StatelessWidget {
   }
 }
 
-/// Displays markdown content as text (until flutter_markdown is added).
+/// Displays markdown content rendered properly.
 class _MarkdownViewer extends StatelessWidget {
   final ArtifactEvent artifact;
 
@@ -529,16 +530,54 @@ class _MarkdownViewer extends StatelessWidget {
 
         // Markdown content
         Expanded(
-          child: SingleChildScrollView(
+          child: Markdown(
+            data: content,
+            selectable: true,
             padding: const EdgeInsets.all(16),
-            child: SelectableText(
-              content,
-              style: const TextStyle(
+            styleSheet: MarkdownStyleSheet(
+              p: const TextStyle(
                 color: Color(0xFFE5E7EB),
                 fontSize: 14,
-                fontFamily: 'monospace',
                 height: 1.6,
               ),
+              h1: const TextStyle(
+                color: Color(0xFFE5E7EB),
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+              h2: const TextStyle(
+                color: Color(0xFFE5E7EB),
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+              h3: const TextStyle(
+                color: Color(0xFFE5E7EB),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+              code: const TextStyle(
+                color: Color(0xFFE5E7EB),
+                backgroundColor: Color(0xFF1F1F1F),
+                fontFamily: 'monospace',
+                fontSize: 13,
+              ),
+              codeblockDecoration: BoxDecoration(
+                color: const Color(0xFF1F1F1F),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF2D2D2D)),
+              ),
+              blockquote: const TextStyle(
+                color: Color(0xFF9CA3AF),
+                fontStyle: FontStyle.italic,
+              ),
+              blockquoteDecoration: BoxDecoration(
+                color: const Color(0xFF1F1F1F),
+                borderRadius: BorderRadius.circular(4),
+                border: const Border(
+                  left: BorderSide(color: Color(0xFF3B82F6), width: 4),
+                ),
+              ),
+              listBullet: const TextStyle(color: Color(0xFFE5E7EB)),
             ),
           ),
         ),
