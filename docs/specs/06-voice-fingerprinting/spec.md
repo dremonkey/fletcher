@@ -83,4 +83,10 @@ The solution will be implemented primarily within the **LiveKit Agent** backend 
 *   **Opt-in**: The system should strictly be "enrollment based" (user says "Learn my voice").
 
 ## 7. Future Considerations (Knittt)
-This module should be written as a standalone library/package (`@fletcher/voice-key`) so it can be imported into Knittt (the desktop agent) later. Knittt will use local microphone input instead of LiveKit streams, but the processing pipeline (PCM -> Embedding -> Match) is identical.
+This module should be written as a standalone library/package (`@fletcher/voice-key`) so it can be imported into Knittt later. Knittt will use local microphone input instead of LiveKit streams, but the processing pipeline (PCM -> Embedding -> Match) is identical.
+
+**Knittt Integration (Active):** The Knittt Ingestion Pipeline (`~/code/knittt/docs/tech-specs/ingestion-pipeline.md` §3.1 Stage 1c) consumes this module for persistent speaker identification. Key differences in the Knittt context:
+- **Runtime:** ONNX via the `ort` crate in Rust (vs. `onnxruntime-node` in Fletcher). Same ECAPA-TDNN model, different host language.
+- **Enrollment:** Owner voiceprint is captured implicitly during the Birth Conversation (Knittt's onboarding), not via explicit "Learn my voice" opt-in.
+- **Registry storage:** DuckDB (vs. JSON file). Schema is the same (`speaker_id`, `label`, `embedding`, `last_seen`).
+- **Downstream use:** Speaker identity gates personality extraction (owner-only) and enables cross-session relationship edges in the Knowledge Graph.
