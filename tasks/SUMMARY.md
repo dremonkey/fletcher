@@ -59,7 +59,7 @@ The mobile client for real-time voice interaction and visualization.
 - Mute toggle, auto-connect, dark theme
 - Ganglia data channel subscription (`ganglia-events` topic)
 - StatusBar widget showing agent actions (reading, searching, editing)
-- ArtifactViewer for diffs, code blocks, search results, errors
+- ArtifactViewer for diffs, code blocks (with Markdown support), search results, errors
 
 ### 4. [Standalone Brain Plugin](./04-livekit-agent-plugin) 🔄
 A unified LLM plugin (`@knittt/livekit-agent-ganglia`) that bridges LiveKit agents to OpenClaw or Nanoclaw via OpenAI-compatible API.
