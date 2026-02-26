@@ -511,7 +511,7 @@ class _MarkdownViewer extends StatelessWidget {
             child: Row(
               children: [
                 const Icon(
-                  Icons.markdown_rounded,
+                  Icons.description_rounded,
                   size: 14,
                   color: Color(0xFF6B7280),
                 ),
