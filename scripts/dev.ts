@@ -101,13 +101,26 @@ async function auditEnv(): Promise<void> {
   }
 
   if (env("GANGLIA_TYPE") === "openclaw" && !env("OPENCLAW_API_KEY")) {
-    p.log.info(
-      "Retrieve your gateway token from your OpenClaw config:\n" +
-        "  grep -oP '\"token\":\\s*\"\\K[^\"]+' ~/.openclaw/openclaw.json",
-    );
-    const key = await p.password({ message: "Enter your OpenClaw gateway token:" });
-    if (p.isCancel(key)) cancelled();
-    setKey("OPENCLAW_API_KEY", key);
+    // Try to read the token from the OpenClaw config file
+    const configPath = join(process.env.HOME || "~", ".openclaw", "openclaw.json");
+    let autoToken: string | undefined;
+    try {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      autoToken = config?.gateway?.auth?.token;
+    } catch {}
+
+    if (autoToken) {
+      p.log.info(`Found gateway token in ${configPath}`);
+      setKey("OPENCLAW_API_KEY", autoToken);
+    } else {
+      p.log.warn(
+        `Could not read gateway token from ${configPath}\n` +
+          "  Enter it manually below.",
+      );
+      const key = await p.password({ message: "Enter your OpenClaw gateway token:" });
+      if (p.isCancel(key)) cancelled();
+      setKey("OPENCLAW_API_KEY", key);
+    }
   }
 
   // Voice keys
