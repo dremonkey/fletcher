@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/conversation_state.dart';
+import 'health_service.dart';
 
 class LiveKitService extends ChangeNotifier {
   Room? _room;
@@ -19,6 +20,8 @@ class LiveKitService extends ChangeNotifier {
   Timer? _audioLevelTimer;
   Timer? _statusClearTimer;
 
+  final HealthService healthService = HealthService();
+
   // Buffer for reassembling chunked messages
   final Map<String, List<String?>> _chunks = {};
 
@@ -31,10 +34,14 @@ class LiveKitService extends ChangeNotifier {
     required String url,
     required String token,
   }) async {
+    // Run local config validation checks immediately
+    healthService.validateConfig(livekitUrl: url, livekitToken: token);
+
     try {
       _updateState(status: ConversationStatus.connecting);
 
       final hasPermission = await requestPermissions();
+      healthService.updateMicPermission(granted: hasPermission);
       if (!hasPermission) {
         _updateState(
           status: ConversationStatus.error,
@@ -61,6 +68,11 @@ class LiveKitService extends ChangeNotifier {
       );
 
       _localParticipant = _room!.localParticipant;
+      healthService.updateRoomConnected(connected: true);
+
+      // Check if agent is already in the room
+      final hasAgent = _room!.remoteParticipants.isNotEmpty;
+      healthService.updateAgentPresent(present: hasAgent);
 
       // Enable microphone
       await _localParticipant!.setMicrophoneEnabled(true);
@@ -68,6 +80,7 @@ class LiveKitService extends ChangeNotifier {
       _startAudioLevelMonitoring();
       _updateState(status: ConversationStatus.idle);
     } catch (e) {
+      healthService.updateRoomConnected(connected: false, errorDetail: e.toString());
       _updateState(
         status: ConversationStatus.error,
         errorMessage: e.toString(),
@@ -86,6 +99,13 @@ class LiveKitService extends ChangeNotifier {
     _listener?.on<ParticipantConnectedEvent>((event) {
       // Remote participant joined (the AI agent)
       debugPrint('Participant connected: ${event.participant.identity}');
+      healthService.updateAgentPresent(present: true);
+    });
+
+    _listener?.on<ParticipantDisconnectedEvent>((event) {
+      debugPrint('Participant disconnected: ${event.participant.identity}');
+      final hasAgent = _room?.remoteParticipants.isNotEmpty ?? false;
+      healthService.updateAgentPresent(present: hasAgent);
     });
 
     _listener?.on<TrackSubscribedEvent>((event) {

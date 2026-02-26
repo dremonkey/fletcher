@@ -3,6 +3,7 @@ import '../models/conversation_state.dart';
 import '../services/livekit_service.dart';
 import '../widgets/amber_orb.dart';
 import '../widgets/artifact_viewer.dart';
+import '../widgets/health_panel.dart';
 import '../widgets/mute_toggle.dart';
 import '../widgets/status_bar.dart';
 
@@ -27,6 +28,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   void initState() {
     super.initState();
     _liveKitService.addListener(_onStateChanged);
+    _liveKitService.healthService.addListener(_onStateChanged);
     _connect();
   }
 
@@ -44,6 +46,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   @override
   void dispose() {
     _liveKitService.removeListener(_onStateChanged);
+    _liveKitService.healthService.removeListener(_onStateChanged);
     _liveKitService.dispose();
     super.dispose();
   }
@@ -86,20 +89,33 @@ class _ConversationScreenState extends State<ConversationScreen> {
               ),
             ),
 
-            // Artifact chip (tap to open artifact drawer)
+            // Health chip + Artifact chip row
             Positioned(
               bottom: 120,
               left: 0,
               right: 0,
-              child: Center(
-                child: ArtifactChip(
-                  count: state.artifacts.length,
-                  onTap: () => showArtifactDrawer(
-                    context,
-                    artifacts: state.artifacts,
-                    onClear: _liveKitService.clearArtifacts,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  HealthChip(
+                    overall: _liveKitService.healthService.state.overall,
+                    onTap: () => showHealthPanel(
+                      context,
+                      healthService: _liveKitService.healthService,
+                    ),
                   ),
-                ),
+                  if (state.artifacts.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    ArtifactChip(
+                      count: state.artifacts.length,
+                      onTap: () => showArtifactDrawer(
+                        context,
+                        artifacts: state.artifacts,
+                        onClear: _liveKitService.clearArtifacts,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
 
