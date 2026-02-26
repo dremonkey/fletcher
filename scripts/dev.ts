@@ -102,9 +102,8 @@ async function auditEnv(): Promise<void> {
 
   if (env("GANGLIA_TYPE") === "openclaw" && !env("OPENCLAW_API_KEY")) {
     p.log.info(
-      "Generate a gateway token with:\n" +
-        "  openclaw doctor --generate-gateway-token\n" +
-        "See https://docs.openclaw.ai/gateway/security for details.",
+      "Retrieve your gateway token from your OpenClaw config:\n" +
+        "  grep -oP '\"token\":\\s*\"\\K[^\"]+' ~/.openclaw/openclaw.json",
     );
     const key = await p.password({ message: "Enter your OpenClaw gateway token:" });
     if (p.isCancel(key)) cancelled();
