@@ -144,6 +144,8 @@ bun dev
 
 This will audit your environment, prompt for any missing API keys (saving them to `.env`), start the local LiveKit server, generate a token, and launch the voice agent — all in one command.
 
+If `adb` and `flutter` are on your PATH and a device is connected, it will also offer to build and install the debug APK to your phone.
+
 #### Manual Setup
 
 If you prefer to run services individually:
