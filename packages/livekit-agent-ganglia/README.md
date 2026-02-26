@@ -99,9 +99,17 @@ Ganglia sends this as `Authorization: Bearer <token>` on every request. See the 
 
 The `model` field in the request body controls which OpenClaw agent handles the completion. By default, ganglia sends `model: 'openclaw-gateway'` which uses the Gateway's default agent.
 
-To target a specific agent, use the format `openclaw:<agent-id>` (e.g. `openclaw:main`) or set the `x-openclaw-agent-id` header on the request.
+To target a specific agent, pass `model` in the config using the format `openclaw:<agent-id>`:
 
-> **Note:** The `model` field is currently configurable on `OpenClawLLM` but not yet forwarded to the HTTP client. For now, agent targeting requires setting the header on the Gateway side or using the default agent.
+```typescript
+const llm = new OpenClawLLM({
+  baseUrl: 'http://localhost:8080',
+  apiKey: process.env.OPENCLAW_API_KEY,
+  model: 'openclaw:main',  // targets the "main" agent
+});
+```
+
+You can also target an agent via the `x-openclaw-agent-id` header on the Gateway side.
 
 ### Session Management
 

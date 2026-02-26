@@ -70,6 +70,7 @@ export function buildSessionHeaders(session: LiveKitSessionInfo): Partial<OpenCl
 export class OpenClawClient {
   private baseUrl: string;
   private apiKey: string;
+  private model: string;
   private defaultSession?: LiveKitSessionInfo;
   private trackSessionState: boolean;
   private managedSessions: Map<string, ManagedSession> = new Map();
@@ -77,6 +78,7 @@ export class OpenClawClient {
   constructor(config: OpenClawConfig = {}) {
     this.baseUrl = config.baseUrl || process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:8080';
     this.apiKey = config.apiKey || process.env.OPENCLAW_API_KEY || '';
+    this.model = config.model || 'openclaw-gateway';
     this.defaultSession = config.defaultSession;
     this.trackSessionState = config.trackSessionState ?? false;
   }
@@ -236,7 +238,7 @@ export class OpenClawClient {
     }
 
     const body: Record<string, any> = {
-      model: 'openclaw-gateway',
+      model: this.model,
       messages: options.messages,
       stream: true,
     };
