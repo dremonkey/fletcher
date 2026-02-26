@@ -161,8 +161,15 @@ async function auditLiveKit(): Promise<void> {
   }
 }
 
+const DEFAULT_ROOM = "fletcher-dev";
+
 async function auditEnv(): Promise<void> {
   await auditLiveKit();
+
+  // Room name
+  if (!env("LIVEKIT_ROOM")) {
+    setKey("LIVEKIT_ROOM", DEFAULT_ROOM);
+  }
 
   // Ganglia backend
   if (!env("GANGLIA_TYPE")) {
@@ -224,6 +231,7 @@ function showConfig(): void {
     [
       `LiveKit URL:    ${env("LIVEKIT_URL")}`,
       `LiveKit Key:    ${mask(env("LIVEKIT_API_KEY"))}`,
+      `LiveKit Room:   ${env("LIVEKIT_ROOM")}`,
       `Ganglia:        ${env("GANGLIA_TYPE")}`,
       `Deepgram:       ${mask(env("DEEPGRAM_API_KEY"))}`,
       `Cartesia:       ${mask(env("CARTESIA_API_KEY"))}`,
@@ -237,6 +245,7 @@ async function modifyConfig(): Promise<void> {
     message: "Which key to change?",
     options: [
       { value: "livekit", label: "LiveKit server" },
+      { value: "LIVEKIT_ROOM", label: "LiveKit room name" },
       { value: "GANGLIA_TYPE", label: "Ganglia backend" },
       { value: "OPENCLAW_API_KEY", label: "OpenClaw gateway token" },
       { value: "DEEPGRAM_API_KEY", label: "Deepgram API key (speech-to-text)" },
@@ -251,6 +260,13 @@ async function modifyConfig(): Promise<void> {
     delete process.env.LIVEKIT_API_KEY;
     delete process.env.LIVEKIT_API_SECRET;
     await auditLiveKit();
+  } else if (key === "LIVEKIT_ROOM") {
+    const value = await p.text({
+      message: "Room name:",
+      initialValue: env("LIVEKIT_ROOM") || DEFAULT_ROOM,
+    });
+    if (p.isCancel(value)) return;
+    setKey("LIVEKIT_ROOM", value);
   } else if (key === "GANGLIA_TYPE") {
     const backend = await p.select({
       message: "Which brain backend?",
@@ -329,7 +345,10 @@ async function startServices(): Promise<Subprocess> {
   }
 
   // 2. Token generation
-  await runStep("Generating LiveKit token", ["bun", "run", "scripts/generate-token.ts"]);
+  const room = env("LIVEKIT_ROOM") || DEFAULT_ROOM;
+  await runStep("Generating LiveKit token", [
+    "bun", "run", "scripts/generate-token.ts", "--room", room,
+  ]);
 
   // 3. Voice agent — start with piped output to check for early crash
   const s = p.spinner();
@@ -338,7 +357,7 @@ async function startServices(): Promise<Subprocess> {
   const agentMode = isLocalLiveKit() ? "dev" : "connect";
   const agentArgs = ["bun", "run", "scripts/voice-agent.ts", agentMode];
   if (agentMode === "connect") {
-    agentArgs.push("--room", "fletcher-dev");
+    agentArgs.push("--room", room);
   }
   const agent = spawn(agentArgs, {
     cwd: ROOT,
