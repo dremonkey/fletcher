@@ -13,6 +13,7 @@ import * as p from "@clack/prompts";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { spawn, type Subprocess } from "bun";
+import { discoverSkills, installSkills } from "./install-skills";
 
 const ROOT = join(import.meta.dirname, "..");
 const ENV_PATH = join(ROOT, ".env");
@@ -284,6 +285,36 @@ async function modifyConfig(): Promise<void> {
   }
 }
 
+async function manageSkills(): Promise<void> {
+  const skills = discoverSkills();
+
+  if (skills.length === 0) {
+    p.log.warn("No skills found in skills/*/SKILL.md");
+    return;
+  }
+
+  const selected = await p.multiselect({
+    message: "Which skills to install?",
+    options: skills.map((s) => ({
+      value: s.dir,
+      label: `/${s.name}`,
+      hint: s.description,
+    })),
+    required: false,
+  });
+
+  if (p.isCancel(selected)) return;
+
+  const selectedDirs = selected as string[];
+  if (selectedDirs.length === 0) return;
+
+  const installed = installSkills(selectedDirs, skills);
+  p.log.success(
+    `Installed ${installed.length} skill${installed.length === 1 ? "" : "s"}: ` +
+      installed.join(", "),
+  );
+}
+
 async function confirmOrModify(): Promise<void> {
   while (true) {
     showConfig();
@@ -293,12 +324,17 @@ async function confirmOrModify(): Promise<void> {
       options: [
         { value: "start", label: "Start services" },
         { value: "modify", label: "Modify config" },
+        { value: "skills", label: "Install Claude Code skills", hint: "symlink skills → .claude/commands/" },
       ],
     });
     if (p.isCancel(action)) cancelled();
 
     if (action === "start") return;
-    await modifyConfig();
+    if (action === "skills") {
+      await manageSkills();
+    } else {
+      await modifyConfig();
+    }
   }
 }
 

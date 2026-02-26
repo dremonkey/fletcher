@@ -6,21 +6,21 @@
 // Usage: bun run skills:install
 
 import * as p from "@clack/prompts";
-import { existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, unlinkSync, lstatSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, unlinkSync } from "fs";
 import { join, relative } from "path";
 
 const ROOT = join(import.meta.dirname, "..");
 const SKILLS_DIR = join(ROOT, "skills");
 const COMMANDS_DIR = join(ROOT, ".claude", "commands");
 
-interface Skill {
+export interface Skill {
   name: string;
   dir: string;
   path: string;
   description: string;
 }
 
-function discoverSkills(): Skill[] {
+export function discoverSkills(): Skill[] {
   if (!existsSync(SKILLS_DIR)) return [];
 
   const entries = readdirSync(SKILLS_DIR, { withFileTypes: true });
@@ -55,66 +55,73 @@ function discoverSkills(): Skill[] {
   return skills.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function cancelled(): never {
-  p.cancel("Cancelled.");
-  process.exit(0);
-}
+export function installSkills(selectedDirs: string[], skills: Skill[]): string[] {
+  mkdirSync(COMMANDS_DIR, { recursive: true });
 
-// ── Main ─────────────────────────────────────────────────────────────
+  const installed: string[] = [];
 
-p.intro("Claude Code Skills Installer");
+  for (const dir of selectedDirs) {
+    const skill = skills.find((s) => s.dir === dir)!;
+    const linkPath = join(COMMANDS_DIR, `${dir}.md`);
+    const targetPath = relative(COMMANDS_DIR, skill.path);
 
-const skills = discoverSkills();
+    // Remove existing symlink/file if present
+    if (existsSync(linkPath)) {
+      try {
+        unlinkSync(linkPath);
+      } catch {}
+    }
 
-if (skills.length === 0) {
-  p.log.warn("No skills found in skills/*/SKILL.md");
-  p.outro("Nothing to install.");
-  process.exit(0);
-}
-
-const selected = await p.multiselect({
-  message: "Which skills would you like to install?",
-  options: skills.map((s) => ({
-    value: s.dir,
-    label: `/${s.name}`,
-    hint: s.description,
-  })),
-  required: false,
-});
-
-if (p.isCancel(selected)) cancelled();
-
-const selectedDirs = selected as string[];
-
-if (selectedDirs.length === 0) {
-  p.outro("No skills selected.");
-  process.exit(0);
-}
-
-// Ensure .claude/commands/ exists
-mkdirSync(COMMANDS_DIR, { recursive: true });
-
-const installed: string[] = [];
-
-for (const dir of selectedDirs) {
-  const skill = skills.find((s) => s.dir === dir)!;
-  const linkPath = join(COMMANDS_DIR, `${dir}.md`);
-  const targetPath = relative(COMMANDS_DIR, skill.path);
-
-  // Remove existing symlink/file if present
-  if (existsSync(linkPath)) {
-    try {
-      unlinkSync(linkPath);
-    } catch {}
+    symlinkSync(targetPath, linkPath);
+    installed.push(`/${skill.name}`);
   }
 
-  symlinkSync(targetPath, linkPath);
-  installed.push(`/${skill.name}`);
+  return installed;
 }
 
-p.log.success(
-  `Installed ${installed.length} skill${installed.length === 1 ? "" : "s"}:\n` +
-    installed.map((s) => `  ${s}`).join("\n"),
-);
+// ── Standalone CLI ───────────────────────────────────────────────────
 
-p.outro("Skills are ready. Use them in Claude Code with their trigger commands.");
+if (import.meta.main) {
+  function cancelled(): never {
+    p.cancel("Cancelled.");
+    process.exit(0);
+  }
+
+  p.intro("Claude Code Skills Installer");
+
+  const skills = discoverSkills();
+
+  if (skills.length === 0) {
+    p.log.warn("No skills found in skills/*/SKILL.md");
+    p.outro("Nothing to install.");
+    process.exit(0);
+  }
+
+  const selected = await p.multiselect({
+    message: "Which skills would you like to install?",
+    options: skills.map((s) => ({
+      value: s.dir,
+      label: `/${s.name}`,
+      hint: s.description,
+    })),
+    required: false,
+  });
+
+  if (p.isCancel(selected)) cancelled();
+
+  const selectedDirs = selected as string[];
+
+  if (selectedDirs.length === 0) {
+    p.outro("No skills selected.");
+    process.exit(0);
+  }
+
+  const installed = installSkills(selectedDirs, skills);
+
+  p.log.success(
+    `Installed ${installed.length} skill${installed.length === 1 ? "" : "s"}:\n` +
+      installed.map((s) => `  ${s}`).join("\n"),
+  );
+
+  p.outro("Skills are ready. Use them in Claude Code with their trigger commands.");
+}
