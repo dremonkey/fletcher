@@ -140,7 +140,7 @@ async function auditEnv(): Promise<void> {
 
 // ── Phase 2: Confirmation ────────────────────────────────────────────
 
-async function confirm(): Promise<void> {
+function showConfig(): void {
   const mask = (v: string | undefined) => (v ? "***" + v.slice(-4) : "(not set)");
 
   p.note(
@@ -153,9 +153,55 @@ async function confirm(): Promise<void> {
     ].join("\n"),
     "Configuration",
   );
+}
 
-  const ok = await p.confirm({ message: "Start services?" });
-  if (p.isCancel(ok) || !ok) cancelled();
+async function modifyConfig(): Promise<void> {
+  const editableKeys = [
+    { value: "GANGLIA_TYPE", label: "Ganglia backend" },
+    { value: "OPENCLAW_API_KEY", label: "OpenClaw gateway token" },
+    { value: "DEEPGRAM_API_KEY", label: "Deepgram API key (speech-to-text)" },
+    { value: "CARTESIA_API_KEY", label: "Cartesia API key (text-to-speech)" },
+  ] as const;
+
+  const key = await p.select({
+    message: "Which key to change?",
+    options: editableKeys.map((k) => ({ value: k.value, label: k.label })),
+  });
+  if (p.isCancel(key)) return;
+
+  if (key === "GANGLIA_TYPE") {
+    const backend = await p.select({
+      message: "Which brain backend?",
+      options: [
+        { value: "nanoclaw", label: "Nanoclaw", hint: "single-user, localhost" },
+        { value: "openclaw", label: "OpenClaw", hint: "multi-user, requires API key" },
+      ],
+    });
+    if (p.isCancel(backend)) return;
+    setKey("GANGLIA_TYPE", backend as string);
+  } else {
+    const value = await p.password({ message: `Enter ${editableKeys.find((k) => k.value === key)!.label}:` });
+    if (p.isCancel(value)) return;
+    setKey(key as string, value);
+  }
+}
+
+async function confirmOrModify(): Promise<void> {
+  while (true) {
+    showConfig();
+
+    const action = await p.select({
+      message: "What would you like to do?",
+      options: [
+        { value: "start", label: "Start services" },
+        { value: "modify", label: "Modify config" },
+      ],
+    });
+    if (p.isCancel(action)) cancelled();
+
+    if (action === "start") return;
+    await modifyConfig();
+  }
 }
 
 // ── Phase 3: Service Startup ─────────────────────────────────────────
@@ -352,7 +398,7 @@ function installShutdownHandler(agent: Subprocess): void {
 p.intro("Fletcher Dev Launcher");
 
 await auditEnv();
-await confirm();
+await confirmOrModify();
 
 const agent = await startServices();
 installShutdownHandler(agent);
