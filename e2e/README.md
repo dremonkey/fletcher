@@ -25,29 +25,29 @@ After running tests, Claude Code outputs a summary table:
 ┌─────┬──────────────────────┬────────┬────────────────────────────────┐
 │ #   │ Step                 │ Result │ Notes                          │
 ├─────┼──────────────────────┼────────┼────────────────────────────────┤
-│ 0   │ Preconditions        │ PASS   │ Emulator running, APK found    │
-│ 1   │ Force-stop the app   │ PASS   │                                │
-│ 2   │ Launch the app       │ PASS   │ "Connecting..." badge visible  │
-│ 3   │ Wait for idle state  │ FAIL   │ Timed out — still "Connecting" │
+│ 0   │ Preconditions        │ ✅ PASS │ Emulator running, APK found    │
+│ 1   │ Force-stop the app   │ ✅ PASS │                                │
+│ 2   │ Launch the app       │ ✅ PASS │ "Connecting..." badge visible  │
+│ 3   │ Wait for idle state  │ ❌ FAIL │ Timed out — still "Connecting" │
 └─────┴──────────────────────┴────────┴────────────────────────────────┘
-Result: FAIL (3/4 passed) — 001-app-launch
+Result: ❌ FAIL (3/4 passed) — 001-app-launch
 ```
 
 **Rules:**
 - Step `0` is always precondition verification
-- `Result` is `PASS`, `FAIL`, or `SKIP` (if a prior step failed)
+- Result icons: `✅ PASS`, `❌ FAIL`, `⏭️ SKIP` (if a prior step failed)
 - `Notes` contains the key evidence: what was seen in the screenshot or logs
 - When running multiple tests, print one table per test followed by a combined summary:
 
 ```
-┌───────┬──────────────────┬────────┬───────────────┐
-│ Test  │ Name             │ Result │ Steps         │
-├───────┼──────────────────┼────────┼───────────────┤
-│ 001   │ App Launch       │ PASS   │ 4/4 passed    │
-│ 002   │ Mute Toggle      │ PASS   │ 4/4 passed    │
-│ 003   │ Health Panel     │ FAIL   │ 3/4 passed    │
-└───────┴──────────────────┴────────┴───────────────┘
-Suite: FAIL (2/3 tests passed)
+┌───────┬──────────────────┬─────────┬───────────────┐
+│ Test  │ Name             │ Result  │ Steps         │
+├───────┼──────────────────┼─────────┼───────────────┤
+│ 001   │ App Launch       │ ✅ PASS │ 4/4 passed    │
+│ 002   │ Mute Toggle      │ ✅ PASS │ 4/4 passed    │
+│ 003   │ Health Panel     │ ❌ FAIL │ 3/4 passed    │
+└───────┴──────────────────┴─────────┴───────────────┘
+Suite: ❌ FAIL (2/3 tests passed)
 ```
 
 ## Writing Tests
