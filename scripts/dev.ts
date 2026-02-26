@@ -549,20 +549,11 @@ async function deployToDevice(): Promise<void> {
   // Update mobile .env with correct LiveKit URL (LAN IP for local server)
   updateMobileEnv();
 
-  // Build debug APK
-  const mobileDir = join(ROOT, "apps", "mobile");
-  const built = await runStep(
-    "Building debug APK (this may take a while)",
-    ["flutter", "build", "apk", "--debug"],
-    { cwd: mobileDir, fatal: false },
-  );
-  if (!built) return;
-
-  // Install to device
-  const apkPath = join(mobileDir, "build", "app", "outputs", "flutter-apk", "app-debug.apk");
+  // Build and install APK via shared script (skip app launch — TUI only installs)
   await runStep(
-    `Installing to ${target.description}`,
-    ["adb", "-s", target.serial, "install", "-r", apkPath],
+    "Building and installing APK",
+    ["bash", join(ROOT, "scripts", "ensure-mobile-ready.sh"),
+     "--device-id", target.serial, "--skip-launch"],
     { fatal: false },
   );
 }
