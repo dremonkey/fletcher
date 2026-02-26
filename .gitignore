@@ -29,3 +29,7 @@ Thumbs.db
 
 # Nix / direnv
 .direnv/
+
+# E2E test captures
+e2e/captures/*
+!e2e/captures/.gitkeep
