@@ -148,9 +148,12 @@ e2e/
 └── captures/                # Gitignored — capture output
     └── .gitkeep
 
+scripts/
+└── ensure-mobile-ready.sh   # Shared: ensure emulator + APK + app are ready
+
 skills/e2e-test-runner/
 ├── SKILL.md                 # Skill definition (installed via bun dev or bun run skills:install)
-├── check-preconditions.sh   # Verify emulator, APK, app status
+├── check-preconditions.sh   # Delegates to scripts/ensure-mobile-ready.sh
 └── run-step.sh              # Batch-run step commands
 ```
 

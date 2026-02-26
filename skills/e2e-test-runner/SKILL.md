@@ -10,7 +10,7 @@ Run end-to-end tests for the Fletcher mobile app via adb and vision.
 
 ## Workflow
 
-### 1. Check preconditions
+### 1. Ensure preconditions
 
 Run the preconditions helper:
 
@@ -18,7 +18,7 @@ Run the preconditions helper:
 skills/e2e-test-runner/check-preconditions.sh
 ```
 
-If any line shows `FAIL`, stop and report the failure. Do not proceed with test steps.
+The script auto-fixes issues when possible (starts emulator, builds/installs APK, launches app). Lines prefixed `FIX` indicate successful remediation and are treated as passing. If any line shows `FAIL`, stop and report the failure. Do not proceed with test steps.
 
 ### 2. Identify test files
 
@@ -131,5 +131,6 @@ Suite: ❌ FAIL (2/3 tests passed)
 - `DEVICE_ID` — Target device (default: `emulator-5554`)
 - Test files: `e2e/tests/*.md`
 - Captures: `e2e/captures/` (gitignored)
+- Shared script: `scripts/ensure-mobile-ready.sh` (emulator + APK + app setup)
 - Skill helpers: `skills/e2e-test-runner/` (check-preconditions.sh, run-step.sh)
 - Capture helper: `e2e/helpers/emu-capture.sh`
