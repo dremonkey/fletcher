@@ -65,6 +65,55 @@ const llm = new OpenClawLLM({
 });
 ```
 
+## OpenClaw Gateway Setup
+
+The OpenClaw Gateway exposes an OpenAI-compatible `/v1/chat/completions` endpoint that ganglia uses as its LLM backend. There are a few things to configure on the Gateway side before it will work.
+
+### Enable the Chat Completions Endpoint
+
+The HTTP chat completions endpoint is **disabled by default**. Enable it in your `openclaw.json5`:
+
+```json5
+{
+  gateway: {
+    http: {
+      endpoints: {
+        chatCompletions: { enabled: true },
+      },
+    },
+  },
+}
+```
+
+### Authentication
+
+Generate a gateway token and set it as `OPENCLAW_API_KEY`:
+
+```bash
+openclaw doctor --generate-gateway-token
+```
+
+Ganglia sends this as `Authorization: Bearer <token>` on every request. See the [Gateway security docs](https://docs.openclaw.ai/gateway/security) for details.
+
+### Agent Targeting (model field)
+
+The `model` field in the request body controls which OpenClaw agent handles the completion. By default, ganglia sends `model: 'openclaw-gateway'` which uses the Gateway's default agent.
+
+To target a specific agent, use the format `openclaw:<agent-id>` (e.g. `openclaw:main`) or set the `x-openclaw-agent-id` header on the request.
+
+> **Note:** The `model` field is currently configurable on `OpenClawLLM` but not yet forwarded to the HTTP client. For now, agent targeting requires setting the header on the Gateway side or using the default agent.
+
+### Session Management
+
+Ganglia tracks conversation context using `X-OpenClaw-*` headers derived from LiveKit room and participant info:
+
+- `X-OpenClaw-Session-Id` — deterministic ID from room SID + participant identity
+- `X-OpenClaw-Room-SID` — LiveKit room SID
+- `X-OpenClaw-Room-Name` — LiveKit room name
+- `X-OpenClaw-Participant-Identity` — participant identity
+
+These headers allow the Gateway to maintain conversation state across multiple requests from the same voice session. For stateless usage, you can alternatively pass a `user` string in the request body and the Gateway will derive a stable session key from it.
+
 ## Environment Variables
 
 | Variable | Default | Description |
