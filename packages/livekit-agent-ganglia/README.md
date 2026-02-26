@@ -87,13 +87,17 @@ The HTTP chat completions endpoint is **disabled by default**. Enable it in your
 
 ### Authentication
 
-Generate a gateway token and set it as `OPENCLAW_API_KEY`:
+Ganglia authenticates with the Gateway using a Bearer token sent on every request. The token is configured in your OpenClaw config at `~/.openclaw/openclaw.json` under `gateway.auth.token`.
+
+To extract it and set it as an environment variable:
 
 ```bash
-openclaw doctor --generate-gateway-token
+export OPENCLAW_API_KEY=$(grep -oP '"token":\s*"\K[^"]+' ~/.openclaw/openclaw.json)
 ```
 
-Ganglia sends this as `Authorization: Bearer <token>` on every request. See the [Gateway security docs](https://docs.openclaw.ai/gateway/security) for details.
+Or add it to your `.env` file. The `bun dev` TUI reads this automatically from the config file.
+
+See the [Gateway security docs](https://docs.openclaw.ai/gateway/security) for details.
 
 ### Agent Targeting (model field)
 
