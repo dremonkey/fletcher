@@ -1,9 +1,12 @@
 #!/usr/bin/env bun
 /**
- * TUI dev launcher for Fletcher.
+ * Fletcher TUI — single entry point for development and maintenance.
  *
- * Audits the environment, prompts for missing keys, and orchestrates
- * all services (LiveKit, token generation, voice agent) with spinner feedback.
+ * Main menu:
+ *   - Start dev services  (env audit → LiveKit + voice agent + mobile deploy)
+ *   - Manage configuration (view/edit .env keys)
+ *   - Install Claude Code skills (symlink skills → .claude/commands/)
+ *   - Deploy to mobile device (build APK → push to emulator/device)
  *
  * Usage:
  *   bun dev
@@ -73,7 +76,7 @@ function cancelled(): never {
   process.exit(0);
 }
 
-// ── Phase 1: Environment Audit ───────────────────────────────────────
+// ── Environment Audit ─────────────────────────────────────────────────
 
 const LIVEKIT_YAML = join(ROOT, "livekit.yaml");
 
@@ -223,17 +226,17 @@ async function auditEnv(): Promise<void> {
   }
 }
 
-// ── Phase 2: Confirmation ────────────────────────────────────────────
+// ── Configuration ─────────────────────────────────────────────────────
 
 function showConfig(): void {
   const mask = (v: string | undefined) => (v ? "***" + v.slice(-4) : "(not set)");
 
   p.note(
     [
-      `LiveKit URL:    ${env("LIVEKIT_URL")}`,
+      `LiveKit URL:    ${env("LIVEKIT_URL") ?? "(not set)"}`,
       `LiveKit Key:    ${mask(env("LIVEKIT_API_KEY"))}`,
-      `LiveKit Room:   ${env("LIVEKIT_ROOM")}`,
-      `Ganglia:        ${env("GANGLIA_TYPE")}`,
+      `LiveKit Room:   ${env("LIVEKIT_ROOM") ?? "(not set)"}`,
+      `Ganglia:        ${env("GANGLIA_TYPE") ?? "(not set)"}`,
       `Deepgram:       ${mask(env("DEEPGRAM_API_KEY"))}`,
       `Cartesia:       ${mask(env("CARTESIA_API_KEY"))}`,
     ].join("\n"),
@@ -285,6 +288,25 @@ async function modifyConfig(): Promise<void> {
   }
 }
 
+async function manageConfiguration(): Promise<void> {
+  while (true) {
+    showConfig();
+
+    const action = await p.select({
+      message: "Configuration",
+      options: [
+        { value: "back", label: "Back to main menu" },
+        { value: "modify", label: "Edit a key" },
+      ],
+    });
+    if (p.isCancel(action)) return;
+    if (action === "back") return;
+    await modifyConfig();
+  }
+}
+
+// ── Skills ────────────────────────────────────────────────────────────
+
 async function manageSkills(): Promise<void> {
   const skills = discoverSkills();
 
@@ -315,30 +337,26 @@ async function manageSkills(): Promise<void> {
   );
 }
 
-async function confirmOrModify(): Promise<void> {
+// ── Pre-start confirm ─────────────────────────────────────────────────
+
+async function confirmBeforeStart(): Promise<void> {
   while (true) {
     showConfig();
 
     const action = await p.select({
-      message: "What would you like to do?",
+      message: "Ready to start?",
       options: [
         { value: "start", label: "Start services" },
-        { value: "modify", label: "Modify config" },
-        { value: "skills", label: "Install Claude Code skills", hint: "symlink skills → .claude/commands/" },
+        { value: "modify", label: "Edit a key first" },
       ],
     });
     if (p.isCancel(action)) cancelled();
-
     if (action === "start") return;
-    if (action === "skills") {
-      await manageSkills();
-    } else {
-      await modifyConfig();
-    }
+    await modifyConfig();
   }
 }
 
-// ── Phase 3: Service Startup ─────────────────────────────────────────
+// ── Service Startup ───────────────────────────────────────────────────
 
 const children: Subprocess[] = [];
 
@@ -421,7 +439,7 @@ async function startServices(): Promise<Subprocess> {
   return agent;
 }
 
-// ── Phase 4: Mobile Deploy (optional) ────────────────────────────────
+// ── Mobile Deploy ─────────────────────────────────────────────────────
 
 interface AdbDevice {
   serial: string;
@@ -549,7 +567,7 @@ async function deployToDevice(): Promise<void> {
   );
 }
 
-// ── Phase 5: Steady State & Cleanup ──────────────────────────────────
+// ── Cleanup ───────────────────────────────────────────────────────────
 
 function installShutdownHandler(agent: Subprocess): void {
   let shuttingDown = false;
@@ -583,21 +601,8 @@ function installShutdownHandler(agent: Subprocess): void {
   process.on("SIGTERM", cleanup);
 }
 
-// ── Main ─────────────────────────────────────────────────────────────
+// ── Main Menu ─────────────────────────────────────────────────────────
 
-p.intro("Fletcher Dev Launcher");
-
-await auditEnv();
-await confirmOrModify();
-
-const agent = await startServices();
-installShutdownHandler(agent);
-
-await deployToDevice();
-
-p.note("Voice agent is running. Press Ctrl+C to stop.", "Fletcher is ready");
-
-// Pipe agent output to terminal now that clack UI is done
 async function pipeStream(stream: ReadableStream<Uint8Array> | null, dest: NodeJS.WriteStream) {
   if (!stream) return;
   const reader = stream.getReader();
@@ -609,8 +614,57 @@ async function pipeStream(stream: ReadableStream<Uint8Array> | null, dest: NodeJ
     }
   } catch {}
 }
-pipeStream(agent.stdout as ReadableStream<Uint8Array>, process.stdout);
-pipeStream(agent.stderr as ReadableStream<Uint8Array>, process.stderr);
 
-await agent.exited;
-p.outro("Voice agent exited.");
+p.intro("Fletcher Dev Launcher");
+
+while (true) {
+  const action = await p.select({
+    message: "What would you like to do?",
+    options: [
+      { value: "start", label: "Start dev services", hint: "LiveKit + voice agent + optional mobile deploy" },
+      { value: "config", label: "Manage configuration", hint: "view and edit environment variables" },
+      { value: "skills", label: "Install Claude Code skills", hint: "symlink skills → .claude/commands/" },
+      { value: "deploy", label: "Deploy to mobile device", hint: "build APK and push to emulator/device" },
+      { value: "quit", label: "Quit" },
+    ],
+  });
+  if (p.isCancel(action)) cancelled();
+
+  if (action === "quit") {
+    p.outro("Goodbye.");
+    process.exit(0);
+  }
+
+  if (action === "config") {
+    await manageConfiguration();
+    continue;
+  }
+
+  if (action === "skills") {
+    await manageSkills();
+    continue;
+  }
+
+  if (action === "deploy") {
+    await deployToDevice();
+    continue;
+  }
+
+  // action === "start" — launch services
+  await auditEnv();
+  await confirmBeforeStart();
+
+  const agent = await startServices();
+  installShutdownHandler(agent);
+
+  await deployToDevice();
+
+  p.note("Voice agent is running. Press Ctrl+C to stop.", "Fletcher is ready");
+
+  pipeStream(agent.stdout as ReadableStream<Uint8Array>, process.stdout);
+  pipeStream(agent.stderr as ReadableStream<Uint8Array>, process.stderr);
+
+  await agent.exited;
+  p.outro("Voice agent exited.");
+  break;
+}
