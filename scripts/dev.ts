@@ -145,11 +145,15 @@ async function confirm(): Promise<void> {
 
 const children: Subprocess[] = [];
 
-async function runStep(label: string, cmd: string[]): Promise<void> {
+async function runStep(
+  label: string,
+  cmd: string[],
+  opts?: { cwd?: string; fatal?: boolean },
+): Promise<boolean> {
   const s = p.spinner();
   s.start(label);
 
-  const proc = spawn(cmd, { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
+  const proc = spawn(cmd, { cwd: opts?.cwd ?? ROOT, stdout: "pipe", stderr: "pipe" });
   children.push(proc);
 
   const exitCode = await proc.exited;
@@ -159,11 +163,13 @@ async function runStep(label: string, cmd: string[]): Promise<void> {
     const stderr = await new Response(proc.stderr).text();
     s.stop(`${label} — failed (exit ${exitCode})`);
     if (stderr.trim()) p.log.error(stderr.trim());
+    if (opts?.fatal === false) return false;
     p.cancel("Service startup failed.");
     process.exit(1);
   }
 
   s.stop(`${label} — done`);
+  return true;
 }
 
 async function startServices(): Promise<Subprocess> {
@@ -185,7 +191,94 @@ async function startServices(): Promise<Subprocess> {
   return agent;
 }
 
-// ── Phase 4: Steady State & Cleanup ──────────────────────────────────
+// ── Phase 4: Mobile Deploy (optional) ────────────────────────────────
+
+interface AdbDevice {
+  serial: string;
+  status: string;
+  description: string;
+}
+
+function hasCommand(name: string): boolean {
+  try {
+    const proc = Bun.spawnSync(["which", name], { stdout: "pipe", stderr: "pipe" });
+    return proc.exitCode === 0;
+  } catch {
+    return false;
+  }
+}
+
+function listAdbDevices(): AdbDevice[] {
+  const proc = Bun.spawnSync(["adb", "devices", "-l"], { stdout: "pipe", stderr: "pipe" });
+  if (proc.exitCode !== 0) return [];
+
+  const output = proc.stdout.toString();
+  const devices: AdbDevice[] = [];
+
+  for (const line of output.split("\n")) {
+    // Lines look like: "1A2B3C4D  device usb:1-1 product:raven model:Pixel_6_Pro ..."
+    const match = line.match(/^(\S+)\s+(device|unauthorized|offline)\s*(.*)/);
+    if (!match) continue;
+    const [, serial, status, rest] = match;
+    const modelMatch = rest.match(/model:(\S+)/);
+    const description = modelMatch ? modelMatch[1].replace(/_/g, " ") : serial;
+    devices.push({ serial, status, description });
+  }
+
+  return devices;
+}
+
+async function deployToDevice(): Promise<void> {
+  if (!hasCommand("adb") || !hasCommand("flutter")) return;
+
+  const devices = listAdbDevices();
+  const available = devices.filter((d) => d.status === "device");
+  if (available.length === 0) return;
+
+  let target: AdbDevice;
+
+  if (available.length === 1) {
+    const ok = await p.confirm({
+      message: `Deploy to ${available[0].description} (${available[0].serial})?`,
+    });
+    if (p.isCancel(ok) || !ok) return;
+    target = available[0];
+  } else {
+    const choice = await p.select({
+      message: "Deploy to which device?",
+      options: [
+        ...available.map((d) => ({
+          value: d.serial,
+          label: d.description,
+          hint: d.serial,
+        })),
+        { value: "__skip__", label: "Skip", hint: "don't deploy to a device" },
+      ],
+    });
+    if (p.isCancel(choice)) return;
+    if (choice === "__skip__") return;
+    target = available.find((d) => d.serial === choice)!;
+  }
+
+  // Build debug APK
+  const mobileDir = join(ROOT, "apps", "mobile");
+  const built = await runStep(
+    "Building debug APK (this may take a while)",
+    ["flutter", "build", "apk", "--debug"],
+    { cwd: mobileDir, fatal: false },
+  );
+  if (!built) return;
+
+  // Install to device
+  const apkPath = join(mobileDir, "build", "app", "outputs", "flutter-apk", "app-debug.apk");
+  await runStep(
+    `Installing to ${target.description}`,
+    ["adb", "-s", target.serial, "install", "-r", apkPath],
+    { fatal: false },
+  );
+}
+
+// ── Phase 5: Steady State & Cleanup ──────────────────────────────────
 
 function installShutdownHandler(agent: Subprocess): void {
   let shuttingDown = false;
@@ -228,6 +321,8 @@ await confirm();
 
 const agent = await startServices();
 installShutdownHandler(agent);
+
+await deployToDevice();
 
 p.note("Voice agent is running. Press Ctrl+C to stop.", "Fletcher is ready");
 
