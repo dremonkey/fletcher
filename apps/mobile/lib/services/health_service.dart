@@ -15,10 +15,8 @@ class HealthService extends ChangeNotifier {
     _livekitToken = livekitToken;
 
     final checks = <HealthCheck>[
-      _checkEnvLoaded(),
-      _checkUrlFormat(),
-      _checkTokenPresent(),
-      _checkTokenExpiry(),
+      _checkUrl(),
+      _checkToken(),
       // Connection-dependent checks start as pending
       const HealthCheck(
         id: 'mic_permission',
@@ -50,10 +48,8 @@ class HealthService extends ChangeNotifier {
     }
 
     final checks = <HealthCheck>[
-      _checkEnvLoaded(),
-      _checkUrlFormat(),
-      _checkTokenPresent(),
-      _checkTokenExpiry(),
+      _checkUrl(),
+      _checkToken(),
       connectionChecks['mic_permission'] ??
           const HealthCheck(id: 'mic_permission', label: 'Microphone permission'),
       connectionChecks['room_joined'] ??
@@ -97,54 +93,34 @@ class HealthService extends ChangeNotifier {
 
   // --- Local validation checks ---
 
-  HealthCheck _checkEnvLoaded() {
-    final ok = _livekitUrl != null && _livekitUrl!.isNotEmpty;
-    return HealthCheck(
-      id: 'env_loaded',
-      label: '.env loaded',
-      status: ok ? HealthCheckStatus.ok : HealthCheckStatus.error,
-      detail: ok ? _livekitUrl! : 'LIVEKIT_URL is empty or missing',
-      suggestion: ok ? null : 'Add LIVEKIT_URL to apps/mobile/.env',
-    );
-  }
-
-  HealthCheck _checkUrlFormat() {
+  HealthCheck _checkUrl() {
     if (_livekitUrl == null || _livekitUrl!.isEmpty) {
       return const HealthCheck(
-        id: 'url_format',
-        label: 'URL format valid',
+        id: 'livekit_url',
+        label: 'LiveKit URL',
         status: HealthCheckStatus.error,
-        detail: 'No URL to validate',
+        detail: 'LIVEKIT_URL is empty or missing',
+        suggestion: 'Add LIVEKIT_URL to apps/mobile/.env',
       );
     }
     final valid = _livekitUrl!.startsWith('ws://') || _livekitUrl!.startsWith('wss://');
     return HealthCheck(
-      id: 'url_format',
-      label: 'URL format valid',
+      id: 'livekit_url',
+      label: 'LiveKit URL',
       status: valid ? HealthCheckStatus.ok : HealthCheckStatus.error,
       detail: valid ? _livekitUrl! : 'URL must start with ws:// or wss://',
       suggestion: valid ? null : 'Change LIVEKIT_URL to use ws:// or wss:// scheme',
     );
   }
 
-  HealthCheck _checkTokenPresent() {
-    final ok = _livekitToken != null && _livekitToken!.isNotEmpty;
-    return HealthCheck(
-      id: 'token_present',
-      label: 'Token present',
-      status: ok ? HealthCheckStatus.ok : HealthCheckStatus.error,
-      detail: ok ? 'Token is set' : 'LIVEKIT_TOKEN is empty or missing',
-      suggestion: ok ? null : 'Generate a token with livekit-cli or your token server',
-    );
-  }
-
-  HealthCheck _checkTokenExpiry() {
+  HealthCheck _checkToken() {
     if (_livekitToken == null || _livekitToken!.isEmpty) {
       return const HealthCheck(
-        id: 'token_expiry',
-        label: 'Token not expired',
+        id: 'livekit_token',
+        label: 'LiveKit token',
         status: HealthCheckStatus.error,
-        detail: 'No token to check',
+        detail: 'LIVEKIT_TOKEN is empty or missing',
+        suggestion: 'Generate a token with livekit-cli or your token server',
       );
     }
 
@@ -152,8 +128,8 @@ class HealthService extends ChangeNotifier {
       final parts = _livekitToken!.split('.');
       if (parts.length != 3) {
         return const HealthCheck(
-          id: 'token_expiry',
-          label: 'Token not expired',
+          id: 'livekit_token',
+          label: 'LiveKit token',
           status: HealthCheckStatus.error,
           detail: 'Invalid JWT format (expected 3 segments)',
           suggestion: 'Regenerate the token',
@@ -177,8 +153,8 @@ class HealthService extends ChangeNotifier {
       final exp = json['exp'] as int?;
       if (exp == null) {
         return const HealthCheck(
-          id: 'token_expiry',
-          label: 'Token not expired',
+          id: 'livekit_token',
+          label: 'LiveKit token',
           status: HealthCheckStatus.warning,
           detail: 'No exp claim in token (never expires)',
         );
@@ -190,34 +166,34 @@ class HealthService extends ChangeNotifier {
 
       if (remaining.isNegative) {
         return HealthCheck(
-          id: 'token_expiry',
-          label: 'Token not expired',
+          id: 'livekit_token',
+          label: 'LiveKit token',
           status: HealthCheckStatus.error,
-          detail: 'Token expired ${_formatDuration(remaining.abs())} ago',
+          detail: 'Expired ${_formatDuration(remaining.abs())} ago',
           suggestion: 'Generate a new token',
         );
       }
 
       if (remaining.inMinutes < 5) {
         return HealthCheck(
-          id: 'token_expiry',
-          label: 'Token not expired',
+          id: 'livekit_token',
+          label: 'LiveKit token',
           status: HealthCheckStatus.warning,
-          detail: 'Token expires in ${_formatDuration(remaining)}',
+          detail: 'Expires in ${_formatDuration(remaining)}',
           suggestion: 'Consider generating a fresh token soon',
         );
       }
 
       return HealthCheck(
-        id: 'token_expiry',
-        label: 'Token not expired',
+        id: 'livekit_token',
+        label: 'LiveKit token',
         status: HealthCheckStatus.ok,
         detail: 'Expires in ${_formatDuration(remaining)}',
       );
     } catch (e) {
       return HealthCheck(
-        id: 'token_expiry',
-        label: 'Token not expired',
+        id: 'livekit_token',
+        label: 'LiveKit token',
         status: HealthCheckStatus.error,
         detail: 'Failed to decode token: $e',
         suggestion: 'Regenerate the token',
