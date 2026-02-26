@@ -196,15 +196,33 @@ async function startServices(): Promise<Subprocess> {
   // 2. Token generation
   await runStep("Generating LiveKit token", ["bun", "run", "scripts/generate-token.ts"]);
 
-  // 3. Voice agent (long-running — inherit stdout for real-time logs)
-  p.log.info("Starting voice agent (logs below)...\n");
+  // 3. Voice agent — start with piped output to check for early crash
+  const s = p.spinner();
+  s.start("Starting voice agent");
 
   const agent = spawn(["bun", "run", "scripts/voice-agent.ts", "dev"], {
     cwd: ROOT,
-    stdout: "inherit",
-    stderr: "inherit",
+    stdout: "pipe",
+    stderr: "pipe",
   });
   children.push(agent);
+
+  // Give the agent a couple seconds to crash or stabilize
+  const earlyCrash = await Promise.race([
+    agent.exited.then((code) => code),
+    new Promise<null>((r) => setTimeout(() => r(null), 2000)),
+  ]);
+
+  if (earlyCrash !== null) {
+    const stderr = await new Response(agent.stderr).text();
+    children.splice(children.indexOf(agent), 1);
+    s.stop("Starting voice agent — failed");
+    if (stderr.trim()) p.log.error(stderr.trim());
+    p.cancel("Voice agent failed to start.");
+    process.exit(1);
+  }
+
+  s.stop("Starting voice agent — running");
   return agent;
 }
 
@@ -342,6 +360,21 @@ installShutdownHandler(agent);
 await deployToDevice();
 
 p.note("Voice agent is running. Press Ctrl+C to stop.", "Fletcher is ready");
+
+// Pipe agent output to terminal now that clack UI is done
+async function pipeStream(stream: ReadableStream<Uint8Array> | null, dest: NodeJS.WriteStream) {
+  if (!stream) return;
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      dest.write(value);
+    }
+  } catch {}
+}
+pipeStream(agent.stdout as ReadableStream<Uint8Array>, process.stdout);
+pipeStream(agent.stderr as ReadableStream<Uint8Array>, process.stderr);
 
 await agent.exited;
 p.outro("Voice agent exited.");
