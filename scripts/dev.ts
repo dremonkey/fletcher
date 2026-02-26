@@ -391,6 +391,44 @@ function listAdbDevices(): AdbDevice[] {
   return devices;
 }
 
+function getLanIp(): string | null {
+  const proc = Bun.spawnSync(["hostname", "-I"], { stdout: "pipe", stderr: "pipe" });
+  if (proc.exitCode !== 0) return null;
+  const ip = proc.stdout.toString().trim().split(/\s+/)[0];
+  return ip || null;
+}
+
+function updateMobileEnv(): void {
+  const mobileEnvPath = join(ROOT, "apps", "mobile", ".env");
+  let livekitUrl = env("LIVEKIT_URL") || "";
+
+  // Replace localhost with LAN IP for physical devices
+  if (livekitUrl.includes("localhost") || livekitUrl.includes("127.0.0.1")) {
+    const lanIp = getLanIp();
+    if (lanIp) {
+      livekitUrl = livekitUrl.replace(/localhost|127\.0\.0\.1/, lanIp);
+      p.log.info(`Mobile LIVEKIT_URL rewritten to ${livekitUrl}`);
+    }
+  }
+
+  // Write to mobile .env using the same pattern as generate-token.ts
+  const updateKey = (path: string, key: string, value: string) => {
+    let content = "";
+    if (existsSync(path)) content = readFileSync(path, "utf-8");
+    const lines = content.split("\n");
+    let found = false;
+    const updated = lines.map((line) => {
+      if (line.startsWith(`${key}=`)) { found = true; return `${key}=${value}`; }
+      return line;
+    });
+    if (!found) updated.push(`${key}=${value}`);
+    const result = updated.filter((l, i, a) => l !== "" || i < a.length - 1).join("\n") + "\n";
+    writeFileSync(path, result);
+  };
+
+  updateKey(mobileEnvPath, "LIVEKIT_URL", livekitUrl);
+}
+
 async function deployToDevice(): Promise<void> {
   if (!hasCommand("adb") || !hasCommand("flutter")) return;
 
@@ -422,6 +460,9 @@ async function deployToDevice(): Promise<void> {
     if (choice === "__skip__") return;
     target = available.find((d) => d.serial === choice)!;
   }
+
+  // Update mobile .env with correct LiveKit URL (LAN IP for local server)
+  updateMobileEnv();
 
   // Build debug APK
   const mobileDir = join(ROOT, "apps", "mobile");
