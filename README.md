@@ -134,11 +134,24 @@ echo "use flake" > .envrc
 direnv allow
 ```
 
-#### Initialize Services
-After entering the shell, run the setup script to check prerequisites and start the local infrastructure:
+#### Start Development
+
+The quickest way to get everything running is the TUI dev launcher:
 
 ```bash
-./scripts/setup.sh
+bun dev
+```
+
+This will audit your environment, prompt for any missing API keys (saving them to `.env`), start the local LiveKit server, generate a token, and launch the voice agent — all in one command.
+
+#### Manual Setup
+
+If you prefer to run services individually:
+
+```bash
+./scripts/setup.sh          # Start LiveKit + health check
+bun run token:generate      # Generate a LiveKit token
+bun run voice:dev           # Start the voice agent
 ```
 
 ## Local Infrastructure
