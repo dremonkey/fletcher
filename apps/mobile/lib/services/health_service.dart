@@ -103,7 +103,7 @@ class HealthService extends ChangeNotifier {
       id: 'env_loaded',
       label: '.env loaded',
       status: ok ? HealthCheckStatus.ok : HealthCheckStatus.error,
-      detail: ok ? 'LIVEKIT_URL is set' : 'LIVEKIT_URL is empty or missing',
+      detail: ok ? _livekitUrl! : 'LIVEKIT_URL is empty or missing',
       suggestion: ok ? null : 'Add LIVEKIT_URL to apps/mobile/.env',
     );
   }
