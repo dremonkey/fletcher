@@ -218,6 +218,7 @@ if (isMainModule) {
   cli.runApp(
     new ServerOptions({
       agent: import.meta.filename,
+      initializeProcessTimeout: 60_000,
     }),
   );
 }
