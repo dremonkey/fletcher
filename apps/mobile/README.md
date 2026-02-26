@@ -84,6 +84,15 @@ For manual (non-Nix) setups:
 
 ## Running the App
 
+### Quick Start (from repo root)
+```bash
+# Launch emulator + run app in one step
+bun run mobile:dev
+
+# Or just run the app (emulator must already be running)
+bun run mobile:run
+```
+
 ### Android Emulator
 ```bash
 # List available emulators
