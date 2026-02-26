@@ -25,9 +25,11 @@
     "token:generate": "bun run scripts/generate-token.ts",
     "agent:dev": "bun run scripts/run-agent.ts",
     "voice:dev": "bun run scripts/voice-agent.ts dev",
-    "voice:connect": "bun run scripts/voice-agent.ts connect"
+    "voice:connect": "bun run scripts/voice-agent.ts connect",
+    "dev": "bun run scripts/dev.ts"
   },
   "devDependencies": {
+    "@clack/prompts": "^1.0.1",
     "@livekit/rtc-node": "0.13.24",
     "@types/node": "^20.0.0",
     "eslint": "^8.0.0",
