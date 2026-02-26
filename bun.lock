@@ -5,6 +5,7 @@
     "": {
       "name": "fletcher",
       "dependencies": {
+        "@knittt/livekit-agent-ganglia": "workspace:*",
         "@livekit/agents": "^1.0.43",
         "@livekit/agents-plugin-cartesia": "^1.0.0",
         "@livekit/agents-plugin-deepgram": "^1.0.0",
