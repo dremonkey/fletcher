@@ -336,7 +336,11 @@ async function startServices(): Promise<Subprocess> {
   s.start("Starting voice agent");
 
   const agentMode = isLocalLiveKit() ? "dev" : "connect";
-  const agent = spawn(["bun", "run", "scripts/voice-agent.ts", agentMode], {
+  const agentArgs = ["bun", "run", "scripts/voice-agent.ts", agentMode];
+  if (agentMode === "connect") {
+    agentArgs.push("--room", "fletcher-dev");
+  }
+  const agent = spawn(agentArgs, {
     cwd: ROOT,
     stdout: "pipe",
     stderr: "pipe",
