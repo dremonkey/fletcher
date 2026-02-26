@@ -317,9 +317,16 @@ async function runStep(
   return true;
 }
 
+function isLocalLiveKit(): boolean {
+  const url = env("LIVEKIT_URL") || "";
+  return url.includes("localhost") || url.includes("127.0.0.1");
+}
+
 async function startServices(): Promise<Subprocess> {
-  // 1. LiveKit infrastructure
-  await runStep("Starting LiveKit server", ["bash", "./scripts/setup.sh"]);
+  // 1. LiveKit infrastructure (only for local server)
+  if (isLocalLiveKit()) {
+    await runStep("Starting LiveKit server", ["bash", "./scripts/setup.sh"]);
+  }
 
   // 2. Token generation
   await runStep("Generating LiveKit token", ["bun", "run", "scripts/generate-token.ts"]);
