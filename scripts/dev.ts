@@ -108,8 +108,8 @@ async function auditEnv(): Promise<void> {
 
   // Voice keys
   const voiceKeys = [
-    { key: "DEEPGRAM_API_KEY", label: "Deepgram API key (STT)" },
-    { key: "CARTESIA_API_KEY", label: "Cartesia API key (TTS)" },
+    { key: "DEEPGRAM_API_KEY", label: "Deepgram API key (speech-to-text)" },
+    { key: "CARTESIA_API_KEY", label: "Cartesia API key (text-to-speech)" },
   ] as const;
 
   for (const { key, label } of voiceKeys) {
