@@ -88,11 +88,25 @@ adb shell am start -n com.fletcher.fletcher/.MainActivity
 
 ## Running Tests
 
-Ask Claude Code:
+### Setup
 
-- **Single test**: "Run e2e test 001"
-- **All tests**: "Run all e2e tests"
+Install the `/e2e` skill so Claude Code knows the test runner workflow:
+
+```sh
+bun run skills:install
+```
+
+Select `e2e-test-runner` from the menu. This symlinks the skill into `.claude/commands/`.
+
+### Running
+
+Ask Claude Code (or use the `/e2e` slash command):
+
+- **Single test**: "Run e2e test 001" or `/e2e 001`
+- **All tests**: "Run all e2e tests" or `/e2e`
 - **Specific step**: "Run step 2 of e2e test 003"
+
+The skill uses `e2e/helpers/check-preconditions.sh` to verify the emulator is ready, then `e2e/helpers/run-step.sh` to batch-execute commands for each step, minimizing token usage.
 
 ## Capture Helper
 
@@ -124,14 +138,16 @@ Produces three files in `e2e/captures/`:
 
 ```
 e2e/
-├── README.md              # This file
+├── README.md                    # This file
 ├── helpers/
-│   └── emu-capture.sh     # Screenshot + UI dump + logcat capture
+│   ├── check-preconditions.sh   # Verify emulator, APK, app status
+│   ├── emu-capture.sh           # Screenshot + UI dump + logcat capture
+│   └── run-step.sh              # Batch-run step commands
 ├── tests/
-│   ├── 001-app-launch.md  # App launch → connecting → idle
-│   ├── 002-mute-toggle.md # Mute/unmute cycle
-│   └── 003-health-panel.md# Open and verify diagnostics panel
-└── captures/              # Gitignored — capture output
+│   ├── 001-app-launch.md        # App launch → connecting → idle
+│   ├── 002-mute-toggle.md       # Mute/unmute cycle
+│   └── 003-health-panel.md      # Open and verify diagnostics panel
+└── captures/                    # Gitignored — capture output
     └── .gitkeep
 ```
 
