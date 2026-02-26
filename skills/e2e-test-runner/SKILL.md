@@ -15,7 +15,7 @@ Run end-to-end tests for the Fletcher mobile app via adb and vision.
 Run the preconditions helper:
 
 ```sh
-e2e/helpers/check-preconditions.sh
+skills/e2e-test-runner/check-preconditions.sh
 ```
 
 If any line shows `FAIL`, stop and report the failure. Do not proceed with test steps.
@@ -41,7 +41,7 @@ For each test file, process steps sequentially:
 Collect all `sh` code block commands from the step and run them via the helper:
 
 ```sh
-e2e/helpers/run-step.sh "cmd1" "cmd2" ...
+skills/e2e-test-runner/run-step.sh "cmd1" "cmd2" ...
 ```
 
 #### c. Handle SKIP commands (coordinate placeholders)
@@ -131,4 +131,5 @@ Suite: ❌ FAIL (2/3 tests passed)
 - `DEVICE_ID` — Target device (default: `emulator-5554`)
 - Test files: `e2e/tests/*.md`
 - Captures: `e2e/captures/` (gitignored)
-- Helpers: `e2e/helpers/`
+- Skill helpers: `skills/e2e-test-runner/` (check-preconditions.sh, run-step.sh)
+- Capture helper: `e2e/helpers/emu-capture.sh`

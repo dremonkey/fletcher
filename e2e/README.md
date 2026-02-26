@@ -106,7 +106,7 @@ Ask Claude Code (or use the `/e2e` slash command):
 - **All tests**: "Run all e2e tests" or `/e2e`
 - **Specific step**: "Run step 2 of e2e test 003"
 
-The skill uses `e2e/helpers/check-preconditions.sh` to verify the emulator is ready, then `e2e/helpers/run-step.sh` to batch-execute commands for each step, minimizing token usage.
+The skill uses its own helper scripts (`skills/e2e-test-runner/check-preconditions.sh`, `run-step.sh`) to verify the emulator is ready and batch-execute commands for each step, minimizing token usage.
 
 ## Capture Helper
 
@@ -138,17 +138,20 @@ Produces three files in `e2e/captures/`:
 
 ```
 e2e/
-├── README.md                    # This file
+├── README.md                # This file
 ├── helpers/
-│   ├── check-preconditions.sh   # Verify emulator, APK, app status
-│   ├── emu-capture.sh           # Screenshot + UI dump + logcat capture
-│   └── run-step.sh              # Batch-run step commands
+│   └── emu-capture.sh       # Screenshot + UI dump + logcat capture
 ├── tests/
-│   ├── 001-app-launch.md        # App launch → connecting → idle
-│   ├── 002-mute-toggle.md       # Mute/unmute cycle
-│   └── 003-health-panel.md      # Open and verify diagnostics panel
-└── captures/                    # Gitignored — capture output
+│   ├── 001-app-launch.md    # App launch → connecting → idle
+│   ├── 002-mute-toggle.md   # Mute/unmute cycle
+│   └── 003-health-panel.md  # Open and verify diagnostics panel
+└── captures/                # Gitignored — capture output
     └── .gitkeep
+
+skills/e2e-test-runner/
+├── SKILL.md                 # Skill definition (installed via bun dev or bun run skills:install)
+├── check-preconditions.sh   # Verify emulator, APK, app status
+└── run-step.sh              # Batch-run step commands
 ```
 
 ## Future
