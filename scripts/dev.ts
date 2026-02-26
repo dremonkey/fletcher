@@ -74,18 +74,57 @@ function cancelled(): never {
 
 // ── Phase 1: Environment Audit ───────────────────────────────────────
 
-async function auditEnv(): Promise<void> {
-  // LiveKit keys — required, no prompting
-  const livekitKeys = ["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"] as const;
-  const missing = livekitKeys.filter((k) => !env(k));
-  if (missing.length > 0) {
-    p.log.error(
-      `Missing LiveKit keys: ${missing.join(", ")}\n` +
-        `  These come from your LiveKit Cloud project.\n` +
-        `  Add them to .env and try again.`,
-    );
-    process.exit(1);
+const LIVEKIT_YAML = join(ROOT, "livekit.yaml");
+
+function readLocalLiveKitConfig(): { url: string; key: string; secret: string } | null {
+  try {
+    const content = readFileSync(LIVEKIT_YAML, "utf-8");
+    // Parse port
+    const portMatch = content.match(/^port:\s*(\d+)/m);
+    const port = portMatch ? portMatch[1] : "7880";
+    // Parse first key/secret pair
+    const keysMatch = content.match(/^keys:\s*\n\s+(\S+):\s*(\S+)/m);
+    if (!keysMatch) return null;
+    return { url: `ws://localhost:${port}`, key: keysMatch[1], secret: keysMatch[2] };
+  } catch {
+    return null;
   }
+}
+
+async function auditLiveKit(): Promise<void> {
+  const hasAll = env("LIVEKIT_URL") && env("LIVEKIT_API_KEY") && env("LIVEKIT_API_SECRET");
+  if (hasAll) return;
+
+  const localConfig = readLocalLiveKitConfig();
+
+  const mode = await p.select({
+    message: "LiveKit server?",
+    options: [
+      ...(localConfig
+        ? [{ value: "local" as const, label: "Local", hint: `${localConfig.url}` }]
+        : []),
+      { value: "cloud" as const, label: "LiveKit Cloud", hint: "enter your cloud credentials" },
+    ],
+  });
+  if (p.isCancel(mode)) cancelled();
+
+  if (mode === "local" && localConfig) {
+    setKey("LIVEKIT_URL", localConfig.url);
+    setKey("LIVEKIT_API_KEY", localConfig.key);
+    setKey("LIVEKIT_API_SECRET", localConfig.secret);
+  } else {
+    for (const key of ["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"] as const) {
+      if (!env(key)) {
+        const value = await p.text({ message: `Enter ${key}:` });
+        if (p.isCancel(value)) cancelled();
+        setKey(key, value);
+      }
+    }
+  }
+}
+
+async function auditEnv(): Promise<void> {
+  await auditLiveKit();
 
   // Ganglia backend
   if (!env("GANGLIA_TYPE")) {
@@ -156,20 +195,25 @@ function showConfig(): void {
 }
 
 async function modifyConfig(): Promise<void> {
-  const editableKeys = [
-    { value: "GANGLIA_TYPE", label: "Ganglia backend" },
-    { value: "OPENCLAW_API_KEY", label: "OpenClaw gateway token" },
-    { value: "DEEPGRAM_API_KEY", label: "Deepgram API key (speech-to-text)" },
-    { value: "CARTESIA_API_KEY", label: "Cartesia API key (text-to-speech)" },
-  ] as const;
-
   const key = await p.select({
     message: "Which key to change?",
-    options: editableKeys.map((k) => ({ value: k.value, label: k.label })),
+    options: [
+      { value: "livekit", label: "LiveKit server" },
+      { value: "GANGLIA_TYPE", label: "Ganglia backend" },
+      { value: "OPENCLAW_API_KEY", label: "OpenClaw gateway token" },
+      { value: "DEEPGRAM_API_KEY", label: "Deepgram API key (speech-to-text)" },
+      { value: "CARTESIA_API_KEY", label: "Cartesia API key (text-to-speech)" },
+    ],
   });
   if (p.isCancel(key)) return;
 
-  if (key === "GANGLIA_TYPE") {
+  if (key === "livekit") {
+    // Clear existing keys so auditLiveKit re-prompts
+    delete process.env.LIVEKIT_URL;
+    delete process.env.LIVEKIT_API_KEY;
+    delete process.env.LIVEKIT_API_SECRET;
+    await auditLiveKit();
+  } else if (key === "GANGLIA_TYPE") {
     const backend = await p.select({
       message: "Which brain backend?",
       options: [
@@ -180,7 +224,7 @@ async function modifyConfig(): Promise<void> {
     if (p.isCancel(backend)) return;
     setKey("GANGLIA_TYPE", backend as string);
   } else {
-    const value = await p.password({ message: `Enter ${editableKeys.find((k) => k.value === key)!.label}:` });
+    const value = await p.password({ message: `Enter new value:` });
     if (p.isCancel(value)) return;
     setKey(key as string, value);
   }
