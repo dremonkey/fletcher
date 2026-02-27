@@ -17,7 +17,7 @@ import { loadEnv, cancelled } from "./env";
 import { auditEnv } from "./audit";
 import { manageConfiguration, confirmBeforeStart } from "./config";
 import { manageSkills } from "./skills";
-import { startServices, installShutdownHandler, pipeStream } from "./services";
+import { startServices, installShutdownHandler, children } from "./services";
 import { deployToDevice } from "./mobile";
 
 // Load .env into process.env on startup
@@ -58,7 +58,8 @@ while (true) {
   if (action === "deploy") {
     const flutterProc = await deployToDevice();
     if (flutterProc) {
-      installShutdownHandler(flutterProc);
+      children.push(flutterProc);
+      installShutdownHandler();
       p.note("Flutter running with hot reload. Press 'r' to reload, Ctrl+C to stop.");
       await flutterProc.exited;
       p.outro("Flutter exited.");
@@ -67,24 +68,23 @@ while (true) {
     continue;
   }
 
-  // action === "start" — launch services
+  // action === "start" — launch services via docker-compose
   await auditEnv();
   await confirmBeforeStart();
 
-  const agent = await startServices();
-  installShutdownHandler(agent);
+  await startServices();
+  installShutdownHandler();
   const flutterProc = await deployToDevice();
 
   if (flutterProc) {
+    children.push(flutterProc);
     p.note("Voice agent + Flutter running. Press 'r' for hot reload, Ctrl+C to stop.", "Fletcher is ready");
+    await flutterProc.exited;
+    p.outro("Flutter exited.");
   } else {
-    p.note("Voice agent is running. Press Ctrl+C to stop.", "Fletcher is ready");
+    p.note("Services running via docker compose. Press Ctrl+C to stop.", "Fletcher is ready");
+    // Block until interrupted
+    await new Promise(() => {});
   }
-
-  pipeStream(agent.stdout as ReadableStream<Uint8Array>, process.stdout);
-  pipeStream(agent.stderr as ReadableStream<Uint8Array>, process.stderr);
-
-  await agent.exited;
-  p.outro("Voice agent exited.");
   break;
 }
