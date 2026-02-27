@@ -21,7 +21,7 @@
  *   CARTESIA_API_KEY - Cartesia API key for TTS
  */
 
-import { defineAgent, cli, ServerOptions, type JobContext } from '@livekit/agents';
+import { defineAgent, cli, ServerOptions, type JobContext, type JobRequest, type AgentServer } from '@livekit/agents';
 import { voice, llm } from '@livekit/agents';
 import * as deepgram from '@livekit/agents-plugin-deepgram';
 import * as cartesia from '@livekit/agents-plugin-cartesia';
@@ -213,6 +213,10 @@ export default defineAgent({
   },
 });
 
+// Tracks rooms with active agent jobs in the parent worker process.
+// Cleaned up every 2.5s by loadFunc when child processes exit.
+const activeRoomNames = new Set<string>();
+
 // Run as CLI if this is the main module
 const isMainModule = process.argv[1]?.endsWith('voice-agent.ts');
 if (isMainModule) {
@@ -220,6 +224,29 @@ if (isMainModule) {
     new ServerOptions({
       agent: import.meta.filename,
       initializeProcessTimeout: 60_000,
+      // Reject duplicate jobs for rooms that already have an agent
+      requestFunc: async (req: JobRequest) => {
+        const roomName = req.room?.name;
+        if (roomName && activeRoomNames.has(roomName)) {
+          console.log(`Rejecting duplicate job for room ${roomName}`);
+          await req.reject();
+          return;
+        }
+        if (roomName) activeRoomNames.add(roomName);
+        await req.accept();
+      },
+      // Sync activeRoomNames with real child processes and report load.
+      // Runs every 2.5s — stale rooms are removed when their child exits.
+      loadFunc: async (worker: AgentServer) => {
+        const runningRooms = new Set(
+          worker.activeJobs.map((j) => j.job.room?.name).filter(Boolean),
+        );
+        for (const room of activeRoomNames) {
+          if (!runningRooms.has(room)) activeRoomNames.delete(room);
+        }
+        return worker.activeJobs.length;
+      },
+      loadThreshold: 1,
     }),
   );
 }
