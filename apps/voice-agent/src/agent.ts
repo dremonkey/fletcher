@@ -23,7 +23,7 @@ import { defineAgent, cli, ServerOptions, type JobContext } from '@livekit/agent
 import { voice } from '@livekit/agents';
 import * as deepgram from '@livekit/agents-plugin-deepgram';
 import * as cartesia from '@livekit/agents-plugin-cartesia';
-import { createGangliaFromEnv, type GangliaLLM } from '@knittt/livekit-agent-ganglia';
+import { createGangliaFromEnv } from '@knittt/livekit-agent-ganglia';
 
 // ---------------------------------------------------------------------------
 // Environment validation
@@ -61,46 +61,26 @@ console.log('Environment validated:', {
 // ---------------------------------------------------------------------------
 export default defineAgent({
   entry: async (ctx: JobContext) => {
+    const gangliaLlm = await createGangliaFromEnv();
+    console.log(`Using ganglia backend: ${gangliaLlm.gangliaType()}`);
+
+    const stt = new deepgram.STT({ apiKey: process.env.DEEPGRAM_API_KEY });
+    const tts = new cartesia.TTS({ apiKey: process.env.CARTESIA_API_KEY });
+
+    const session = new voice.AgentSession({ stt, tts, llm: gangliaLlm });
+    await session.start({
+      agent: new voice.Agent({ instructions: '' }),
+      room: ctx.room,
+    });
     await ctx.connect();
     console.log(`Connected to room: ${ctx.room.name}`);
 
     const participant = await ctx.waitForParticipant();
-    console.log(`Participant connected: ${participant.identity}`);
-
-    // Create ganglia LLM from environment
-    let gangliaLlm: GangliaLLM;
-    try {
-      gangliaLlm = await createGangliaFromEnv();
-      console.log(`Using ganglia backend: ${gangliaLlm.gangliaType()}`);
-    } catch (error) {
-      console.error('Failed to create ganglia LLM:', error);
-      throw error;
-    }
-
+    console.log(`Participant joined: ${participant.identity}`);
     gangliaLlm.setDefaultSession?.({
       roomName: ctx.room.name,
       participantIdentity: participant.identity,
     });
-
-    const stt = new deepgram.STT({
-      apiKey: process.env.DEEPGRAM_API_KEY,
-    });
-
-    const tts = new cartesia.TTS({
-      apiKey: process.env.CARTESIA_API_KEY,
-    });
-
-    const agent = new voice.Agent({
-      instructions: '',
-      llm: gangliaLlm,
-      stt,
-      tts,
-    });
-
-    const session = new voice.AgentSession({ stt, tts, llm: gangliaLlm });
-    await session.start({ agent, room: ctx.room });
-
-    console.log('Voice agent started, listening for speech...');
 
     ctx.addShutdownCallback(async () => {
       console.log('Shutting down voice agent...');
@@ -113,7 +93,6 @@ export default defineAgent({
 cli.runApp(
   new ServerOptions({
     agent: import.meta.filename,
-    agentName: 'livekit-ganglia-agent',
     initializeProcessTimeout: 60_000,
   }),
 );
