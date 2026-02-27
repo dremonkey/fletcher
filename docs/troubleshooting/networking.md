@@ -2,24 +2,38 @@
 
 Connecting the Flutter mobile app to a LiveKit server running on your dev machine.
 
-## Working Configuration (Tailscale)
+## Working Configurations
 
-The proven path uses **Tailscale** for connectivity. The phone connects to the dev machine's Tailscale IP over `ws://` (cleartext). This works even when the phone is on cellular data.
+### Option A: LAN (phone on same WiFi)
+
+The simplest path when the phone is on the same WiFi network. **Tailscale must be OFF** on the phone (see [Tailscale VPN routing caveat](#tailscale-vpn-routing-caveat)).
+
+**Requirements:**
+- Phone on same WiFi as dev machine
+- Tailscale VPN disabled on the phone
+- `apps/mobile/.env` pointing to LAN IP: `ws://192.168.87.59:7880`
+
+### Option B: Tailscale (any network)
+
+Works across networks (WiFi, cellular, different offices) without firewall or port-forwarding concerns.
 
 **Requirements:**
 - Tailscale installed on both dev machine and phone, same account
-- `network_security_config.xml` allowing cleartext (already added)
 - `apps/mobile/.env` pointing to Tailscale IP: `ws://100.87.219.109:7880`
+
+**Note:** No `network_security_config.xml` is needed. The LiveKit Flutter SDK uses its own native WebSocket/WebRTC stack (`flutter_webrtc` plugin) which bypasses Android's `NetworkSecurityConfig` cleartext restrictions. Those restrictions only apply to the standard Android HTTP stack (`HttpURLConnection` / `OkHttp`).
 
 ## Quick Diagnosis
 
 | Symptom | Likely cause | Jump to |
 |---------|-------------|---------|
-| App shows "Connecting..." forever (no error) | Phone can't reach server, or cleartext blocked | [Step 0](#step-0-verify-phone-can-reach-the-server) |
+| App shows "Connecting..." forever (no error) | Phone can't reach server (Tailscale VPN routing?) | [Step 0](#step-0-verify-phone-can-reach-the-server) |
 | WebSocket connects but no audio | WebRTC UDP blocked | [Step 3](#step-3-webrtc-udp-connectivity) |
 | Works on emulator, fails on physical device | Wrong IP in .env | [Step 2](#step-2-confirm-mobile-env-has-the-right-ip) |
 
-**Key insight:** The LiveKit Flutter SDK's `Room.connect()` will **hang silently** (no error, no timeout) if the server is unreachable. There's no built-in connection timeout. The app shows "Connecting..." forever with no logcat errors.
+**Key insights:**
+- The LiveKit Flutter SDK's `Room.connect()` will **hang silently** (no error, no timeout) if the server is unreachable. The app shows "Connecting..." forever with no logcat errors.
+- `adb shell` commands (ping, nc) run as UID 2000 (shell) and **bypass Tailscale VPN routing**. A successful `adb shell ping` does NOT mean the app can reach that IP. See [Tailscale VPN routing caveat](#tailscale-vpn-routing-caveat).
 
 ---
 
@@ -155,34 +169,27 @@ ports:
 
 ---
 
-## Step 4: Android cleartext policy
+## Step 4: Android cleartext policy — NOT needed
 
-Android 9+ blocks cleartext HTTP/WebSocket (`ws://`) by default. Without explicit config, `Room.connect()` to a `ws://` URL will **hang silently** — no error, no timeout, no logcat output.
+Android 9+ blocks cleartext HTTP/WebSocket (`ws://`) by default for the standard Android HTTP stack. However, the LiveKit Flutter SDK uses **`flutter_webrtc`'s native WebSocket/WebRTC implementation**, which bypasses `NetworkSecurityConfig` entirely.
 
-### Fix (already applied)
+**Tested:** `ws://192.168.87.59:7880` connects successfully without any `network_security_config.xml` or `networkSecurityConfig` manifest attribute.
 
-**`apps/mobile/android/app/src/main/res/xml/network_security_config.xml`:**
+**Status:** [x] Not needed — LiveKit SDK bypasses Android cleartext restrictions
 
-```xml
-<?xml version="1.0" encoding="utf-8"?>
-<network-security-config>
-    <base-config cleartextTrafficPermitted="true" />
-</network-security-config>
-```
+---
 
-**`AndroidManifest.xml`** — add `android:networkSecurityConfig` to `<application>`:
+## Tailscale VPN routing caveat
 
-```xml
-<application
-    android:label="fletcher"
-    android:name="${applicationName}"
-    android:icon="@mipmap/ic_launcher"
-    android:networkSecurityConfig="@xml/network_security_config">
-```
+When Tailscale is active on Android, it installs `ip rule` entries (priority 13000) that route **all app traffic** (by UID range) through its VPN routing table. This table only has routes for Tailscale IPs (`100.x.x.x`). LAN traffic (`192.168.x.x`) has no route and is **silently dropped**.
 
-**Note:** For production, restrict cleartext to specific domains instead of allowing it globally.
+This means:
+- **LAN IPs don't work when Tailscale is ON** — `Room.connect()` hangs silently
+- **`adb shell` tests are misleading** — `adb shell ping` runs as UID 2000 (shell), which is outside Tailscale's captured UID ranges. It bypasses the VPN and reaches LAN directly.
 
-**Status:** [x] Cleartext traffic allowed
+**To use LAN:** Turn off Tailscale on the phone.
+**To use Tailscale:** Use the Tailscale IP (`100.x.x.x`) in `.env`.
+**Both simultaneously:** Not currently possible on Android without Tailscale "Allow LAN access" (not available on Android as of Feb 2026).
 
 ---
 
@@ -243,7 +250,7 @@ Set `apps/mobile/.env`:
 LIVEKIT_URL=ws://100.87.219.109:7880
 ```
 
-Requires `network_security_config.xml` for cleartext `ws://`.
+No cleartext config needed (LiveKit SDK bypasses Android's `NetworkSecurityConfig`).
 
 ### Upgrading to wss:// (optional, removes cleartext dependency)
 
@@ -279,12 +286,12 @@ With `wss://`, the `network_security_config.xml` is no longer needed.
 
 If the phone is on the same WiFi network as the dev machine:
 
-1. Find dev machine LAN IP: `hostname -I | awk '{print $1}'`
-2. Set `apps/mobile/.env`: `LIVEKIT_URL=ws://<LAN_IP>:7880`
-3. Ensure `network_security_config.xml` allows cleartext
+1. **Turn off Tailscale** on the phone (see [Tailscale VPN routing caveat](#tailscale-vpn-routing-caveat))
+2. Find dev machine LAN IP: `hostname -I | awk '{print $1}'`
+3. Set `apps/mobile/.env`: `LIVEKIT_URL=ws://<LAN_IP>:7880`
 4. Check firewall allows ports 7880 (TCP) and 7882 + 50000-60000 (UDP)
 
-The TUI auto-rewrites `localhost` → LAN IP when deploying to a physical device.
+No `network_security_config.xml` needed. The TUI auto-rewrites `localhost` → LAN IP when deploying to a physical device.
 
 ---
 
@@ -303,3 +310,10 @@ The TUI auto-rewrites `localhost` → LAN IP when deploying to a physical device
 | 2026-02-27 | Step 5: E2E connect | PASS | WebSocket connected, ICE gathered, agent joined, audio track subscribed |
 | 2026-02-27 | Observation | NOTE | LiveKit nodeIP=172.19.0.2 (Docker bridge) — may need `network_mode: host` for LAN |
 | 2026-02-27 | Observation | NOTE | LiveKit SDK `Room.connect()` hangs silently on unreachable URLs (no timeout) |
+| 2026-02-27 | LAN, Tailscale ON, no cleartext | FAIL | Hang — Tailscale VPN routing blackholes LAN traffic for apps |
+| 2026-02-27 | LAN, Tailscale ON, with cleartext | FAIL | Hang — same VPN routing issue, cleartext irrelevant |
+| 2026-02-27 | Tailscale IP, Tailscale ON, with cleartext | PASS | Full E2E: WebSocket + WebRTC + agent dispatch |
+| 2026-02-27 | LAN, Tailscale OFF, with cleartext | PASS | WebSocket + WebRTC connected over LAN |
+| 2026-02-27 | LAN, Tailscale OFF, NO cleartext | PASS | WebSocket + WebRTC connected — cleartext config NOT needed |
+| 2026-02-27 | Conclusion | NOTE | `network_security_config.xml` unnecessary — LiveKit SDK bypasses Android NetworkSecurityConfig |
+| 2026-02-27 | Conclusion | NOTE | Tailscale VPN on Android routes all app traffic through VPN table; LAN IPs unreachable |
