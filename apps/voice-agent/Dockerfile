@@ -25,4 +25,5 @@ COPY --from=build /app/apps/voice-agent apps/voice-agent
 COPY --from=build /app/package.json .
 COPY --from=build /app/tsconfig.base.json .
 
-CMD ["sh", "-c", "bun run apps/voice-agent/src/agent.ts connect --room ${LIVEKIT_ROOM:-fletcher-dev}"]
+ENTRYPOINT ["bun", "run", "apps/voice-agent/src/agent.ts"]
+CMD ["dev"]

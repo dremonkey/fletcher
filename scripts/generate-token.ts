@@ -9,7 +9,7 @@
  *   bun run token:generate --room "my-room"
  */
 
-import { AccessToken } from "livekit-server-sdk";
+import { AccessToken, RoomConfiguration, RoomAgentDispatch } from "livekit-server-sdk";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join, dirname } from "path";
 
@@ -54,6 +54,11 @@ token.addGrant({
   canPublish: true,
   canSubscribe: true,
   canPublishData: true,
+});
+
+// Embed agent dispatch config so LiveKit auto-dispatches the voice agent
+token.roomConfig = new RoomConfiguration({
+  agents: [new RoomAgentDispatch({ agentName: "voice-agent" })],
 });
 
 const jwt = await token.toJwt();
