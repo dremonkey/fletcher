@@ -9,7 +9,7 @@ import * as p from "@clack/prompts";
 import { existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, unlinkSync } from "fs";
 import { join, relative } from "path";
 
-const ROOT = join(import.meta.dirname, "..");
+const ROOT = join(import.meta.dirname, "..", "..", "..");
 const SKILLS_DIR = join(ROOT, "skills");
 const COMMANDS_DIR = join(ROOT, ".claude", "commands");
 

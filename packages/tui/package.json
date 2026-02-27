@@ -1,0 +1,12 @@
+{
+  "name": "@fletcher/tui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fletcher development TUI",
+  "scripts": {
+    "dev": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.0.1"
+  }
+}
