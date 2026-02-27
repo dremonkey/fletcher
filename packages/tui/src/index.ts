@@ -1,6 +1,5 @@
-#!/usr/bin/env bun
 /**
- * Fletcher TUI — single entry point for development and maintenance.
+ * Fletcher TUI — interactive menu for development and maintenance.
  *
  * Main menu:
  *   - Start dev services  (env audit -> LiveKit + voice agent + mobile deploy)
@@ -9,7 +8,7 @@
  *   - Deploy to mobile device (build APK -> push to emulator/device)
  *
  * Usage:
- *   bun dev
+ *   fletcher tui   (or: bun dev)
  */
 
 import * as p from "@clack/prompts";
