@@ -4,42 +4,20 @@
 
 When pressing Ctrl+C after starting services via the TUI, ensure all resources are cleaned up: Docker containers brought down via `docker compose down`, and the Android emulator process is terminated.
 
-## Current State
+## Root Cause (found)
 
-The TUI already has a shutdown handler in `packages/tui/src/services.ts`:
+The original handler was `async` and used `await spawn(...).exited` for `docker compose down`.
+When Ctrl+C is pressed in a terminal, SIGINT is sent to the **entire foreground process group**
+— both the TUI and any child processes (Flutter, emulator). The child exits, which resolves
+`await flutterProc.exited` in the main flow, and the module finishes executing. Meanwhile the
+async cleanup handler's `await proc.exited` is still pending. The race means `docker compose down`
+may never complete (or even start) before the process exits.
 
-```typescript
-export function installShutdownHandler(): void {
-  let shuttingDown = false;
+## Fix
 
-  const cleanup = async () => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-
-    // 1. docker compose down
-    const proc = spawn(["docker", "compose", "down"], { cwd: ROOT });
-    await proc.exited;
-
-    // 2. SIGTERM all child processes
-    for (const child of children) {
-      try { child.kill("SIGTERM"); } catch {}
-    }
-
-    // 3. Wait 1s, then SIGKILL stragglers
-    await new Promise((r) => setTimeout(r, 1000));
-    for (const child of children) {
-      try { child.kill("SIGKILL"); } catch {}
-    }
-
-    process.exit(0);
-  };
-
-  process.on("SIGINT", cleanup);
-  process.on("SIGTERM", cleanup);
-}
-```
-
-This looks correct in principle. The task is to verify it actually works in all scenarios and fix any gaps.
+Changed the cleanup handler from async to **synchronous** using `Bun.spawnSync` for
+`docker compose down`. This blocks the signal handler until docker compose finishes,
+then calls `process.exit(0)` — the main flow never gets a chance to resume.
 
 ## Investigation Areas
 

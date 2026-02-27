@@ -210,33 +210,39 @@ export function installShutdownHandler(): void {
 
   let shuttingDown = false;
 
-  const cleanup = async () => {
+  const cleanup = () => {
     if (shuttingDown) return;
     shuttingDown = true;
 
-    console.log(); // newline after ^C
-    p.outro("Shutting down Fletcher...");
+    try {
+      console.log(); // newline after ^C
+      console.log("Shutting down Fletcher...");
 
-    // Stop docker-compose services
-    const proc = spawn(["docker", "compose", "down"], {
-      cwd: ROOT,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    await proc.exited;
+      // SIGTERM children first — they've already received SIGINT from the
+      // terminal so this is mostly a no-op, but covers edge cases.
+      for (const child of children) {
+        try {
+          child.kill("SIGTERM");
+        } catch {}
+      }
 
-    // SIGTERM any remaining children
-    for (const child of children) {
-      try {
-        child.kill("SIGTERM");
-      } catch {}
-    }
+      // Synchronously bring down docker services.  Using spawnSync guarantees
+      // this completes before the process exits — an async handler races with
+      // the main flow when child processes die from the same SIGINT.
+      Bun.spawnSync(["docker", "compose", "down"], {
+        cwd: ROOT,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
 
-    await new Promise((r) => setTimeout(r, 1000));
-    for (const child of children) {
-      try {
-        child.kill("SIGKILL");
-      } catch {}
+      // Force-kill anything still alive (emulator, flutter, etc.)
+      for (const child of children) {
+        try {
+          child.kill("SIGKILL");
+        } catch {}
+      }
+    } catch (err) {
+      console.error("Cleanup error:", err);
     }
 
     process.exit(0);
