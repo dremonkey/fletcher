@@ -32,11 +32,21 @@ type AgentState = "idle" | "listening" | "thinking" | "speaking";
 /**
  * Voice agent for handling real-time voice conversations.
  *
- * Delegates the full audio pipeline to the @livekit/agents SDK:
- * - deepgram.STT for speech-to-text
- * - cartesia.TTS for text-to-speech
- * - Ganglia LLM for the brain (OpenClaw or Nanoclaw)
- * - voice.AgentSession orchestrates the pipeline
+ * This is a thin bridge between LiveKit's audio pipeline and the OpenClaw brain.
+ * All personality, instructions, and tools are owned by the OpenClaw agent —
+ * the voice.Agent here is an empty shell required by AgentSession.start().
+ *
+ * Pipeline: deepgram.STT → Ganglia LLM (OpenClaw) → cartesia.TTS
+ * Orchestration: voice.AgentSession handles VAD, turn detection, interruptions.
+ *
+ * Caveats of the passthrough approach:
+ * - LiveKit's built-in tool execution won't work (tools live in OpenClaw).
+ *   If LiveKit-side tools are ever needed (e.g. client-side actions like
+ *   muting/transferring), a hybrid approach with tools on both sides would
+ *   be required.
+ * - The Agent's chatCtx accumulates conversation history locally, but OpenClaw
+ *   maintains its own history. These can drift if messages are dropped or
+ *   retried. Currently harmless since OpenClaw is the source of truth.
  */
 export class VoiceAgent {
   private roomId: string;
@@ -102,9 +112,10 @@ export class VoiceAgent {
       },
     });
 
-    // Create the voice agent definition
+    // Empty shell — OpenClaw owns the personality, instructions, and tools.
+    // voice.Agent is required by AgentSession.start() but contributes nothing.
     this.agent = new voice.Agent({
-      instructions: "You are a helpful voice assistant.",
+      instructions: "",
       llm: this.llmInstance,
       stt: this.sttInstance,
       tts: this.ttsInstance,
