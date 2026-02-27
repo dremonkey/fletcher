@@ -28,7 +28,7 @@ The LiveKit channel plugin (`@openclaw/channel-livekit`) that integrates voice c
 **Tasks:**
 - [~] 001: Initialize OpenClaw channel plugin — plugin structure and OpenClaw integration done; testing remaining
 - [~] 002: Implement audio pipeline (STT/TTS) — wired to SDK + Ganglia; actual provider integration, audio track management, latency monitoring remaining
-- [ ] 003: Debug voice agent not responding (blocked by flutter-app/003)
+- [x] 003: Debug voice agent not responding ✅ — fixed via auto-dispatch (agentName + roomConfig in token)
 - [x] 004: Channel plugin approach (implementation guide)
 - [x] 005: Token generation endpoint (Sovereign Pairing) ✅
 
