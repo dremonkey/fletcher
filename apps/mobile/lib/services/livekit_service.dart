@@ -132,67 +132,115 @@ class LiveKitService extends ChangeNotifier {
       _handleDataReceived(event);
     });
 
-    // Subscribe to transcription events from the voice agent
-    _listener?.on<TranscriptionEvent>((event) {
-      _handleTranscription(event);
-    });
+    // Subscribe to transcription text streams from the voice agent (livekit-agents >= 1.0)
+    _room!.registerTextStreamHandler(
+      'lk.transcription',
+      _handleTranscriptionStream,
+    );
   }
 
   // ---------------------------------------------------------------------------
-  // Transcription handling
+  // Transcription handling (text stream protocol)
   // ---------------------------------------------------------------------------
 
-  void _handleTranscription(TranscriptionEvent event) {
-    final isLocal = event.participant.identity ==
-        _localParticipant?.identity;
+  /// Segment state tracked per (segmentId, participantIdentity) pair.
+  final Map<String, String> _segmentContent = {};
+
+  void _handleTranscriptionStream(
+      TextStreamReader reader, String participantIdentity) {
+    final info = reader.info;
+    if (info == null) return;
+
+    final attributes = info.attributes;
+    final segmentId = attributes['lk.segment_id'] ?? info.id;
+    final isLocal = participantIdentity == _localParticipant?.identity;
     final role = isLocal ? TranscriptRole.user : TranscriptRole.agent;
+    // Agent transcripts are delta-streamed (append chunks); user transcripts
+    // are full-replacement (each chunk is the complete text so far).
+    final isDelta = !isLocal;
 
-    for (final segment in event.segments) {
-      final entry = TranscriptEntry(
-        id: segment.id,
-        role: role,
-        text: segment.text,
-        isFinal: segment.isFinal,
-        timestamp: segment.firstReceivedTime,
+    reader.listen(
+      (chunk) {
+        final text = utf8.decode(chunk.content);
+        if (text.isEmpty) return;
+
+        if (isDelta) {
+          _segmentContent[segmentId] =
+              (_segmentContent[segmentId] ?? '') + text;
+        } else {
+          _segmentContent[segmentId] = text;
+        }
+
+        _upsertTranscript(
+          segmentId: segmentId,
+          role: role,
+          text: _segmentContent[segmentId]!,
+          isFinal: false,
+        );
+      },
+      onDone: () {
+        final isFinal =
+            (attributes['lk.transcription_final'] ?? '').toLowerCase() ==
+                'true';
+        final text = _segmentContent.remove(segmentId) ?? '';
+
+        _upsertTranscript(
+          segmentId: segmentId,
+          role: role,
+          text: text,
+          isFinal: isFinal,
+        );
+      },
+    );
+  }
+
+  void _upsertTranscript({
+    required String segmentId,
+    required TranscriptRole role,
+    required String text,
+    required bool isFinal,
+  }) {
+    final entry = TranscriptEntry(
+      id: segmentId,
+      role: role,
+      text: text,
+      isFinal: isFinal,
+      timestamp: DateTime.now(),
+    );
+
+    final transcript = List<TranscriptEntry>.from(_state.transcript);
+    final existingIdx = transcript.indexWhere((e) => e.id == segmentId);
+    if (existingIdx >= 0) {
+      transcript[existingIdx] = entry;
+    } else {
+      transcript.add(entry);
+    }
+
+    while (transcript.length > _maxTranscriptEntries) {
+      transcript.removeAt(0);
+    }
+
+    if (role == TranscriptRole.user) {
+      _userSubtitleClearTimer?.cancel();
+      _updateState(
+        transcript: transcript,
+        currentUserTranscript: entry,
       );
-
-      // Upsert into transcript history (match by segment id)
-      final transcript = List<TranscriptEntry>.from(_state.transcript);
-      final existingIdx = transcript.indexWhere((e) => e.id == segment.id);
-      if (existingIdx >= 0) {
-        transcript[existingIdx] = entry;
-      } else {
-        transcript.add(entry);
+      if (isFinal) {
+        _userSubtitleClearTimer = Timer(const Duration(seconds: 3), () {
+          _updateState(clearCurrentUserTranscript: true);
+        });
       }
-
-      // Cap transcript history
-      while (transcript.length > _maxTranscriptEntries) {
-        transcript.removeAt(0);
-      }
-
-      // Update current subtitle
-      if (role == TranscriptRole.user) {
-        _userSubtitleClearTimer?.cancel();
-        _updateState(
-          transcript: transcript,
-          currentUserTranscript: entry,
-        );
-        if (segment.isFinal) {
-          _userSubtitleClearTimer = Timer(const Duration(seconds: 3), () {
-            _updateState(clearCurrentUserTranscript: true);
-          });
-        }
-      } else {
-        _agentSubtitleClearTimer?.cancel();
-        _updateState(
-          transcript: transcript,
-          currentAgentTranscript: entry,
-        );
-        if (segment.isFinal) {
-          _agentSubtitleClearTimer = Timer(const Duration(seconds: 3), () {
-            _updateState(clearCurrentAgentTranscript: true);
-          });
-        }
+    } else {
+      _agentSubtitleClearTimer?.cancel();
+      _updateState(
+        transcript: transcript,
+        currentAgentTranscript: entry,
+      );
+      if (isFinal) {
+        _agentSubtitleClearTimer = Timer(const Duration(seconds: 3), () {
+          _updateState(clearCurrentAgentTranscript: true);
+        });
       }
     }
   }
@@ -410,10 +458,12 @@ class LiveKitService extends ChangeNotifier {
     _statusClearTimer?.cancel();
     _userSubtitleClearTimer?.cancel();
     _agentSubtitleClearTimer?.cancel();
+    _room?.unregisterTextStreamHandler('lk.transcription');
     _listener?.dispose();
     await _room?.disconnect();
     _room = null;
     _localParticipant = null;
+    _segmentContent.clear();
   }
 
   @override
