@@ -200,7 +200,7 @@ export default defineAgent({
     });
 
     // Start the agent session
-    const session = new voice.AgentSession();
+    const session = new voice.AgentSession({ stt, tts, llm: gangliaLlm });
     await session.start({ agent, room: ctx.room });
 
     console.log('Voice agent started, listening for speech...');
