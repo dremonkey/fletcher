@@ -18,6 +18,7 @@ set -uo pipefail
 #   --avd-name <NAME>  AVD to start if emulator offline (default: $AVD_NAME or pixel_9)
 #   --skip-build       Don't build/install APK even if missing
 #   --skip-launch      Don't launch the app even if not running
+#   --force-build      Always rebuild and reinstall APK, even if already installed
 
 # ── Configuration (env vars with defaults, overridable by flags) ──────
 
@@ -29,6 +30,7 @@ PACKAGE="com.fletcher.fletcher"
 
 SKIP_BUILD=false
 SKIP_LAUNCH=false
+FORCE_BUILD=false
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -42,6 +44,7 @@ while [[ $# -gt 0 ]]; do
     --avd-name)   AVD_NAME="$2"; shift 2 ;;
     --skip-build) SKIP_BUILD=true; shift ;;
     --skip-launch) SKIP_LAUNCH=true; shift ;;
+    --force-build) FORCE_BUILD=true; shift ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
 done
@@ -118,7 +121,7 @@ fi
 
 # ── Stage 2: APK ─────────────────────────────────────────────────────
 
-if $ADB shell pm list packages 2>/dev/null | grep -q "$PACKAGE"; then
+if [ "$FORCE_BUILD" != true ] && $ADB shell pm list packages 2>/dev/null | grep -q "$PACKAGE"; then
   echo "PASS apk: ${PACKAGE} installed"
 elif [ "$SKIP_BUILD" = true ]; then
   echo "FAIL apk: ${PACKAGE} not installed (--skip-build)"
