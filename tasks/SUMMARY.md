@@ -127,6 +127,12 @@ Signature-based authentication protocol (Ed25519) for edge devices.
 
 **Spec:** [docs/specs/07-sovereign-pairing.md](../docs/specs/07-sovereign-pairing.md)
 
+### 8. [Security](./08-security) 📋
+Hardening secrets management, auth, and dev environment security.
+
+**Tasks:**
+- [ ] 001: Generate LiveKit API secret at setup time — remove hardcoded secret from `livekit.yaml`, generate per-developer at bootstrap
+
 ## Development Path
 
 1. **Phase 1: Infrastructure** ✅
