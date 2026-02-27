@@ -27,8 +27,8 @@
     "agent:dev": "bun run scripts/run-agent.ts",
     "voice:dev": "bun run scripts/voice-agent.ts dev",
     "voice:connect": "bun run scripts/voice-agent.ts connect",
-    "dev": "bun run scripts/dev.ts",
-    "skills:install": "bun run scripts/install-skills.ts"
+    "dev": "bun run packages/tui/src/index.ts",
+    "skills:install": "bun run packages/tui/src/install-skills.ts"
   },
   "devDependencies": {
     "@clack/prompts": "^1.0.1",
