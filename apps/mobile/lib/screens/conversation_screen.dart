@@ -3,9 +3,12 @@ import '../models/conversation_state.dart';
 import '../services/livekit_service.dart';
 import '../widgets/amber_orb.dart';
 import '../widgets/artifact_viewer.dart';
+import '../widgets/audio_waveform.dart';
 import '../widgets/health_panel.dart';
 import '../widgets/mute_toggle.dart';
 import '../widgets/status_bar.dart';
+import '../widgets/transcript_drawer.dart';
+import '../widgets/transcript_subtitle.dart';
 
 class ConversationScreen extends StatefulWidget {
   final String livekitUrl;
@@ -51,6 +54,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
     super.dispose();
   }
 
+  void _openTranscriptDrawer() {
+    showTranscriptDrawer(
+      context,
+      transcript: _liveKitService.state.transcript,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = _liveKitService.state;
@@ -89,9 +99,48 @@ class _ConversationScreenState extends State<ConversationScreen> {
               ),
             ),
 
-            // Health chip + Artifact chip row
+            // Audio waveform row
             Positioned(
-              bottom: 120,
+              bottom: 220,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // User waveform
+                  AudioWaveform(
+                    amplitudes: state.userWaveform,
+                    color: const Color(0xFFF59E0B),
+                    height: 32,
+                    barCount: 15,
+                  ),
+                  const SizedBox(width: 24),
+                  // Agent waveform
+                  AudioWaveform(
+                    amplitudes: state.aiWaveform,
+                    color: const Color(0xFF6B7280),
+                    height: 32,
+                    barCount: 15,
+                  ),
+                ],
+              ),
+            ),
+
+            // Transcript subtitle
+            Positioned(
+              bottom: 150,
+              left: 0,
+              right: 0,
+              child: TranscriptSubtitle(
+                userTranscript: state.currentUserTranscript,
+                agentTranscript: state.currentAgentTranscript,
+                onTap: _openTranscriptDrawer,
+              ),
+            ),
+
+            // Health chip + Artifact chip + Transcript chip row
+            Positioned(
+              bottom: 105,
               left: 0,
               right: 0,
               child: Row(
@@ -115,6 +164,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       ),
                     ),
                   ],
+                  if (state.transcript.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    TranscriptChip(
+                      count: state.transcript.length,
+                      onTap: _openTranscriptDrawer,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -135,7 +191,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
             // Error message
             if (state.status == ConversationStatus.error)
               Positioned(
-                bottom: 120,
+                bottom: 260,
                 left: 24,
                 right: 24,
                 child: Container(
