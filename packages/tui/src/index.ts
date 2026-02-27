@@ -71,8 +71,9 @@ while (true) {
   await auditEnv();
   await confirmBeforeStart();
 
-  await startServices();
+  // Install early so Ctrl+C during startup still cleans up
   installShutdownHandler();
+  await startServices();
   const flutterProc = await deployToDevice();
 
   if (flutterProc) {

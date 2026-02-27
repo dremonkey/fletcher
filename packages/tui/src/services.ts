@@ -135,7 +135,12 @@ export async function startServices(): Promise<void> {
   ]);
 }
 
+let shutdownInstalled = false;
+
 export function installShutdownHandler(): void {
+  if (shutdownInstalled) return;
+  shutdownInstalled = true;
+
   let shuttingDown = false;
 
   const cleanup = async () => {
