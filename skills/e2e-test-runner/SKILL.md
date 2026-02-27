@@ -140,22 +140,7 @@ e2e/helpers/emu-speak.sh --file /path/to/any.wav   # arbitrary WAV file
 e2e/helpers/emu-speak.sh --tone 2                   # 440Hz sine tone (needs FFMPEG)
 ```
 
-### Generating new fixtures (one-time)
-
-When a new test needs a phrase that doesn't have a fixture yet, generate it
-once via Cartesia TTS and **commit the WAV file**:
-
-```sh
-e2e/helpers/emu-speak.sh --generate "Tell me a joke" joke-request
-git add e2e/fixtures/audio/joke-request.wav
-```
-
-**Important:**
-- Fixtures live in `e2e/fixtures/audio/<name>.wav` and MUST be committed to git.
-- The `--generate` command calls the Cartesia TTS API (requires `CARTESIA_API_KEY`
-  in `.env`). This is the ONLY time the API is called — never during test runs.
-- The script refuses to overwrite existing fixtures. Delete the file first to regenerate.
-- `CARTESIA_VOICE_ID` and `CARTESIA_MODEL` env vars can customize the voice/model.
+To create new tests and generate audio fixtures, use `/e2e-new`.
 
 ### Coordinate scaling
 
