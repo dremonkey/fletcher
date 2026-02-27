@@ -4,20 +4,28 @@
 
 When pressing Ctrl+C after starting services via the TUI, ensure all resources are cleaned up: Docker containers brought down via `docker compose down`, and the Android emulator process is terminated.
 
-## Root Cause (found)
+## Root Causes (found)
 
-The original handler was `async` and used `await spawn(...).exited` for `docker compose down`.
-When Ctrl+C is pressed in a terminal, SIGINT is sent to the **entire foreground process group**
-— both the TUI and any child processes (Flutter, emulator). The child exits, which resolves
-`await flutterProc.exited` in the main flow, and the module finishes executing. Meanwhile the
-async cleanup handler's `await proc.exited` is still pending. The race means `docker compose down`
-may never complete (or even start) before the process exits.
+### 1. Bun signal handler bug (primary)
 
-## Fix
+Bun has a bug where adding then removing a second signal handler silently
+disconnects the first handler from native signal dispatch. The JS listener list
+(`process.listeners("SIGINT")`) still reports the handler, but it never fires.
 
-Changed the cleanup handler from async to **synchronous** using `Bun.spawnSync` for
-`docker compose down`. This blocks the signal handler until docker compose finishes,
-then calls `process.exit(0)` — the main flow never gets a chance to resume.
+`@clack/prompts` spinners do exactly this: they add their own SIGINT handler on
+`start()` and remove it on `stop()`. Every spinner in `startServices()` and
+`deployToDevice()` was breaking our shutdown handler.
+
+**Fix:** `installShutdownHandler()` now re-registers (remove + add) the handler
+each time it's called. It must be called **after** all clack prompts/spinners finish.
+
+### 2. Async handler race (secondary)
+
+The original handler was `async` with `await spawn(...).exited`. When Ctrl+C sends
+SIGINT to the entire process group, child processes die too, resolving the main
+flow's await. The module finishes before the async cleanup completes.
+
+**Fix:** Cleanup uses `Bun.spawnSync` so it blocks until docker compose down completes.
 
 ## Investigation Areas
 

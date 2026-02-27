@@ -202,52 +202,61 @@ export async function startServices(): Promise<void> {
   ]);
 }
 
-let shutdownInstalled = false;
+let shuttingDown = false;
 
-export function installShutdownHandler(): void {
-  if (shutdownInstalled) return;
-  shutdownInstalled = true;
+/**
+ * Synchronous cleanup: SIGTERM children → docker compose down → SIGKILL stragglers.
+ *
+ * Must be synchronous (uses Bun.spawnSync) so it completes before the process
+ * exits — an async handler races with the main flow when child processes die
+ * from the same SIGINT.
+ */
+function cleanup(): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
 
-  let shuttingDown = false;
+  try {
+    console.log(); // newline after ^C
+    console.log("Shutting down Fletcher...");
 
-  const cleanup = () => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-
-    try {
-      console.log(); // newline after ^C
-      console.log("Shutting down Fletcher...");
-
-      // SIGTERM children first — they've already received SIGINT from the
-      // terminal so this is mostly a no-op, but covers edge cases.
-      for (const child of children) {
-        try {
-          child.kill("SIGTERM");
-        } catch {}
-      }
-
-      // Synchronously bring down docker services.  Using spawnSync guarantees
-      // this completes before the process exits — an async handler races with
-      // the main flow when child processes die from the same SIGINT.
-      Bun.spawnSync(["docker", "compose", "down"], {
-        cwd: ROOT,
-        stdout: "pipe",
-        stderr: "pipe",
-      });
-
-      // Force-kill anything still alive (emulator, flutter, etc.)
-      for (const child of children) {
-        try {
-          child.kill("SIGKILL");
-        } catch {}
-      }
-    } catch (err) {
-      console.error("Cleanup error:", err);
+    for (const child of children) {
+      try {
+        child.kill("SIGTERM");
+      } catch {}
     }
 
-    process.exit(0);
-  };
+    Bun.spawnSync(["docker", "compose", "down"], {
+      cwd: ROOT,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
 
+    for (const child of children) {
+      try {
+        child.kill("SIGKILL");
+      } catch {}
+    }
+  } catch (err) {
+    console.error("Cleanup error:", err);
+  }
+
+  process.exit(0);
+}
+
+/**
+ * (Re-)register SIGINT/SIGTERM handlers for graceful shutdown.
+ *
+ * Must be called **after** any @clack/prompts spinner or interactive prompt
+ * finishes.  Bun has a bug where adding then removing a second signal handler
+ * silently disconnects the first handler from native signal dispatch (the JS
+ * listener list still looks correct).  Clack spinners do exactly this — they
+ * add their own SIGINT handler on start() and remove it on stop().
+ *
+ * Calling this function re-registers the handler so native dispatch works again.
+ */
+export function installShutdownHandler(): void {
+  process.removeListener("SIGINT", cleanup);
+  process.removeListener("SIGTERM", cleanup);
   process.on("SIGINT", cleanup);
   process.on("SIGTERM", cleanup);
 }
