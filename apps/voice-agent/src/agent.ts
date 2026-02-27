@@ -25,6 +25,40 @@ import * as deepgram from '@livekit/agents-plugin-deepgram';
 import * as cartesia from '@livekit/agents-plugin-cartesia';
 import { createGangliaFromEnv, type GangliaLLM } from '@knittt/livekit-agent-ganglia';
 
+// ---------------------------------------------------------------------------
+// Environment validation
+// ---------------------------------------------------------------------------
+const REQUIRED_ENV = [
+  'LIVEKIT_URL',
+  'LIVEKIT_API_KEY',
+  'LIVEKIT_API_SECRET',
+  'DEEPGRAM_API_KEY',
+  'CARTESIA_API_KEY',
+] as const;
+
+const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
+if (missing.length > 0) {
+  console.error(`Missing required environment variables: ${missing.join(', ')}`);
+  process.exit(1);
+}
+
+// Ganglia-specific validation
+const gangliaType = process.env.GANGLIA_TYPE ?? 'openclaw';
+if (gangliaType === 'openclaw' && !process.env.OPENCLAW_API_KEY) {
+  console.error('GANGLIA_TYPE=openclaw requires OPENCLAW_API_KEY');
+  process.exit(1);
+}
+
+console.log('Environment validated:', {
+  LIVEKIT_URL: process.env.LIVEKIT_URL,
+  GANGLIA_TYPE: gangliaType,
+  DEEPGRAM_API_KEY: `${process.env.DEEPGRAM_API_KEY!.slice(0, 6)}...`,
+  CARTESIA_API_KEY: `${process.env.CARTESIA_API_KEY!.slice(0, 6)}...`,
+});
+
+// ---------------------------------------------------------------------------
+// Agent definition
+// ---------------------------------------------------------------------------
 export default defineAgent({
   entry: async (ctx: JobContext) => {
     await ctx.connect();
