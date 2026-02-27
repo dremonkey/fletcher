@@ -30,8 +30,8 @@ Thumbs.db
 # Nix / direnv
 .direnv/
 
-# Claude Code commands (symlinks installed by skills:install)
-.claude/commands/
+# Claude Code
+.claude/
 
 # E2E test captures
 e2e/captures/*
