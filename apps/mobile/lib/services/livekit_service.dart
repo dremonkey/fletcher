@@ -6,6 +6,12 @@ import 'package:permission_handler/permission_handler.dart';
 import '../models/conversation_state.dart';
 import 'health_service.dart';
 
+/// Max waveform samples (~30 samples at 100ms = 3s history)
+const _maxWaveformSamples = 30;
+
+/// Max transcript entries to keep in history
+const _maxTranscriptEntries = 100;
+
 class LiveKitService extends ChangeNotifier {
   Room? _room;
   LocalParticipant? _localParticipant;
@@ -19,11 +25,17 @@ class LiveKitService extends ChangeNotifier {
 
   Timer? _audioLevelTimer;
   Timer? _statusClearTimer;
+  Timer? _userSubtitleClearTimer;
+  Timer? _agentSubtitleClearTimer;
 
   final HealthService healthService = HealthService();
 
   // Buffer for reassembling chunked messages
   final Map<String, List<String?>> _chunks = {};
+
+  // Rolling waveform buffers
+  final List<double> _userWaveformBuffer = [];
+  final List<double> _aiWaveformBuffer = [];
 
   Future<bool> requestPermissions() async {
     final status = await Permission.microphone.request();
@@ -119,7 +131,75 @@ class LiveKitService extends ChangeNotifier {
     _listener?.on<DataReceivedEvent>((event) {
       _handleDataReceived(event);
     });
+
+    // Subscribe to transcription events from the voice agent
+    _listener?.on<TranscriptionEvent>((event) {
+      _handleTranscription(event);
+    });
   }
+
+  // ---------------------------------------------------------------------------
+  // Transcription handling
+  // ---------------------------------------------------------------------------
+
+  void _handleTranscription(TranscriptionEvent event) {
+    final isLocal = event.participant.identity ==
+        _localParticipant?.identity;
+    final role = isLocal ? TranscriptRole.user : TranscriptRole.agent;
+
+    for (final segment in event.segments) {
+      final entry = TranscriptEntry(
+        id: segment.id,
+        role: role,
+        text: segment.text,
+        isFinal: segment.isFinal,
+        timestamp: segment.firstReceivedTime,
+      );
+
+      // Upsert into transcript history (match by segment id)
+      final transcript = List<TranscriptEntry>.from(_state.transcript);
+      final existingIdx = transcript.indexWhere((e) => e.id == segment.id);
+      if (existingIdx >= 0) {
+        transcript[existingIdx] = entry;
+      } else {
+        transcript.add(entry);
+      }
+
+      // Cap transcript history
+      while (transcript.length > _maxTranscriptEntries) {
+        transcript.removeAt(0);
+      }
+
+      // Update current subtitle
+      if (role == TranscriptRole.user) {
+        _userSubtitleClearTimer?.cancel();
+        _updateState(
+          transcript: transcript,
+          currentUserTranscript: entry,
+        );
+        if (segment.isFinal) {
+          _userSubtitleClearTimer = Timer(const Duration(seconds: 3), () {
+            _updateState(clearCurrentUserTranscript: true);
+          });
+        }
+      } else {
+        _agentSubtitleClearTimer?.cancel();
+        _updateState(
+          transcript: transcript,
+          currentAgentTranscript: entry,
+        );
+        if (segment.isFinal) {
+          _agentSubtitleClearTimer = Timer(const Duration(seconds: 3), () {
+            _updateState(clearCurrentAgentTranscript: true);
+          });
+        }
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Ganglia data channel handling
+  // ---------------------------------------------------------------------------
 
   /// Handles data received from the voice agent via data channel
   void _handleDataReceived(DataReceivedEvent event) {
@@ -159,16 +239,16 @@ class LiveKitService extends ChangeNotifier {
     // Check if complete
     if (_chunks[transferId]!.every((c) => c != null)) {
       debugPrint('[Ganglia] Reassembling chunked message $transferId');
-      
+
       try {
         final allBytes = <int>[];
         for (final part in _chunks[transferId]!) {
           allBytes.addAll(base64Decode(part!));
         }
-        
+
         final reassembledJsonStr = utf8.decode(allBytes);
         final reassembledJson = jsonDecode(reassembledJsonStr) as Map<String, dynamic>;
-        
+
         _processGangliaEvent(reassembledJson);
       } catch (e) {
         debugPrint('[Ganglia] Failed to reassemble chunks: $e');
@@ -209,10 +289,14 @@ class LiveKitService extends ChangeNotifier {
     _updateState(artifacts: []);
   }
 
+  // ---------------------------------------------------------------------------
+  // Audio level monitoring (using Participant.audioLevel)
+  // ---------------------------------------------------------------------------
+
   void _startAudioLevelMonitoring() {
     _audioLevelTimer?.cancel();
     _audioLevelTimer = Timer.periodic(
-      const Duration(milliseconds: 50),
+      const Duration(milliseconds: 100),
       (_) => _updateAudioLevels(),
     );
   }
@@ -220,29 +304,25 @@ class LiveKitService extends ChangeNotifier {
   void _updateAudioLevels() {
     if (_room == null) return;
 
-    // Get local (user) audio level
-    double userLevel = 0.0;
-    final localAudioTrack = _localParticipant?.audioTrackPublications
-        .where((pub) => pub.track != null)
-        .firstOrNull
-        ?.track as LocalAudioTrack?;
-
-    if (localAudioTrack != null) {
-      userLevel = localAudioTrack.currentBitrate?.toDouble() ?? 0.0;
-      // Normalize - this is a rough approximation
-      userLevel = (userLevel / 100000).clamp(0.0, 1.0);
-    }
+    // Get local (user) audio level from Participant.audioLevel (server-computed, 0.0-1.0)
+    final userLevel = _localParticipant?.audioLevel ?? 0.0;
 
     // Get remote (AI) audio level
     double aiLevel = 0.0;
     for (final participant in _room!.remoteParticipants.values) {
-      for (final pub in participant.audioTrackPublications) {
-        if (pub.track != null && pub.subscribed) {
-          // Audio level from remote track
-          aiLevel = (pub.track as RemoteAudioTrack).currentBitrate?.toDouble() ?? 0.0;
-          aiLevel = (aiLevel / 100000).clamp(0.0, 1.0);
-        }
+      if (participant.audioLevel > aiLevel) {
+        aiLevel = participant.audioLevel;
       }
+    }
+
+    // Update waveform buffers
+    _userWaveformBuffer.add(userLevel);
+    if (_userWaveformBuffer.length > _maxWaveformSamples) {
+      _userWaveformBuffer.removeAt(0);
+    }
+    _aiWaveformBuffer.add(aiLevel);
+    if (_aiWaveformBuffer.length > _maxWaveformSamples) {
+      _aiWaveformBuffer.removeAt(0);
     }
 
     // Update state based on audio levels
@@ -274,6 +354,8 @@ class LiveKitService extends ChangeNotifier {
       status: newStatus,
       userAudioLevel: userLevel,
       aiAudioLevel: aiLevel,
+      userWaveform: List<double>.from(_userWaveformBuffer),
+      aiWaveform: List<double>.from(_aiWaveformBuffer),
     );
   }
 
@@ -297,6 +379,12 @@ class LiveKitService extends ChangeNotifier {
     StatusEvent? currentStatus,
     bool clearStatus = false,
     List<ArtifactEvent>? artifacts,
+    List<double>? userWaveform,
+    List<double>? aiWaveform,
+    TranscriptEntry? currentUserTranscript,
+    bool clearCurrentUserTranscript = false,
+    TranscriptEntry? currentAgentTranscript,
+    bool clearCurrentAgentTranscript = false,
   }) {
     _state = _state.copyWith(
       status: status,
@@ -307,6 +395,12 @@ class LiveKitService extends ChangeNotifier {
       currentStatus: currentStatus,
       clearStatus: clearStatus,
       artifacts: artifacts,
+      userWaveform: userWaveform,
+      aiWaveform: aiWaveform,
+      currentUserTranscript: currentUserTranscript,
+      clearCurrentUserTranscript: clearCurrentUserTranscript,
+      currentAgentTranscript: currentAgentTranscript,
+      clearCurrentAgentTranscript: clearCurrentAgentTranscript,
     );
     notifyListeners();
   }
@@ -314,6 +408,8 @@ class LiveKitService extends ChangeNotifier {
   Future<void> disconnect() async {
     _audioLevelTimer?.cancel();
     _statusClearTimer?.cancel();
+    _userSubtitleClearTimer?.cancel();
+    _agentSubtitleClearTimer?.cancel();
     _listener?.dispose();
     await _room?.disconnect();
     _room = null;
