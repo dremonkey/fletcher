@@ -37,54 +37,23 @@ function isLocalLiveKit(): boolean {
   return url.includes("localhost") || url.includes("127.0.0.1");
 }
 
-export async function startServices(): Promise<Subprocess> {
-  // 1. LiveKit infrastructure (only for local server)
+export async function startServices(): Promise<void> {
+  // 1. Start infrastructure + voice agent via docker-compose
   if (isLocalLiveKit()) {
-    await runStep("Starting LiveKit server", ["bash", "./scripts/setup.sh"]);
+    const services = ["livekit", "voice-agent"];
+    await runStep("Starting services (docker compose)", [
+      "docker", "compose", "up", "-d", ...services,
+    ]);
   }
 
-  // 2. Token generation
+  // 2. Token generation (needed for mobile client, runs on host)
   const room = env("LIVEKIT_ROOM") || DEFAULT_ROOM;
   await runStep("Generating LiveKit token", [
     "bun", "run", "scripts/generate-token.ts", "--room", room,
   ]);
-
-  // 3. Voice agent — start with piped output to check for early crash
-  const s = p.spinner();
-  s.start("Starting voice agent");
-
-  const agentMode = isLocalLiveKit() ? "dev" : "connect";
-  const agentArgs = ["bun", "run", "scripts/voice-agent.ts", agentMode];
-  if (agentMode === "connect") {
-    agentArgs.push("--room", room);
-  }
-  const agent = spawn(agentArgs, {
-    cwd: ROOT,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  children.push(agent);
-
-  // Give the agent a couple seconds to crash or stabilize
-  const earlyCrash = await Promise.race([
-    agent.exited.then((code) => code),
-    new Promise<null>((r) => setTimeout(() => r(null), 2000)),
-  ]);
-
-  if (earlyCrash !== null) {
-    const stderr = await new Response(agent.stderr).text();
-    children.splice(children.indexOf(agent), 1);
-    s.stop("Starting voice agent — failed");
-    if (stderr.trim()) p.log.error(stderr.trim());
-    p.cancel("Voice agent failed to start.");
-    process.exit(1);
-  }
-
-  s.stop("Starting voice agent — running");
-  return agent;
 }
 
-export function installShutdownHandler(agent: Subprocess): void {
+export function installShutdownHandler(): void {
   let shuttingDown = false;
 
   const cleanup = async () => {
@@ -94,14 +63,21 @@ export function installShutdownHandler(agent: Subprocess): void {
     console.log(); // newline after ^C
     p.outro("Shutting down Fletcher...");
 
-    // SIGTERM all children
+    // Stop docker-compose services
+    const proc = spawn(["docker", "compose", "down"], {
+      cwd: ROOT,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    await proc.exited;
+
+    // SIGTERM any remaining children
     for (const child of children) {
       try {
         child.kill("SIGTERM");
       } catch {}
     }
 
-    // Give processes 1s to exit gracefully, then SIGKILL
     await new Promise((r) => setTimeout(r, 1000));
     for (const child of children) {
       try {
