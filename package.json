@@ -5,7 +5,7 @@
   "description": "Voice-first bridge for OpenClaw using LiveKit",
   "repository": "dremonkey/openclaw-plugin-livekit",
   "license": "MIT",
-  "workspaces": ["packages/*"],
+  "workspaces": ["packages/*", "apps/voice-agent"],
   "bun": {
     "install": {
       "linker": "isolated"
@@ -25,8 +25,8 @@
     "mobile:build:ios": "cd apps/mobile && flutter build ios",
     "token:generate": "bun run scripts/generate-token.ts",
     "agent:dev": "bun run scripts/run-agent.ts",
-    "voice:dev": "bun run scripts/voice-agent.ts dev",
-    "voice:connect": "bun run scripts/voice-agent.ts connect",
+    "voice:dev": "bun run apps/voice-agent/src/agent.ts dev",
+    "voice:connect": "bun run apps/voice-agent/src/agent.ts connect",
     "dev": "bun run packages/tui/src/index.ts",
     "skills:install": "bun run packages/tui/src/install-skills.ts"
   },

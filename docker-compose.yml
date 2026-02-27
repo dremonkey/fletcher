@@ -17,3 +17,14 @@ services:
       LIVEKIT_URL: http://livekit:7880
       LIVEKIT_API_KEY: devkey
       LIVEKIT_API_SECRET: secret
+
+  voice-agent:
+    build:
+      context: .
+      dockerfile: apps/voice-agent/Dockerfile
+    depends_on:
+      - livekit
+    env_file: .env
+    environment:
+      LIVEKIT_URL: ws://livekit:7880
+    restart: unless-stopped
