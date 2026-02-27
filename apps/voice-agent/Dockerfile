@@ -5,6 +5,8 @@ WORKDIR /app
 FROM base AS install
 COPY package.json bun.lock ./
 COPY packages/livekit-agent-ganglia/package.json packages/livekit-agent-ganglia/
+COPY packages/openclaw-channel-livekit/package.json packages/openclaw-channel-livekit/
+COPY packages/tui/package.json packages/tui/
 COPY apps/voice-agent/package.json apps/voice-agent/
 RUN bun install --frozen-lockfile
 
