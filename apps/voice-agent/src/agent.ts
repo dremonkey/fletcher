@@ -6,8 +6,8 @@
  * handles all conversation logic, tools, and prompting.
  *
  * Usage:
- *   GANGLIA_TYPE=openclaw bun run apps/voice-agent/src/agent.ts dev
- *   GANGLIA_TYPE=nanoclaw bun run apps/voice-agent/src/agent.ts connect --room my-room
+ *   bun run apps/voice-agent/src/agent.ts dev          # register as worker, accept dispatches
+ *   bun run apps/voice-agent/src/agent.ts connect --room my-room  # join a specific room directly
  *
  * Environment variables:
  *   LIVEKIT_URL - LiveKit server URL
@@ -79,6 +79,7 @@ export default defineAgent({
 cli.runApp(
   new ServerOptions({
     agent: import.meta.filename,
+    agentName: 'voice-agent',
     initializeProcessTimeout: 60_000,
   }),
 );
