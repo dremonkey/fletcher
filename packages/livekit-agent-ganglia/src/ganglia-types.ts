@@ -27,10 +27,10 @@ export interface GangliaSessionInfo {
  * OpenClaw backend configuration.
  */
 export interface OpenClawConfig {
-  /** Gateway endpoint URL (default: http://localhost:8080) */
-  endpoint: string;
+  /** Gateway base URL (default: http://localhost:8080) */
+  baseUrl: string;
   /** API key for authentication */
-  token: string;
+  apiKey: string;
 }
 
 /**

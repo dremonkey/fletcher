@@ -55,8 +55,8 @@ export function registerGanglia(
  * const llm = await createGanglia({
  *   type: 'openclaw',
  *   openclaw: {
- *     endpoint: 'http://localhost:8080',
- *     token: process.env.OPENCLAW_API_KEY!,
+ *     baseUrl: 'http://localhost:8080',
+ *     apiKey: process.env.OPENCLAW_API_KEY!,
  *   },
  * });
  * ```
@@ -105,8 +105,8 @@ export async function createGangliaFromEnv(): Promise<GangliaLLM> {
     return createGanglia({
       type: 'openclaw',
       openclaw: {
-        endpoint: process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:8080',
-        token: process.env.OPENCLAW_API_KEY || '',
+        baseUrl: process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:8080',
+        apiKey: process.env.OPENCLAW_API_KEY || '',
       },
     });
   }
