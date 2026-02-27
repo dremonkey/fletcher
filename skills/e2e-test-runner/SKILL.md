@@ -1,12 +1,13 @@
-# /e2e
+---
+name: e2e
+description: Run end-to-end tests for the Fletcher mobile app via adb and vision. Use when asked to run, execute, or verify e2e tests.
+argument-hint: [test-number]
+disable-model-invocation: true
+---
 
-Run end-to-end tests for the Fletcher mobile app via adb and vision.
+Run e2e test $ARGUMENTS.
 
-## Trigger
-
-- "run e2e test NNN" (e.g., "run e2e test 001")
-- "run all e2e tests"
-- "/e2e" or "/e2e 001"
+If no argument is provided, run all tests.
 
 ## Workflow
 
@@ -140,104 +141,13 @@ e2e/helpers/emu-speak.sh --file /path/to/any.wav   # arbitrary WAV file
 e2e/helpers/emu-speak.sh --tone 2                   # 440Hz sine tone (needs FFMPEG)
 ```
 
-### Generating new fixtures (one-time)
-
-When a new test needs a phrase that doesn't have a fixture yet, generate it
-once via Cartesia TTS and **commit the WAV file**:
-
-```sh
-e2e/helpers/emu-speak.sh --generate "Tell me a joke" joke-request
-git add e2e/fixtures/audio/joke-request.wav
-```
-
-**Important:**
-- Fixtures live in `e2e/fixtures/audio/<name>.wav` and MUST be committed to git.
-- The `--generate` command calls the Cartesia TTS API (requires `CARTESIA_API_KEY`
-  in `.env`). This is the ONLY time the API is called — never during test runs.
-- The script refuses to overwrite existing fixtures. Delete the file first to regenerate.
-- `CARTESIA_VOICE_ID` and `CARTESIA_MODEL` env vars can customize the voice/model.
+To create new tests and generate audio fixtures, use `/e2e-new`.
 
 ### Coordinate scaling
 
 The emulator's physical resolution is 1080x2424 but screenshots are captured at
 half scale (540x1200). When identifying tap coordinates from screenshots, **double
 both X and Y** before passing to `adb shell input tap`.
-
-## Creating new tests
-
-When the user asks to create a new e2e test (e.g., "add an e2e test for X"):
-
-### 1. Determine the next test number
-
-Check existing files in `e2e/tests/` and use the next sequential number (e.g., if
-003 exists, the new test is 004).
-
-### 2. Write the test file
-
-Create `e2e/tests/NNN-<slug>.md` following this format:
-
-```markdown
-# <Title>
-
-<One-line description of what the test verifies.>
-
-## Preconditions
-- Emulator is running (`adb devices` shows the device)
-- <Any app state required, e.g., "Fletcher app is in idle ("Listening") state">
-
-## Steps
-
-### Step 1: <description>
-
-<Prose instructions for what to do and any timing (e.g., "Wait 2 seconds").>
-
-\`\`\`sh
-<adb or helper command>
-\`\`\`
-
-**Expect:**
-- <Visual assertion about what the screenshot should show>
-- <Another assertion>
-
-### Step 2: <description>
-...
-```
-
-**Format rules:**
-- Title = `# <Name>`, matches the filename slug
-- `## Preconditions` — list what must be true before the test runs
-- `### Step N: <description>` — sequential steps
-- Code blocks tagged `` ```sh `` — commands the runner will execute
-- `**Expect:**` — bulleted visual assertions evaluated against screenshots
-- Timing: use "Wait N seconds" (fixed) or "Wait up to N seconds" (poll loop)
-- Tap targets: use `<X> <Y>` placeholders — the runner resolves coordinates visually
-- Captures: use `e2e/helpers/emu-capture.sh NNN-stepN-<label>` for screenshots
-- Audio: use `e2e/helpers/emu-speak.sh <fixture-name>` to inject speech
-
-### 3. Generate audio fixtures (if needed)
-
-If the test requires the user to "speak", generate the fixture WAV and commit it:
-
-```sh
-e2e/helpers/emu-speak.sh --generate "the phrase to speak" fixture-name
-git add e2e/fixtures/audio/fixture-name.wav
-```
-
-Then reference it in the test step:
-
-```sh
-e2e/helpers/emu-speak.sh fixture-name
-```
-
-### 4. Validate by running the test
-
-Run the new test to verify it works:
-
-```sh
-# This triggers the runner workflow above
-```
-
-Use `/e2e NNN` to execute just the new test.
 
 ## Token-saving tips
 

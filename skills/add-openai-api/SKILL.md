@@ -1,10 +1,14 @@
-# /add-openai-api
+---
+name: add-openai-api
+description: Add an OpenAI-compatible HTTP API layer to Nanoclaw for voice integration with Fletcher.
+disable-model-invocation: true
+---
 
-Add an OpenAI-compatible HTTP API layer to Nanoclaw for voice integration with Fletcher.
+Add an OpenAI-compatible HTTP API to Nanoclaw so Fletcher can use it as a brain backend.
 
 ## Overview
 
-This skill adds an HTTP server to Nanoclaw that exposes a `/v1/chat/completions` endpoint compatible with the OpenAI API. This enables Fletcher (the LiveKit voice agent) to use Nanoclaw as a brain backend, just like it uses OpenClaw.
+This skill adds an HTTP server to Nanoclaw exposing a `/v1/chat/completions` endpoint compatible with the OpenAI API. This enables Fletcher (the LiveKit voice agent) to use Nanoclaw as a brain backend, just like it uses OpenClaw.
 
 ## Prerequisites
 
@@ -16,329 +20,31 @@ This skill adds an HTTP server to Nanoclaw that exposes a `/v1/chat/completions`
 
 ### 1. `src/api/server.ts`
 
-Create the HTTP server with the OpenAI-compatible endpoint:
+Create the HTTP server with the OpenAI-compatible endpoint. See [server-example.ts](server-example.ts) for the full implementation.
 
-```typescript
-import { Hono } from 'hono';
-import { stream } from 'hono/streaming';
-import { cors } from 'hono/cors';
-import { loadCrossChannelHistory } from './history';
-import { runConversation } from '../brain/conversation'; // Adjust path to your conversation runner
-
-const app = new Hono();
-
-// Enable CORS for local development
-app.use('/*', cors());
-
-// Health check
-app.get('/health', (c) => c.json({ status: 'ok' }));
-
-// OpenAI-compatible chat completions endpoint
-app.post('/v1/chat/completions', async (c) => {
-  const body = await c.req.json();
-  const channelJid = c.req.header('X-Nanoclaw-Channel') || 'lk:unknown';
-
-  const { messages, stream: shouldStream = true } = body;
-
-  // Load cross-channel history for context
-  const historyMessages = await loadCrossChannelHistory(100);
-
-  // Combine history with incoming messages
-  const fullContext = [...historyMessages, ...messages];
-
-  if (!shouldStream) {
-    // Non-streaming response (rarely used for voice)
-    const response = await runConversationNonStreaming(fullContext, channelJid);
-    return c.json({
-      id: `chatcmpl-${Date.now()}`,
-      object: 'chat.completion',
-      created: Math.floor(Date.now() / 1000),
-      model: 'nanoclaw',
-      choices: [{
-        index: 0,
-        message: { role: 'assistant', content: response },
-        finish_reason: 'stop'
-      }],
-      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
-    });
-  }
-
-  // Streaming SSE response
-  c.header('Content-Type', 'text/event-stream');
-  c.header('Cache-Control', 'no-cache');
-  c.header('Connection', 'keep-alive');
-
-  return stream(c, async (stream) => {
-    const chatId = `chatcmpl-${Date.now()}`;
-
-    try {
-      // Run conversation with streaming callback
-      await runConversationStreaming(fullContext, channelJid, {
-        onStatus: async (action: string, detail?: string) => {
-          // Extended event: status updates for voice UX
-          const event = {
-            type: 'status',
-            action,
-            detail
-          };
-          await stream.write(`data: ${JSON.stringify(event)}\n\n`);
-        },
-
-        onArtifact: async (artifactType: string, data: Record<string, unknown>) => {
-          // Extended event: visual artifacts (not spoken)
-          const event = {
-            type: 'artifact',
-            artifact_type: artifactType,
-            ...data
-          };
-          await stream.write(`data: ${JSON.stringify(event)}\n\n`);
-        },
-
-        onContent: async (delta: string) => {
-          // Standard OpenAI format: content to be spoken
-          const chunk = {
-            id: chatId,
-            object: 'chat.completion.chunk',
-            created: Math.floor(Date.now() / 1000),
-            model: 'nanoclaw',
-            choices: [{
-              index: 0,
-              delta: { content: delta },
-              finish_reason: null
-            }]
-          };
-          await stream.write(`data: ${JSON.stringify(chunk)}\n\n`);
-        },
-
-        onToolCall: async (name: string, args: Record<string, unknown>) => {
-          // Emit status for tool calls
-          const event = {
-            type: 'status',
-            action: name,
-            detail: JSON.stringify(args)
-          };
-          await stream.write(`data: ${JSON.stringify(event)}\n\n`);
-        }
-      });
-
-      // Send completion marker
-      await stream.write('data: [DONE]\n\n');
-    } catch (error) {
-      console.error('Streaming error:', error);
-      const errorEvent = {
-        type: 'error',
-        message: error instanceof Error ? error.message : 'Unknown error'
-      };
-      await stream.write(`data: ${JSON.stringify(errorEvent)}\n\n`);
-      await stream.write('data: [DONE]\n\n');
-    }
-  });
-});
-
-export function startApiServer(port: number): void {
-  console.log(`Starting Nanoclaw API server on port ${port}`);
-  Bun.serve({
-    port,
-    fetch: app.fetch
-  });
-  console.log(`Nanoclaw API listening at http://localhost:${port}`);
-  console.log(`OpenAI-compatible endpoint: POST http://localhost:${port}/v1/chat/completions`);
-}
-
-export { app };
-```
+Key points:
+- Uses Hono as the HTTP framework
+- CORS enabled for local development
+- Health check at `GET /health`
+- Chat completions at `POST /v1/chat/completions`
+- Supports both streaming (SSE) and non-streaming responses
+- Reads `X-Nanoclaw-Channel` header for channel JID
 
 ### 2. `src/api/history.ts`
 
-Create the cross-channel history loader:
+Create the cross-channel history loader. See [history-example.ts](history-example.ts) for the full implementation.
 
-```typescript
-import { getDatabase } from '../db'; // Adjust path to your database module
-
-export interface HistoryMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  channel?: string;
-  timestamp?: number;
-}
-
-/**
- * Load cross-channel message history.
- *
- * Since Nanoclaw is single-user, all messages belong to the same user.
- * We load recent messages from ALL channels to provide full context.
- *
- * @param limit - Maximum number of messages to load (default: 100)
- * @returns Array of messages formatted for Claude conversation
- */
-export async function loadCrossChannelHistory(limit: number = 100): Promise<HistoryMessage[]> {
-  const db = getDatabase();
-
-  // Load all recent messages across all channels
-  // Messages are stored with chat_jid prefixes like:
-  // - WhatsApp: 1234567890@s.whatsapp.net
-  // - Telegram: tg:123456789
-  // - LiveKit/Voice: lk:participant-id
-  //
-  // Note: Nanoclaw uses is_from_me (0=user, 1=assistant) not a role column
-  const rows = db.query(`
-    SELECT
-      chat_jid,
-      is_from_me,
-      content,
-      timestamp
-    FROM messages
-    ORDER BY timestamp DESC
-    LIMIT ?
-  `).all(limit) as Array<{
-    chat_jid: string;
-    is_from_me: number;
-    content: string;
-    timestamp: string;
-  }>;
-
-  // Reverse to get chronological order
-  const messages = rows.reverse();
-
-  return messages.map(row => ({
-    role: row.is_from_me ? 'assistant' : 'user',
-    content: row.content,
-    channel: extractChannelFromJid(row.chat_jid),
-    timestamp: parseInt(row.timestamp, 10)
-  }));
-}
-
-/**
- * Store a message from the API channel.
- *
- * @param chatJid - The JID for this session (e.g., "lk:participant-id")
- * @param isFromMe - Whether the message is from the assistant (true) or user (false)
- * @param content - Message content
- */
-export async function storeApiMessage(
-  chatJid: string,
-  isFromMe: boolean,
-  content: string
-): Promise<void> {
-  const db = getDatabase();
-  const id = `api-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-
-  db.run(`
-    INSERT INTO messages (id, chat_jid, sender, content, timestamp, is_from_me)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `, [id, chatJid, isFromMe ? 'assistant' : 'user', content, Date.now().toString(), isFromMe ? 1 : 0]);
-}
-
-/**
- * Extract channel type from chat_jid.
- */
-function extractChannelFromJid(chatJid: string): string {
-  if (chatJid.includes('@s.whatsapp.net')) return 'whatsapp';
-  if (chatJid.startsWith('tg:')) return 'telegram';
-  if (chatJid.startsWith('lk:')) return 'livekit';
-  return 'unknown';
-}
-
-/**
- * Format history messages with channel context for Claude.
- *
- * This helps Claude understand the multi-channel nature of the conversation.
- */
-export function formatHistoryForClaude(messages: HistoryMessage[]): string {
-  return messages.map(msg => {
-    const channelTag = msg.channel ? `[${msg.channel}] ` : '';
-    return `${channelTag}${msg.role}: ${msg.content}`;
-  }).join('\n');
-}
-```
+Key points:
+- Loads recent messages from ALL channels (WhatsApp, Telegram, LiveKit)
+- Single-user system — all messages belong to the same user
+- Maps `is_from_me` (0/1) to `user`/`assistant` roles
+- Stores API messages with `lk:` JID prefix
 
 ### 3. `src/api/types.ts`
 
-Create shared types for the API:
+Create shared types for the API. See [types-example.ts](types-example.ts) for the full implementation.
 
-```typescript
-/**
- * Status event types for voice UX feedback.
- * These are sent during long-running operations to indicate what's happening.
- */
-export interface StatusEvent {
-  type: 'status';
-  action: StatusAction;
-  detail?: string;
-  file?: string;
-  query?: string;
-}
-
-export type StatusAction =
-  | 'thinking'
-  | 'searching_files'
-  | 'reading_file'
-  | 'writing_file'
-  | 'web_search'
-  | 'executing_command'
-  | 'analyzing';
-
-/**
- * Artifact event types for visual content (not spoken).
- * These are sent to the Flutter app via LiveKit data channel.
- */
-export interface ArtifactEvent {
-  type: 'artifact';
-  artifact_type: ArtifactType;
-  file?: string;
-  path?: string;
-  content?: string;
-  diff?: string;
-  language?: string;
-  query?: string;
-  results?: unknown[];
-}
-
-export type ArtifactType =
-  | 'diff'
-  | 'code'
-  | 'file'
-  | 'search_results'
-  | 'image';
-
-/**
- * Content event (standard OpenAI delta format).
- * This content is spoken via TTS.
- */
-export interface ContentEvent {
-  type: 'content';
-  delta: string;
-}
-
-/**
- * Streaming callbacks for conversation runner.
- */
-export interface StreamCallbacks {
-  onStatus: (action: StatusAction, detail?: string) => Promise<void>;
-  onArtifact: (artifactType: ArtifactType, data: Record<string, unknown>) => Promise<void>;
-  onContent: (delta: string) => Promise<void>;
-  onToolCall: (name: string, args: Record<string, unknown>) => Promise<void>;
-}
-
-/**
- * OpenAI-compatible chat message format.
- */
-export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-}
-
-/**
- * OpenAI-compatible chat completion request.
- */
-export interface ChatCompletionRequest {
-  model?: string;
-  messages: ChatMessage[];
-  stream?: boolean;
-  temperature?: number;
-  max_tokens?: number;
-}
-```
+Defines: `StatusEvent`, `ArtifactEvent`, `ContentEvent`, `StreamCallbacks`, `ChatMessage`, `ChatCompletionRequest`
 
 ## Files to Modify
 
@@ -347,11 +53,9 @@ export interface ChatCompletionRequest {
 Add API server startup to the main entry point:
 
 ```typescript
-// Add this import at the top
 import { startApiServer } from './api/server';
 import { config } from './config';
 
-// Add this in your startup sequence (after database init, before/alongside other channels)
 if (config.API_PORT) {
   startApiServer(config.API_PORT);
 }
@@ -362,13 +66,11 @@ if (config.API_PORT) {
 Add API configuration:
 
 ```typescript
-// Add to your config interface
 export interface Config {
   // ... existing config
   API_PORT: number | null;
 }
 
-// Add to config loading
 export const config: Config = {
   // ... existing config
   API_PORT: process.env.API_PORT ? parseInt(process.env.API_PORT, 10) : 18789,
@@ -377,64 +79,7 @@ export const config: Config = {
 
 ## Integration with Conversation Runner
 
-The API server needs to integrate with your existing conversation runner. You'll need to modify your conversation runner to accept streaming callbacks.
-
-### Example: Adapting an Existing Runner
-
-If your current conversation runner looks like this:
-
-```typescript
-// Before
-export async function runConversation(messages: Message[]): Promise<string> {
-  const response = await claude.messages.create({...});
-  return response.content[0].text;
-}
-```
-
-Add a streaming version:
-
-```typescript
-// After - add streaming support
-export async function runConversationStreaming(
-  messages: Message[],
-  channelJid: string,
-  callbacks: StreamCallbacks
-): Promise<void> {
-  // Store incoming user message
-  const userMessage = messages[messages.length - 1];
-  if (userMessage.role === 'user') {
-    await storeApiMessage(channelJid, false, userMessage.content);
-  }
-
-  let fullResponse = '';
-
-  // Use Claude's streaming API
-  const stream = await claude.messages.stream({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 4096,
-    messages: messages.map(m => ({ role: m.role, content: m.content })),
-    // ... your existing config
-  });
-
-  for await (const event of stream) {
-    if (event.type === 'content_block_delta') {
-      const delta = event.delta;
-      if (delta.type === 'text_delta') {
-        fullResponse += delta.text;
-        await callbacks.onContent(delta.text);
-      }
-    }
-
-    // Handle tool calls if you support them
-    if (event.type === 'content_block_start' && event.content_block.type === 'tool_use') {
-      await callbacks.onToolCall(event.content_block.name, {});
-    }
-  }
-
-  // Store assistant response
-  await storeApiMessage(channelJid, true, fullResponse);
-}
-```
+Adapt your existing conversation runner to accept streaming callbacks. See [streaming-integration.md](streaming-integration.md) for a before/after example.
 
 ## Environment Variables
 
@@ -446,7 +91,7 @@ export async function runConversationStreaming(
 
 ### Starting the API
 
-After applying this skill, start Nanoclaw normally. The API server will start alongside other channels:
+After applying this skill, start Nanoclaw normally. The API server starts alongside other channels:
 
 ```bash
 bun run src/index.ts
@@ -465,199 +110,35 @@ curl http://localhost:18789/health
 curl -X POST http://localhost:18789/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "X-Nanoclaw-Channel: lk:test-user" \
-  -d '{
-    "model": "nanoclaw",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "stream": false
-  }'
+  -d '{"model": "nanoclaw", "messages": [{"role": "user", "content": "Hello!"}], "stream": false}'
 
 # Chat completion (streaming)
 curl -X POST http://localhost:18789/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "X-Nanoclaw-Channel: lk:test-user" \
-  -d '{
-    "model": "nanoclaw",
-    "messages": [{"role": "user", "content": "What reminders do I have?"}],
-    "stream": true
-  }'
+  -d '{"model": "nanoclaw", "messages": [{"role": "user", "content": "What reminders do I have?"}], "stream": true}'
 ```
 
 ### Using with Fletcher
-
-Configure Fletcher to use Nanoclaw:
 
 ```bash
 export GANGLIA_TYPE=nanoclaw
 export NANOCLAW_URL=http://localhost:18789
 ```
 
-## Extended Event Format
+## Additional resources
 
-### Status Events
-
-Emitted during long-running operations to provide feedback:
-
-```json
-{"type": "status", "action": "searching_files", "detail": "src/**/*.ts"}
-{"type": "status", "action": "reading_file", "file": "src/utils.ts"}
-{"type": "status", "action": "web_search", "query": "typescript best practices"}
-{"type": "status", "action": "thinking"}
-```
-
-Fletcher routes these to:
-- Visualizer state (shows "working" indicator)
-- Optional TTS ("Let me search for that...")
-
-### Artifact Events
-
-Emitted for visual content that shouldn't be spoken:
-
-```json
-{"type": "artifact", "artifact_type": "diff", "file": "src/utils.ts", "diff": "@@ -10,3 +10,5 @@..."}
-{"type": "artifact", "artifact_type": "code", "language": "typescript", "content": "function foo() {...}"}
-{"type": "artifact", "artifact_type": "file", "path": "src/utils.ts", "content": "..."}
-{"type": "artifact", "artifact_type": "search_results", "query": "...", "results": [...]}
-```
-
-Fletcher routes these to:
-- LiveKit data channel -> Flutter app
-- Rendered as diff viewer, code blocks, etc.
-
-### Content Events
-
-Standard OpenAI format, spoken via TTS:
-
-```json
-{"id": "chatcmpl-xxx", "choices": [{"delta": {"content": "Hello!"}}]}
-```
-
-## Cross-Channel Context
-
-The API automatically loads history from all channels. Example flow:
-
-```
-[WhatsApp 9:00am] User: "Remind me to call mom tomorrow at 5pm"
-[WhatsApp 9:01am] Bot:  "I'll remind you to call mom tomorrow at 5pm"
-
-[Voice 2:00pm via Fletcher]
-User: "What reminders do I have?"
-# API loads WhatsApp history, provides context to Claude
-Bot: "You have one reminder: call mom tomorrow at 5pm"
-```
-
-## Security Notes
-
-- The API listens on localhost by default
-- No authentication (single-user system)
-- For remote access, use a reverse proxy with authentication
-- Do not expose directly to the internet
-
-## Limitations
-
-### User-Initiated Only
-
-This API integration supports **inbound requests only** - the user must initiate voice conversations. Nanoclaw cannot proactively "call" the user.
-
-**What works:**
-- User opens app → connects to LiveKit → speaks → Nanoclaw responds
-- User asks "Any reminders?" → Nanoclaw reads pending reminders
-- User says "What's on my calendar?" → Nanoclaw provides schedule
-
-**What doesn't work:**
-- Wake-up alarm that calls the user at 8am
-- Proactive reminder that interrupts the user
-- Nanoclaw initiating a voice conversation
-
-This is the same limitation as other Nanoclaw channels (WhatsApp, Telegram) - they respond to messages but don't initiate conversations.
-
-### Workarounds for Proactive Voice
-
-If you need Nanoclaw to proactively reach the user via voice, consider:
-
-| Approach | How It Works | Requirements |
-|----------|--------------|--------------|
-| **Push + User Action** | Send push notification, user taps to connect, then Nanoclaw speaks | FCM/APNs integration |
-| **Background Connection** | App stays connected to LiveKit, Nanoclaw sends when ready | Background audio permissions, battery impact |
-| **Phone Call** | Use Twilio to place actual phone call | Twilio account, phone number, per-call costs |
-| **Scheduled Check-in** | User configures app to auto-connect at certain times | App scheduling, user opt-in |
-
-These require additional infrastructure beyond this API skill.
-
-### No Outbound Webhook
-
-The API does not provide a callback/webhook mechanism for Nanoclaw to notify Fletcher when it has something to say. Communication is strictly request-response.
-
-### No Dedicated Channel UI
-
-Voice conversations are stored in the `messages` table with `lk:` JID prefix, but there's no dedicated UI for viewing transcripts.
-
-**What's stored:**
-```sql
--- Voice messages are persisted like any other channel
-SELECT * FROM messages WHERE chat_jid LIKE 'lk:%';
-
--- Example rows:
--- | chat_jid  | is_from_me | content              | timestamp   |
--- |-----------|------------|----------------------|-------------|
--- | lk:alice  | 0          | What time is it?     | 1234567890  |
--- | lk:alice  | 1          | It's 3:45 PM.        | 1234567891  |
-```
-
-**What a transcript UI would need:**
-
-| Component | Data Available? | Notes |
-|-----------|-----------------|-------|
-| Message text | ✅ Yes | Stored in `content` column |
-| Speaker (user/assistant) | ✅ Yes | `is_from_me` column (0=user, 1=assistant) |
-| Timestamp | ✅ Yes | `timestamp` column |
-| Participant identity | ✅ Yes | Extracted from `chat_jid` (e.g., `lk:alice` → `alice`) |
-| Channel type label | ⚠️ Derive | UI would map `lk:` prefix → "Voice" label |
-| Audio playback | ❌ No | Audio not stored, only transcriptions |
-| Tool calls / artifacts | ❌ No | Status/artifact events not persisted to DB |
-| Voice activity visualization | ❌ No | No audio waveforms or timing data |
-
-**If building a transcript UI, consider:**
-
-1. **Query pattern:**
-   ```sql
-   SELECT * FROM messages
-   WHERE chat_jid LIKE 'lk:%'
-   ORDER BY timestamp DESC;
-   ```
-
-2. **Channel detection:**
-   ```typescript
-   function getChannelType(chatJid: string): string {
-     if (chatJid.includes('@s.whatsapp.net')) return 'whatsapp';
-     if (chatJid.startsWith('tg:')) return 'telegram';
-     if (chatJid.startsWith('lk:')) return 'voice';
-     return 'unknown';
-   }
-   ```
-
-3. **Optional: Store artifacts** - If you want tool results visible in transcript, modify `storeApiMessage()` to also persist artifact events to a separate table.
+- For server, history, and types implementation code, see [server-example.ts](server-example.ts), [history-example.ts](history-example.ts), [types-example.ts](types-example.ts)
+- For streaming integration guide, see [streaming-integration.md](streaming-integration.md)
+- For extended event format and cross-channel context docs, see [reference.md](reference.md)
 
 ## Dependencies
-
-Add to your `package.json`:
-
-```json
-{
-  "dependencies": {
-    "hono": "^4.0.0"
-  }
-}
-```
-
-Install:
 
 ```bash
 bun add hono
 ```
 
 ## Verification Checklist
-
-After applying this skill, verify:
 
 - [ ] `bun run src/index.ts` starts without errors
 - [ ] `curl http://localhost:18789/health` returns `{"status":"ok"}`
