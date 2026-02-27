@@ -14,6 +14,7 @@ RUN bun install --frozen-lockfile
 FROM install AS build
 COPY tsconfig.base.json ./
 COPY packages/livekit-agent-ganglia/ packages/livekit-agent-ganglia/
+COPY apps/voice-agent/ apps/voice-agent/
 RUN cd packages/livekit-agent-ganglia && bun run build
 
 # Runtime
