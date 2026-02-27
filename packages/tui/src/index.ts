@@ -56,7 +56,14 @@ while (true) {
   }
 
   if (action === "deploy") {
-    await deployToDevice();
+    const flutterProc = await deployToDevice();
+    if (flutterProc) {
+      installShutdownHandler(flutterProc);
+      p.note("Flutter running with hot reload. Press 'r' to reload, Ctrl+C to stop.");
+      await flutterProc.exited;
+      p.outro("Flutter exited.");
+      break;
+    }
     continue;
   }
 
@@ -66,10 +73,13 @@ while (true) {
 
   const agent = await startServices();
   installShutdownHandler(agent);
+  const flutterProc = await deployToDevice();
 
-  await deployToDevice();
-
-  p.note("Voice agent is running. Press Ctrl+C to stop.", "Fletcher is ready");
+  if (flutterProc) {
+    p.note("Voice agent + Flutter running. Press 'r' for hot reload, Ctrl+C to stop.", "Fletcher is ready");
+  } else {
+    p.note("Voice agent is running. Press Ctrl+C to stop.", "Fletcher is ready");
+  }
 
   pipeStream(agent.stdout as ReadableStream<Uint8Array>, process.stdout);
   pipeStream(agent.stderr as ReadableStream<Uint8Array>, process.stderr);
