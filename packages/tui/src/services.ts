@@ -85,7 +85,7 @@ async function waitForPort(host: string, port: number, timeoutMs: number = 30_00
 }
 
 /**
- * Wait for the voice-agent container to log "worker registered", indicating
+ * Wait for the voice-agent container to log "registered worker", indicating
  * it has successfully connected to the LiveKit server and is ready to receive jobs.
  */
 async function waitForAgentRegistration(timeoutMs: number = 30_000): Promise<boolean> {
@@ -97,7 +97,7 @@ async function waitForAgentRegistration(timeoutMs: number = 30_000): Promise<boo
     );
     const output = await new Response(proc.stdout).text();
     await proc.exited;
-    if (output.includes("worker registered")) return true;
+    if (output.includes("registered worker")) return true;
     await new Promise((r) => setTimeout(r, 1000));
   }
   return false;
