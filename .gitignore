@@ -33,6 +33,10 @@ Thumbs.db
 # Claude Code
 .claude/
 
+# Docker build staleness markers
+.docker-build-hash
+.docker-pull-timestamp
+
 # E2E test captures
 e2e/captures/*
 !e2e/captures/.gitkeep
