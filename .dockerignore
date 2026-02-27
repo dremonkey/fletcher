@@ -1,0 +1,9 @@
+node_modules/
+.git/
+.claude/
+apps/mobile/
+*.env
+.env*
+dist/
+*.log
+.DS_Store

@@ -1,0 +1,16 @@
+{
+  "name": "@fletcher/voice-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LiveKit voice agent runner with ganglia LLM backend",
+  "scripts": {
+    "start": "bun run src/agent.ts dev",
+    "dev": "bun run src/agent.ts dev"
+  },
+  "dependencies": {
+    "@knittt/livekit-agent-ganglia": "workspace:*",
+    "@livekit/agents": "^1.0.43",
+    "@livekit/agents-plugin-deepgram": "^1.0.0",
+    "@livekit/agents-plugin-cartesia": "^1.0.0"
+  }
+}
