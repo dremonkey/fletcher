@@ -46,4 +46,4 @@ e2e/helpers/emu-capture.sh 001-step3-idle
 - The orb is fully visible with a breathing animation glow
 - No error message is displayed below the orb
 - The mute toggle button is visible at the bottom center (gray circle with mic icon)
-- The "Diagnostics" chip is visible near the bottom-left area
+- The "Diagnostics" chip is visible in a centered row above the mute toggle

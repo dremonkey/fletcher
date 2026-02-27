@@ -261,6 +261,14 @@ class ConversationState {
   /// List of artifacts received from ganglia (code, diffs, etc.)
   final List<ArtifactEvent> artifacts;
 
+  /// Rolling waveform buffers for visualization (~30 samples = 3s at 100ms)
+  final List<double> userWaveform;
+  final List<double> aiWaveform;
+
+  /// Current in-progress transcriptions for subtitle display
+  final TranscriptEntry? currentUserTranscript;
+  final TranscriptEntry? currentAgentTranscript;
+
   const ConversationState({
     this.status = ConversationStatus.connecting,
     this.userAudioLevel = 0.0,
@@ -269,6 +277,10 @@ class ConversationState {
     this.transcript = const [],
     this.currentStatus,
     this.artifacts = const [],
+    this.userWaveform = const [],
+    this.aiWaveform = const [],
+    this.currentUserTranscript,
+    this.currentAgentTranscript,
   });
 
   ConversationState copyWith({
@@ -280,6 +292,12 @@ class ConversationState {
     StatusEvent? currentStatus,
     bool clearStatus = false,
     List<ArtifactEvent>? artifacts,
+    List<double>? userWaveform,
+    List<double>? aiWaveform,
+    TranscriptEntry? currentUserTranscript,
+    bool clearCurrentUserTranscript = false,
+    TranscriptEntry? currentAgentTranscript,
+    bool clearCurrentAgentTranscript = false,
   }) {
     return ConversationState(
       status: status ?? this.status,
@@ -289,18 +307,47 @@ class ConversationState {
       transcript: transcript ?? this.transcript,
       currentStatus: clearStatus ? null : (currentStatus ?? this.currentStatus),
       artifacts: artifacts ?? this.artifacts,
+      userWaveform: userWaveform ?? this.userWaveform,
+      aiWaveform: aiWaveform ?? this.aiWaveform,
+      currentUserTranscript: clearCurrentUserTranscript
+          ? null
+          : (currentUserTranscript ?? this.currentUserTranscript),
+      currentAgentTranscript: clearCurrentAgentTranscript
+          ? null
+          : (currentAgentTranscript ?? this.currentAgentTranscript),
     );
   }
 }
 
+enum TranscriptRole { user, agent }
+
 class TranscriptEntry {
-  final String speaker;
+  final String id;
+  final TranscriptRole role;
   final String text;
+  final bool isFinal;
   final DateTime timestamp;
 
   const TranscriptEntry({
-    required this.speaker,
+    required this.id,
+    required this.role,
     required this.text,
+    this.isFinal = false,
     required this.timestamp,
   });
+
+  String get speaker => role == TranscriptRole.user ? 'You' : 'Fletcher';
+
+  TranscriptEntry copyWith({
+    String? text,
+    bool? isFinal,
+  }) {
+    return TranscriptEntry(
+      id: id,
+      role: role,
+      text: text ?? this.text,
+      isFinal: isFinal ?? this.isFinal,
+      timestamp: timestamp,
+    );
+  }
 }

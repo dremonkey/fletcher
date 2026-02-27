@@ -4,8 +4,9 @@
 The mobile app currently has no visual feedback showing that the microphone is picking up audio. Add a voice activity indicator and real-time speech-to-text transcription display to confirm the audio pipeline is working.
 
 ## Checklist
-- [ ] Add visual indicator that mic is actively receiving audio (amplitude/volume level)
-- [ ] Display real-time STT transcription text in the app UI
+- [x] Add visual indicator that mic is actively receiving audio (amplitude/volume level)
+- [x] Display real-time STT transcription text in the app UI
+- [x] E2E tests for waveform layout, hidden transcript UI in idle, and element spacing (004-waveform-layout)
 - [ ] Confirm audio flows from phone mic through LiveKit to the agent
 
 ## Context

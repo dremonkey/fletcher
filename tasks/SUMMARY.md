@@ -52,12 +52,15 @@ The mobile client for real-time voice interaction and visualization.
 **Tasks:**
 - [x] 001: Initialize Flutter app ✅
 - [x] 002: Implement Amber Heartbeat visualizer ✅
-- [ ] 003: Voice activity indicator & real-time STT display
+- [~] 003: Voice activity indicator & real-time STT display — audio waveform + STT subtitle + transcript drawer implemented; e2e UI tests passing; end-to-end audio flow verification remaining
 
 **Implemented:**
 - Full Flutter app with livekit_client integration
 - AmberOrb visualizer with all conversation states
-- Real-time audio level monitoring (50ms polling)
+- Real-time audio level monitoring via Participant.audioLevel (100ms polling)
+- Audio waveform visualization (CustomPainter with rolling buffer)
+- Real-time STT subtitle overlay with TranscriptionEvent handling
+- Transcript drawer (chat-style, follows ArtifactDrawer pattern)
 - Mute toggle, auto-connect, dark theme
 - Ganglia data channel subscription (`ganglia-events` topic)
 - StatusBar widget showing agent actions (reading, searching, editing)
