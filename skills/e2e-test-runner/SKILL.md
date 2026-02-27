@@ -2,7 +2,6 @@
 name: e2e
 description: Run end-to-end tests for the Fletcher mobile app via adb and vision. Use when asked to run, execute, or verify e2e tests.
 argument-hint: [test-number]
-disable-model-invocation: true
 ---
 
 Run e2e test $ARGUMENTS.
