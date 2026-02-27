@@ -18,4 +18,5 @@ services:
     env_file: .env
     environment:
       LIVEKIT_URL: ws://livekit:7880
+      LIVEKIT_ROOM: ${LIVEKIT_ROOM:-fletcher-dev}
     restart: unless-stopped
