@@ -79,7 +79,7 @@ export default defineAgent({
 cli.runApp(
   new ServerOptions({
     agent: import.meta.filename,
-    agentName: 'voice-agent',
+    agentName: 'livekit-ganglia-agent',
     initializeProcessTimeout: 60_000,
   }),
 );
