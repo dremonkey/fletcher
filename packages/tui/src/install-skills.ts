@@ -90,7 +90,7 @@ export function installSkills(selectedDirs: string[], skills: Skill[]): string[]
 
   for (const dir of selectedDirs) {
     const skill = skills.find((s) => s.dir === dir)!;
-    const linkPath = join(COMMANDS_DIR, `${dir}.md`);
+    const linkPath = join(COMMANDS_DIR, `${skill.name}.md`);
     const targetPath = relative(COMMANDS_DIR, skill.path);
 
     // Remove existing symlink/file if present
