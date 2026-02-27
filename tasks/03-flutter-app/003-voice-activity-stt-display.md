@@ -6,6 +6,7 @@ The mobile app currently has no visual feedback showing that the microphone is p
 ## Checklist
 - [x] Add visual indicator that mic is actively receiving audio (amplitude/volume level)
 - [x] Display real-time STT transcription text in the app UI
+- [x] E2E tests for waveform layout, hidden transcript UI in idle, and element spacing (004-waveform-layout)
 - [ ] Confirm audio flows from phone mic through LiveKit to the agent
 
 ## Context
