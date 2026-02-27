@@ -193,7 +193,7 @@ export async function deployToDevice(): Promise<void> {
     await runStep(
       `Starting emulator (${avdName}) and deploying`,
       ["bash", join(ROOT, "scripts", "ensure-mobile-ready.sh"),
-       "--device-id", serial, "--avd-name", avdName, "--skip-launch"],
+       "--device-id", serial, "--avd-name", avdName],
       { fatal: false },
     );
   } else {
@@ -201,7 +201,7 @@ export async function deployToDevice(): Promise<void> {
     await runStep(
       "Building and installing APK",
       ["bash", join(ROOT, "scripts", "ensure-mobile-ready.sh"),
-       "--device-id", serial, "--skip-launch"],
+       "--device-id", serial],
       { fatal: false },
     );
   }
