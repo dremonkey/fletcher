@@ -1,8 +1,9 @@
 import * as p from "@clack/prompts";
+import { spawn, type Subprocess } from "bun";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { ROOT, env } from "./env";
-import { runStep } from "./services";
+import { runStep, children } from "./services";
 
 interface AdbDevice {
   serial: string;
@@ -114,14 +115,14 @@ function updateMobileEnv(): void {
   updateKey(mobileEnvPath, "LIVEKIT_URL", livekitUrl);
 }
 
-export async function deployToDevice(): Promise<void> {
+export async function deployToDevice(): Promise<Subprocess | null> {
   if (!hasCommand("adb")) {
     p.log.warn("adb not found — skipping mobile deploy. Install Android SDK or run inside nix develop.");
-    return;
+    return null;
   }
   if (!hasCommand("flutter")) {
     p.log.warn("flutter not found — skipping mobile deploy. Install Flutter or run inside nix develop.");
-    return;
+    return null;
   }
 
   const devices = listAdbDevices();
@@ -140,7 +141,7 @@ export async function deployToDevice(): Promise<void> {
     } else {
       p.log.warn("No Android devices or emulators available — skipping mobile deploy.");
     }
-    return;
+    return null;
   }
 
   // Build unified option list: connected devices + offline AVDs
@@ -171,7 +172,7 @@ export async function deployToDevice(): Promise<void> {
       ? `No devices connected. Start ${offlineAvds[0]} emulator and deploy?`
       : `Deploy to ${opt.label} (${opt.hint})?`;
     const ok = await p.confirm({ message: msg });
-    if (p.isCancel(ok) || !ok) return;
+    if (p.isCancel(ok) || !ok) return null;
     selection = opt.value;
   } else {
     options.push({ value: "__skip__", label: "Skip", hint: "don't deploy" });
@@ -179,30 +180,52 @@ export async function deployToDevice(): Promise<void> {
       message: "Deploy to which device?",
       options,
     });
-    if (p.isCancel(choice)) return;
-    if (choice === "__skip__") return;
+    if (p.isCancel(choice)) return null;
+    if (choice === "__skip__") return null;
     selection = choice as string;
   }
 
-  // Update mobile .env with correct LiveKit URL (LAN IP for local server)
-  updateMobileEnv();
-
   if (selection.startsWith("avd:")) {
+    // Path A: boot a new emulator, then attach flutter run
     const avdName = selection.slice(4);
     const serial = nextEmulatorSerial(devices);
-    await runStep(
-      `Starting emulator (${avdName}) and deploying`,
+    const booted = await runStep(
+      `Starting emulator (${avdName})`,
       ["bash", join(ROOT, "scripts", "ensure-mobile-ready.sh"),
-       "--device-id", serial, "--avd-name", avdName, "--force-build"],
+       "--device-id", serial, "--avd-name", avdName, "--skip-build", "--skip-launch"],
       { fatal: false },
     );
-  } else {
-    const serial = selection.slice("device:".length);
-    await runStep(
-      "Building and installing APK",
-      ["bash", join(ROOT, "scripts", "ensure-mobile-ready.sh"),
-       "--device-id", serial, "--force-build"],
-      { fatal: false },
-    );
+    if (!booted) return null;
+    updateMobileEnv();
+    return spawnFlutterRun(serial);
   }
+
+  const serial = selection.slice("device:".length);
+
+  if (serial.startsWith("emulator-")) {
+    // Path B: already-running emulator, attach flutter run directly
+    updateMobileEnv();
+    return spawnFlutterRun(serial);
+  }
+
+  // Path C: physical device, one-shot build+install+launch
+  updateMobileEnv();
+  await runStep(
+    "Building and installing APK",
+    ["bash", join(ROOT, "scripts", "ensure-mobile-ready.sh"),
+     "--device-id", serial, "--force-build"],
+    { fatal: false },
+  );
+  return null;
+}
+
+function spawnFlutterRun(serial: string): Subprocess {
+  const flutter = spawn(["flutter", "run", "-d", serial], {
+    cwd: join(ROOT, "apps", "mobile"),
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  children.push(flutter);
+  return flutter;
 }
