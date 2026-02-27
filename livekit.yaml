@@ -2,6 +2,6 @@ port: 7880
 bind_addresses:
   - ""
 keys:
-  devkey: secret
+  devkey: 9B8mAgLb7vX2GVlgjGmWWisW5BkxppzvVnxx2Kod60I=
 logging:
   level: info
