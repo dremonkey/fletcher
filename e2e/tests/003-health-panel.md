@@ -15,12 +15,12 @@ e2e/helpers/emu-capture.sh 003-step1-initial
 ```
 
 **Expect:**
-- The "Diagnostics" chip is visible near the bottom-left area of the screen
+- The "Diagnostics" chip is visible in a centered row above the mute toggle
 - The chip has a small colored dot (green = healthy, amber = degraded, red = unhealthy) next to the "Diagnostics" label
 
 ### Step 2: Tap the Diagnostics chip
 
-Identify the Diagnostics chip coordinates from the screenshot (bottom area, left of center, ~120px from bottom). Tap it.
+Identify the Diagnostics chip coordinates from the screenshot (centered row, ~105px from bottom). Tap it.
 
 ```sh
 adb -s ${DEVICE_ID:-emulator-5554} shell input tap <X> <Y>
