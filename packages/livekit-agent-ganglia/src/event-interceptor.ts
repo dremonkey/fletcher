@@ -4,7 +4,6 @@ import {
   type ArtifactEvent,
   type StatusAction,
   statusFromToolCall,
-  createArtifactFromToolResult,
 } from './events.js';
 import {
   type ToolCall,
