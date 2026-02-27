@@ -58,7 +58,7 @@ token.addGrant({
 
 // Embed agent dispatch config so LiveKit auto-dispatches the voice agent
 token.roomConfig = new RoomConfiguration({
-  agents: [new RoomAgentDispatch({ agentName: "voice-agent" })],
+  agents: [new RoomAgentDispatch({ agentName: "livekit-ganglia-agent" })],
 });
 
 const jwt = await token.toJwt();
