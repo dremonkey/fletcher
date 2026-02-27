@@ -67,6 +67,7 @@ class LiveKitService extends ChangeNotifier {
       _listener = _room!.createListener();
       _setupRoomListeners();
 
+      debugPrint('[Fletcher] Connecting to $url');
       await _room!.connect(
         url,
         token,
@@ -79,6 +80,7 @@ class LiveKitService extends ChangeNotifier {
         ),
       );
 
+      debugPrint('[Fletcher] Connected to room');
       _localParticipant = _room!.localParticipant;
       healthService.updateRoomConnected(connected: true);
 
@@ -92,6 +94,7 @@ class LiveKitService extends ChangeNotifier {
       _startAudioLevelMonitoring();
       _updateState(status: ConversationStatus.idle);
     } catch (e) {
+      debugPrint('[Fletcher] Connection failed: $e');
       healthService.updateRoomConnected(connected: false, errorDetail: e.toString());
       _updateState(
         status: ConversationStatus.error,

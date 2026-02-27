@@ -38,3 +38,4 @@ When using explicit dispatch, the job type on both sides must match — if the w
 ## Issues
 
 - [Agent registers but never joins a room](./agent-not-dispatched.md) — JT_ROOM / JT_PARTICIPANT job type mismatch
+- [Mobile app → local server networking](./networking.md) — LAN connectivity, WebRTC UDP, Android cleartext, Tailscale
