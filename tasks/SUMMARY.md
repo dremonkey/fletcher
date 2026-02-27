@@ -133,6 +133,14 @@ Hardening secrets management, auth, and dev environment security.
 **Tasks:**
 - [ ] 001: Generate LiveKit API secret at setup time — remove hardcoded secret from `livekit.yaml`, generate per-developer at bootstrap
 
+### 9. [TUI Improvements](./tui) 🔄
+Developer experience improvements to the terminal UI launcher.
+
+**Tasks:**
+- [~] 001: `fletcher tui` CLI entrypoint — code complete, needs manual verification
+- [~] 002: Reliable one-shot service startup — sequenced startup with health checks implemented, needs end-to-end testing
+- [~] 003: Graceful Ctrl+C shutdown — handler installed early + idempotent, needs manual testing
+
 ## Development Path
 
 1. **Phase 1: Infrastructure** ✅
