@@ -1,12 +1,13 @@
-# /e2e
+---
+name: e2e
+description: Run end-to-end tests for the Fletcher mobile app via adb and vision. Use when asked to run, execute, or verify e2e tests.
+argument-hint: [test-number]
+disable-model-invocation: true
+---
 
-Run end-to-end tests for the Fletcher mobile app via adb and vision.
+Run e2e test $ARGUMENTS.
 
-## Trigger
-
-- "run e2e test NNN" (e.g., "run e2e test 001")
-- "run all e2e tests"
-- "/e2e" or "/e2e 001"
+If no argument is provided, run all tests.
 
 ## Workflow
 

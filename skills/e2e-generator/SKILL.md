@@ -1,11 +1,11 @@
-# /e2e-new
+---
+name: e2e-new
+description: Create new end-to-end tests for the Fletcher mobile app. Use when asked to create, add, or write an e2e test.
+argument-hint: [description]
+disable-model-invocation: true
+---
 
-Create new end-to-end tests for the Fletcher mobile app.
-
-## Trigger
-
-- "create/add/write an e2e test for X"
-- `/e2e-new`
+Create a new e2e test for: $ARGUMENTS
 
 ## Workflow
 
