@@ -119,6 +119,50 @@ When running multiple tests, print one table per test, then a combined summary:
 Suite: ❌ FAIL (2/3 tests passed)
 ```
 
+## Audio injection (emu-speak)
+
+Use `e2e/helpers/emu-speak.sh` to inject audio into the emulator's microphone
+via PipeWire. This is how tests simulate a user speaking.
+
+### Playing audio in tests
+
+Tests reference **committed fixture WAV files** by name:
+
+```sh
+e2e/helpers/emu-speak.sh greeting          # plays e2e/fixtures/audio/greeting.wav
+e2e/helpers/emu-speak.sh weather-query     # plays e2e/fixtures/audio/weather-query.wav
+```
+
+Other playback modes:
+
+```sh
+e2e/helpers/emu-speak.sh --file /path/to/any.wav   # arbitrary WAV file
+e2e/helpers/emu-speak.sh --tone 2                   # 440Hz sine tone (needs FFMPEG)
+```
+
+### Generating new fixtures (one-time)
+
+When a new test needs a phrase that doesn't have a fixture yet, generate it
+once via Cartesia TTS and **commit the WAV file**:
+
+```sh
+e2e/helpers/emu-speak.sh --generate "Tell me a joke" joke-request
+git add e2e/fixtures/audio/joke-request.wav
+```
+
+**Important:**
+- Fixtures live in `e2e/fixtures/audio/<name>.wav` and MUST be committed to git.
+- The `--generate` command calls the Cartesia TTS API (requires `CARTESIA_API_KEY`
+  in `.env`). This is the ONLY time the API is called — never during test runs.
+- The script refuses to overwrite existing fixtures. Delete the file first to regenerate.
+- `CARTESIA_VOICE_ID` and `CARTESIA_MODEL` env vars can customize the voice/model.
+
+### Coordinate scaling
+
+The emulator's physical resolution is 1080x2424 but screenshots are captured at
+half scale (540x1200). When identifying tap coordinates from screenshots, **double
+both X and Y** before passing to `adb shell input tap`.
+
 ## Token-saving tips
 
 - Use `run-step.sh` to batch commands — one tool call per step, not per command
@@ -130,7 +174,9 @@ Suite: ❌ FAIL (2/3 tests passed)
 
 - `DEVICE_ID` — Target device (default: `emulator-5554`)
 - Test files: `e2e/tests/*.md`
+- Audio fixtures: `e2e/fixtures/audio/*.wav` (committed)
 - Captures: `e2e/captures/` (gitignored)
 - Shared script: `scripts/ensure-mobile-ready.sh` (emulator + APK + app setup)
 - Skill helpers: `skills/e2e-test-runner/` (check-preconditions.sh, run-step.sh)
 - Capture helper: `e2e/helpers/emu-capture.sh`
+- Audio helper: `e2e/helpers/emu-speak.sh`
