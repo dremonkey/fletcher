@@ -34,18 +34,46 @@ export function discoverSkills(): Skill[] {
     const content = readFileSync(skillPath, "utf-8");
     const lines = content.split("\n");
 
-    // Parse heading: "# /skill-name"
-    const heading = lines[0]?.trim() ?? "";
-    const nameMatch = heading.match(/^#\s+\/(.+)/);
-    const name = nameMatch ? nameMatch[1] : entry.name;
-
-    // Parse description: first non-empty line after heading
+    let name = entry.name;
     let description = "";
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (line) {
-        description = line;
-        break;
+
+    // Check for YAML frontmatter (starts with ---)
+    if (lines[0]?.trim() === "---") {
+      const endIdx = lines.indexOf("---", 1);
+      if (endIdx > 0) {
+        // Parse frontmatter fields
+        for (let i = 1; i < endIdx; i++) {
+          const match = lines[i].match(/^(\w[\w-]*):\s*(.+)/);
+          if (match) {
+            const [, key, value] = match;
+            if (key === "name") name = value.trim();
+            if (key === "description") description = value.trim();
+          }
+        }
+        // If no description in frontmatter, use first non-empty line after frontmatter
+        if (!description) {
+          for (let i = endIdx + 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (line) {
+              description = line;
+              break;
+            }
+          }
+        }
+      }
+    } else {
+      // Legacy format: "# /skill-name" heading
+      const heading = lines[0]?.trim() ?? "";
+      const nameMatch = heading.match(/^#\s+\/(.+)/);
+      if (nameMatch) name = nameMatch[1];
+
+      // First non-empty line after heading
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line) {
+          description = line;
+          break;
+        }
       }
     }
 

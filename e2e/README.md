@@ -52,7 +52,7 @@ Suite: ❌ FAIL (2/3 tests passed)
 
 ## Writing Tests
 
-Test files live in `e2e/tests/` as numbered markdown files.
+Test files live in `e2e/tests/` as numbered markdown files. Use `/e2e-new` to create new tests interactively — it handles numbering, fixture generation, and validation.
 
 ### Format
 
@@ -90,13 +90,13 @@ adb shell am start -n com.fletcher.fletcher/.MainActivity
 
 ### Setup
 
-Install the `/e2e` skill so Claude Code knows the test runner workflow:
+Install the e2e skills so Claude Code knows the test workflows:
 
 ```sh
 bun run skills:install
 ```
 
-Select `e2e-test-runner` from the menu. This symlinks the skill into `.claude/commands/`.
+Select `e2e-test-runner` (run tests) and `e2e-generator` (create tests) from the menu. This symlinks the skills into `.claude/commands/`.
 
 ### Running
 
@@ -152,9 +152,12 @@ scripts/
 └── ensure-mobile-ready.sh   # Shared: ensure emulator + APK + app are ready
 
 skills/e2e-test-runner/
-├── SKILL.md                 # Skill definition (installed via bun dev or bun run skills:install)
-├── check-preconditions.sh   # Delegates to scripts/ensure-mobile-ready.sh
+├── SKILL.md                 # /e2e — test runner skill
+├── check-preconditions.sh   # Verify emulator, APK, app status
 └── run-step.sh              # Batch-run step commands
+
+skills/e2e-generator/
+└── SKILL.md                 # /e2e-new — test authoring skill
 ```
 
 ## Future
