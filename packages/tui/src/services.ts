@@ -3,6 +3,7 @@ import { spawn, type Subprocess } from "bun";
 import { createHash } from "crypto";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
+import { connect, type Socket } from "net";
 import { ROOT, env } from "./env";
 import { DEFAULT_ROOM } from "./audit";
 
@@ -61,6 +62,48 @@ export async function runStep(
 }
 
 /**
+ * Poll a TCP port until it accepts connections or the timeout expires.
+ * Returns true if the port became reachable, false on timeout.
+ */
+async function waitForPort(host: string, port: number, timeoutMs: number = 30_000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const reachable = await new Promise<boolean>((resolve) => {
+      const sock: Socket = connect({ host, port }, () => {
+        sock.destroy();
+        resolve(true);
+      });
+      sock.on("error", () => {
+        sock.destroy();
+        resolve(false);
+      });
+    });
+    if (reachable) return true;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  return false;
+}
+
+/**
+ * Wait for the voice-agent container to log "worker registered", indicating
+ * it has successfully connected to the LiveKit server and is ready to receive jobs.
+ */
+async function waitForAgentRegistration(timeoutMs: number = 30_000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const proc = spawn(
+      ["docker", "compose", "logs", "--tail", "50", "voice-agent"],
+      { cwd: ROOT, stdout: "pipe", stderr: "pipe" },
+    );
+    const output = await new Response(proc.stdout).text();
+    await proc.exited;
+    if (output.includes("worker registered")) return true;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  return false;
+}
+
+/**
  * Compute a truncated SHA-256 over all files matching {@link VOICE_AGENT_SOURCES}.
  * Both relative path and file contents are fed into the hash so that renames
  * and content changes are both detected.
@@ -101,7 +144,6 @@ function isLocalLiveKit(): boolean {
 }
 
 export async function startServices(): Promise<void> {
-  // 1. Start infrastructure + voice agent via docker-compose
   if (isLocalLiveKit()) {
     // Pull latest livekit image (at most once per 24h)
     if (shouldPullLivekit()) {
@@ -111,24 +153,49 @@ export async function startServices(): Promise<void> {
       writeFileSync(PULL_MARKER_FILE, String(Date.now()));
     }
 
-    // Rebuild voice-agent if source files changed
+    // Rebuild voice-agent image if source files changed (build only, don't start yet)
     const rebuild = voiceAgentNeedsRebuild();
-    const upCmd = ["docker", "compose", "up", "-d"];
-    if (rebuild) upCmd.push("--build");
-    upCmd.push("livekit", "voice-agent");
-
-    await runStep(
-      rebuild ? "Building & starting services" : "Starting services",
-      upCmd,
-    );
-
-    // Save hash after successful build
     if (rebuild) {
+      await runStep("Building voice-agent image", [
+        "docker", "compose", "build", "voice-agent",
+      ]);
       writeFileSync(BUILD_HASH_FILE, computeSourceHash());
+    }
+
+    // Step 1: Start LiveKit server
+    await runStep("Starting LiveKit server", [
+      "docker", "compose", "up", "-d", "livekit",
+    ]);
+
+    // Step 2: Wait for LiveKit to accept connections on port 7880
+    const s1 = p.spinner();
+    s1.start("Waiting for LiveKit to be ready (port 7880)");
+    const livekitReady = await waitForPort("127.0.0.1", 7880);
+    if (!livekitReady) {
+      s1.stop("LiveKit failed to become ready within 30s");
+      p.cancel("Service startup failed.");
+      process.exit(1);
+    }
+    s1.stop("LiveKit is ready");
+
+    // Step 3: Start voice agent (LiveKit is confirmed ready)
+    await runStep("Starting voice agent", [
+      "docker", "compose", "up", "-d", "voice-agent",
+    ]);
+
+    // Step 4: Wait for agent to register with LiveKit
+    const s2 = p.spinner();
+    s2.start("Waiting for voice agent to register");
+    const agentReady = await waitForAgentRegistration();
+    if (!agentReady) {
+      s2.stop("Voice agent failed to register within 30s");
+      p.log.warn("Agent may not have connected — check `docker compose logs voice-agent`");
+    } else {
+      s2.stop("Voice agent registered");
     }
   }
 
-  // 2. Token generation (needed for mobile client, runs on host)
+  // Step 5: Generate token (only after services are confirmed ready)
   const room = env("LIVEKIT_ROOM") || DEFAULT_ROOM;
   await runStep("Generating LiveKit token", [
     "bun", "run", "scripts/generate-token.ts", "--room", room,
