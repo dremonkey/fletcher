@@ -69,8 +69,10 @@ export interface OpenClawChatOptions {
   tool_choice?: any;
   /** @deprecated Use session instead */
   sessionId?: string;
-  /** LiveKit session info for OpenClaw session mapping */
+  /** LiveKit session info — used for metadata headers (Room-SID, Participant-Identity, etc.) */
   session?: LiveKitSessionInfo;
+  /** Resolved session key for routing. Takes priority over session/sessionId for routing. */
+  sessionKey?: import('../session-routing.js').SessionKey;
 }
 
 /**

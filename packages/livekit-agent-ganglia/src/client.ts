@@ -9,8 +9,10 @@ import {
   AuthenticationError,
   SessionError,
 } from './types/index.js';
+import type { SessionKey } from './session-routing.js';
 
 /**
+ * @deprecated Use resolveSessionKey() + SessionKey routing instead.
  * Generates a deterministic session ID from LiveKit session info.
  * Combines room SID and participant identity for unique session tracking.
  */
@@ -44,6 +46,7 @@ export function generateSessionId(session: LiveKitSessionInfo): string {
 }
 
 /**
+ * @deprecated Use buildMetadataHeaders() + SessionKey routing instead.
  * Builds OpenClaw session headers from LiveKit session info.
  */
 export function buildSessionHeaders(session: LiveKitSessionInfo): Partial<OpenClawSessionHeaders> {
@@ -65,6 +68,51 @@ export function buildSessionHeaders(session: LiveKitSessionInfo): Partial<OpenCl
   }
 
   return headers;
+}
+
+/**
+ * Builds supplementary metadata headers from LiveKit session info.
+ * These are informational only — they do NOT affect routing.
+ * Routing is determined by SessionKey (header or body.user).
+ */
+export function buildMetadataHeaders(session: LiveKitSessionInfo): Record<string, string> {
+  const headers: Record<string, string> = {};
+
+  if (session.roomSid) {
+    headers['X-OpenClaw-Room-SID'] = session.roomSid;
+  }
+  if (session.roomName) {
+    headers['X-OpenClaw-Room-Name'] = session.roomName;
+  }
+  if (session.participantIdentity) {
+    headers['X-OpenClaw-Participant-Identity'] = session.participantIdentity;
+  }
+  if (session.participantSid) {
+    headers['X-OpenClaw-Participant-SID'] = session.participantSid;
+  }
+
+  return headers;
+}
+
+/**
+ * Applies a SessionKey to the request headers and body.
+ *
+ * Routing rules per spec 08:
+ * - owner  → header: x-openclaw-session-key: "main"
+ * - guest  → body.user: "guest_{identity}"
+ * - room   → body.user: "room_{room_name}"
+ */
+export function applySessionKey(
+  sessionKey: SessionKey,
+  headers: Record<string, string>,
+  body: Record<string, any>,
+): void {
+  if (sessionKey.type === 'owner') {
+    headers['x-openclaw-session-key'] = sessionKey.key;
+  } else {
+    // guest or room — use body.user
+    body.user = sessionKey.key;
+  }
 }
 
 export class OpenClawClient {
@@ -227,16 +275,6 @@ export class OpenClawClient {
       headers['Authorization'] = `Bearer ${this.apiKey}`;
     }
 
-    // Resolve session info: prefer request session, fall back to default, then legacy sessionId
-    const session = options.session || this.defaultSession;
-    if (session) {
-      const sessionHeaders = buildSessionHeaders(session);
-      Object.assign(headers, sessionHeaders);
-    } else if (options.sessionId) {
-      // Legacy support: use sessionId directly as the session header
-      headers['X-OpenClaw-Session-Id'] = options.sessionId;
-    }
-
     const body: Record<string, any> = {
       model: this.model,
       messages: options.messages,
@@ -250,10 +288,27 @@ export class OpenClawClient {
       body.tool_choice = options.tool_choice;
     }
 
-    // Also include session_id in body for APIs that expect it there
-    const sessionId = session ? generateSessionId(session) : options.sessionId;
-    if (sessionId) {
+    // Session routing: SessionKey takes priority, then legacy fallback
+    const session = options.session || this.defaultSession;
+
+    if (options.sessionKey) {
+      // New routing: apply session key to headers/body per spec 08
+      applySessionKey(options.sessionKey, headers, body);
+
+      // Add supplementary metadata headers (informational, not routing)
+      if (session) {
+        Object.assign(headers, buildMetadataHeaders(session));
+      }
+    } else if (session) {
+      // Legacy fallback: use old session headers
+      const sessionHeaders = buildSessionHeaders(session);
+      Object.assign(headers, sessionHeaders);
+      const sessionId = generateSessionId(session);
       body.session_id = sessionId;
+    } else if (options.sessionId) {
+      // Legacy support: use sessionId directly as the session header
+      headers['X-OpenClaw-Session-Id'] = options.sessionId;
+      body.session_id = options.sessionId;
     }
 
     const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
