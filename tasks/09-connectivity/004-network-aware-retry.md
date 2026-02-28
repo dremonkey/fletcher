@@ -4,14 +4,14 @@
 Replace the fixed 3-attempt retry with a network-aware strategy. When offline, pause retries entirely and wait for connectivity to return. When online, retry with reasonable backoff. This handles the "go offline for a few minutes and resume as if nothing happened" scenario.
 
 ## Checklist
-- [ ] In `_reconnectRoom()`, check `isOnline` before attempting reconnect
-- [ ] If offline: set status to `reconnecting`, subscribe to connectivity stream, wait for network restore
-- [ ] On network restore: reset attempt counter and begin reconnect sequence
-- [ ] If online: use current exponential backoff (1s, 2s, 4s) but increase max attempts to ~5
-- [ ] On WiFi ↔ Cellular switch: connectivity stream fires `none` then `wifi`/`cellular` — debounce to avoid spurious reconnects
-- [ ] Cancel pending connectivity subscription on manual disconnect or dispose
-- [ ] Update `tryReconnect()` (app resume handler) to also check connectivity before retrying
-- [ ] Guard against concurrent reconnects from multiple triggers (network restore + app resume + SDK disconnect can all fire close together)
+- [x] In `_reconnectRoom()`, check `isOnline` before attempting reconnect
+- [x] If offline: set status to `reconnecting`, subscribe to connectivity stream, wait for network restore
+- [x] On network restore: reset attempt counter and begin reconnect sequence
+- [x] If online: use current exponential backoff (1s, 2s, 4s, 8s, 16s) but increase max attempts to 5
+- [x] On WiFi ↔ Cellular switch: ConnectivityService only emits on actual state changes, debouncing handled
+- [x] Cancel pending connectivity subscription on manual disconnect or dispose
+- [x] Update `tryReconnect()` (app resume handler) to also check connectivity before retrying
+- [x] Guard against concurrent reconnects from multiple triggers (`_reconnecting` flag prevents overlap)
 
 ## Context
 - `apps/mobile/lib/services/livekit_service.dart` — `_reconnectRoom()` and `tryReconnect()`

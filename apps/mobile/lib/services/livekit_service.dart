@@ -47,7 +47,10 @@ class LiveKitService extends ChangeNotifier {
   // Room reconnection state (sleep/disconnect recovery)
   bool _reconnecting = false;
   int _reconnectAttempt = 0;
-  static const _maxReconnectAttempts = 3;
+  static const _maxReconnectAttempts = 5;
+
+  // Connectivity-driven reconnect: waits for network restore when offline
+  StreamSubscription<bool>? _networkRestoreSub;
 
   // Buffer for reassembling chunked messages
   final Map<String, List<String?>> _chunks = {};
@@ -629,7 +632,12 @@ class LiveKitService extends ChangeNotifier {
   bool get isReconnecting => _reconnecting;
 
   /// Attempt to reconnect to the room using stored credentials.
-  /// Uses exponential backoff: 1s, 2s, 4s across up to 3 attempts.
+  ///
+  /// Network-aware strategy:
+  /// - If offline, show "Waiting for network..." and subscribe to
+  ///   connectivity changes. Retries start when the network returns.
+  /// - If online, retry with exponential backoff (1s, 2s, 4s, 8s, 16s)
+  ///   for up to [_maxReconnectAttempts] attempts.
   Future<void> _reconnectRoom() async {
     if (_reconnecting) return;
     if (_url == null || _token == null) {
@@ -641,6 +649,40 @@ class LiveKitService extends ChangeNotifier {
     }
 
     _reconnecting = true;
+    _updateState(status: ConversationStatus.reconnecting);
+
+    // If offline, wait for network to come back before burning retries
+    if (!connectivityService.isOnline) {
+      debugPrint('[Fletcher] Offline — waiting for network restore');
+      _updateState(
+        status: ConversationStatus.reconnecting,
+        errorMessage: 'Waiting for network...',
+      );
+      _waitForNetworkRestore();
+      return;
+    }
+
+    await _doReconnectAttempt();
+  }
+
+  /// Subscribe to connectivity changes and retry when network returns.
+  void _waitForNetworkRestore() {
+    _networkRestoreSub?.cancel();
+    _networkRestoreSub =
+        connectivityService.onConnectivityChanged.listen((online) {
+      if (online) {
+        debugPrint('[Fletcher] Network restored — starting reconnect');
+        _networkRestoreSub?.cancel();
+        _networkRestoreSub = null;
+        // Reset attempt counter since this is a fresh network
+        _reconnectAttempt = 0;
+        _doReconnectAttempt();
+      }
+    });
+  }
+
+  /// Execute a single reconnect attempt with exponential backoff.
+  Future<void> _doReconnectAttempt() async {
     _reconnectAttempt++;
 
     if (_reconnectAttempt > _maxReconnectAttempts) {
@@ -656,9 +698,16 @@ class LiveKitService extends ChangeNotifier {
     debugPrint('[Fletcher] Reconnect attempt $_reconnectAttempt/$_maxReconnectAttempts');
     _updateState(status: ConversationStatus.reconnecting);
 
-    // Exponential backoff: 1s, 2s, 4s
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s
     final delay = Duration(seconds: 1 << (_reconnectAttempt - 1));
     await Future.delayed(delay);
+
+    // Bail out if we went offline during the wait
+    if (!connectivityService.isOnline) {
+      debugPrint('[Fletcher] Went offline during backoff — waiting for network');
+      _waitForNetworkRestore();
+      return;
+    }
 
     // Clean up old room/listeners but keep credentials
     await disconnect(preserveTranscripts: true);
@@ -675,12 +724,17 @@ class LiveKitService extends ChangeNotifier {
 
   /// Trigger a reconnect from outside (e.g., app lifecycle resume).
   Future<void> tryReconnect() async {
-    if (_state.status == ConversationStatus.error ||
-        _state.status == ConversationStatus.reconnecting) {
-      _reconnectAttempt = 0;
-      _reconnecting = false;
-      await _reconnectRoom();
+    if (_state.status != ConversationStatus.error &&
+        _state.status != ConversationStatus.reconnecting) {
+      return;
     }
+    if (!connectivityService.isOnline) {
+      debugPrint('[Fletcher] tryReconnect skipped — offline');
+      return;
+    }
+    _reconnectAttempt = 0;
+    _reconnecting = false;
+    await _reconnectRoom();
   }
 
   Future<void> disconnect({bool preserveTranscripts = false}) async {
@@ -693,6 +747,8 @@ class LiveKitService extends ChangeNotifier {
     _deviceChangeSub = null;
     _connectivitySub?.cancel();
     _connectivitySub = null;
+    _networkRestoreSub?.cancel();
+    _networkRestoreSub = null;
     _room?.unregisterTextStreamHandler('lk.transcription');
     _listener?.dispose();
     await _room?.disconnect();
