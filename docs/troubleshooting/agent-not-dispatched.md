@@ -106,6 +106,59 @@ token.roomConfig = new RoomConfiguration({
 });
 ```
 
+---
+
+# Agent registers but dispatch fails with "no servers available"
+
+## Symptoms
+
+- `voice-agent` container starts and registers with LiveKit successfully
+- LiveKit server logs show `failed to send job request` with `no servers available (received 1 responses)`
+- The voice-agent logs show `registered worker` but never `received job request`
+- The error is intermittent — sometimes the agent joins, sometimes it doesn't
+
+## LiveKit server logs
+
+```
+worker registered    jobType: "JT_ROOM"  agentName: ""  workerID: "AW_xxx"
+failed to send job request  {"error": "no servers available (received 1 responses)", "jobType": "JT_ROOM", "agentName": ""}
+```
+
+The worker registers correctly, but when a room is created the server considers the worker unavailable without even sending it a job request.
+
+## Root cause
+
+The `@livekit/agents` Node.js SDK periodically reports CPU load to the LiveKit server via `os.cpus()`. The server uses this reported load to decide whether a worker can accept jobs.
+
+Inside a Docker container, `os.cpus()` returns **host** CPU counters, not the container's cgroup allocation. This produces unreliable load measurements that can cause the server to consider the worker full even when it's idle.
+
+In dev mode, the SDK sets `loadThreshold: Infinity` so the Node.js side never marks itself as `WS_FULL`. However, the raw load *value* is still sent to the Go server, which may interpret it independently of the threshold the worker reports.
+
+## Fix
+
+Override `loadFunc` in `ServerOptions` to always report zero load:
+
+```typescript
+// apps/voice-agent/src/agent.ts
+cli.runApp(new ServerOptions({
+  agent: import.meta.filename,
+  initializeProcessTimeout: 60_000,
+  loadFunc: async () => 0,
+}));
+```
+
+This tells the LiveKit server "this worker is always available for dispatch."
+
+### Is this safe?
+
+- **Local dev:** Yes. There's no benefit to load-gating a single-agent dev setup.
+- **Production (LiveKit Cloud):** The SDK ignores custom `loadFunc` and forces its own defaults, so this override has no effect.
+- **Self-hosted production:** You'd want real load reporting. Remove the override and ensure the container has accurate CPU accounting (e.g., `--cpus` flag matching cgroup limits).
+
+## Verification
+
+After the fix, LiveKit server logs should show `assigned job to worker` instead of `failed to send job request` when a room is created.
+
 ## References
 
 - [LiveKit Agents overview](https://docs.livekit.io/agents/)
