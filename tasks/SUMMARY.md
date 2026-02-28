@@ -151,6 +151,7 @@ Bulletproof connection handling: survive network switches, Bluetooth changes, ai
 - [ ] 003: Add network connectivity monitoring — `connectivity_plus` for online/offline awareness
 - [ ] 004: Network-aware reconnection strategy — pause retries while offline, resume on network restore
 - [ ] 005: Preserve app state across reconnects — transcripts, artifacts, mute state survive reconnection
+- [x] 006: Tailscale ICE negotiation fix — pin server's Tailscale IP for stable 5G/Wi-Fi transitions ✅
 
 **Depends on:** Epic 3 (Flutter App)
 
