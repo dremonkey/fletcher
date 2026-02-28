@@ -142,6 +142,18 @@ Developer experience improvements to the terminal UI launcher.
 - [x] 002: Reliable one-shot service startup — fixed registration log string, Docker CPU load dispatch bug ([agents-js#1082](https://github.com/livekit/agents-js/issues/1082)), ganglia config mismatch; tested on emulator + Pixel 9
 - [~] 003: Graceful Ctrl+C shutdown — Bun signal handler bug workaround + sync cleanup working; Ctrl+C during startup and double Ctrl+C untested
 
+### 9. [Connectivity & Resilience](./09-connectivity) 📋
+Bulletproof connection handling: survive network switches, Bluetooth changes, airplane mode, and phone sleep.
+
+**Tasks:**
+- [ ] 001: Hook into LiveKit SDK reconnection events — show "Reconnecting..." during SDK's own 10-attempt recovery window
+- [ ] 002: Filter DisconnectReason before auto-reconnect — prevent infinite loops and fighting user intent
+- [ ] 003: Add network connectivity monitoring — `connectivity_plus` for online/offline awareness
+- [ ] 004: Network-aware reconnection strategy — pause retries while offline, resume on network restore
+- [ ] 005: Preserve app state across reconnects — transcripts, artifacts, mute state survive reconnection
+
+**Depends on:** Epic 3 (Flutter App)
+
 ## Development Path
 
 1. **Phase 1: Infrastructure** ✅
