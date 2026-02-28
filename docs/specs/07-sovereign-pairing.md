@@ -94,6 +94,32 @@ api.registerHttpRoute({
 });
 ```
 
+## Current State: Prototype Token Flow
+
+> **Sovereign Pairing is not yet active.** The server-side verification logic exists in `packages/openclaw-channel-livekit/src/auth.ts` (Ed25519 signature check, replay protection, token issuance), but the Flutter app does not use it. The current dev workflow uses a pre-generated token instead.
+
+### What happens today
+
+1. Developer runs `bun run token:generate --identity <name>` (see `scripts/generate-token.ts`)
+2. Script mints a LiveKit JWT with the given identity and writes it to `apps/mobile/.env`
+3. Flutter app reads the token from `.env` at startup and connects directly to LiveKit
+4. No signature verification, no challenge-response, no device registration
+
+### Why this exists
+
+The prototype flow is sufficient for single-developer local testing where the developer controls both the token and the server. It avoids the need to implement Ed25519 key management in Flutter before the voice pipeline is validated end-to-end.
+
+### What replaces it
+
+This document describes the production protocol. When implemented:
+- The Flutter app will generate an Ed25519 keypair on first launch and register its public key with the Hub
+- On each connect, the app will sign a challenge and POST it to `/fletcher/token`
+- The Hub will verify the signature, mint a LiveKit token with `identity: deviceId`, and return it
+- The `deviceId` becomes the stable participant identity used by [session routing](./08-session-continuity/spec.md) to determine owner vs guest access
+- Owner verification additionally requires [Voice Fingerprinting](./06-voice-fingerprinting/spec.md) — Sovereign Pairing proves the *device*, voice fingerprinting proves the *person*
+
+See [Session Continuity spec](./08-session-continuity/spec.md#current-implementation-prototype) for how owner detection works in the prototype.
+
 ## Future Considerations
 
 *   **Challenge-Response:** Move to a 2-step handshake (Request Challenge -> Sign Challenge) for stronger replay protection if timestamps prove insufficient.

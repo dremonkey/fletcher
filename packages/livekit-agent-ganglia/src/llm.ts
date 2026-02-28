@@ -1,6 +1,7 @@
 import { llm, APIConnectOptions } from '@livekit/agents';
 import { type GangliaLLM, registerGanglia } from './factory.js';
 import { type GangliaSessionInfo } from './ganglia-types.js';
+import { type SessionKey } from './session-routing.js';
 import { OpenClawClient } from './client.js';
 import {
   OpenClawConfig,
@@ -78,6 +79,7 @@ export function extractSessionFromContext(
 export class OpenClawLLM extends LLMBase implements GangliaLLM {
   private client: OpenClawClient;
   private _model: string;
+  private _sessionKey?: SessionKey;
 
   constructor(config: OpenClawConfig = {}) {
     super();
@@ -108,10 +110,25 @@ export class OpenClawLLM extends LLMBase implements GangliaLLM {
   }
 
   /**
-   * Sets the default session for all subsequent chat requests.
+   * Sets the default session metadata for all subsequent chat requests.
    */
   setDefaultSession(session: LiveKitSessionInfo | GangliaSessionInfo): void {
     this.client.setDefaultSession(session as LiveKitSessionInfo);
+  }
+
+  /**
+   * Sets the session key for routing. This determines which backend
+   * session the conversation routes to (owner/guest/room).
+   */
+  setSessionKey(sessionKey: SessionKey): void {
+    this._sessionKey = sessionKey;
+  }
+
+  /**
+   * Returns the current session key, if set.
+   */
+  getSessionKey(): SessionKey | undefined {
+    return this._sessionKey;
   }
 
   chat({
@@ -130,12 +147,14 @@ export class OpenClawLLM extends LLMBase implements GangliaLLM {
       chatCtx,
       toolCtx,
       connOptions: connOptions || { maxRetry: 3, retryIntervalMs: 2000, timeoutMs: 10000 },
+      sessionKey: this._sessionKey,
     });
   }
 }
 
 class OpenClawChatStream extends LLMStream {
   private openclawClient: OpenClawClient;
+  private _sessionKey?: SessionKey;
 
   constructor(
     llmInstance: OpenClawLLM,
@@ -144,14 +163,17 @@ class OpenClawChatStream extends LLMStream {
       chatCtx,
       toolCtx,
       connOptions,
+      sessionKey,
     }: {
       chatCtx: ChatContext;
       toolCtx?: ToolContext;
       connOptions: APIConnectOptions;
+      sessionKey?: SessionKey;
     },
   ) {
     super(llmInstance, { chatCtx, toolCtx, connOptions });
     this.openclawClient = client;
+    this._sessionKey = sessionKey;
   }
 
   protected async run(): Promise<void> {
@@ -219,7 +241,7 @@ class OpenClawChatStream extends LLMStream {
         },
       })) : undefined;
 
-      // Extract session info from LiveKit context
+      // Extract session metadata from LiveKit context (informational headers)
       const session = extractSessionFromContext(chatCtx, connOptions);
 
       const stream = this.openclawClient.chat({
@@ -227,6 +249,7 @@ class OpenClawChatStream extends LLMStream {
         stream: true,
         tools: tools && tools.length > 0 ? tools : undefined,
         session,
+        sessionKey: this._sessionKey,
       });
 
       for await (const chunk of stream) {

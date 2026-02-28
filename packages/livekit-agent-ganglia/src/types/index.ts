@@ -4,12 +4,7 @@ export interface OpenClawConfig {
   model?: string;
   /** Default session info to use if not provided per-request */
   defaultSession?: LiveKitSessionInfo;
-  /** Enable automatic session state tracking */
-  trackSessionState?: boolean;
 }
-
-/** Session lifecycle state */
-export type SessionState = 'active' | 'expired' | 'reconnecting' | 'disconnected';
 
 /**
  * LiveKit session identifiers mapped to OpenClaw session headers.
@@ -26,23 +21,6 @@ export interface LiveKitSessionInfo {
   participantSid?: string;
   /** Custom session ID to override auto-generated session mapping */
   customSessionId?: string;
-}
-
-/**
- * Extended session info with state tracking metadata.
- * Used internally for session lifecycle management.
- */
-export interface ManagedSession extends LiveKitSessionInfo {
-  /** Current session state */
-  state: SessionState;
-  /** Session creation timestamp (ms since epoch) */
-  createdAt: number;
-  /** Last activity timestamp (ms since epoch) */
-  lastActivityAt: number;
-  /** Number of requests made in this session */
-  requestCount: number;
-  /** Computed session ID */
-  sessionId: string;
 }
 
 export interface OpenClawMessage {
@@ -69,8 +47,10 @@ export interface OpenClawChatOptions {
   tool_choice?: any;
   /** @deprecated Use session instead */
   sessionId?: string;
-  /** LiveKit session info for OpenClaw session mapping */
+  /** LiveKit session info — used for metadata headers (Room-SID, Participant-Identity, etc.) */
   session?: LiveKitSessionInfo;
+  /** Resolved session key for routing. Takes priority over session/sessionId for routing. */
+  sessionKey?: import('../session-routing.js').SessionKey;
 }
 
 /**
