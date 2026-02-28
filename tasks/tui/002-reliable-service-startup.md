@@ -80,8 +80,8 @@ Apply fixes to make the TUI startup reliable:
 
 ### Phase 5: TUI fixes
 - [x] Implement fixes in `packages/tui/src/services.ts`
-- [ ] Test TUI one-shot startup with emulator (3+ consecutive successes)
-- [ ] Test TUI one-shot startup with Pixel 9 (3+ consecutive successes)
+- [x] Test TUI one-shot startup with emulator (3+ consecutive successes)
+- [x] Test TUI one-shot startup with Pixel 9 (3+ consecutive successes)
 
 ## Success Criteria
 
@@ -89,6 +89,19 @@ Apply fixes to make the TUI startup reliable:
 - Works with both emulator and physical device
 - Clear error messages if a step fails (no silent failures)
 
-## Current Findings
+## Findings
 
-_(To be updated as investigation progresses)_
+### 1. Voice agent registration log string mismatch
+The TUI polled for `"worker registered"` but `@livekit/agents` logs `"registered worker"`.
+**Fix:** Corrected the string match in `waitForAgentRegistration()`.
+
+### 2. Docker CPU load causing intermittent dispatch failures
+`@livekit/agents` reports CPU load via `os.cpus()`, which returns host counters inside Docker — not cgroup-scoped values. The LiveKit Go server interprets the inflated load as "worker unavailable" and refuses to dispatch jobs.
+**Fix:** Override `loadFunc: async () => 0` in `ServerOptions`. Filed upstream as [livekit/agents-js#1082](https://github.com/livekit/agents-js/issues/1082).
+
+### 3. Ganglia config property mismatch
+`ganglia-types.ts` used `endpoint`/`token` but `OpenClawClient` expected `baseUrl`/`apiKey`. Properties were silently undefined; client fell back to env vars.
+**Fix:** Aligned property names across both interfaces.
+
+### 4. Build hash logging
+Added logging to show whether the voice-agent image is being rebuilt or skipped, with truncated hash values for debugging.

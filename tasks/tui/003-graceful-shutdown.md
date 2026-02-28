@@ -67,7 +67,7 @@ The Android emulator may be started via `emulator -avd <name>`. Killing the proc
 - [x] Verify `installShutdownHandler()` is called before any services start
 - [x] Verify all spawned child processes (Flutter, emulator) are tracked in `children`
 - [x] Verify `docker compose down` runs with correct cwd
-- [ ] Test Ctrl+C after full startup — all containers stopped, emulator closed
+- [x] Test Ctrl+C after full startup — all containers stopped, emulator closed
 - [ ] Test Ctrl+C during startup — partial resources cleaned up
 - [ ] Test double Ctrl+C — no crash, no orphaned processes
 - [x] Fix any gaps found

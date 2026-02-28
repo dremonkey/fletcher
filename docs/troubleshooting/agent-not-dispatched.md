@@ -159,8 +159,13 @@ This tells the LiveKit server "this worker is always available for dispatch."
 
 After the fix, LiveKit server logs should show `assigned job to worker` instead of `failed to send job request` when a room is created.
 
+## Upstream issue
+
+Filed as [livekit/agents-js#1082](https://github.com/livekit/agents-js/issues/1082) — `defaultCpuLoad` should use cgroup-aware CPU measurement when running inside a container.
+
 ## References
 
 - [LiveKit Agents overview](https://docs.livekit.io/agents/)
 - [Agent server lifecycle](https://docs.livekit.io/agents/server/lifecycle/)
 - [Agent dispatch modes](https://docs.livekit.io/agents/server/agent-dispatch/)
+- [Node.js os.cpus() not cgroup-aware](https://github.com/nodejs/node/issues/28018)
