@@ -382,7 +382,7 @@ class LiveKitService extends ChangeNotifier {
 
   void _subscribeToDeviceChanges() {
     _deviceChangeSub?.cancel();
-    _deviceChangeSub = Hardware.instance.onDeviceChange.listen((_) {
+    _deviceChangeSub = Hardware.instance.onDeviceChange.stream.listen((_) {
       _onDeviceChange();
     });
   }
