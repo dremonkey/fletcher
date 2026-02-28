@@ -2,13 +2,33 @@ import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 
+/// Abstraction over [Connectivity] for testability.
+abstract class ConnectivityProvider {
+  Future<List<ConnectivityResult>> checkConnectivity();
+  Stream<List<ConnectivityResult>> get onConnectivityChanged;
+}
+
+/// Default implementation that delegates to [Connectivity] from
+/// connectivity_plus.
+class RealConnectivityProvider implements ConnectivityProvider {
+  final Connectivity _connectivity = Connectivity();
+
+  @override
+  Future<List<ConnectivityResult>> checkConnectivity() =>
+      _connectivity.checkConnectivity();
+
+  @override
+  Stream<List<ConnectivityResult>> get onConnectivityChanged =>
+      _connectivity.onConnectivityChanged;
+}
+
 /// Lightweight service that tracks network connectivity state.
 ///
 /// Exposes a synchronous [isOnline] getter and a [Stream<bool>] for
 /// online/offline transitions. Used by [LiveKitService] to make smarter
 /// reconnection decisions (e.g. pause retries while offline).
 class ConnectivityService extends ChangeNotifier {
-  final Connectivity _connectivity = Connectivity();
+  final ConnectivityProvider _provider;
   StreamSubscription<List<ConnectivityResult>>? _subscription;
 
   bool _isOnline = true;
@@ -26,17 +46,18 @@ class ConnectivityService extends ChangeNotifier {
       StreamController<bool>.broadcast();
   Stream<bool> get onConnectivityChanged => _onlineController.stream;
 
-  ConnectivityService() {
+  ConnectivityService({ConnectivityProvider? provider})
+      : _provider = provider ?? RealConnectivityProvider() {
     _init();
   }
 
   Future<void> _init() async {
     // Get initial state
-    final results = await _connectivity.checkConnectivity();
+    final results = await _provider.checkConnectivity();
     _update(results);
 
     // Listen for changes
-    _subscription = _connectivity.onConnectivityChanged.listen(_update);
+    _subscription = _provider.onConnectivityChanged.listen(_update);
   }
 
   void _update(List<ConnectivityResult> results) {

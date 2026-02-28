@@ -5,6 +5,7 @@ import 'package:livekit_client/livekit_client.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/conversation_state.dart';
 import 'connectivity_service.dart';
+import 'disconnect_reason.dart' as dr;
 import 'health_service.dart';
 
 /// Max waveform samples (~30 samples at 100ms = 3s history)
@@ -171,7 +172,7 @@ class LiveKitService extends ChangeNotifier {
       debugPrint('[Fletcher] Disconnected: $reason');
       healthService.updateAgentPresent(present: false);
 
-      if (_shouldReconnect(reason)) {
+      if (dr.shouldReconnect(reason)) {
         healthService.updateRoomConnected(
           connected: false,
           errorDetail: 'Disconnected ($reason)',
@@ -180,11 +181,11 @@ class LiveKitService extends ChangeNotifier {
       } else {
         healthService.updateRoomConnected(
           connected: false,
-          errorDetail: _disconnectMessage(reason),
+          errorDetail: dr.disconnectMessage(reason),
         );
         _updateState(
           status: ConversationStatus.error,
-          errorMessage: _disconnectMessage(reason),
+          errorMessage: dr.disconnectMessage(reason),
         );
       }
     });
@@ -588,42 +589,6 @@ class LiveKitService extends ChangeNotifier {
       clearCurrentAgentTranscript: clearCurrentAgentTranscript,
     );
     notifyListeners();
-  }
-
-  // ---------------------------------------------------------------------------
-  // Disconnect reason classification
-  // ---------------------------------------------------------------------------
-
-  /// Reasons that warrant automatic reconnection (transient failures).
-  static const _reconnectableReasons = {
-    DisconnectReason.unknown,
-    DisconnectReason.disconnected,
-    DisconnectReason.signalingConnectionFailure,
-    DisconnectReason.reconnectAttemptsExceeded,
-  };
-
-  bool _shouldReconnect(DisconnectReason reason) =>
-      _reconnectableReasons.contains(reason);
-
-  String _disconnectMessage(DisconnectReason reason) {
-    switch (reason) {
-      case DisconnectReason.clientInitiated:
-        return 'Disconnected';
-      case DisconnectReason.duplicateIdentity:
-        return 'Another session took over this connection';
-      case DisconnectReason.participantRemoved:
-        return 'Removed from room';
-      case DisconnectReason.roomDeleted:
-        return 'Room no longer exists';
-      case DisconnectReason.serverShutdown:
-        return 'Server shut down';
-      case DisconnectReason.joinFailure:
-        return 'Failed to join room';
-      case DisconnectReason.stateMismatch:
-        return 'Connection state error';
-      default:
-        return 'Connection lost';
-    }
   }
 
   // ---------------------------------------------------------------------------
