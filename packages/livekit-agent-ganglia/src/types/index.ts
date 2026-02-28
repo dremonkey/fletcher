@@ -4,6 +4,8 @@ export interface OpenClawConfig {
   model?: string;
   /** Default session info to use if not provided per-request */
   defaultSession?: LiveKitSessionInfo;
+  /** Optional logger for production-level logging (defaults to silent) */
+  logger?: import('../logger.js').Logger;
 }
 
 /**

@@ -25,6 +25,16 @@ import { voice } from '@livekit/agents';
 import * as deepgram from '@livekit/agents-plugin-deepgram';
 import * as cartesia from '@livekit/agents-plugin-cartesia';
 import { createGangliaFromEnv, resolveSessionKeySimple } from '@knittt/livekit-agent-ganglia';
+import pino from 'pino';
+
+// ---------------------------------------------------------------------------
+// Logger setup — pretty-print when running locally, JSON in production
+// ---------------------------------------------------------------------------
+const isLocal = process.env.NODE_ENV !== 'production' && !process.env.K_SERVICE;
+const logger = pino({
+  level: process.env.LOG_LEVEL || 'info',
+  ...(isLocal ? { transport: { target: 'pino-pretty', options: { colorize: true } } } : {}),
+});
 
 // ---------------------------------------------------------------------------
 // Environment validation
@@ -39,31 +49,29 @@ const REQUIRED_ENV = [
 
 const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
 if (missing.length > 0) {
-  console.error(`Missing required environment variables: ${missing.join(', ')}`);
+  logger.fatal(`Missing required environment variables: ${missing.join(', ')}`);
   process.exit(1);
 }
 
 // Ganglia-specific validation
 const gangliaType = process.env.GANGLIA_TYPE ?? 'openclaw';
 if (gangliaType === 'openclaw' && !process.env.OPENCLAW_API_KEY) {
-  console.error('GANGLIA_TYPE=openclaw requires OPENCLAW_API_KEY');
+  logger.fatal('GANGLIA_TYPE=openclaw requires OPENCLAW_API_KEY');
   process.exit(1);
 }
 
-console.log('Environment validated:', {
-  LIVEKIT_URL: process.env.LIVEKIT_URL,
-  GANGLIA_TYPE: gangliaType,
-  DEEPGRAM_API_KEY: `${process.env.DEEPGRAM_API_KEY!.slice(0, 6)}...`,
-  CARTESIA_API_KEY: `${process.env.CARTESIA_API_KEY!.slice(0, 6)}...`,
-});
+logger.info({
+  livekitUrl: process.env.LIVEKIT_URL,
+  gangliaType,
+}, 'Environment validated');
 
 // ---------------------------------------------------------------------------
 // Agent definition
 // ---------------------------------------------------------------------------
 export default defineAgent({
   entry: async (ctx: JobContext) => {
-    const gangliaLlm = await createGangliaFromEnv();
-    console.log(`Using ganglia backend: ${gangliaLlm.gangliaType()}`);
+    const gangliaLlm = await createGangliaFromEnv({ logger });
+    logger.info(`Using ganglia backend: ${gangliaLlm.gangliaType()}`);
 
     const stt = new deepgram.STT({ apiKey: process.env.DEEPGRAM_API_KEY });
     const tts = new cartesia.TTS({ apiKey: process.env.CARTESIA_API_KEY });
@@ -74,10 +82,10 @@ export default defineAgent({
       room: ctx.room,
     });
     await ctx.connect();
-    console.log(`Connected to room: ${ctx.room.name}`);
+    logger.info(`Connected to room: ${ctx.room.name}`);
 
     const participant = await ctx.waitForParticipant();
-    console.log(`Participant joined: ${participant.identity}`);
+    logger.info(`Participant joined: ${participant.identity}`);
 
     // Resolve session routing based on participant identity and room occupancy
     const ownerIdentity = process.env.FLETCHER_OWNER_IDENTITY;
@@ -90,7 +98,7 @@ export default defineAgent({
       ctx.room.name,
       participantCount,
     );
-    console.log(`Session routing: ${sessionKey.type} → ${sessionKey.key}`);
+    logger.info({ type: sessionKey.type, key: sessionKey.key }, 'Session routing resolved');
 
     gangliaLlm.setSessionKey?.(sessionKey);
     gangliaLlm.setDefaultSession?.({
@@ -99,7 +107,7 @@ export default defineAgent({
     });
 
     ctx.addShutdownCallback(async () => {
-      console.log('Shutting down voice agent...');
+      logger.info('Shutting down voice agent...');
       await session.close();
     });
   },

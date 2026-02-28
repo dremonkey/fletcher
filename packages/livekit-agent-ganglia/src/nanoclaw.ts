@@ -7,6 +7,7 @@ import type {
   OpenClawMessage,
   OpenClawToolCallDelta,
 } from './types/index.js';
+import { dbg } from './logger.js';
 
 // Re-export types from @livekit/agents
 type ChatChunk = llm.ChatChunk;
@@ -181,12 +182,16 @@ class NanoclawChatStream extends LLMStream {
   }
 
   protected async run(): Promise<void> {
+    dbg.nanoclawStream('run() called');
     const messages: OpenClawMessage[] = [];
     const chatCtx = this.chatCtx;
     const toolCtx = this.toolCtx;
     const connOptions = this.connOptions;
 
+    dbg.nanoclawStream('chatCtx.items count: %d', chatCtx.items?.length ?? 0);
     for (const item of chatCtx.items) {
+      dbg.nanoclawStream('item type=%s instanceof ChatMessage=%s FunctionCall=%s',
+        item?.constructor?.name, item instanceof ChatMessageClass, item instanceof FunctionCallClass);
       if (item instanceof ChatMessageClass) {
         const msg: OpenClawMessage = {
           role: item.role as OpenClawMessage['role'],
@@ -245,8 +250,17 @@ class NanoclawChatStream extends LLMStream {
         },
       })) : undefined;
 
+      dbg.nanoclawStream('converted %d messages, %d tools', messages.length, tools?.length ?? 0);
+      if (messages.length > 0) {
+        const lastMsg = messages[messages.length - 1];
+        dbg.nanoclawStream('last message: role=%s content="%s"',
+          lastMsg.role, (lastMsg.content || '').slice(0, 100));
+      }
+
       // Extract session metadata from LiveKit context
       const session = extractNanoclawSession(chatCtx, connOptions);
+      dbg.nanoclawStream('session: %O', session);
+      dbg.nanoclawStream('sessionKey: %O', this._sessionKey);
 
       const stream = this.nanoclawClient.chat({
         messages,
@@ -300,7 +314,7 @@ class NanoclawChatStream extends LLMStream {
         this.output.put(chatChunk);
       }
     } catch (error) {
-      console.error('Nanoclaw stream error:', error);
+      this.logger.error(`NanoclawChatStream error: ${error}`);
       throw error;
     } finally {
       this.output.close();

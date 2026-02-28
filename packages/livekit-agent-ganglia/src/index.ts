@@ -28,6 +28,9 @@
  * ```
  */
 
+// Logging
+export { noopLogger, type Logger } from './logger.js';
+
 // Ganglia Types
 export type {
   GangliaConfig,
