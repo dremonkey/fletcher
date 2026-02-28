@@ -9,6 +9,7 @@ import {
   OpenClawToolCallDelta,
   LiveKitSessionInfo,
 } from './types/index.js';
+import { dbg } from './logger.js';
 
 // Re-export types from @livekit/agents
 type ChatChunk = llm.ChatChunk;
@@ -177,12 +178,16 @@ class OpenClawChatStream extends LLMStream {
   }
 
   protected async run(): Promise<void> {
+    dbg.openclawStream('run() called');
     const messages: OpenClawMessage[] = [];
     const chatCtx = this.chatCtx;
     const toolCtx = this.toolCtx;
     const connOptions = this.connOptions;
 
+    dbg.openclawStream('chatCtx.items count: %d', chatCtx.items?.length ?? 0);
     for (const item of chatCtx.items) {
+      dbg.openclawStream('item type=%s instanceof ChatMessage=%s FunctionCall=%s',
+        item?.constructor?.name, item instanceof ChatMessageClass, item instanceof FunctionCallClass);
       if (item instanceof ChatMessageClass) {
         const msg: OpenClawMessage = {
           role: item.role as OpenClawMessage['role'],
@@ -241,8 +246,17 @@ class OpenClawChatStream extends LLMStream {
         },
       })) : undefined;
 
+      dbg.openclawStream('converted %d messages, %d tools', messages.length, tools?.length ?? 0);
+      if (messages.length > 0) {
+        const lastMsg = messages[messages.length - 1];
+        dbg.openclawStream('last message: role=%s content="%s"',
+          lastMsg.role, (lastMsg.content || '').slice(0, 100));
+      }
+
       // Extract session metadata from LiveKit context (informational headers)
       const session = extractSessionFromContext(chatCtx, connOptions);
+      dbg.openclawStream('session: %O', session);
+      dbg.openclawStream('sessionKey: %O', this._sessionKey);
 
       const stream = this.openclawClient.chat({
         messages,
@@ -252,9 +266,19 @@ class OpenClawChatStream extends LLMStream {
         sessionKey: this._sessionKey,
       });
 
+      let chunkCount = 0;
       for await (const chunk of stream) {
+        chunkCount++;
         const delta = chunk.choices[0]?.delta;
-        if (!delta) continue;
+        if (!delta) {
+          dbg.openclawStream('chunk %d: no delta', chunkCount);
+          continue;
+        }
+
+        if (chunkCount <= 3 || delta.tool_calls) {
+          dbg.openclawStream('chunk %d: role=%s content="%s" hasToolCalls=%s',
+            chunkCount, delta.role, (delta.content || '').slice(0, 50), !!delta.tool_calls);
+        }
 
         // Map tool calls to FunctionCall format if present
         let toolCalls: FunctionCall[] | undefined;
@@ -278,8 +302,9 @@ class OpenClawChatStream extends LLMStream {
         };
         this.output.put(chatChunk);
       }
+      dbg.openclawStream('stream complete, %d chunks received', chunkCount);
     } catch (error) {
-      console.error('OpenClaw stream error:', error);
+      this.logger.error(`OpenClawChatStream error: ${error}`);
       throw error;
     } finally {
       this.output.close();

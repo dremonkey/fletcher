@@ -8,6 +8,7 @@
 import type { llm } from '@livekit/agents';
 import type { GangliaConfig, GangliaSessionInfo } from './ganglia-types.js';
 import type { SessionKey } from './session-routing.js';
+import { type Logger, noopLogger, dbg } from './logger.js';
 
 /**
  * Extended LLM interface with session management.
@@ -105,25 +106,38 @@ export function isGangliaAvailable(type: string): boolean {
  * - OPENCLAW_GATEWAY_URL, OPENCLAW_API_KEY (for openclaw)
  * - NANOCLAW_URL (for nanoclaw)
  */
-export async function createGangliaFromEnv(): Promise<GangliaLLM> {
+export async function createGangliaFromEnv(opts?: { logger?: Logger }): Promise<GangliaLLM> {
+  const logger = opts?.logger || noopLogger;
   const type = (process.env.GANGLIA_TYPE || process.env.BRAIN_TYPE || 'openclaw') as GangliaConfig['type'];
+  dbg.factory('createGangliaFromEnv: GANGLIA_TYPE=%s BRAIN_TYPE=%s resolved=%s',
+    process.env.GANGLIA_TYPE, process.env.BRAIN_TYPE, type);
+  dbg.factory('registered types: %s', Array.from(registry.keys()).join(', ') || 'none');
 
   if (type === 'openclaw') {
+    const baseUrl = process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:8080';
+    dbg.factory('creating openclaw: baseUrl=%s hasApiKey=%s', baseUrl, !!process.env.OPENCLAW_API_KEY);
+    logger.info(`Creating ganglia backend: openclaw (${baseUrl})`);
     return createGanglia({
       type: 'openclaw',
       openclaw: {
-        baseUrl: process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:8080',
+        baseUrl,
         apiKey: process.env.OPENCLAW_API_KEY || '',
+        logger,
       },
     });
   }
 
   if (type === 'nanoclaw') {
+    const url = process.env.NANOCLAW_URL || 'http://localhost:18789';
+    const prefix = process.env.NANOCLAW_CHANNEL_PREFIX || 'lk';
+    dbg.factory('creating nanoclaw: url=%s channelPrefix=%s', url, prefix);
+    logger.info(`Creating ganglia backend: nanoclaw (${url})`);
     return createGanglia({
       type: 'nanoclaw',
       nanoclaw: {
-        url: process.env.NANOCLAW_URL || 'http://localhost:18789',
-        channelPrefix: process.env.NANOCLAW_CHANNEL_PREFIX || 'lk',
+        url,
+        channelPrefix: prefix,
+        logger,
       },
     });
   }

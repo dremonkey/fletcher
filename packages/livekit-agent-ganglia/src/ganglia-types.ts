@@ -41,6 +41,8 @@ export interface NanoclawConfig {
   url: string;
   /** Channel prefix for JID (default: lk) */
   channelPrefix?: string;
+  /** Optional logger for production-level logging (defaults to silent) */
+  logger?: import('./logger.js').Logger;
 }
 
 /**
@@ -48,8 +50,8 @@ export interface NanoclawConfig {
  * Use `type` to determine which backend to instantiate.
  */
 export type GangliaConfig =
-  | { type: 'openclaw'; openclaw: OpenClawConfig }
-  | { type: 'nanoclaw'; nanoclaw: NanoclawConfig };
+  | { type: 'openclaw'; openclaw: OpenClawConfig; logger?: import('./logger.js').Logger }
+  | { type: 'nanoclaw'; nanoclaw: NanoclawConfig; logger?: import('./logger.js').Logger };
 
 /**
  * Backend type identifier.
