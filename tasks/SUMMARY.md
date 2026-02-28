@@ -73,6 +73,8 @@ A unified LLM plugin (`@knittt/livekit-agent-ganglia`) that bridges LiveKit agen
 - [~] 001: Standalone Brain Plugin — OpenClaw working, unit tests passing; advanced features (async tools, context injection) and documentation remaining
 - [~] 002: Nanoclaw Integration — Phase 1-3 complete, Phase 4 (integration tests) in progress
 - [ ] 003: OpenResponses API Backend — backlog; item-based alternative to Chat Completions with granular SSE, ephemeral files, client-side tools
+- [ ] 004: Session Key Routing (spec 08) — implement identity-based session routing to replace room-scoped session IDs; enables conversation persistence across reconnections
+- [ ] 005: End-to-End OpenClaw Integration — validate full voice pipeline against a real OpenClaw Gateway; session continuity, guest isolation, tool calling
 
 **Implemented:**
 - Unified `@knittt/livekit-agent-ganglia` package with types, factory, events, tool-interceptor
@@ -86,14 +88,15 @@ A unified LLM plugin (`@knittt/livekit-agent-ganglia`) that bridges LiveKit agen
 - 129 unit tests passing
 
 **Remaining:**
-1. Apply `/add-openai-api` skill to Nanoclaw repo
-2. Integration tests with both backends (end-to-end voice conversation)
-3. Error handling and retry tests (network failures, rate limits)
-4. Async tool resolution support
-5. Context injection (LiveKit room metadata → OpenClaw context)
-6. Package README and documentation
-7. CI/CD for npm publishing
-8. Syntax highlighting for code artifacts (optional)
+1. **Session routing (004)** — replace `roomSid:participantIdentity` session keys with owner/guest/room routing per spec 08
+2. **E2E OpenClaw integration (005)** — validate against real Gateway
+3. Apply `/add-openai-api` skill to Nanoclaw repo
+4. Integration tests with Nanoclaw backend
+5. Error handling and retry tests (network failures, rate limits)
+6. Async tool resolution support
+7. Context injection (LiveKit room metadata → OpenClaw context)
+8. Package README and documentation
+9. CI/CD for npm publishing
 
 ### 5. [Latency Optimization](./05-latency-optimization) 📋
 Pipeline optimizations to reduce voice-to-voice latency from ~1.4s to <0.8s.
