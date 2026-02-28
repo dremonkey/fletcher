@@ -39,3 +39,4 @@ When using explicit dispatch, the job type on both sides must match — if the w
 
 - [Agent registers but never joins a room](./agent-not-dispatched.md) — JT_ROOM / JT_PARTICIPANT job type mismatch
 - [Mobile app → local server networking](./networking.md) — LAN connectivity, WebRTC UDP, Android cleartext, Tailscale
+- [VAD works but no subtitles](./stt-dies-on-audio-source-change.md) — STT pipeline dies when audio source changes mid-session (e.g., Bluetooth disconnect)
