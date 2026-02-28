@@ -31,6 +31,8 @@ export interface OpenClawConfig {
   baseUrl: string;
   /** API key for authentication */
   apiKey: string;
+  /** Optional logger for production-level logging (defaults to silent) */
+  logger?: import('./logger.js').Logger;
 }
 
 /**
