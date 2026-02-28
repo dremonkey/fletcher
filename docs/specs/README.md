@@ -18,6 +18,10 @@ specs/
 │   └── tool-calling.md         # Tool/skill calling feature
 ├── 05-latency-optimization/    # Voice pipeline latency optimization
 │   └── spec.md                 # Overlapped STT/LLM, preemptive generation
+├── 08-session-continuity/      # Session persistence across room reconnections
+│   ├── spec.md                 # Backend-agnostic session routing architecture
+│   ├── openclaw-implementation.md
+│   └── nanoclaw-implementation.md
 └── architecture-comparison.md  # Cross-cutting architecture decisions
 ```
 
@@ -40,6 +44,11 @@ specs/
 
 ### Latency Optimization
 - [Main Spec](./05-latency-optimization/spec.md) - Overlapped STT/LLM pipeline, preemptive generation, endpointing tuning
+
+### Session Continuity
+- [Main Spec](./08-session-continuity/spec.md) - Backend-agnostic session routing: rooms are transport, sessions persist
+- [OpenClaw Implementation](./08-session-continuity/openclaw-implementation.md) - Owner→main, guest→user field, room→user field
+- [Nanoclaw Implementation](./08-session-continuity/nanoclaw-implementation.md) - Single-user simplification, channel headers
 
 ### Cross-Cutting
 - [Architecture Comparison](./architecture-comparison.md) - Three integration approaches compared
