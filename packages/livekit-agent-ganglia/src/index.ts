@@ -93,6 +93,15 @@ export type {
 // Event Interception (Protocol)
 export { EventInterceptor, type EventInterceptorConfig } from './event-interceptor.js';
 
+// Session Routing
+export {
+  resolveSessionKey,
+  resolveSessionKeySimple,
+  type SessionKey,
+  type SpeakerVerification,
+  type SessionRoutingConfig,
+} from './session-routing.js';
+
 // OpenClaw Implementation
 import { OpenClawLLM } from './llm.js';
 export { OpenClawLLM };
