@@ -231,6 +231,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
         statusText = 'Connecting...';
         statusColor = const Color(0xFF4B5563);
         break;
+      case ConversationStatus.reconnecting:
+        statusText = 'Reconnecting...';
+        statusColor = const Color(0xFFF59E0B);
+        break;
       case ConversationStatus.idle:
         statusText = 'Listening';
         statusColor = const Color(0xFFF59E0B);
