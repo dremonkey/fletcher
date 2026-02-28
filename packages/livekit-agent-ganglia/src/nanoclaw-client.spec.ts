@@ -138,6 +138,14 @@ describe('sessionKeyToChannel', () => {
   it('room → "room:{room_name}"', () => {
     expect(sessionKeyToChannel({ type: 'room', key: 'room_standup' })).toBe('room:standup');
   });
+
+  it('handles identity with underscores — splits on first only', () => {
+    expect(sessionKeyToChannel({ type: 'guest', key: 'guest_user_name' })).toBe('guest:user_name');
+  });
+
+  it('handles room name with underscores', () => {
+    expect(sessionKeyToChannel({ type: 'room', key: 'room_my_project_room' })).toBe('room:my_project_room');
+  });
 });
 
 describe('NanoclawClient sessionKey routing', () => {

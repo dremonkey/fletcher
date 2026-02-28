@@ -60,8 +60,10 @@ export function sessionKeyToChannel(sessionKey: SessionKey): string {
   if (sessionKey.type === 'owner') {
     return 'main';
   }
-  // guest_bob → guest:bob, room_standup → room:standup
-  return sessionKey.key.replace('_', ':');
+  // Split on first underscore only: guest_user_name → guest:user_name
+  const idx = sessionKey.key.indexOf('_');
+  if (idx === -1) return sessionKey.key;
+  return sessionKey.key.slice(0, idx) + ':' + sessionKey.key.slice(idx + 1);
 }
 
 /**

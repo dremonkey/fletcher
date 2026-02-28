@@ -79,12 +79,16 @@ export default defineAgent({
     const participant = await ctx.waitForParticipant();
     console.log(`Participant joined: ${participant.identity}`);
 
-    // Resolve session routing based on participant identity
+    // Resolve session routing based on participant identity and room occupancy
     const ownerIdentity = process.env.FLETCHER_OWNER_IDENTITY;
+    const remoteParticipants = ctx.room.remoteParticipants?.size ?? 0;
+    // Exclude the agent itself — count only human participants
+    const participantCount = Math.max(1, remoteParticipants);
     const sessionKey = resolveSessionKeySimple(
       participant.identity,
       ownerIdentity,
       ctx.room.name,
+      participantCount,
     );
     console.log(`Session routing: ${sessionKey.type} → ${sessionKey.key}`);
 

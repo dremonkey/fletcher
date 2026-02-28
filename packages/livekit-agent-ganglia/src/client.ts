@@ -340,7 +340,9 @@ export class OpenClawClient {
 
       // Handle session-related errors
       if (response.status === 440 || errorText.toLowerCase().includes('session expired')) {
-        const sid = session ? generateSessionId(session) : options.sessionId || 'unknown';
+        // Use the routing key if available, otherwise fall back to legacy session ID
+        const sid = options.sessionKey?.key
+          || (session ? generateSessionId(session) : options.sessionId || 'unknown');
         if (this.trackSessionState && session) {
           this.expireSession(generateSessionId(session));
         }
