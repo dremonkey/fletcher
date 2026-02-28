@@ -23,40 +23,57 @@ Session routing depends on **who is in the room** and **whether the owner is pre
 
 ### Owner Detection
 
-The "owner" is a special participant identity established during onboarding. Fletcher stores this identity locally and compares it against participants in the room.
+Owner detection requires verifying the **person speaking**, not just the device connecting. A paired device authenticates the hardware, but the device could be borrowed or stolen — routing a stranger to the owner's "main" session would leak sensitive context.
+
+**Two-layer verification:**
+
+| Layer | Mechanism | What it proves | Alone sufficient? |
+|---|---|---|---|
+| Device identity | [Sovereign Pairing](../07-sovereign-pairing.md) | "This is a known, paired device" | No |
+| Speaker identity | [Voice Fingerprinting](../06-voice-fingerprinting/spec.md) | "The person speaking is the owner" | Configurable |
+| Both | Device + voice match | "Known device, confirmed speaker" | Yes |
+
+**Default behavior:** A paired device starts in **guest mode**. The agent upgrades the session to owner ("main") only after voice fingerprinting confirms the speaker with sufficient confidence (>0.75). This means:
+
+1. User connects from a paired device → agent joins, routes to a guest session initially
+2. User speaks → voice fingerprint engine processes audio
+3. If speaker matches owner voiceprint → agent upgrades routing to "main" session
+4. If no match or low confidence → remains in guest session
+
+**Upgrade mid-conversation:** When the agent upgrades from guest to owner routing, it should seamlessly switch the backend session key. Any messages exchanged in the guest session before verification can be discarded or merged — this is an implementation detail.
+
+**Fallback modes:** For environments without voice fingerprinting (e.g., early development, text-only), owner detection can fall back to:
+- Manual config: `FLETCHER_OWNER_IDENTITY` env var matches participant identity (trust-on-connect, suitable for single-user local setups)
+- Passphrase: Owner speaks a configured phrase to authenticate
 
 **Onboarding flow:**
 
-1. First launch → owner identifies themselves (voice fingerprint, passphrase, or manual config)
-2. Fletcher stores the owner identity (e.g., `"andre"`) in local device config
-3. On every room join, Fletcher checks: is the owner's identity among the participants?
-
-**Implementation:** The owner identity is a participant identity string set in the LiveKit token. The agent (ganglia) inspects `room.participants` on join and applies routing rules.
-
-**Related mechanisms:**
-
-- [Voice Fingerprinting](../06-voice-fingerprinting/spec.md) — can serve as the onboarding mechanism. The owner's voiceprint is captured during enrollment and used for continuous speaker verification. When the fingerprint engine identifies a participant as the owner (confidence >0.75), the agent can treat them as the owner without relying solely on the token identity.
-- [Sovereign Pairing](../07-sovereign-pairing.md) — provides cryptographic device authentication. A paired device's token already carries a verified identity, which the agent can trust for owner detection without additional fingerprinting.
+1. First launch → owner enrolls their voiceprint (speaks a few sentences)
+2. Fletcher stores the voiceprint locally (see [Voice Fingerprinting spec](../06-voice-fingerprinting/spec.md) for enrollment)
+3. Device is paired with the hub (see [Sovereign Pairing spec](../07-sovereign-pairing.md))
+4. On every room join: device identity gets them in, voice identity determines session routing
 
 ### Session Key Resolution
 
-The agent resolves a session key using this priority:
+Session routing is **dynamic** — it can change mid-conversation as speaker verification completes. The agent starts with an initial key and may upgrade it.
 
 ```
-fn resolveSessionKey(room, config):
+fn resolveSessionKey(room, speakerVerified, config):
   participants = room.remoteParticipants + room.localParticipant
-  ownerPresent = any(p.identity == config.ownerIdentity for p in participants)
   participantCount = len(participants)
 
   if participantCount == 1:
-    if ownerPresent:
+    if speakerVerified == "owner":
       return SessionKey(type: "owner", key: "main")
     else:
+      // Not yet verified, or verified as non-owner
       return SessionKey(type: "guest", key: "guest:{participant.identity}")
 
   else:  // multi-user
     return SessionKey(type: "room", key: "room:{room.name}")
 ```
+
+**`speakerVerified`** starts as `"unknown"` on connect and is updated by the voice fingerprint engine. In fallback mode (no fingerprinting), it can be set to `"owner"` immediately based on `FLETCHER_OWNER_IDENTITY` matching the participant identity.
 
 The resolved `SessionKey` is then passed to the backend-specific client, which maps it to the appropriate header or request parameter.
 
@@ -157,8 +174,8 @@ The mapping from `SessionKey` to backend-specific parameters is defined in each 
 
 ## Related Specs
 
-- [Voice Fingerprinting](../06-voice-fingerprinting/spec.md) — speaker identification for owner detection and context injection
-- [Sovereign Pairing](../07-sovereign-pairing.md) — device authentication and token minting with stable identity
+- [Voice Fingerprinting](../06-voice-fingerprinting/spec.md) — speaker verification for owner detection (gates access to "main" session)
+- [Sovereign Pairing](../07-sovereign-pairing.md) — device authentication (necessary but not sufficient for owner routing)
 - [Brain Plugin](../04-livekit-agent-plugin/spec.md) — current session context management (`conversationId`, speaker attribution)
 - [Nanoclaw Integration](../04-livekit-agent-plugin/nanoclaw-integration.md) — cross-channel history and JID-based channel separation
 - [Channel Plugin](../02-livekit-agent/spec.md) — room-to-conversation mapping (1:1), current context management
