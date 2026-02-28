@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'bun:test';
-import { NanoclawClient, generateChannelJid } from './nanoclaw-client.js';
+import { describe, it, expect, mock, beforeEach } from 'bun:test';
+import { NanoclawClient, generateChannelJid, sessionKeyToChannel } from './nanoclaw-client.js';
 import type { GangliaSessionInfo } from './ganglia-types.js';
+import type { SessionKey } from './session-routing.js';
 
 describe('generateChannelJid', () => {
   it('should use participantIdentity as primary identifier', () => {
@@ -122,5 +123,119 @@ describe('NanoclawClient', () => {
     });
 
     expect(client.getDefaultSession()).toBeUndefined();
+  });
+});
+
+describe('sessionKeyToChannel', () => {
+  it('owner → "main"', () => {
+    expect(sessionKeyToChannel({ type: 'owner', key: 'main' })).toBe('main');
+  });
+
+  it('guest → "guest:{identity}"', () => {
+    expect(sessionKeyToChannel({ type: 'guest', key: 'guest_bob' })).toBe('guest:bob');
+  });
+
+  it('room → "room:{room_name}"', () => {
+    expect(sessionKeyToChannel({ type: 'room', key: 'room_standup' })).toBe('room:standup');
+  });
+});
+
+describe('NanoclawClient sessionKey routing', () => {
+  beforeEach(() => {
+    global.fetch = mock();
+  });
+
+  function mockSuccessResponse() {
+    const mockFetch = global.fetch as any;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: {
+        getReader: () => ({
+          read: mock().mockResolvedValueOnce({ done: true }),
+          releaseLock: mock(),
+        }),
+      },
+    } as any);
+    return mockFetch;
+  }
+
+  it('owner sessionKey → X-Nanoclaw-Channel: main', async () => {
+    const mockFetch = mockSuccessResponse();
+    const client = new NanoclawClient({ url: 'http://test' });
+
+    const stream = client.chat({
+      messages: [{ role: 'user', content: 'hi' }],
+      sessionKey: { type: 'owner', key: 'main' },
+    });
+    for await (const _ of stream) {}
+
+    const callArgs = mockFetch.mock.calls[0];
+    const headers = callArgs[1].headers;
+
+    expect(headers['X-Nanoclaw-Channel']).toBe('main');
+  });
+
+  it('guest sessionKey → X-Nanoclaw-Channel: guest:{identity}', async () => {
+    const mockFetch = mockSuccessResponse();
+    const client = new NanoclawClient({ url: 'http://test' });
+
+    const stream = client.chat({
+      messages: [],
+      sessionKey: { type: 'guest', key: 'guest_bob' },
+    });
+    for await (const _ of stream) {}
+
+    const callArgs = mockFetch.mock.calls[0];
+    const headers = callArgs[1].headers;
+
+    expect(headers['X-Nanoclaw-Channel']).toBe('guest:bob');
+  });
+
+  it('room sessionKey → X-Nanoclaw-Channel: room:{name}', async () => {
+    const mockFetch = mockSuccessResponse();
+    const client = new NanoclawClient({ url: 'http://test' });
+
+    const stream = client.chat({
+      messages: [],
+      sessionKey: { type: 'room', key: 'room_standup' },
+    });
+    for await (const _ of stream) {}
+
+    const callArgs = mockFetch.mock.calls[0];
+    const headers = callArgs[1].headers;
+
+    expect(headers['X-Nanoclaw-Channel']).toBe('room:standup');
+  });
+
+  it('sessionKey takes priority over legacy session', async () => {
+    const mockFetch = mockSuccessResponse();
+    const client = new NanoclawClient({ url: 'http://test' });
+    client.setDefaultSession({ participantIdentity: 'old-user' });
+
+    const stream = client.chat({
+      messages: [],
+      sessionKey: { type: 'owner', key: 'main' },
+    });
+    for await (const _ of stream) {}
+
+    const callArgs = mockFetch.mock.calls[0];
+    const headers = callArgs[1].headers;
+
+    // Should use sessionKey, not legacy JID
+    expect(headers['X-Nanoclaw-Channel']).toBe('main');
+  });
+
+  it('falls back to legacy JID when no sessionKey', async () => {
+    const mockFetch = mockSuccessResponse();
+    const client = new NanoclawClient({ url: 'http://test', channelPrefix: 'lk' });
+    client.setDefaultSession({ participantIdentity: 'alice' });
+
+    const stream = client.chat({ messages: [] });
+    for await (const _ of stream) {}
+
+    const callArgs = mockFetch.mock.calls[0];
+    const headers = callArgs[1].headers;
+
+    expect(headers['X-Nanoclaw-Channel']).toBe('lk:alice');
   });
 });

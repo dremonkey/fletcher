@@ -1,5 +1,6 @@
 import type { GangliaSessionInfo, NanoclawConfig } from './ganglia-types.js';
 import type { OpenClawMessage, OpenClawChatResponse } from './types/index.js';
+import type { SessionKey } from './session-routing.js';
 
 /**
  * Chat options for Nanoclaw API.
@@ -9,8 +10,10 @@ export interface NanoclawChatOptions {
   stream?: boolean;
   tools?: any[];
   tool_choice?: any;
-  /** LiveKit session info for channel JID generation */
+  /** LiveKit session info for channel JID generation (legacy) */
   session?: GangliaSessionInfo;
+  /** Resolved session key for routing. Takes priority over session for channel header. */
+  sessionKey?: SessionKey;
 }
 
 /**
@@ -43,6 +46,22 @@ export function generateChannelJid(
 
   // Fallback: generate a random identifier
   return `${prefix}:session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/**
+ * Maps a SessionKey to a Nanoclaw channel value.
+ *
+ * Routing rules per spec 08:
+ * - owner → "main" (or omitted for default session)
+ * - guest → "guest:{identity}"
+ * - room  → "room:{room_name}"
+ */
+export function sessionKeyToChannel(sessionKey: SessionKey): string {
+  if (sessionKey.type === 'owner') {
+    return 'main';
+  }
+  // guest_bob → guest:bob, room_standup → room:standup
+  return sessionKey.key.replace('_', ':');
 }
 
 /**
@@ -100,13 +119,16 @@ export class NanoclawClient {
       'Content-Type': 'application/json',
     };
 
-    // Add channel JID header
-    const session = options.session || this.defaultSession;
-    if (session) {
-      headers['X-Nanoclaw-Channel'] = generateChannelJid(session, this.channelPrefix);
+    // Session routing: SessionKey takes priority, then legacy JID fallback
+    if (options.sessionKey) {
+      headers['X-Nanoclaw-Channel'] = sessionKeyToChannel(options.sessionKey);
     } else {
-      // Fallback to unknown channel
-      headers['X-Nanoclaw-Channel'] = `${this.channelPrefix}:unknown`;
+      const session = options.session || this.defaultSession;
+      if (session) {
+        headers['X-Nanoclaw-Channel'] = generateChannelJid(session, this.channelPrefix);
+      } else {
+        headers['X-Nanoclaw-Channel'] = `${this.channelPrefix}:unknown`;
+      }
     }
 
     const body: Record<string, any> = {

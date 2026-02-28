@@ -113,7 +113,7 @@ export * from './types/index.js';
 import { NanoclawLLM } from './nanoclaw.js';
 export { NanoclawLLM };
 export { extractNanoclawSession } from './nanoclaw.js';
-export { NanoclawClient, generateChannelJid } from './nanoclaw-client.js';
+export { NanoclawClient, generateChannelJid, sessionKeyToChannel } from './nanoclaw-client.js';
 export type { NanoclawChatOptions } from './nanoclaw-client.js';
 
 /**
