@@ -129,6 +129,32 @@ class LiveKitService extends ChangeNotifier {
   }
 
   void _setupRoomListeners() {
+    // SDK reconnection events — the SDK tries up to 10 reconnects (~40s)
+    // before firing RoomDisconnectedEvent. Show feedback during that window.
+    _listener?.on<RoomReconnectingEvent>((_) {
+      debugPrint('[Fletcher] SDK reconnecting...');
+      _updateState(status: ConversationStatus.reconnecting);
+      healthService.updateRoomReconnecting();
+    });
+
+    _listener?.on<RoomAttemptReconnectEvent>((event) {
+      debugPrint(
+        '[Fletcher] SDK reconnect attempt ${event.attempt}/${event.maxAttemptsRetry} '
+        '(next retry in ${event.nextRetryDelaysInMs}ms)',
+      );
+    });
+
+    _listener?.on<RoomReconnectedEvent>((_) {
+      debugPrint('[Fletcher] SDK reconnected successfully');
+      _reconnectAttempt = 0;
+      _reconnecting = false;
+      healthService.updateRoomConnected(connected: true);
+      // Restore status: respect mute state, otherwise go idle
+      _updateState(
+        status: _isMuted ? ConversationStatus.muted : ConversationStatus.idle,
+      );
+    });
+
     _listener?.on<RoomDisconnectedEvent>((event) {
       healthService.updateRoomConnected(connected: false, errorDetail: 'Disconnected from room');
       healthService.updateAgentPresent(present: false);

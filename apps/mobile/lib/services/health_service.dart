@@ -73,6 +73,15 @@ class HealthService extends ChangeNotifier {
     );
   }
 
+  void updateRoomReconnecting() {
+    _updateCheck(
+      'room_joined',
+      status: HealthCheckStatus.warning,
+      detail: 'Reconnecting...',
+      suggestion: 'The SDK is attempting to restore the connection',
+    );
+  }
+
   void updateRoomConnected({required bool connected, String? errorDetail}) {
     _updateCheck(
       'room_joined',
