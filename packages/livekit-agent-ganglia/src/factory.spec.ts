@@ -105,8 +105,8 @@ describe('Backend Registration', () => {
     const llm = await createGanglia({
       type: 'openclaw',
       openclaw: {
-        endpoint: 'http://localhost:8080',
-        token: 'test-token',
+        baseUrl: 'http://localhost:8080',
+        apiKey: 'test-token',
       },
     });
 

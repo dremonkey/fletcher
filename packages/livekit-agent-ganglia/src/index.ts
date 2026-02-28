@@ -10,7 +10,7 @@
  * // From explicit config (OpenClaw)
  * const llm = await createGanglia({
  *   type: 'openclaw',
- *   openclaw: { endpoint: 'http://localhost:8080', token: '...' },
+ *   openclaw: { baseUrl: 'http://localhost:8080', apiKey: '...' },
  * });
  *
  * // From explicit config (Nanoclaw)
