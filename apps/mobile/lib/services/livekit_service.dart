@@ -39,6 +39,11 @@ class LiveKitService extends ChangeNotifier {
 
   final HealthService healthService = HealthService();
 
+  // Room reconnection state (sleep/disconnect recovery)
+  bool _reconnecting = false;
+  int _reconnectAttempt = 0;
+  static const _maxReconnectAttempts = 3;
+
   // Buffer for reassembling chunked messages
   final Map<String, List<String?>> _chunks = {};
 
@@ -99,6 +104,8 @@ class LiveKitService extends ChangeNotifier {
 
       debugPrint('[Fletcher] Connected to room');
       _localParticipant = _room!.localParticipant;
+      _reconnectAttempt = 0;
+      _reconnecting = false;
       healthService.updateRoomConnected(connected: true);
 
       // Check if agent is already in the room
@@ -123,10 +130,9 @@ class LiveKitService extends ChangeNotifier {
 
   void _setupRoomListeners() {
     _listener?.on<RoomDisconnectedEvent>((event) {
-      _updateState(
-        status: ConversationStatus.error,
-        errorMessage: 'Disconnected from room',
-      );
+      healthService.updateRoomConnected(connected: false, errorDetail: 'Disconnected from room');
+      healthService.updateAgentPresent(present: false);
+      _reconnectRoom();
     });
 
     _listener?.on<ParticipantConnectedEvent>((event) {
@@ -383,16 +389,16 @@ class LiveKitService extends ChangeNotifier {
 
   void _onDeviceChange() {
     // Skip if already reconnecting or fully disconnected
-    if (_isReconnecting || _room == null) return;
+    if (_isReconnecting || _reconnecting || _room == null) return;
 
     // Debounce: audio route changes can fire multiple events rapidly
     _deviceChangeDebounce?.cancel();
     _deviceChangeDebounce = Timer(const Duration(seconds: 1), () {
-      _reconnect();
+      _reconnectAudioDevice();
     });
   }
 
-  Future<void> _reconnect() async {
+  Future<void> _reconnectAudioDevice() async {
     if (_isReconnecting || _url == null || _token == null) return;
     _isReconnecting = true;
 
@@ -514,6 +520,68 @@ class LiveKitService extends ChangeNotifier {
       clearCurrentAgentTranscript: clearCurrentAgentTranscript,
     );
     notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Room reconnection logic (sleep/disconnect recovery)
+  // ---------------------------------------------------------------------------
+
+  /// Whether a room reconnection attempt is currently in progress.
+  bool get isReconnecting => _reconnecting;
+
+  /// Attempt to reconnect to the room using stored credentials.
+  /// Uses exponential backoff: 1s, 2s, 4s across up to 3 attempts.
+  Future<void> _reconnectRoom() async {
+    if (_reconnecting) return;
+    if (_url == null || _token == null) {
+      _updateState(
+        status: ConversationStatus.error,
+        errorMessage: 'Disconnected from room',
+      );
+      return;
+    }
+
+    _reconnecting = true;
+    _reconnectAttempt++;
+
+    if (_reconnectAttempt > _maxReconnectAttempts) {
+      _reconnecting = false;
+      _reconnectAttempt = 0;
+      _updateState(
+        status: ConversationStatus.error,
+        errorMessage: 'Failed to reconnect after $_maxReconnectAttempts attempts',
+      );
+      return;
+    }
+
+    debugPrint('[Fletcher] Reconnect attempt $_reconnectAttempt/$_maxReconnectAttempts');
+    _updateState(status: ConversationStatus.reconnecting);
+
+    // Exponential backoff: 1s, 2s, 4s
+    final delay = Duration(seconds: 1 << (_reconnectAttempt - 1));
+    await Future.delayed(delay);
+
+    // Clean up old room/listeners but keep credentials
+    await disconnect(preserveTranscripts: true);
+
+    // Attempt fresh connect
+    await connect(url: _url!, token: _token!);
+
+    // If connect failed (status is error), try again
+    if (_state.status == ConversationStatus.error) {
+      _reconnecting = false;
+      _reconnectRoom();
+    }
+  }
+
+  /// Trigger a reconnect from outside (e.g., app lifecycle resume).
+  Future<void> tryReconnect() async {
+    if (_state.status == ConversationStatus.error ||
+        _state.status == ConversationStatus.reconnecting) {
+      _reconnectAttempt = 0;
+      _reconnecting = false;
+      await _reconnectRoom();
+    }
   }
 
   Future<void> disconnect({bool preserveTranscripts = false}) async {

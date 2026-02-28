@@ -24,12 +24,14 @@ class ConversationScreen extends StatefulWidget {
   State<ConversationScreen> createState() => _ConversationScreenState();
 }
 
-class _ConversationScreenState extends State<ConversationScreen> {
+class _ConversationScreenState extends State<ConversationScreen>
+    with WidgetsBindingObserver {
   final LiveKitService _liveKitService = LiveKitService();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _liveKitService.addListener(_onStateChanged);
     _liveKitService.healthService.addListener(_onStateChanged);
     _connect();
@@ -47,7 +49,15 @@ class _ConversationScreenState extends State<ConversationScreen> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _liveKitService.tryReconnect();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _liveKitService.removeListener(_onStateChanged);
     _liveKitService.healthService.removeListener(_onStateChanged);
     _liveKitService.dispose();
@@ -188,8 +198,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
               ),
             ),
 
-            // Error message
-            if (state.status == ConversationStatus.error)
+            // Error / reconnecting message
+            if (state.status == ConversationStatus.error ||
+                state.status == ConversationStatus.reconnecting)
               Positioned(
                 bottom: 260,
                 left: 24,
@@ -203,11 +214,15 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     color: const Color(0xFF1F1F1F),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: const Color(0xFFEF4444).withOpacity(0.5),
+                      color: state.status == ConversationStatus.reconnecting
+                          ? const Color(0xFFF59E0B).withOpacity(0.5)
+                          : const Color(0xFFEF4444).withOpacity(0.5),
                     ),
                   ),
                   child: Text(
-                    state.errorMessage ?? 'Connection error',
+                    state.status == ConversationStatus.reconnecting
+                        ? 'Connection lost. Reconnecting...'
+                        : state.errorMessage ?? 'Connection error',
                     style: const TextStyle(
                       color: Color(0xFFE5E7EB),
                       fontSize: 14,
