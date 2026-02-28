@@ -90,9 +90,20 @@ export default defineAgent({
 });
 
 // Run as CLI if this is the main module
+//
+// loadFunc: Always report zero load so the LiveKit server considers this
+// worker available for dispatch.  The default `defaultCpuLoad` samples
+// os.cpus() inside the Docker container, but that reflects *host* CPU
+// counters rather than the container's cgroup allocation.  The Go server
+// uses the reported load to gate job dispatch, and the unreliable
+// measurement causes intermittent "no servers available" errors even
+// though the worker is idle.  In production (LiveKit Cloud) the SDK
+// ignores custom loadFunc and uses its own defaults, so this only
+// affects local dev.
 cli.runApp(
   new ServerOptions({
     agent: import.meta.filename,
     initializeProcessTimeout: 60_000,
+    loadFunc: async () => 0,
   }),
 );
