@@ -19,6 +19,12 @@ class HealthService extends ChangeNotifier {
       _checkToken(),
       // Connection-dependent checks start as pending
       const HealthCheck(
+        id: 'network',
+        label: 'Network',
+        status: HealthCheckStatus.ok,
+        detail: 'Checking...',
+      ),
+      const HealthCheck(
         id: 'mic_permission',
         label: 'Microphone permission',
       ),
@@ -42,7 +48,7 @@ class HealthService extends ChangeNotifier {
 
     final connectionChecks = <String, HealthCheck>{};
     for (final check in _state.checks) {
-      if (['mic_permission', 'room_joined', 'agent_present'].contains(check.id)) {
+      if (['network', 'mic_permission', 'room_joined', 'agent_present'].contains(check.id)) {
         connectionChecks[check.id] = check;
       }
     }
@@ -50,6 +56,8 @@ class HealthService extends ChangeNotifier {
     final checks = <HealthCheck>[
       _checkUrl(),
       _checkToken(),
+      connectionChecks['network'] ??
+          const HealthCheck(id: 'network', label: 'Network'),
       connectionChecks['mic_permission'] ??
           const HealthCheck(id: 'mic_permission', label: 'Microphone permission'),
       connectionChecks['room_joined'] ??
@@ -63,6 +71,15 @@ class HealthService extends ChangeNotifier {
   }
 
   // --- Connection-dependent updates called by LiveKitService ---
+
+  void updateNetworkStatus({required bool online, String? detail}) {
+    _updateCheck(
+      'network',
+      status: online ? HealthCheckStatus.ok : HealthCheckStatus.error,
+      detail: online ? (detail ?? 'Connected') : 'No network connection',
+      suggestion: online ? null : 'Check WiFi or cellular data settings',
+    );
+  }
 
   void updateMicPermission({required bool granted}) {
     _updateCheck(

@@ -4,13 +4,13 @@
 The app has no awareness of network state. When offline, reconnect attempts fire blindly and exhaust the retry budget before the network returns. Adding `connectivity_plus` lets us detect online/offline transitions and make smarter reconnection decisions.
 
 ## Checklist
-- [ ] Add `connectivity_plus` to `apps/mobile/pubspec.yaml`
-- [ ] Create a lightweight `ConnectivityService` (or add to `HealthService`) that exposes a `Stream<bool>` for online/offline state
-- [ ] Track current connectivity status: `wifi`, `cellular`, `none`
-- [ ] Expose a synchronous `bool get isOnline` getter for use in reconnect guards
-- [ ] Update `HealthService` to include network status in diagnostics
-- [ ] Wire connectivity stream into `LiveKitService` (subscription in `connect()`, cancel in `disconnect()`)
-- [ ] Verify Android and iOS permissions/setup for `connectivity_plus`
+- [x] Add `connectivity_plus` to `apps/mobile/pubspec.yaml`
+- [x] Create a lightweight `ConnectivityService` (or add to `HealthService`) that exposes a `Stream<bool>` for online/offline state
+- [x] Track current connectivity status: `wifi`, `cellular`, `none`
+- [x] Expose a synchronous `bool get isOnline` getter for use in reconnect guards
+- [x] Update `HealthService` to include network status in diagnostics
+- [x] Wire connectivity stream into `LiveKitService` (subscription in `connect()`, cancel in `disconnect()`)
+- [x] Verify Android and iOS permissions/setup for `connectivity_plus`
 
 ## Context
 - `apps/mobile/pubspec.yaml` — add dependency

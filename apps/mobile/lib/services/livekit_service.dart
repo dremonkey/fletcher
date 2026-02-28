@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/conversation_state.dart';
+import 'connectivity_service.dart';
 import 'health_service.dart';
 
 /// Max waveform samples (~30 samples at 100ms = 3s history)
@@ -37,7 +38,11 @@ class LiveKitService extends ChangeNotifier {
   Timer? _deviceChangeDebounce;
   bool _isReconnecting = false;
 
+  // Network connectivity subscription
+  StreamSubscription<bool>? _connectivitySub;
+
   final HealthService healthService = HealthService();
+  final ConnectivityService connectivityService = ConnectivityService();
 
   // Room reconnection state (sleep/disconnect recovery)
   bool _reconnecting = false;
@@ -117,6 +122,7 @@ class LiveKitService extends ChangeNotifier {
 
       _startAudioLevelMonitoring();
       _subscribeToDeviceChanges();
+      _subscribeToConnectivity();
       _updateState(status: ConversationStatus.idle);
     } catch (e) {
       debugPrint('[Fletcher] Connection failed: $e');
@@ -420,6 +426,20 @@ class LiveKitService extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
+  // Network connectivity monitoring
+  // ---------------------------------------------------------------------------
+
+  void _subscribeToConnectivity() {
+    _connectivitySub?.cancel();
+    // Sync initial state to health service
+    healthService.updateNetworkStatus(online: connectivityService.isOnline);
+    _connectivitySub =
+        connectivityService.onConnectivityChanged.listen((online) {
+      healthService.updateNetworkStatus(online: online);
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Audio device change → auto-reconnect
   // ---------------------------------------------------------------------------
 
@@ -671,6 +691,8 @@ class LiveKitService extends ChangeNotifier {
     _deviceChangeDebounce?.cancel();
     _deviceChangeSub?.cancel();
     _deviceChangeSub = null;
+    _connectivitySub?.cancel();
+    _connectivitySub = null;
     _room?.unregisterTextStreamHandler('lk.transcription');
     _listener?.dispose();
     await _room?.disconnect();
@@ -687,6 +709,7 @@ class LiveKitService extends ChangeNotifier {
   @override
   void dispose() {
     disconnect();
+    connectivityService.dispose();
     super.dispose();
   }
 }
