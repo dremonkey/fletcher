@@ -1,4 +1,5 @@
 port: 7880
+node_ip: 100.87.219.109 # NixOS Tailscale IP — forces ICE candidates to use this routable address
 bind_addresses:
   - ""
 keys:
@@ -8,6 +9,5 @@ rtc:
   port_range_start: 50000
   port_range_end: 60000
   use_external_ip: true
-  external_ip: 100.87.219.109
 logging:
   level: info
