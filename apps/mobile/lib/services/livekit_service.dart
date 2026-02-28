@@ -120,13 +120,15 @@ class LiveKitService extends ChangeNotifier {
       final hasAgent = _room!.remoteParticipants.isNotEmpty;
       healthService.updateAgentPresent(present: hasAgent);
 
-      // Enable microphone
-      await _localParticipant!.setMicrophoneEnabled(true);
+      // Enable microphone — respect mute state across reconnects
+      await _localParticipant!.setMicrophoneEnabled(!_isMuted);
 
       _startAudioLevelMonitoring();
       _subscribeToDeviceChanges();
       _subscribeToConnectivity();
-      _updateState(status: ConversationStatus.idle);
+      _updateState(
+        status: _isMuted ? ConversationStatus.muted : ConversationStatus.idle,
+      );
     } catch (e) {
       debugPrint('[Fletcher] Connection failed: $e');
       healthService.updateRoomConnected(connected: false, errorDetail: e.toString());
@@ -754,7 +756,26 @@ class LiveKitService extends ChangeNotifier {
     await _room?.disconnect();
     _room = null;
     _localParticipant = null;
+
+    // Finalize in-flight transcript segments before clearing —
+    // text already received shouldn't be silently dropped.
+    for (final entry in _segmentContent.entries) {
+      _upsertTranscript(
+        segmentId: entry.key,
+        role: TranscriptRole.agent, // best guess for orphaned segments
+        text: entry.value,
+        isFinal: true,
+      );
+    }
     _segmentContent.clear();
+
+    // Clear stale ganglia chunk buffers — partial messages from the
+    // old connection can't be reassembled.
+    _chunks.clear();
+
+    // Clear waveform buffers — old audio levels are meaningless
+    _userWaveformBuffer.clear();
+    _aiWaveformBuffer.clear();
 
     if (!preserveTranscripts) {
       _url = null;
