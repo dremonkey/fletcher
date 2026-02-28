@@ -4,8 +4,6 @@ import {
   OpenClawConfig,
   LiveKitSessionInfo,
   OpenClawSessionHeaders,
-  ManagedSession,
-  SessionState,
   AuthenticationError,
   SessionError,
 } from './types/index.js';
@@ -120,15 +118,12 @@ export class OpenClawClient {
   private apiKey: string;
   private model: string;
   private defaultSession?: LiveKitSessionInfo;
-  private trackSessionState: boolean;
-  private managedSessions: Map<string, ManagedSession> = new Map();
 
   constructor(config: OpenClawConfig = {}) {
     this.baseUrl = config.baseUrl || process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:8080';
     this.apiKey = config.apiKey || process.env.OPENCLAW_API_KEY || '';
     this.model = config.model || 'openclaw-gateway';
     this.defaultSession = config.defaultSession;
-    this.trackSessionState = config.trackSessionState ?? false;
   }
 
   /**
@@ -157,111 +152,6 @@ export class OpenClawClient {
    */
   setDefaultSession(session: LiveKitSessionInfo): void {
     this.defaultSession = session;
-  }
-
-  /**
-   * Creates or updates a managed session with state tracking.
-   * Returns the managed session with computed session ID.
-   */
-  createManagedSession(session: LiveKitSessionInfo): ManagedSession {
-    const sessionId = generateSessionId(session);
-    const existing = this.managedSessions.get(sessionId);
-
-    if (existing) {
-      // Update existing session
-      existing.lastActivityAt = Date.now();
-      return existing;
-    }
-
-    const managed: ManagedSession = {
-      ...session,
-      state: 'active',
-      createdAt: Date.now(),
-      lastActivityAt: Date.now(),
-      requestCount: 0,
-      sessionId,
-    };
-
-    if (this.trackSessionState) {
-      this.managedSessions.set(sessionId, managed);
-    }
-
-    return managed;
-  }
-
-  /**
-   * Gets a managed session by ID.
-   */
-  getManagedSession(sessionId: string): ManagedSession | undefined {
-    return this.managedSessions.get(sessionId);
-  }
-
-  /**
-   * Gets all managed sessions.
-   */
-  getAllManagedSessions(): ManagedSession[] {
-    return Array.from(this.managedSessions.values());
-  }
-
-  /**
-   * Updates the state of a managed session.
-   */
-  updateSessionState(sessionId: string, state: SessionState): void {
-    const session = this.managedSessions.get(sessionId);
-    if (session) {
-      session.state = state;
-      session.lastActivityAt = Date.now();
-    }
-  }
-
-  /**
-   * Marks a session as expired and removes it from tracking.
-   */
-  expireSession(sessionId: string): void {
-    const session = this.managedSessions.get(sessionId);
-    if (session) {
-      session.state = 'expired';
-    }
-  }
-
-  /**
-   * Removes a session from tracking.
-   */
-  removeSession(sessionId: string): boolean {
-    return this.managedSessions.delete(sessionId);
-  }
-
-  /**
-   * Clears all managed sessions.
-   */
-  clearSessions(): void {
-    this.managedSessions.clear();
-  }
-
-  /**
-   * Validates if a session is in an active state.
-   */
-  isSessionActive(sessionId: string): boolean {
-    const session = this.managedSessions.get(sessionId);
-    return session?.state === 'active';
-  }
-
-  /**
-   * Creates session info from LiveKit room and participant data.
-   * This is a convenience method for extracting session identifiers.
-   */
-  static createSessionFromLiveKit(opts: {
-    roomSid?: string;
-    roomName?: string;
-    participantIdentity?: string;
-    participantSid?: string;
-  }): LiveKitSessionInfo {
-    return {
-      roomSid: opts.roomSid,
-      roomName: opts.roomName,
-      participantIdentity: opts.participantIdentity,
-      participantSid: opts.participantSid,
-    };
   }
 
   async *chat(options: OpenClawChatOptions): AsyncIterableIterator<OpenClawChatResponse> {
@@ -343,9 +233,6 @@ export class OpenClawClient {
         // Use the routing key if available, otherwise fall back to legacy session ID
         const sid = options.sessionKey?.key
           || (session ? generateSessionId(session) : options.sessionId || 'unknown');
-        if (this.trackSessionState && session) {
-          this.expireSession(generateSessionId(session));
-        }
         throw new SessionError(
           `Session expired: ${errorText}`,
           sid,
@@ -354,16 +241,6 @@ export class OpenClawClient {
       }
 
       throw new Error(`OpenClaw API error (${response.status}): ${errorText}`);
-    }
-
-    // Update managed session state on successful response
-    if (this.trackSessionState && session) {
-      const managed = this.managedSessions.get(generateSessionId(session));
-      if (managed) {
-        managed.requestCount++;
-        managed.lastActivityAt = Date.now();
-        managed.state = 'active';
-      }
     }
 
     if (!response.body) {
