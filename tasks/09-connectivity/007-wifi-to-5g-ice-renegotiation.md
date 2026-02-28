@@ -28,24 +28,60 @@ livekit  | job ended  status: "JS_FAILED"  error: "agent worker left the room"
 - Client also sent `srflx 23.93.223....:44455` but selected candidate was the stale LAN IP
 
 ## Analysis
-When the device switches from WiFi to 5G:
-- The WiFi interface goes down, invalidating all existing ICE candidates from the client side
-- The client needs to gather new candidates on the 5G interface and perform an ICE restart
-- LiveKit SDK should handle this via its reconnect logic, but the server is marking `isExpectedToResume: false`, preventing resumption
-- The server sees the DTLS timeout and immediately closes the participant rather than waiting for an ICE restart
+
+### Root cause: "break before make" timing
+
+WiFi → 5G is a **"break before make"** transition — WiFi drops *before* 5G is fully active, creating a connectivity gap. The phone must: activate 5G → get an IP → re-establish the Tailscale tunnel → gather new ICE candidates. This takes several seconds.
+
+The server-side timeline shows it gives up far too quickly:
+
+```
+07:33:54  "short ice connection" — server detects ICE link is dead
+07:33:59  participant closed     — only 5 seconds later (isExpectedToResume: false)
+07:34:19  room closed            — agent leaves, job marked JS_FAILED
+```
+
+**~5 seconds is not enough** for the 5G + Tailscale handoff to complete.
+
+### Why 5G → WiFi works
+
+That's a **"make before break"** transition — WiFi comes up *while 5G is still active*. There's no connectivity gap, so the client can gather new ICE candidates on WiFi and renegotiate while the old connection is still alive.
+
+### The smoking gun: `isExpectedToResume: false`
+
+This is the critical flag. When the server sets this to `false`, it cleans up participant state immediately — even if the client reconnects seconds later, there's nothing to resume into. The room empties, the agent leaves, and the room closes via departure timeout.
+
+### Cascade of failure
+
+1. **Server gives up too fast** (~5s ICE timeout) — not enough time for 5G handoff
+2. **`isExpectedToResume: false`** — server doesn't preserve participant state for reconnection
+3. **Agent leaves when room empties** — the voice agent exits as soon as the user participant is gone
+4. **Room closes on departure timeout** (~20s) — even if the client reconnects, it would be joining an empty room with no agent
+5. **App-level reconnect (task 004) never gets a chance** — by the time the client has 5G + Tailscale, everything is torn down
 
 ### Possible root causes
-- [ ] LiveKit server `isExpectedToResume: false` — investigate why the server doesn't expect resumption on network change
+- [ ] LiveKit server ICE disconnect timeout is too short (~5s) for mobile network transitions
+- [ ] `isExpectedToResume: false` — investigate why the server doesn't expect resumption; may need config to force resume expectation
 - [ ] Client-side ICE restart may not be triggering (Flutter LiveKit SDK behavior on network change)
 - [ ] Tailscale tunnel re-establishment delay on 5G may exceed LiveKit's ICE timeout
 - [ ] `use_external_ip: true` in `livekit.yaml` may conflict with `rtc.node_ip` pinning
+- [ ] Agent exits immediately on participant disconnect — no grace period to wait for reconnection
+
+## Likely fix (two levels)
+
+### Server config
+LiveKit should have settings to increase the ICE disconnect timeout and keep participant state around longer. Look for `reconnect_timeout`, `departure_timeout`, or `pli_throttle`-style knobs in `livekit.yaml`. Even 30s instead of 5s would cover most WiFi → 5G transitions.
+
+### Room/agent persistence
+The agent should not leave the room the instant the user disconnects. A grace period (e.g., 30-60s) would let the client complete the 5G handoff and rejoin. This may be configurable in the LiveKit agent framework or require a wrapper in the voice agent code.
 
 ## Investigation checklist
-- [ ] Check LiveKit server config for ICE timeout / resume settings
-- [ ] Check if `reconnect_on_disconnected` or similar server-side config exists
+- [ ] Check LiveKit server config for ICE timeout / resume settings (`reconnect_timeout`, etc.)
+- [ ] Check LiveKit source for what determines `isExpectedToResume` and whether it's configurable
 - [ ] Test with increased ICE disconnect timeout on server
+- [ ] Add agent-side grace period before leaving room on participant disconnect
 - [ ] Capture client-side logs during WiFi → 5G switch (Flutter LiveKit SDK)
-- [ ] Verify Tailscale tunnel re-establishment timing on 5G
+- [ ] Verify Tailscale tunnel re-establishment timing on 5G (how many seconds?)
 - [ ] Check if Flutter `ConnectivityService` triggers reconnect fast enough
 - [ ] Test whether forcing an ICE restart from client side resolves the issue
 
