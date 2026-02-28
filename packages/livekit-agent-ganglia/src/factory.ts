@@ -7,15 +7,22 @@
 
 import type { llm } from '@livekit/agents';
 import type { GangliaConfig, GangliaSessionInfo } from './ganglia-types.js';
+import type { SessionKey } from './session-routing.js';
 
 /**
  * Extended LLM interface with session management.
  */
 export interface GangliaLLM extends llm.LLM {
   /**
-   * Sets the default session info for all subsequent requests.
+   * Sets the default session info (metadata) for all subsequent requests.
    */
   setDefaultSession?(session: GangliaSessionInfo): void;
+
+  /**
+   * Sets the session key for routing. This determines which backend
+   * session the conversation routes to (owner/guest/room).
+   */
+  setSessionKey?(sessionKey: SessionKey): void;
 
   /**
    * Returns the backend type identifier.

@@ -15,6 +15,7 @@
  *   LIVEKIT_API_SECRET - LiveKit API secret
  *   GANGLIA_TYPE - Backend type: 'openclaw' or 'nanoclaw'
  *   OPENCLAW_API_KEY - OpenClaw API key (if using openclaw)
+ *   FLETCHER_OWNER_IDENTITY - Participant identity of the owner (for session routing)
  *   DEEPGRAM_API_KEY - Deepgram API key for STT
  *   CARTESIA_API_KEY - Cartesia API key for TTS
  */
@@ -23,7 +24,7 @@ import { defineAgent, cli, ServerOptions, type JobContext } from '@livekit/agent
 import { voice } from '@livekit/agents';
 import * as deepgram from '@livekit/agents-plugin-deepgram';
 import * as cartesia from '@livekit/agents-plugin-cartesia';
-import { createGangliaFromEnv } from '@knittt/livekit-agent-ganglia';
+import { createGangliaFromEnv, resolveSessionKeySimple } from '@knittt/livekit-agent-ganglia';
 
 // ---------------------------------------------------------------------------
 // Environment validation
@@ -77,6 +78,17 @@ export default defineAgent({
 
     const participant = await ctx.waitForParticipant();
     console.log(`Participant joined: ${participant.identity}`);
+
+    // Resolve session routing based on participant identity
+    const ownerIdentity = process.env.FLETCHER_OWNER_IDENTITY;
+    const sessionKey = resolveSessionKeySimple(
+      participant.identity,
+      ownerIdentity,
+      ctx.room.name,
+    );
+    console.log(`Session routing: ${sessionKey.type} → ${sessionKey.key}`);
+
+    gangliaLlm.setSessionKey?.(sessionKey);
     gangliaLlm.setDefaultSession?.({
       roomName: ctx.room.name,
       participantIdentity: participant.identity,
