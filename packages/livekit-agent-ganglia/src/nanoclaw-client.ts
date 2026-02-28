@@ -1,6 +1,7 @@
 import type { GangliaSessionInfo, NanoclawConfig } from './ganglia-types.js';
 import type { OpenClawMessage, OpenClawChatResponse } from './types/index.js';
 import type { SessionKey } from './session-routing.js';
+import { type Logger, noopLogger, dbg } from './logger.js';
 
 /**
  * Chat options for Nanoclaw API.
@@ -78,10 +79,12 @@ export class NanoclawClient {
   private baseUrl: string;
   private channelPrefix: string;
   private defaultSession?: GangliaSessionInfo;
+  private logger: Logger;
 
   constructor(config: NanoclawConfig) {
     this.baseUrl = config.url || process.env.NANOCLAW_URL || 'http://localhost:18789';
     this.channelPrefix = config.channelPrefix || process.env.NANOCLAW_CHANNEL_PREFIX || 'lk';
+    this.logger = config.logger || noopLogger;
   }
 
   /**
@@ -146,12 +149,27 @@ export class NanoclawClient {
       body.tool_choice = options.tool_choice;
     }
 
-    const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
+    const url = `${this.baseUrl}/v1/chat/completions`;
+    dbg.nanoclawClient('POST %s msgCount=%d hasTools=%s channel=%s',
+      url, options.messages.length,
+      !!(options.tools && options.tools.length > 0),
+      headers['X-Nanoclaw-Channel'],
+    );
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } catch (fetchError) {
+      this.logger.error(`NanoclawClient fetch failed for ${url}: ${fetchError}`);
+      throw fetchError;
+    }
+
+    dbg.nanoclawClient('response %d %s', response.status, response.statusText);
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error');
@@ -192,7 +210,7 @@ export class NanoclawClient {
               // Standard chat completion chunk
               yield data as OpenClawChatResponse;
             } catch (e) {
-              console.error('Error parsing JSON chunk:', trimmedLine);
+              this.logger.warn(`Error parsing JSON chunk: ${trimmedLine}`);
             }
           }
         }

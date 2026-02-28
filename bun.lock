@@ -31,6 +31,8 @@
         "@livekit/agents": "^1.0.47",
         "@livekit/agents-plugin-cartesia": "^1.0.0",
         "@livekit/agents-plugin-deepgram": "^1.0.0",
+        "pino": "^9.6.0",
+        "pino-pretty": "^13.0.0",
       },
     },
     "packages/livekit-agent-ganglia": {
@@ -38,8 +40,10 @@
       "version": "0.1.0",
       "dependencies": {
         "@livekit/agents": "^1.0.0",
+        "debug": "^4.4.0",
       },
       "devDependencies": {
+        "@types/debug": "^4.1.12",
         "typescript": "^5.0.0",
       },
     },
@@ -787,6 +791,8 @@
     "@types/chai": ["@types/chai@5.2.3", "", { "dependencies": { "@types/deep-eql": "*", "assertion-error": "^2.0.1" } }, "sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA=="],
 
     "@types/connect": ["@types/connect@3.4.38", "", { "dependencies": { "@types/node": "*" } }, "sha512-K6uROf1LD88uDQqJCktA4yzL1YYAK6NgfsI0v/mTgyPKWsX1CnJ0XPSDhViejru1GcRkLWb8RlzFYJRqGUbaug=="],
+
+    "@types/debug": ["@types/debug@4.1.12", "", { "dependencies": { "@types/ms": "*" } }, "sha512-vIChWdVG3LG1SMxEvI/AK+FWJthlrqlTu7fbrlywTkkaONwk/UAGaULXRlf8vkzFBLVm0zkMdCquhL5aOjhXPQ=="],
 
     "@types/deep-eql": ["@types/deep-eql@4.0.2", "", {}, "sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw=="],
 

@@ -8,6 +8,7 @@ import {
   SessionError,
 } from './types/index.js';
 import type { SessionKey } from './session-routing.js';
+import { type Logger, noopLogger, dbg } from './logger.js';
 
 /**
  * @deprecated Use resolveSessionKey() + SessionKey routing instead.
@@ -118,12 +119,14 @@ export class OpenClawClient {
   private apiKey: string;
   private model: string;
   private defaultSession?: LiveKitSessionInfo;
+  private logger: Logger;
 
   constructor(config: OpenClawConfig = {}) {
     this.baseUrl = config.baseUrl || process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:8080';
     this.apiKey = config.apiKey || process.env.OPENCLAW_API_KEY || '';
     this.model = config.model || 'openclaw-gateway';
     this.defaultSession = config.defaultSession;
+    this.logger = config.logger || noopLogger;
   }
 
   /**
@@ -201,12 +204,27 @@ export class OpenClawClient {
       body.session_id = options.sessionId;
     }
 
-    const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
+    const url = `${this.baseUrl}/v1/chat/completions`;
+    dbg.openclawClient('POST %s msgCount=%d hasTools=%s sessionKey=%s',
+      url, options.messages.length,
+      !!(options.tools && options.tools.length > 0),
+      options.sessionKey?.type ?? 'none',
+    );
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } catch (fetchError) {
+      this.logger.error(`OpenClawClient fetch failed for ${url}: ${fetchError}`);
+      throw fetchError;
+    }
+
+    dbg.openclawClient('response %d %s', response.status, response.statusText);
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error');
@@ -268,7 +286,7 @@ export class OpenClawClient {
               const data = JSON.parse(trimmedLine.slice(6));
               yield data as OpenClawChatResponse;
             } catch (e) {
-              console.error('Error parsing JSON chunk:', trimmedLine);
+              this.logger.warn(`Error parsing JSON chunk: ${trimmedLine}`);
             }
           }
         }
