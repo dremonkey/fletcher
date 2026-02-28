@@ -151,9 +151,9 @@ This tells the LiveKit server "this worker is always available for dispatch."
 
 ### Is this safe?
 
-- **Local dev:** Yes. There's no benefit to load-gating a single-agent dev setup.
-- **Production (LiveKit Cloud):** The SDK ignores custom `loadFunc` and forces its own defaults, so this override has no effect.
-- **Self-hosted production:** You'd want real load reporting. Remove the override and ensure the container has accurate CPU accounting (e.g., `--cpus` flag matching cgroup limits).
+- **Single-worker / low room count (< ~10):** Yes. The worker will never be under meaningful load, so there's nothing useful to report.
+- **LiveKit Cloud:** The SDK ignores custom `loadFunc` and forces its own defaults, so this override has no effect.
+- **High-scale multi-worker deployments:** You'd want real load reporting so the server can distribute jobs across workers. Remove the override and ensure containers have accurate CPU accounting (e.g., `--cpus` flag matching cgroup limits).
 
 ## Verification
 
