@@ -121,16 +121,6 @@ function computeSourceHash(): string {
   return hash.digest("hex").slice(0, 16);
 }
 
-/** Returns `true` when the voice-agent Docker image is stale (hash mismatch or missing marker). */
-function voiceAgentNeedsRebuild(): boolean {
-  const current = computeSourceHash();
-  if (existsSync(BUILD_HASH_FILE)) {
-    const stored = readFileSync(BUILD_HASH_FILE, "utf-8").trim();
-    if (stored === current) return false;
-  }
-  return true;
-}
-
 /** Returns `true` when we haven't pulled the upstream LiveKit image in the last 24 hours. */
 function shouldPullLivekit(): boolean {
   if (!existsSync(PULL_MARKER_FILE)) return true;
@@ -154,12 +144,18 @@ export async function startServices(): Promise<void> {
     }
 
     // Rebuild voice-agent image if source files changed (build only, don't start yet)
-    const rebuild = voiceAgentNeedsRebuild();
-    if (rebuild) {
+    const currentHash = computeSourceHash();
+    const storedHash = existsSync(BUILD_HASH_FILE)
+      ? readFileSync(BUILD_HASH_FILE, "utf-8").trim()
+      : null;
+    if (storedHash !== currentHash) {
+      p.log.info(`Voice-agent source changed (${storedHash?.slice(0, 8) ?? "no prior build"} → ${currentHash.slice(0, 8)})`);
       await runStep("Building voice-agent image", [
         "docker", "compose", "build", "voice-agent",
       ]);
-      writeFileSync(BUILD_HASH_FILE, computeSourceHash());
+      writeFileSync(BUILD_HASH_FILE, currentHash);
+    } else {
+      p.log.info(`Voice-agent image up to date (${currentHash.slice(0, 8)})`);
     }
 
     // Step 1: Start LiveKit server
