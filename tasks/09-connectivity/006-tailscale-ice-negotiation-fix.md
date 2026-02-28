@@ -7,16 +7,18 @@ Fletcher users reported a connectivity failure when transitioning from Wi-Fi to 
 - **Root Cause:** The LiveKit server (running in a Docker container on NixOS) was auto-detecting its local LAN/Wi-Fi IP for ICE candidate advertisements. When the client moved to 5G, it continued trying to reach the server via the unreachable local IP instead of the stable Tailscale IP.
 
 ## Fix
-The `livekit.yaml` configuration was modified to explicitly define the `rtc.external_ip` using the server's Tailscale IP. This ensures that the server always advertises a routable address for clients on the tailnet, regardless of their physical network (Wi-Fi, 5G, etc.).
+The `livekit.yaml` configuration was modified to set `node_ip` (a top-level LiveKit config field) to the server's Tailscale IP. This ensures that the server always advertises a routable address for ICE candidates, regardless of the client's physical network (Wi-Fi, 5G, etc.).
+
+> **Note:** The earlier attempt used `rtc.external_ip`, which is not a valid LiveKit field and causes a config parse error. The correct field is `node_ip` at the top level.
 
 ### Configuration Changes (`livekit.yaml`)
 ```yaml
+node_ip: 100.87.219.109 # NixOS Tailscale IP
 rtc:
   tcp_port: 7881
   port_range_start: 50000
   port_range_end: 60000
   use_external_ip: true
-  external_ip: 100.87.219.109 # NixOS Tailscale IP
 ```
 
 ## Architectural Note: Why Pinning to a Tailscale IP?
