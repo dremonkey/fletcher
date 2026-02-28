@@ -12,6 +12,7 @@ dependencies:
   flutter_dotenv: ^5.2.1
   flutter_markdown: ^0.7.6
   livekit_client: ^2.5.0
+  connectivity_plus: ^6.1.4
   permission_handler: ^11.3.0
 
 dev_dependencies:

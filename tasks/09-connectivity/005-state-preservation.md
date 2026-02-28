@@ -4,12 +4,12 @@
 Ensure all user-visible state survives reconnection: transcript history, artifacts, ganglia status, and audio settings (mute state). Currently transcripts are preserved via `preserveTranscripts: true` on `disconnect()`, but there are edge cases and other state to consider.
 
 ## Checklist
-- [ ] Audit all state cleared by `disconnect()` — ensure transcript, artifacts, and mute state survive
-- [ ] Verify `_segmentContent` (in-flight transcript segments) is handled correctly — segments from the old connection should be finalized, not silently dropped
-- [ ] Preserve mute state across reconnects — if user was muted, stay muted after reconnect
-- [ ] Clear stale waveform buffers on reconnect (old audio levels are meaningless)
-- [ ] Clear `_chunks` buffer (in-flight ganglia data channel messages) on disconnect — partial messages from old connection can't be reassembled
-- [ ] Re-register `lk.transcription` text stream handler after reconnect (verify this happens in `_setupRoomListeners`)
+- [x] Audit all state cleared by `disconnect()` — ensure transcript, artifacts, and mute state survive
+- [x] Verify `_segmentContent` (in-flight transcript segments) is handled correctly — segments from the old connection are finalized before clearing
+- [x] Preserve mute state across reconnects — `connect()` now respects `_isMuted` for mic enable and initial status
+- [x] Clear stale waveform buffers on reconnect (old audio levels are meaningless)
+- [x] Clear `_chunks` buffer (in-flight ganglia data channel messages) on disconnect — partial messages from old connection can't be reassembled
+- [x] Re-register `lk.transcription` text stream handler after reconnect (verified: happens in `_setupRoomListeners` called by `connect()`)
 - [ ] Test: connect → send messages → disconnect → reconnect → verify transcript history visible
 - [ ] Test: connect → mute → disconnect → reconnect → verify still muted
 
