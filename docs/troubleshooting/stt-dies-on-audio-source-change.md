@@ -66,11 +66,19 @@ setSource(source: ReadableStream<T>) {
 
 Even if `sourceReader` were cleared, the `pump()` method's `finally` block closes the writable stream on detach, so subsequent writes from a new source would also fail. The stream is fundamentally one-shot.
 
-## Workaround
+## Fix
 
-**Reconnect after changing audio sources.** If Bluetooth headphones are disconnected (or any other audio source change occurs), leave the room and rejoin. This creates a fresh agent session with a new STT pipeline.
+This is addressed with two layers of defense:
 
-In the mobile app, this means navigating back and reconnecting. Alternatively, ensure audio sources are stable before connecting.
+1. **SDK upgrade (`@livekit/agents` ≥ 1.0.47).** The upstream fix (PR [#1036](https://github.com/livekit/agents-js/pull/1036), merged 2026-02-19) makes `DeferredReadableStream` support source replacement, so the agent-side STT pipeline survives audio track changes without dying.
+
+2. **Mobile auto-reconnect on audio device change.** The Flutter app listens to `Hardware.instance.onDeviceChange` and automatically disconnects/reconnects when the audio route changes (e.g., Bluetooth disconnect). This is debounced to 1 second to collapse rapid-fire events. The user sees a brief "Reconnecting..." indicator while the session re-establishes. Transcript history is preserved across reconnects.
+
+Together, the SDK fix prevents the agent from dying, and the mobile reconnect ensures a clean session even if something else goes wrong.
+
+### Manual workaround
+
+If running an older agent SDK (< 1.0.47), manually reconnect after changing audio sources: leave the room and rejoin. This creates a fresh agent session with a new STT pipeline.
 
 ## Triggering scenarios
 
@@ -93,4 +101,4 @@ With no subsequent `Error in STTStream mainTask` or `Stream source already set` 
 
 ## Upstream
 
-This is a limitation in `@livekit/agents` `DeferredReadableStream` — it doesn't support detaching and reattaching audio sources. A proper fix requires the SDK to either recreate the stream pipeline on track change or make `DeferredReadableStream` support source replacement.
+Fixed in `@livekit/agents@1.0.47` (PR [#1036](https://github.com/livekit/agents-js/pull/1036)). `DeferredReadableStream` now supports detaching and reattaching audio sources, so the STT pipeline survives audio track changes.
