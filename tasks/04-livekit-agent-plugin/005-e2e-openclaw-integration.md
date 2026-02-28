@@ -82,14 +82,14 @@ Validate the full voice pipeline against a real OpenClaw Gateway. All existing g
 ## Success Criteria
 
 - [ ] Voice agent successfully exchanges at least one turn with OpenClaw Gateway
-- [ ] Session persists across room reconnection (owner identity routing)
+- [ ] Session persists across room reconnection (guest identity routing)
 - [ ] Guest sessions are isolated
 - [ ] No contract mismatches between ganglia's HTTP requests and Gateway's expectations
 - [ ] Any issues found are documented with concrete error messages / response dumps
 
 ## Dependencies
 
-- Task 004 (Session Routing) — must be implemented first for correct session key format
+- Task 004 (Session Routing) — ✅ complete
 - Access to a running OpenClaw Gateway instance with `/v1/chat/completions`
 
 ---
