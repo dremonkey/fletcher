@@ -172,6 +172,34 @@ The mapping from `SessionKey` to backend-specific parameters is defined in each 
 }
 ```
 
+## Current Implementation (Prototype)
+
+> **This is a prototype.** The current implementation uses a simplified trust-on-connect model suitable for single-user local development. It will be replaced by Sovereign Pairing + Voice Fingerprinting as those systems come online.
+
+### How it works today
+
+1. **Token generation** — The developer runs `bun run token:generate --identity andre`, which bakes a hardcoded identity into a LiveKit JWT and writes it to `apps/mobile/.env`.
+2. **App connects** — The Flutter app reads the pre-generated token from `.env` at startup. It has no concept of owner vs guest — it just passes the token to LiveKit.
+3. **Voice agent resolves routing** — When the participant joins the room, `agent.ts` calls `resolveSessionKeySimple(participant.identity, process.env.FLETCHER_OWNER_IDENTITY)`. If the identity matches, it's routed to `"main"`. Otherwise, it's a guest session.
+
+### What this means
+
+- **No runtime authentication.** The token is pre-generated and bundled into the app build. Anyone with the token can connect.
+- **Identity is not verified.** The agent trusts whatever identity is in the JWT. There is no challenge-response, no signature verification, no voice fingerprinting.
+- **Single-user only.** The `FLETCHER_OWNER_IDENTITY` env var is a static string match — there is no multi-device registration, no key rotation, no revocation.
+- **Token expiry is the only guard.** Tokens have a TTL (default 1 hour from `generate-token.ts`), but a leaked token grants full access until it expires.
+
+### What replaces this
+
+| Component | Prototype | Production |
+|---|---|---|
+| Token issuance | `generate-token.ts` script → `.env` file | [Sovereign Pairing](../07-sovereign-pairing.md) — Ed25519 challenge-response via `/fletcher/token` |
+| Device identity | Hardcoded `--identity` flag | `deviceId` from registered keypair |
+| Owner verification | `FLETCHER_OWNER_IDENTITY` string match | [Voice Fingerprinting](../06-voice-fingerprinting/spec.md) — speaker verification (>0.75 confidence) |
+| Session upgrade | Immediate on connect | Dynamic — starts as guest, upgrades to owner after voice match |
+
+The server-side token endpoint (`auth.ts`) and Ed25519 verification logic already exist in the channel plugin but are not yet wired to the Flutter app. See [Sovereign Pairing spec](../07-sovereign-pairing.md) for the full protocol.
+
 ## Related Specs
 
 - [Voice Fingerprinting](../06-voice-fingerprinting/spec.md) — speaker verification for owner detection (gates access to "main" session)
