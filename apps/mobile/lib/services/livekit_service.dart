@@ -39,6 +39,10 @@ class LiveKitService extends ChangeNotifier {
 
   Future<bool> requestPermissions() async {
     final status = await Permission.microphone.request();
+    // Bluetooth permission is needed so audio routing survives headphone
+    // connect/disconnect on Android 12+.  We request it but don't gate
+    // the connection on it — the user can still use the speaker.
+    await Permission.bluetoothConnect.request();
     return status.isGranted;
   }
 
