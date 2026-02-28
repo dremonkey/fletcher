@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/conversation_state.dart';
+import 'connectivity_service.dart';
+import 'disconnect_reason.dart' as dr;
 import 'health_service.dart';
 
 /// Max waveform samples (~30 samples at 100ms = 3s history)
@@ -37,12 +39,19 @@ class LiveKitService extends ChangeNotifier {
   Timer? _deviceChangeDebounce;
   bool _isReconnecting = false;
 
+  // Network connectivity subscription
+  StreamSubscription<bool>? _connectivitySub;
+
   final HealthService healthService = HealthService();
+  final ConnectivityService connectivityService = ConnectivityService();
 
   // Room reconnection state (sleep/disconnect recovery)
   bool _reconnecting = false;
   int _reconnectAttempt = 0;
-  static const _maxReconnectAttempts = 3;
+  static const _maxReconnectAttempts = 5;
+
+  // Connectivity-driven reconnect: waits for network restore when offline
+  StreamSubscription<bool>? _networkRestoreSub;
 
   // Buffer for reassembling chunked messages
   final Map<String, List<String?>> _chunks = {};
@@ -112,12 +121,15 @@ class LiveKitService extends ChangeNotifier {
       final hasAgent = _room!.remoteParticipants.isNotEmpty;
       healthService.updateAgentPresent(present: hasAgent);
 
-      // Enable microphone
-      await _localParticipant!.setMicrophoneEnabled(true);
+      // Enable microphone — respect mute state across reconnects
+      await _localParticipant!.setMicrophoneEnabled(!_isMuted);
 
       _startAudioLevelMonitoring();
       _subscribeToDeviceChanges();
-      _updateState(status: ConversationStatus.idle);
+      _subscribeToConnectivity();
+      _updateState(
+        status: _isMuted ? ConversationStatus.muted : ConversationStatus.idle,
+      );
     } catch (e) {
       debugPrint('[Fletcher] Connection failed: $e');
       healthService.updateRoomConnected(connected: false, errorDetail: e.toString());
@@ -129,10 +141,53 @@ class LiveKitService extends ChangeNotifier {
   }
 
   void _setupRoomListeners() {
+    // SDK reconnection events — the SDK tries up to 10 reconnects (~40s)
+    // before firing RoomDisconnectedEvent. Show feedback during that window.
+    _listener?.on<RoomReconnectingEvent>((_) {
+      debugPrint('[Fletcher] SDK reconnecting...');
+      _updateState(status: ConversationStatus.reconnecting);
+      healthService.updateRoomReconnecting();
+    });
+
+    _listener?.on<RoomAttemptReconnectEvent>((event) {
+      debugPrint(
+        '[Fletcher] SDK reconnect attempt ${event.attempt}/${event.maxAttemptsRetry} '
+        '(next retry in ${event.nextRetryDelaysInMs}ms)',
+      );
+    });
+
+    _listener?.on<RoomReconnectedEvent>((_) {
+      debugPrint('[Fletcher] SDK reconnected successfully');
+      _reconnectAttempt = 0;
+      _reconnecting = false;
+      healthService.updateRoomConnected(connected: true);
+      // Restore status: respect mute state, otherwise go idle
+      _updateState(
+        status: _isMuted ? ConversationStatus.muted : ConversationStatus.idle,
+      );
+    });
+
     _listener?.on<RoomDisconnectedEvent>((event) {
-      healthService.updateRoomConnected(connected: false, errorDetail: 'Disconnected from room');
+      final reason = event.reason ?? DisconnectReason.unknown;
+      debugPrint('[Fletcher] Disconnected: $reason');
       healthService.updateAgentPresent(present: false);
-      _reconnectRoom();
+
+      if (dr.shouldReconnect(reason)) {
+        healthService.updateRoomConnected(
+          connected: false,
+          errorDetail: 'Disconnected ($reason)',
+        );
+        _reconnectRoom();
+      } else {
+        healthService.updateRoomConnected(
+          connected: false,
+          errorDetail: dr.disconnectMessage(reason),
+        );
+        _updateState(
+          status: ConversationStatus.error,
+          errorMessage: dr.disconnectMessage(reason),
+        );
+      }
     });
 
     _listener?.on<ParticipantConnectedEvent>((event) {
@@ -377,6 +432,20 @@ class LiveKitService extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
+  // Network connectivity monitoring
+  // ---------------------------------------------------------------------------
+
+  void _subscribeToConnectivity() {
+    _connectivitySub?.cancel();
+    // Sync initial state to health service
+    healthService.updateNetworkStatus(online: connectivityService.isOnline);
+    _connectivitySub =
+        connectivityService.onConnectivityChanged.listen((online) {
+      healthService.updateNetworkStatus(online: online);
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Audio device change → auto-reconnect
   // ---------------------------------------------------------------------------
 
@@ -530,7 +599,12 @@ class LiveKitService extends ChangeNotifier {
   bool get isReconnecting => _reconnecting;
 
   /// Attempt to reconnect to the room using stored credentials.
-  /// Uses exponential backoff: 1s, 2s, 4s across up to 3 attempts.
+  ///
+  /// Network-aware strategy:
+  /// - If offline, show "Waiting for network..." and subscribe to
+  ///   connectivity changes. Retries start when the network returns.
+  /// - If online, retry with exponential backoff (1s, 2s, 4s, 8s, 16s)
+  ///   for up to [_maxReconnectAttempts] attempts.
   Future<void> _reconnectRoom() async {
     if (_reconnecting) return;
     if (_url == null || _token == null) {
@@ -542,6 +616,40 @@ class LiveKitService extends ChangeNotifier {
     }
 
     _reconnecting = true;
+    _updateState(status: ConversationStatus.reconnecting);
+
+    // If offline, wait for network to come back before burning retries
+    if (!connectivityService.isOnline) {
+      debugPrint('[Fletcher] Offline — waiting for network restore');
+      _updateState(
+        status: ConversationStatus.reconnecting,
+        errorMessage: 'Waiting for network...',
+      );
+      _waitForNetworkRestore();
+      return;
+    }
+
+    await _doReconnectAttempt();
+  }
+
+  /// Subscribe to connectivity changes and retry when network returns.
+  void _waitForNetworkRestore() {
+    _networkRestoreSub?.cancel();
+    _networkRestoreSub =
+        connectivityService.onConnectivityChanged.listen((online) {
+      if (online) {
+        debugPrint('[Fletcher] Network restored — starting reconnect');
+        _networkRestoreSub?.cancel();
+        _networkRestoreSub = null;
+        // Reset attempt counter since this is a fresh network
+        _reconnectAttempt = 0;
+        _doReconnectAttempt();
+      }
+    });
+  }
+
+  /// Execute a single reconnect attempt with exponential backoff.
+  Future<void> _doReconnectAttempt() async {
     _reconnectAttempt++;
 
     if (_reconnectAttempt > _maxReconnectAttempts) {
@@ -557,9 +665,16 @@ class LiveKitService extends ChangeNotifier {
     debugPrint('[Fletcher] Reconnect attempt $_reconnectAttempt/$_maxReconnectAttempts');
     _updateState(status: ConversationStatus.reconnecting);
 
-    // Exponential backoff: 1s, 2s, 4s
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s
     final delay = Duration(seconds: 1 << (_reconnectAttempt - 1));
     await Future.delayed(delay);
+
+    // Bail out if we went offline during the wait
+    if (!connectivityService.isOnline) {
+      debugPrint('[Fletcher] Went offline during backoff — waiting for network');
+      _waitForNetworkRestore();
+      return;
+    }
 
     // Clean up old room/listeners but keep credentials
     await disconnect(preserveTranscripts: true);
@@ -576,12 +691,17 @@ class LiveKitService extends ChangeNotifier {
 
   /// Trigger a reconnect from outside (e.g., app lifecycle resume).
   Future<void> tryReconnect() async {
-    if (_state.status == ConversationStatus.error ||
-        _state.status == ConversationStatus.reconnecting) {
-      _reconnectAttempt = 0;
-      _reconnecting = false;
-      await _reconnectRoom();
+    if (_state.status != ConversationStatus.error &&
+        _state.status != ConversationStatus.reconnecting) {
+      return;
     }
+    if (!connectivityService.isOnline) {
+      debugPrint('[Fletcher] tryReconnect skipped — offline');
+      return;
+    }
+    _reconnectAttempt = 0;
+    _reconnecting = false;
+    await _reconnectRoom();
   }
 
   Future<void> disconnect({bool preserveTranscripts = false}) async {
@@ -592,12 +712,35 @@ class LiveKitService extends ChangeNotifier {
     _deviceChangeDebounce?.cancel();
     _deviceChangeSub?.cancel();
     _deviceChangeSub = null;
+    _connectivitySub?.cancel();
+    _connectivitySub = null;
+    _networkRestoreSub?.cancel();
+    _networkRestoreSub = null;
     _room?.unregisterTextStreamHandler('lk.transcription');
     _listener?.dispose();
     await _room?.disconnect();
     _room = null;
     _localParticipant = null;
+
+    // Finalize in-flight transcript segments before clearing —
+    // text already received shouldn't be silently dropped.
+    for (final entry in _segmentContent.entries) {
+      _upsertTranscript(
+        segmentId: entry.key,
+        role: TranscriptRole.agent, // best guess for orphaned segments
+        text: entry.value,
+        isFinal: true,
+      );
+    }
     _segmentContent.clear();
+
+    // Clear stale ganglia chunk buffers — partial messages from the
+    // old connection can't be reassembled.
+    _chunks.clear();
+
+    // Clear waveform buffers — old audio levels are meaningless
+    _userWaveformBuffer.clear();
+    _aiWaveformBuffer.clear();
 
     if (!preserveTranscripts) {
       _url = null;
@@ -608,6 +751,7 @@ class LiveKitService extends ChangeNotifier {
   @override
   void dispose() {
     disconnect();
+    connectivityService.dispose();
     super.dispose();
   }
 }
