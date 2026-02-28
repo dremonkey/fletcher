@@ -1,6 +1,5 @@
-#!/usr/bin/env bun
 /**
- * Fletcher TUI — single entry point for development and maintenance.
+ * Fletcher TUI — interactive menu for development and maintenance.
  *
  * Main menu:
  *   - Start dev services  (env audit -> LiveKit + voice agent + mobile deploy)
@@ -9,7 +8,7 @@
  *   - Deploy to mobile device (build APK -> push to emulator/device)
  *
  * Usage:
- *   bun dev
+ *   fletcher tui   (or: bun dev)
  */
 
 import * as p from "@clack/prompts";
@@ -17,7 +16,7 @@ import { loadEnv, cancelled } from "./env";
 import { auditEnv } from "./audit";
 import { manageConfiguration, confirmBeforeStart } from "./config";
 import { manageSkills } from "./skills";
-import { startServices, installShutdownHandler, children } from "./services";
+import { startServices, installShutdownHandler } from "./services";
 import { deployToDevice } from "./mobile";
 
 // Load .env into process.env on startup
@@ -58,11 +57,9 @@ while (true) {
   if (action === "deploy") {
     const flutterProc = await deployToDevice();
     if (flutterProc) {
-      children.push(flutterProc);
-      installShutdownHandler();
+      installShutdownHandler(); // after all clack prompts/spinners
       p.note("Flutter running with hot reload. Press 'r' to reload, Ctrl+C to stop.");
       await flutterProc.exited;
-      p.outro("Flutter exited.");
       break;
     }
     continue;
@@ -71,16 +68,18 @@ while (true) {
   // action === "start" — launch services via docker-compose
   await auditEnv();
   await confirmBeforeStart();
-
   await startServices();
-  installShutdownHandler();
   const flutterProc = await deployToDevice();
 
+  // Install AFTER all @clack/prompts spinners and interactive prompts are
+  // done.  Bun has a bug where adding then removing a signal handler (which
+  // clack does on every spinner/prompt) silently disconnects earlier handlers
+  // from native signal dispatch.  Re-registering here restores delivery.
+  installShutdownHandler();
+
   if (flutterProc) {
-    children.push(flutterProc);
     p.note("Voice agent + Flutter running. Press 'r' for hot reload, Ctrl+C to stop.", "Fletcher is ready");
     await flutterProc.exited;
-    p.outro("Flutter exited.");
   } else {
     p.note("Services running via docker compose. Press Ctrl+C to stop.", "Fletcher is ready");
     // Block until interrupted

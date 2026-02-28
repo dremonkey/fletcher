@@ -133,6 +133,14 @@ Hardening secrets management, auth, and dev environment security.
 **Tasks:**
 - [ ] 001: Generate LiveKit API secret at setup time — remove hardcoded secret from `livekit.yaml`, generate per-developer at bootstrap
 
+### 9. [TUI Improvements](./tui) 🔄
+Developer experience improvements to the terminal UI launcher.
+
+**Tasks:**
+- [~] 001: `fletcher tui` CLI entrypoint — code complete, needs manual verification
+- [x] 002: Reliable one-shot service startup — fixed registration log string, Docker CPU load dispatch bug ([agents-js#1082](https://github.com/livekit/agents-js/issues/1082)), ganglia config mismatch; tested on emulator + Pixel 9
+- [~] 003: Graceful Ctrl+C shutdown — Bun signal handler bug workaround + sync cleanup working; Ctrl+C during startup and double Ctrl+C untested
+
 ## Development Path
 
 1. **Phase 1: Infrastructure** ✅
