@@ -1,7 +1,8 @@
 import { describe, it, expect, mock, beforeEach } from 'bun:test';
-import { OpenClawClient, generateSessionId, buildSessionHeaders } from './client.js';
-import type { LiveKitSessionInfo, ManagedSession } from './types/index.js';
+import { OpenClawClient, generateSessionId, buildSessionHeaders, buildMetadataHeaders, applySessionKey } from './client.js';
+import type { LiveKitSessionInfo } from './types/index.js';
 import { AuthenticationError, SessionError } from './types/index.js';
+import type { SessionKey } from './session-routing.js';
 
 describe('OpenClawClient', () => {
   beforeEach(() => {
@@ -223,21 +224,6 @@ describe('OpenClawClient', () => {
     });
   });
 
-  describe('createSessionFromLiveKit', () => {
-    it('should create session info from LiveKit data', () => {
-      const session = OpenClawClient.createSessionFromLiveKit({
-        roomSid: 'RM_abc',
-        roomName: 'my-room',
-        participantIdentity: 'user@example.com',
-        participantSid: 'PA_xyz',
-      });
-
-      expect(session.roomSid).toBe('RM_abc');
-      expect(session.roomName).toBe('my-room');
-      expect(session.participantIdentity).toBe('user@example.com');
-      expect(session.participantSid).toBe('PA_xyz');
-    });
-  });
 });
 
 describe('generateSessionId', () => {
@@ -432,135 +418,71 @@ describe('authentication', () => {
   });
 });
 
-describe('managed sessions', () => {
-  it('should create managed session with initial state', () => {
-    const client = new OpenClawClient({ trackSessionState: true });
+describe('buildMetadataHeaders', () => {
+  it('should build metadata headers without session ID', () => {
     const session: LiveKitSessionInfo = {
-      roomSid: 'RM_test',
-      participantIdentity: 'user-1',
+      roomSid: 'RM_abc',
+      roomName: 'my-room',
+      participantIdentity: 'user-123',
+      participantSid: 'PA_xyz',
     };
 
-    const managed = client.createManagedSession(session);
+    const headers = buildMetadataHeaders(session);
 
-    expect(managed.state).toBe('active');
-    expect(managed.sessionId).toBe('RM_test:user-1');
-    expect(managed.requestCount).toBe(0);
-    expect(managed.createdAt).toBeLessThanOrEqual(Date.now());
-    expect(managed.lastActivityAt).toBeLessThanOrEqual(Date.now());
+    expect(headers['X-OpenClaw-Room-SID']).toBe('RM_abc');
+    expect(headers['X-OpenClaw-Room-Name']).toBe('my-room');
+    expect(headers['X-OpenClaw-Participant-Identity']).toBe('user-123');
+    expect(headers['X-OpenClaw-Participant-SID']).toBe('PA_xyz');
+    // Should NOT include the routing session ID header
+    expect((headers as any)['X-OpenClaw-Session-Id']).toBeUndefined();
   });
 
-  it('should track managed sessions when enabled', () => {
-    const client = new OpenClawClient({ trackSessionState: true });
-    const session: LiveKitSessionInfo = {
-      roomSid: 'RM_tracked',
-      participantIdentity: 'user-tracked',
-    };
-
-    client.createManagedSession(session);
-    const retrieved = client.getManagedSession('RM_tracked:user-tracked');
-
-    expect(retrieved).toBeDefined();
-    expect(retrieved?.roomSid).toBe('RM_tracked');
-  });
-
-  it('should not track sessions when disabled', () => {
-    const client = new OpenClawClient({ trackSessionState: false });
-    const session: LiveKitSessionInfo = {
-      roomSid: 'RM_untracked',
-    };
-
-    client.createManagedSession(session);
-    const retrieved = client.getManagedSession('RM_untracked');
-
-    expect(retrieved).toBeUndefined();
-  });
-
-  it('should return existing managed session on duplicate creation', () => {
-    const client = new OpenClawClient({ trackSessionState: true });
-    const session: LiveKitSessionInfo = {
-      roomSid: 'RM_dup',
-      participantIdentity: 'user-dup',
-    };
-
-    const first = client.createManagedSession(session);
-    const firstCreatedAt = first.createdAt;
-
-    // Simulate some time passing
-    const second = client.createManagedSession(session);
-
-    expect(second.createdAt).toBe(firstCreatedAt);
-    expect(second.lastActivityAt).toBeGreaterThanOrEqual(first.lastActivityAt);
-  });
-
-  it('should update session state', () => {
-    const client = new OpenClawClient({ trackSessionState: true });
-    const session: LiveKitSessionInfo = { roomSid: 'RM_state' };
-
-    client.createManagedSession(session);
-    expect(client.isSessionActive('RM_state')).toBe(true);
-
-    client.updateSessionState('RM_state', 'reconnecting');
-    expect(client.isSessionActive('RM_state')).toBe(false);
-
-    const managed = client.getManagedSession('RM_state');
-    expect(managed?.state).toBe('reconnecting');
-  });
-
-  it('should expire session', () => {
-    const client = new OpenClawClient({ trackSessionState: true });
-    const session: LiveKitSessionInfo = { roomSid: 'RM_expire' };
-
-    client.createManagedSession(session);
-    client.expireSession('RM_expire');
-
-    const managed = client.getManagedSession('RM_expire');
-    expect(managed?.state).toBe('expired');
-  });
-
-  it('should remove session', () => {
-    const client = new OpenClawClient({ trackSessionState: true });
-    const session: LiveKitSessionInfo = { roomSid: 'RM_remove' };
-
-    client.createManagedSession(session);
-    expect(client.getManagedSession('RM_remove')).toBeDefined();
-
-    const removed = client.removeSession('RM_remove');
-    expect(removed).toBe(true);
-    expect(client.getManagedSession('RM_remove')).toBeUndefined();
-  });
-
-  it('should get all managed sessions', () => {
-    const client = new OpenClawClient({ trackSessionState: true });
-
-    client.createManagedSession({ roomSid: 'RM_1' });
-    client.createManagedSession({ roomSid: 'RM_2' });
-    client.createManagedSession({ roomSid: 'RM_3' });
-
-    const all = client.getAllManagedSessions();
-    expect(all).toHaveLength(3);
-    expect(all.map(s => s.sessionId)).toContain('RM_1');
-    expect(all.map(s => s.sessionId)).toContain('RM_2');
-    expect(all.map(s => s.sessionId)).toContain('RM_3');
-  });
-
-  it('should clear all sessions', () => {
-    const client = new OpenClawClient({ trackSessionState: true });
-
-    client.createManagedSession({ roomSid: 'RM_clear1' });
-    client.createManagedSession({ roomSid: 'RM_clear2' });
-
-    client.clearSessions();
-
-    expect(client.getAllManagedSessions()).toHaveLength(0);
+  it('should omit absent fields', () => {
+    const headers = buildMetadataHeaders({ roomName: 'test' });
+    expect(headers['X-OpenClaw-Room-Name']).toBe('test');
+    expect(headers['X-OpenClaw-Room-SID']).toBeUndefined();
+    expect(headers['X-OpenClaw-Participant-Identity']).toBeUndefined();
   });
 });
 
-describe('session state tracking during requests', () => {
+describe('applySessionKey', () => {
+  it('owner → sets x-openclaw-session-key header', () => {
+    const headers: Record<string, string> = {};
+    const body: Record<string, any> = {};
+
+    applySessionKey({ type: 'owner', key: 'main' }, headers, body);
+
+    expect(headers['x-openclaw-session-key']).toBe('main');
+    expect(body.user).toBeUndefined();
+  });
+
+  it('guest → sets body.user field', () => {
+    const headers: Record<string, string> = {};
+    const body: Record<string, any> = {};
+
+    applySessionKey({ type: 'guest', key: 'guest_bob' }, headers, body);
+
+    expect(body.user).toBe('guest_bob');
+    expect(headers['x-openclaw-session-key']).toBeUndefined();
+  });
+
+  it('room → sets body.user field', () => {
+    const headers: Record<string, string> = {};
+    const body: Record<string, any> = {};
+
+    applySessionKey({ type: 'room', key: 'room_standup' }, headers, body);
+
+    expect(body.user).toBe('room_standup');
+    expect(headers['x-openclaw-session-key']).toBeUndefined();
+  });
+});
+
+describe('OpenClawClient sessionKey routing', () => {
   beforeEach(() => {
     global.fetch = mock();
   });
 
-  it('should increment request count on successful request', async () => {
+  function mockSuccessResponse() {
     const mockFetch = global.fetch as any;
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -571,44 +493,132 @@ describe('session state tracking during requests', () => {
         }),
       },
     } as any);
+    return mockFetch;
+  }
 
-    const client = new OpenClawClient({ trackSessionState: true });
-    const session: LiveKitSessionInfo = {
-      roomSid: 'RM_count',
-      participantIdentity: 'user-count',
-    };
+  it('owner sessionKey → sends x-openclaw-session-key header, no user in body', async () => {
+    const mockFetch = mockSuccessResponse();
+    const client = new OpenClawClient({ baseUrl: 'http://test', apiKey: 'key' });
 
-    // Pre-create the managed session
-    client.createManagedSession(session);
-
-    const stream = client.chat({ messages: [], session });
+    const stream = client.chat({
+      messages: [{ role: 'user', content: 'hi' }],
+      sessionKey: { type: 'owner', key: 'main' },
+    });
     for await (const _ of stream) {}
 
-    const managed = client.getManagedSession('RM_count:user-count');
-    expect(managed?.requestCount).toBe(1);
+    const callArgs = mockFetch.mock.calls[0];
+    const headers = callArgs[1].headers;
+    const body = JSON.parse(callArgs[1].body);
+
+    expect(headers['x-openclaw-session-key']).toBe('main');
+    expect(body.user).toBeUndefined();
+    // Should NOT have legacy session headers
+    expect(headers['X-OpenClaw-Session-Id']).toBeUndefined();
+    expect(body.session_id).toBeUndefined();
   });
 
-  it('should mark session as expired on session error', async () => {
-    const mockFetch = global.fetch as any;
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 440,
-      text: () => Promise.resolve('Session expired'),
-    } as any);
+  it('guest sessionKey → sends user in body, no session-key header', async () => {
+    const mockFetch = mockSuccessResponse();
+    const client = new OpenClawClient({ baseUrl: 'http://test', apiKey: 'key' });
 
-    const client = new OpenClawClient({ trackSessionState: true });
-    const session: LiveKitSessionInfo = { roomSid: 'RM_expire_on_error' };
+    const stream = client.chat({
+      messages: [{ role: 'user', content: 'hi' }],
+      sessionKey: { type: 'guest', key: 'guest_bob' },
+    });
+    for await (const _ of stream) {}
 
-    client.createManagedSession(session);
+    const callArgs = mockFetch.mock.calls[0];
+    const headers = callArgs[1].headers;
+    const body = JSON.parse(callArgs[1].body);
 
-    const stream = client.chat({ messages: [], session });
-    try {
-      for await (const _ of stream) {}
-    } catch (e) {
-      // Expected to throw SessionError
-    }
+    expect(body.user).toBe('guest_bob');
+    expect(headers['x-openclaw-session-key']).toBeUndefined();
+  });
 
-    const managed = client.getManagedSession('RM_expire_on_error');
-    expect(managed?.state).toBe('expired');
+  it('room sessionKey → sends user in body', async () => {
+    const mockFetch = mockSuccessResponse();
+    const client = new OpenClawClient({ baseUrl: 'http://test', apiKey: 'key' });
+
+    const stream = client.chat({
+      messages: [{ role: 'user', content: 'hi' }],
+      sessionKey: { type: 'room', key: 'room_standup' },
+    });
+    for await (const _ of stream) {}
+
+    const callArgs = mockFetch.mock.calls[0];
+    const body = JSON.parse(callArgs[1].body);
+
+    expect(body.user).toBe('room_standup');
+  });
+
+  it('sessionKey + session metadata → sends both routing and metadata headers', async () => {
+    const mockFetch = mockSuccessResponse();
+    const client = new OpenClawClient({ baseUrl: 'http://test', apiKey: 'key' });
+
+    const stream = client.chat({
+      messages: [{ role: 'user', content: 'hi' }],
+      sessionKey: { type: 'owner', key: 'main' },
+      session: {
+        roomSid: 'RM_abc',
+        roomName: 'my-room',
+        participantIdentity: 'andre',
+      },
+    });
+    for await (const _ of stream) {}
+
+    const callArgs = mockFetch.mock.calls[0];
+    const headers = callArgs[1].headers;
+
+    // Routing header
+    expect(headers['x-openclaw-session-key']).toBe('main');
+    // Metadata headers (informational)
+    expect(headers['X-OpenClaw-Room-SID']).toBe('RM_abc');
+    expect(headers['X-OpenClaw-Room-Name']).toBe('my-room');
+    expect(headers['X-OpenClaw-Participant-Identity']).toBe('andre');
+  });
+
+  it('sessionKey takes priority over legacy session', async () => {
+    const mockFetch = mockSuccessResponse();
+    const client = new OpenClawClient({
+      baseUrl: 'http://test',
+      apiKey: 'key',
+      defaultSession: { roomSid: 'RM_legacy', participantIdentity: 'old-user' },
+    });
+
+    const stream = client.chat({
+      messages: [],
+      sessionKey: { type: 'guest', key: 'guest_new-user' },
+    });
+    for await (const _ of stream) {}
+
+    const callArgs = mockFetch.mock.calls[0];
+    const headers = callArgs[1].headers;
+    const body = JSON.parse(callArgs[1].body);
+
+    // New routing via body.user
+    expect(body.user).toBe('guest_new-user');
+    // Should NOT have legacy routing
+    expect(headers['X-OpenClaw-Session-Id']).toBeUndefined();
+    expect(body.session_id).toBeUndefined();
+  });
+
+  it('falls back to legacy session when no sessionKey provided', async () => {
+    const mockFetch = mockSuccessResponse();
+    const client = new OpenClawClient({ baseUrl: 'http://test' });
+
+    const stream = client.chat({
+      messages: [],
+      session: { roomSid: 'RM_legacy', participantIdentity: 'user-1' },
+    });
+    for await (const _ of stream) {}
+
+    const callArgs = mockFetch.mock.calls[0];
+    const headers = callArgs[1].headers;
+    const body = JSON.parse(callArgs[1].body);
+
+    // Legacy headers should still work
+    expect(headers['X-OpenClaw-Session-Id']).toBe('RM_legacy:user-1');
+    expect(body.session_id).toBe('RM_legacy:user-1');
   });
 });
+

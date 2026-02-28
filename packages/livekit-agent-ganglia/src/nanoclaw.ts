@@ -1,6 +1,7 @@
 import { llm, APIConnectOptions } from '@livekit/agents';
 import { type GangliaLLM, registerGanglia } from './factory.js';
 import { type GangliaSessionInfo, type NanoclawConfig } from './ganglia-types.js';
+import { type SessionKey } from './session-routing.js';
 import { NanoclawClient } from './nanoclaw-client.js';
 import type {
   OpenClawMessage,
@@ -82,6 +83,7 @@ export function extractNanoclawSession(
 export class NanoclawLLM extends LLMBase implements GangliaLLM {
   private client: NanoclawClient;
   private _model: string;
+  private _sessionKey?: SessionKey;
 
   constructor(config: NanoclawConfig) {
     super();
@@ -112,10 +114,25 @@ export class NanoclawLLM extends LLMBase implements GangliaLLM {
   }
 
   /**
-   * Sets the default session for all subsequent chat requests.
+   * Sets the default session metadata for all subsequent chat requests.
    */
   setDefaultSession(session: GangliaSessionInfo): void {
     this.client.setDefaultSession(session);
+  }
+
+  /**
+   * Sets the session key for routing. This determines which backend
+   * session the conversation routes to (owner/guest/room).
+   */
+  setSessionKey(sessionKey: SessionKey): void {
+    this._sessionKey = sessionKey;
+  }
+
+  /**
+   * Returns the current session key, if set.
+   */
+  getSessionKey(): SessionKey | undefined {
+    return this._sessionKey;
   }
 
   chat({
@@ -134,12 +151,14 @@ export class NanoclawLLM extends LLMBase implements GangliaLLM {
       chatCtx,
       toolCtx,
       connOptions: connOptions || { maxRetry: 3, retryIntervalMs: 2000, timeoutMs: 10000 },
+      sessionKey: this._sessionKey,
     });
   }
 }
 
 class NanoclawChatStream extends LLMStream {
   private nanoclawClient: NanoclawClient;
+  private _sessionKey?: SessionKey;
 
   constructor(
     llmInstance: NanoclawLLM,
@@ -148,14 +167,17 @@ class NanoclawChatStream extends LLMStream {
       chatCtx,
       toolCtx,
       connOptions,
+      sessionKey,
     }: {
       chatCtx: ChatContext;
       toolCtx?: ToolContext;
       connOptions: APIConnectOptions;
+      sessionKey?: SessionKey;
     },
   ) {
     super(llmInstance, { chatCtx, toolCtx, connOptions });
     this.nanoclawClient = client;
+    this._sessionKey = sessionKey;
   }
 
   protected async run(): Promise<void> {
@@ -223,7 +245,7 @@ class NanoclawChatStream extends LLMStream {
         },
       })) : undefined;
 
-      // Extract session info from LiveKit context
+      // Extract session metadata from LiveKit context
       const session = extractNanoclawSession(chatCtx, connOptions);
 
       const stream = this.nanoclawClient.chat({
@@ -231,6 +253,7 @@ class NanoclawChatStream extends LLMStream {
         stream: true,
         tools: tools && tools.length > 0 ? tools : undefined,
         session,
+        sessionKey: this._sessionKey,
       });
 
       for await (const chunk of stream) {

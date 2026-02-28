@@ -93,18 +93,27 @@ export type {
 // Event Interception (Protocol)
 export { EventInterceptor, type EventInterceptorConfig } from './event-interceptor.js';
 
+// Session Routing
+export {
+  resolveSessionKey,
+  resolveSessionKeySimple,
+  type SessionKey,
+  type SpeakerVerification,
+  type SessionRoutingConfig,
+} from './session-routing.js';
+
 // OpenClaw Implementation
 import { OpenClawLLM } from './llm.js';
 export { OpenClawLLM };
 export { extractSessionFromContext } from './llm.js';
-export { OpenClawClient, generateSessionId, buildSessionHeaders } from './client.js';
+export { OpenClawClient, generateSessionId, buildSessionHeaders, buildMetadataHeaders, applySessionKey } from './client.js';
 export * from './types/index.js';
 
 // Nanoclaw Implementation
 import { NanoclawLLM } from './nanoclaw.js';
 export { NanoclawLLM };
 export { extractNanoclawSession } from './nanoclaw.js';
-export { NanoclawClient, generateChannelJid } from './nanoclaw-client.js';
+export { NanoclawClient, generateChannelJid, sessionKeyToChannel } from './nanoclaw-client.js';
 export type { NanoclawChatOptions } from './nanoclaw-client.js';
 
 /**

@@ -73,27 +73,31 @@ A unified LLM plugin (`@knittt/livekit-agent-ganglia`) that bridges LiveKit agen
 - [~] 001: Standalone Brain Plugin — OpenClaw working, unit tests passing; advanced features (async tools, context injection) and documentation remaining
 - [~] 002: Nanoclaw Integration — Phase 1-3 complete, Phase 4 (integration tests) in progress
 - [ ] 003: OpenResponses API Backend — backlog; item-based alternative to Chat Completions with granular SSE, ephemeral files, client-side tools
+- [x] 004: Session Key Routing (spec 08) ✅ — identity-based session routing replaces room-scoped IDs; owner/guest/room routing for both OpenClaw and Nanoclaw; 35 new tests
+- [ ] 005: End-to-End OpenClaw Integration — validate full voice pipeline against real Gateway; session continuity, guest isolation, tool calling
 
 **Implemented:**
 - Unified `@knittt/livekit-agent-ganglia` package with types, factory, events, tool-interceptor
 - `OpenClawLLM` implementation with auth, sessions, message mapping
 - `NanoclawLLM` implementation with JID-based channel headers
 - Backend switching via `GANGLIA_TYPE` env var (openclaw | nanoclaw)
+- **Session key routing** per spec 08: `resolveSessionKey()`, `SessionKey` type, owner/guest/room routing
+- Voice agent wires `FLETCHER_OWNER_IDENTITY` → `resolveSessionKeySimple()` → `setSessionKey()`
 - `/add-openai-api` skill documented for Nanoclaw (needs to be applied)
 - `ToolInterceptor` for visual feedback (status events, artifacts)
 - Flutter UI: `StatusBar` widget and `ArtifactViewer` (diff, code, search results)
 - Data channel subscription for `ganglia-events` topic
-- 129 unit tests passing
+- 162 unit tests passing
 
 **Remaining:**
-1. Apply `/add-openai-api` skill to Nanoclaw repo
-2. Integration tests with both backends (end-to-end voice conversation)
-3. Error handling and retry tests (network failures, rate limits)
-4. Async tool resolution support
-5. Context injection (LiveKit room metadata → OpenClaw context)
-6. Package README and documentation
-7. CI/CD for npm publishing
-8. Syntax highlighting for code artifacts (optional)
+1. **E2E OpenClaw integration (005)** — validate against real Gateway
+2. Apply `/add-openai-api` skill to Nanoclaw repo
+3. Integration tests with Nanoclaw backend
+4. Error handling and retry tests (network failures, rate limits)
+5. Async tool resolution support
+6. Context injection (LiveKit room metadata → OpenClaw context)
+7. Package README and documentation
+8. CI/CD for npm publishing
 
 ### 5. [Latency Optimization](./05-latency-optimization) 📋
 Pipeline optimizations to reduce voice-to-voice latency from ~1.4s to <0.8s.
