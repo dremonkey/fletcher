@@ -28,6 +28,15 @@ class LiveKitService extends ChangeNotifier {
   Timer? _userSubtitleClearTimer;
   Timer? _agentSubtitleClearTimer;
 
+  // Credential cache for reconnects
+  String? _url;
+  String? _token;
+
+  // Audio device change handling
+  StreamSubscription<List<MediaDevice>>? _deviceChangeSub;
+  Timer? _deviceChangeDebounce;
+  bool _isReconnecting = false;
+
   final HealthService healthService = HealthService();
 
   // Buffer for reassembling chunked messages
@@ -50,6 +59,10 @@ class LiveKitService extends ChangeNotifier {
     required String url,
     required String token,
   }) async {
+    // Cache credentials for reconnect
+    _url = url;
+    _token = token;
+
     // Run local config validation checks immediately
     healthService.validateConfig(livekitUrl: url, livekitToken: token);
 
@@ -96,6 +109,7 @@ class LiveKitService extends ChangeNotifier {
       await _localParticipant!.setMicrophoneEnabled(true);
 
       _startAudioLevelMonitoring();
+      _subscribeToDeviceChanges();
       _updateState(status: ConversationStatus.idle);
     } catch (e) {
       debugPrint('[Fletcher] Connection failed: $e');
@@ -356,6 +370,47 @@ class LiveKitService extends ChangeNotifier {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Audio device change → auto-reconnect
+  // ---------------------------------------------------------------------------
+
+  void _subscribeToDeviceChanges() {
+    _deviceChangeSub?.cancel();
+    _deviceChangeSub = Hardware.instance.onDeviceChange.listen((_) {
+      _onDeviceChange();
+    });
+  }
+
+  void _onDeviceChange() {
+    // Skip if already reconnecting or fully disconnected
+    if (_isReconnecting || _room == null) return;
+
+    // Debounce: audio route changes can fire multiple events rapidly
+    _deviceChangeDebounce?.cancel();
+    _deviceChangeDebounce = Timer(const Duration(seconds: 1), () {
+      _reconnect();
+    });
+  }
+
+  Future<void> _reconnect() async {
+    if (_isReconnecting || _url == null || _token == null) return;
+    _isReconnecting = true;
+
+    debugPrint('[Fletcher] Audio device changed — reconnecting');
+    _updateState(status: ConversationStatus.reconnecting);
+
+    // Tear down connection but keep transcript history
+    await disconnect(preserveTranscripts: true);
+
+    // Brief pause to let the OS settle the new audio route
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    _isReconnecting = false;
+
+    // Reconnect with cached credentials
+    await connect(url: _url!, token: _token!);
+  }
+
   void _updateAudioLevels() {
     if (_room == null) return;
 
@@ -385,8 +440,9 @@ class LiveKitService extends ChangeNotifier {
 
     if (_isMuted) {
       newStatus = ConversationStatus.muted;
-    } else if (_state.status == ConversationStatus.error) {
-      // Keep error state
+    } else if (_state.status == ConversationStatus.error ||
+        _state.status == ConversationStatus.reconnecting) {
+      // Keep error/reconnecting state
     } else if (aiLevel > 0.05) {
       newStatus = ConversationStatus.aiSpeaking;
     } else if (userLevel > 0.05) {
@@ -460,17 +516,25 @@ class LiveKitService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> disconnect() async {
+  Future<void> disconnect({bool preserveTranscripts = false}) async {
     _audioLevelTimer?.cancel();
     _statusClearTimer?.cancel();
     _userSubtitleClearTimer?.cancel();
     _agentSubtitleClearTimer?.cancel();
+    _deviceChangeDebounce?.cancel();
+    _deviceChangeSub?.cancel();
+    _deviceChangeSub = null;
     _room?.unregisterTextStreamHandler('lk.transcription');
     _listener?.dispose();
     await _room?.disconnect();
     _room = null;
     _localParticipant = null;
     _segmentContent.clear();
+
+    if (!preserveTranscripts) {
+      _url = null;
+      _token = null;
+    }
   }
 
   @override

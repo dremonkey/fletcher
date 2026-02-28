@@ -1,5 +1,6 @@
 enum ConversationStatus {
   connecting,
+  reconnecting,
   idle,
   userSpeaking,
   processing,
