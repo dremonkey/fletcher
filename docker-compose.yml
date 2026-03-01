@@ -2,20 +2,19 @@ services:
   livekit:
     image: livekit/livekit-server:latest
     command: --config /etc/livekit.yaml
+    network_mode: host
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml
-    ports:
-      - "7880:7880"
-      - "7881:7881"
-      - "7882:7882/udp"
     restart: unless-stopped
   voice-agent:
     build:
       context: .
       dockerfile: apps/voice-agent/Dockerfile
-    depends_on:
-      - livekit
+    network_mode: host
     env_file: .env
     environment:
-      LIVEKIT_URL: ws://livekit:7880
+      LIVEKIT_URL: ws://localhost:7880
+      OPENCLAW_GATEWAY_URL: http://localhost:18789
+      DEBUG: ganglia:*
+      LOG_LEVEL: debug
     restart: unless-stopped
