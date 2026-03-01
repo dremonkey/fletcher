@@ -79,3 +79,10 @@ When Tailscale is detected but no `LIVEKIT_URL_TAILSCALE` is configured, the URL
 | `apps/mobile/lib/screens/conversation_screen.dart` | Forwards `livekitUrlTailscale` to `LiveKitService.connect()` |
 | `apps/mobile/lib/services/livekit_service.dart` | Calls resolver before every connect, surfaces warnings |
 | `apps/mobile/lib/services/health_service.dart` | `updateNetworkStatus(warning:)` for Tailscale mismatch diagnostics |
+
+## Related Documents
+
+- [Infrastructure](infrastructure.md) — Docker Compose, LiveKit config, and Tailscale IP pinning
+- [Mobile Client](mobile-client.md) — Flutter app connection lifecycle and reconnection strategy
+- [Developer Workflow](developer-workflow.md) — TUI launcher and mobile deployment
+- [System Overview](system-overview.md) — deployment topology showing network boundaries

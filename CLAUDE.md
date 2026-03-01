@@ -17,6 +17,31 @@ This project (Fletcher) is an OpenClaw channel plugin for real-time voice conver
 - Specs are organized by component (mirroring `tasks/` structure): `01-infrastructure/`, `02-livekit-agent/`, `03-flutter-app/`, `04-livekit-agent-plugin/`.
 - Do NOT leave spec files in the project root. Move them to the appropriate `docs/specs/` subdirectory.
 
+## Architecture Docs (IMPORTANT)
+`docs/architecture/` contains **canonical architecture documentation** — the ground truth for how the system actually works. These are distinct from specs (`docs/specs/`) and tasks (`tasks/`):
+
+| Directory | Purpose | Tense |
+|-----------|---------|-------|
+| `docs/architecture/` | **What is built** — describes the current system as implemented | Present tense |
+| `docs/specs/` | **What was planned** — design proposals and planning artifacts | May be outdated |
+| `tasks/` | **What to do next** — roadmap and progress tracking | Forward-looking |
+
+**The architecture docs are the handoff document.** An engineer reading them should be able to understand and replicate the entire stack. Specs and tasks may drift from reality; architecture docs must not.
+
+**Before finishing a PR**, review whether your changes require architecture doc updates:
+- **Added/removed a package, service, or major component?** Update `system-overview.md`
+- **Changed the voice pipeline (STT, TTS, LLM, AgentSession)?** Update `voice-pipeline.md`
+- **Modified Ganglia (factory, backends, streaming, events)?** Update `brain-plugin.md`
+- **Changed session routing or SessionKey logic?** Update `session-routing.md`
+- **Modified the OpenClaw plugin interface or adapters?** Update `channel-plugin.md`
+- **Changed data channel events, transcription, or chunking?** Update `data-channel-protocol.md`
+- **Changed the Flutter app (services, widgets, state)?** Update `mobile-client.md`
+- **Changed Docker, LiveKit config, Nix, or env vars?** Update `infrastructure.md`
+- **Changed the TUI, scripts, or dev commands?** Update `developer-workflow.md`
+- **Changed Tailscale or network logic?** Update `network-connectivity.md`
+
+If your change doesn't fit any existing doc, consider whether a new architecture doc is needed. Update `docs/architecture/README.md` if you add or remove documents.
+
 ## Testing Standards
 - Use `bun:test` for all TypeScript/JavaScript unit tests.
 - **Co-location Rule:** Unit tests MUST live directly alongside their corresponding source files (e.g., `src/client.ts` and `src/client.spec.ts`). Do NOT use a separate `__tests__/` directory.
