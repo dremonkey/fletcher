@@ -127,6 +127,8 @@ elif [ "$SKIP_BUILD" = true ]; then
   echo "FAIL apk: ${PACKAGE} not installed (--skip-build)"
   FAILED=1
 else
+  progress "Cleaning Flutter build cache..."
+  (cd "$MOBILE_DIR" && flutter clean) >&2 2>&1
   progress "Building debug APK..."
   if (cd "$MOBILE_DIR" && flutter build apk --debug) >&2 2>&1; then
     APK_PATH="$MOBILE_DIR/build/app/outputs/flutter-apk/app-debug.apk"
