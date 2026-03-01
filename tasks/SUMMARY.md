@@ -32,7 +32,8 @@ The LiveKit channel plugin (`@openclaw/channel-livekit`) that integrates voice c
 - [x] 004: Channel plugin approach (implementation guide)
 - [x] 005: Token generation endpoint (Sovereign Pairing) ✅
 - [ ] 007: Noise-Robust Voice Detection 📋
-- [ ] 008: Immediate Acknowledgment 📋
+- [ ] 008: Immediate Acknowledgment 📋 — non-verbal audio cue on EOU to bridge LLM wait time ([BUG-006](../docs/field-tests/20260301-buglog.md))
+- [ ] 009: TTS Empty Chunk Guard 📋 — buffer initial TTS input to avoid Cartesia rejecting punctuation-only chunks ([BUG-005](../docs/field-tests/20260301-buglog.md))
 
 **Implemented:**
 - Full plugin structure with OpenClaw adapters (config, security, gateway, outbound, status)
@@ -110,6 +111,7 @@ Pipeline optimizations to reduce voice-to-voice latency from ~1.4s to <0.8s.
 - [x] 002: Add latency instrumentation & metrics — moved to [Epic 10: Metrics](./10-metrics)
 - [ ] 003: Streaming interim transcripts to LLM (Phase 2)
 - [ ] 004: TTS pre-warming validation (Phase 3)
+- [ ] 005: Investigate & reduce OpenClaw TTFT — 8-17s first-token latency is the dominant bottleneck ([BUG-006](../docs/field-tests/20260301-buglog.md))
 
 **Baseline measurement (2026-03-01 field test):** ~8-10s perceived latency. LLM TTFT is ~8s, pipeline overhead ~528ms.
 
@@ -165,6 +167,7 @@ Bulletproof connection handling: survive network switches, Bluetooth changes, ai
 - [x] 006: Tailscale ICE negotiation fix — pin server's Tailscale IP for stable 5G/Wi-Fi transitions ✅
 - [ ] 007: WiFi → 5G ICE renegotiation failure — client can't reconnect after WiFi→5G switch; server marks `isExpectedToResume: false`
 - [~] 008: Tailscale-aware URL resolution — runtime detection of Tailscale VPN on phone, auto-selects correct URL; code complete, needs user testing
+- [ ] 009: Bluetooth audio route recovery — audio track dies silently on BT/speaker transitions; needs audio route change listener ([BUG-004](../docs/field-tests/20260301-buglog.md))
 
 **Depends on:** Epic 3 (Flutter App)
 
