@@ -271,6 +271,7 @@ class OpenClawChatStream extends LLMStream {
       dbg.openclawStream('session: %O', session);
       dbg.openclawStream('sessionKey: %O', this._sessionKey);
 
+      const streamStart = performance.now();
       const stream = this.openclawClient.chat({
         messages,
         stream: true,
@@ -280,8 +281,14 @@ class OpenClawChatStream extends LLMStream {
       });
 
       let chunkCount = 0;
+      let firstChunkAt: number | undefined;
       for await (const chunk of stream) {
         chunkCount++;
+        if (!firstChunkAt) {
+          firstChunkAt = performance.now();
+          dbg.openclawStream('timing: streamStart→firstChunk=%dms', Math.round(firstChunkAt - streamStart));
+        }
+
         const delta = chunk.choices[0]?.delta;
         if (!delta) {
           dbg.openclawStream('chunk %d: no delta', chunkCount);
@@ -315,7 +322,8 @@ class OpenClawChatStream extends LLMStream {
         };
         this.output.put(chatChunk);
       }
-      dbg.openclawStream('stream complete, %d chunks received', chunkCount);
+      const streamDurationMs = Math.round(performance.now() - streamStart);
+      dbg.openclawStream('stream complete, %d chunks in %dms', chunkCount, streamDurationMs);
     } catch (error) {
       this.logger.error(`OpenClawChatStream error: ${error}`);
       throw error;
