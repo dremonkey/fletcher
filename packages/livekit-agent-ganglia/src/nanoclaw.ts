@@ -90,6 +90,16 @@ export class NanoclawLLM extends LLMBase implements GangliaLLM {
     super();
     this.client = new NanoclawClient(config);
     this._model = 'nanoclaw';
+
+    if (!(this instanceof LLMBase)) {
+      const msg = [
+        'NanoclawLLM: instanceof LLM check failed — likely duplicate @livekit/agents installs.',
+        'Ensure @livekit/agents is a peerDependency (not a direct dependency) in livekit-agent-ganglia.',
+        'Run: bun why @livekit/agents',
+      ].join(' ');
+      dbg.nanoclawStream(msg);
+      throw new Error(msg);
+    }
   }
 
   /**
