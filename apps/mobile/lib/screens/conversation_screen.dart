@@ -13,11 +13,13 @@ import '../widgets/transcript_subtitle.dart';
 class ConversationScreen extends StatefulWidget {
   final String livekitUrl;
   final String token;
+  final String? livekitUrlTailscale;
 
   const ConversationScreen({
     super.key,
     required this.livekitUrl,
     required this.token,
+    this.livekitUrlTailscale,
   });
 
   @override
@@ -45,6 +47,7 @@ class _ConversationScreenState extends State<ConversationScreen>
     await _liveKitService.connect(
       url: widget.livekitUrl,
       token: widget.token,
+      tailscaleUrl: widget.livekitUrlTailscale,
     );
   }
 

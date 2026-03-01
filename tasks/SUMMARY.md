@@ -157,6 +157,7 @@ Bulletproof connection handling: survive network switches, Bluetooth changes, ai
 - [x] 005: Preserve app state across reconnects — transcripts, artifacts, mute state survive reconnection
 - [x] 006: Tailscale ICE negotiation fix — pin server's Tailscale IP for stable 5G/Wi-Fi transitions ✅
 - [ ] 007: WiFi → 5G ICE renegotiation failure — client can't reconnect after WiFi→5G switch; server marks `isExpectedToResume: false`
+- [~] 008: Tailscale-aware URL resolution — runtime detection of Tailscale VPN on phone, auto-selects correct URL; code complete, needs user testing
 
 **Depends on:** Epic 3 (Flutter App)
 

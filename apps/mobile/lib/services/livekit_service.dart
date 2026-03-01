@@ -7,6 +7,7 @@ import '../models/conversation_state.dart';
 import 'connectivity_service.dart';
 import 'disconnect_reason.dart' as dr;
 import 'health_service.dart';
+import 'url_resolver.dart';
 
 /// Max waveform samples (~30 samples at 100ms = 3s history)
 const _maxWaveformSamples = 30;
@@ -33,6 +34,7 @@ class LiveKitService extends ChangeNotifier {
   // Credential cache for reconnects
   String? _url;
   String? _token;
+  String? _tailscaleUrl;
 
   // Audio device change handling
   StreamSubscription<List<MediaDevice>>? _deviceChangeSub;
@@ -72,13 +74,31 @@ class LiveKitService extends ChangeNotifier {
   Future<void> connect({
     required String url,
     required String token,
+    String? tailscaleUrl,
   }) async {
     // Cache credentials for reconnect
     _url = url;
     _token = token;
+    if (tailscaleUrl != null) _tailscaleUrl = tailscaleUrl;
+
+    // Resolve the correct URL based on network state (LAN vs Tailscale)
+    final resolved = await resolveLivekitUrl(
+      lanUrl: url,
+      tailscaleUrl: _tailscaleUrl,
+    );
+    final resolvedUrl = resolved.url;
 
     // Run local config validation checks immediately
-    healthService.validateConfig(livekitUrl: url, livekitToken: token);
+    healthService.validateConfig(livekitUrl: resolvedUrl, livekitToken: token);
+
+    // Surface Tailscale warning through health panel if present
+    if (resolved.warning != null) {
+      healthService.updateNetworkStatus(
+        online: true,
+        detail: 'Connected (Tailscale mismatch)',
+        warning: resolved.warning,
+      );
+    }
 
     try {
       _updateState(status: ConversationStatus.connecting);
@@ -98,9 +118,9 @@ class LiveKitService extends ChangeNotifier {
       _listener = _room!.createListener();
       _setupRoomListeners();
 
-      debugPrint('[Fletcher] Connecting to $url');
+      debugPrint('[Fletcher] Connecting to $resolvedUrl');
       await _room!.connect(
-        url,
+        resolvedUrl,
         token,
         roomOptions: const RoomOptions(
           adaptiveStream: true,
@@ -482,8 +502,8 @@ class LiveKitService extends ChangeNotifier {
 
     _isReconnecting = false;
 
-    // Reconnect with cached credentials
-    await connect(url: _url!, token: _token!);
+    // Reconnect with cached credentials (re-resolves URL for network changes)
+    await connect(url: _url!, token: _token!, tailscaleUrl: _tailscaleUrl);
   }
 
   void _updateAudioLevels() {
@@ -679,8 +699,8 @@ class LiveKitService extends ChangeNotifier {
     // Clean up old room/listeners but keep credentials
     await disconnect(preserveTranscripts: true);
 
-    // Attempt fresh connect
-    await connect(url: _url!, token: _token!);
+    // Attempt fresh connect (re-resolves URL for network changes)
+    await connect(url: _url!, token: _token!, tailscaleUrl: _tailscaleUrl);
 
     // If connect failed (status is error), try again
     if (_state.status == ConversationStatus.error) {
@@ -745,6 +765,7 @@ class LiveKitService extends ChangeNotifier {
     if (!preserveTranscripts) {
       _url = null;
       _token = null;
+      _tailscaleUrl = null;
     }
   }
 

@@ -72,12 +72,30 @@ class HealthService extends ChangeNotifier {
 
   // --- Connection-dependent updates called by LiveKitService ---
 
-  void updateNetworkStatus({required bool online, String? detail}) {
+  void updateNetworkStatus({required bool online, String? detail, String? warning}) {
+    HealthCheckStatus status;
+    String checkDetail;
+    String? checkSuggestion;
+
+    if (!online) {
+      status = HealthCheckStatus.error;
+      checkDetail = 'No network connection';
+      checkSuggestion = 'Check WiFi or cellular data settings';
+    } else if (warning != null) {
+      status = HealthCheckStatus.warning;
+      checkDetail = detail ?? 'Connected';
+      checkSuggestion = warning;
+    } else {
+      status = HealthCheckStatus.ok;
+      checkDetail = detail ?? 'Connected';
+      checkSuggestion = null;
+    }
+
     _updateCheck(
       'network',
-      status: online ? HealthCheckStatus.ok : HealthCheckStatus.error,
-      detail: online ? (detail ?? 'Connected') : 'No network connection',
-      suggestion: online ? null : 'Check WiFi or cellular data settings',
+      status: status,
+      detail: checkDetail,
+      suggestion: checkSuggestion,
     );
   }
 
