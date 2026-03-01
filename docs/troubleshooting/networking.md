@@ -11,6 +11,7 @@ The simplest path when the phone is on the same WiFi network. **Tailscale must b
 **Requirements:**
 - Phone on same WiFi as dev machine
 - Tailscale VPN disabled on the phone
+- NixOS firewall ports open (see [NixOS firewall](#nixos-firewall))
 - `apps/mobile/.env` pointing to LAN IP: `ws://192.168.87.59:7880`
 
 ### Option B: Tailscale (any network)
@@ -28,6 +29,7 @@ Works across networks (WiFi, cellular, different offices) without firewall or po
 | Symptom | Likely cause | Jump to |
 |---------|-------------|---------|
 | App shows "Connecting..." forever (no error) | Phone can't reach server (Tailscale VPN routing?) | [Step 0](#step-0-verify-phone-can-reach-the-server) |
+| `Connection failed: SocketException: Software caused connection abort` | NixOS firewall blocking port 7880 | [NixOS firewall](#nixos-firewall) |
 | WebSocket connects but no audio | WebRTC UDP blocked | [Step 3](#step-3-webrtc-udp-connectivity) |
 | Works on emulator, fails on physical device | Wrong IP in .env | [Step 2](#step-2-confirm-mobile-env-has-the-right-ip) |
 
@@ -179,6 +181,37 @@ Android 9+ blocks cleartext HTTP/WebSocket (`ws://`) by default for the standard
 
 ---
 
+## NixOS firewall
+
+NixOS enables a stateful firewall by default that blocks all incoming TCP/UDP except explicitly allowed ports. With `network_mode: host`, LiveKit binds directly to the host's interfaces — but the firewall still blocks external connections.
+
+**Symptom:** The app logs `SocketException: Software caused connection abort, address = 192.168.87.59, port = ..., uri=http://192.168.87.59:7880/rtc/validate`. The server is listening (`ss -tlnp | grep 7880` shows `*:7880`) and `curl http://192.168.87.59:7880` works from the host, but the phone can't connect.
+
+**Check current allowed ports:**
+
+```sh
+nixos-option networking.firewall.allowedTCPPorts
+```
+
+**Fix — restrict to LAN subnet (recommended for local dev):**
+
+```nix
+# In your NixOS configuration (e.g., hosts/nixos/configuration.nix)
+networking.firewall.extraCommands = ''
+  iptables -A INPUT -p tcp -s 192.168.87.0/24 --dport 7880 -j ACCEPT
+  iptables -A INPUT -p tcp -s 192.168.87.0/24 --dport 7881 -j ACCEPT
+  iptables -A INPUT -p udp -s 192.168.87.0/24 --dport 50000:60000 -j ACCEPT
+'';
+```
+
+Then `sudo nixos-rebuild switch`.
+
+**Why not open to all interfaces?** Ports 50000-60000 (UDP) is a large surface area. Restricting to your LAN subnet avoids exposing them to the internet while still allowing the phone to connect.
+
+**Note:** Tailscale traffic bypasses the NixOS firewall (it travels over the `tailscale0` interface which is trusted). This is why Option B (Tailscale) works without any firewall changes.
+
+---
+
 ## Tailscale VPN routing caveat
 
 When Tailscale is active on Android, it installs `ip rule` entries (priority 13000) that route **all app traffic** (by UID range) through its VPN routing table. This table only has routes for Tailscale IPs (`100.x.x.x`). LAN traffic (`192.168.x.x`) has no route and is **silently dropped**.
@@ -289,7 +322,7 @@ If the phone is on the same WiFi network as the dev machine:
 1. **Turn off Tailscale** on the phone (see [Tailscale VPN routing caveat](#tailscale-vpn-routing-caveat))
 2. Find dev machine LAN IP: `hostname -I | awk '{print $1}'`
 3. Set `apps/mobile/.env`: `LIVEKIT_URL=ws://<LAN_IP>:7880`
-4. Check firewall allows ports 7880 (TCP) and 7882 + 50000-60000 (UDP)
+4. Open firewall ports for your LAN subnet (see [NixOS firewall](#nixos-firewall))
 
 No `network_security_config.xml` needed. The TUI auto-rewrites `localhost` → LAN IP when deploying to a physical device.
 
@@ -317,3 +350,6 @@ No `network_security_config.xml` needed. The TUI auto-rewrites `localhost` → L
 | 2026-02-27 | LAN, Tailscale OFF, NO cleartext | PASS | WebSocket + WebRTC connected — cleartext config NOT needed |
 | 2026-02-27 | Conclusion | NOTE | `network_security_config.xml` unnecessary — LiveKit SDK bypasses Android NetworkSecurityConfig |
 | 2026-02-27 | Conclusion | NOTE | Tailscale VPN on Android routes all app traffic through VPN table; LAN IPs unreachable |
+| 2026-02-28 | LAN, Tailscale OFF, firewall closed | FAIL | `SocketException: Software caused connection abort` — NixOS firewall blocks port 7880 from LAN |
+| 2026-02-28 | LAN, Tailscale OFF, firewall open | PASS | Opened 7880/tcp, 7881/tcp, 50000-60000/udp for 192.168.87.0/24 — full E2E works |
+| 2026-02-28 | Conclusion | NOTE | NixOS firewall enabled by default; only port 22 allowed. Tailscale bypasses firewall (trusted interface) |
