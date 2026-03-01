@@ -21,12 +21,13 @@
  */
 
 import { defineAgent, cli, ServerOptions, type JobContext } from '@livekit/agents';
-import { voice, metrics } from '@livekit/agents';
+import { voice } from '@livekit/agents';
 import * as deepgram from '@livekit/agents-plugin-deepgram';
 import * as cartesia from '@livekit/agents-plugin-cartesia';
 import { createGangliaFromEnv, resolveSessionKeySimple } from '@knittt/livekit-agent-ganglia';
 import pino from 'pino';
 import { TurnMetricsCollector } from './metrics';
+import { initTelemetry, shutdownTelemetry } from './telemetry';
 
 // ---------------------------------------------------------------------------
 // Logger setup — pretty-print when running locally, JSON in production
@@ -71,6 +72,8 @@ logger.info({
 // ---------------------------------------------------------------------------
 export default defineAgent({
   entry: async (ctx: JobContext) => {
+    await initTelemetry(logger);
+
     const gangliaLlm = await createGangliaFromEnv({ logger });
     logger.info(`Using ganglia backend: ${gangliaLlm.gangliaType()}`);
 
@@ -143,6 +146,7 @@ export default defineAgent({
     ctx.addShutdownCallback(async () => {
       logger.info('Shutting down voice agent...');
       await session.close();
+      await shutdownTelemetry();
     });
   },
 });
