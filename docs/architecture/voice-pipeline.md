@@ -135,6 +135,51 @@ In addition to the audio pipeline, the system sends metadata to the client via L
 
 See [Data Channel Protocol](data-channel-protocol.md) for the message format and chunking protocol.
 
+## Metrics & Observability
+
+The voice pipeline has three tiers of instrumentation, from lightweight logging to full distributed tracing.
+
+### Tier 1: Per-Turn Metrics (always on)
+
+The `@livekit/agents` SDK emits `MetricsCollected` events for each pipeline stage. The voice agent listens to these and correlates them by `speechId` into per-turn summaries via `TurnMetricsCollector` (`apps/voice-agent/src/metrics.ts`).
+
+**Metrics captured per turn:**
+
+| Metric | Source | What it measures |
+|--------|--------|-----------------|
+| `eouDelayMs` | `eou_metrics` | VAD end-of-speech → turn decision |
+| `transcriptionDelayMs` | `eou_metrics` | Time to get transcript after speech ends |
+| `llmTtftMs` | `llm_metrics` | LLM time to first token |
+| `llmDurationMs` | `llm_metrics` | Total LLM request duration |
+| `ttsTimeToFirstByteMs` | `tts_metrics` | TTS time to first audio byte |
+| `estimatedTotalMs` | Computed | EOU + LLM TTFT + TTS TTFB (pipeline latency) |
+
+Individual component metrics are logged at `debug` level; the correlated per-turn summary is logged at `info` level. The agent also logs `AgentStateChanged` (idle → thinking → speaking) and final user transcripts.
+
+### Tier 2: HTTP-Layer Timing (DEBUG=ganglia:*)
+
+When `DEBUG=ganglia:*` is enabled, Ganglia logs internal HTTP timing for each request to the OpenClaw/Nanoclaw backend:
+
+- **`ganglia:openclaw:client`** — fetch latency, time from fetch start to first SSE chunk, total stream duration, chunk count
+- **`ganglia:openclaw:stream`** — time from `OpenClawChatStream.run()` start to first `ChatChunk`, total stream duration
+
+This is useful for distinguishing network latency from backend processing time.
+
+### Tier 3: OpenTelemetry Distributed Tracing (opt-in)
+
+When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the voice agent initializes a `NodeTracerProvider` with an OTLP/proto exporter and registers it with the LiveKit SDK via `setTracerProvider()`. The SDK then automatically creates spans for the entire voice pipeline.
+
+**Setup:**
+```bash
+# Start Jaeger locally
+docker run -p 16686:16686 -p 4318:4318 jaegertracing/all-in-one
+
+# Set the env var (in .env or docker-compose.yml)
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+```
+
+The telemetry module (`apps/voice-agent/src/telemetry.ts`) uses dynamic imports — when the env var is absent, no OTel code is loaded and there is zero runtime overhead.
+
 ## Related Documents
 
 - [Brain Plugin](brain-plugin.md) — Ganglia LLM interface and streaming details
