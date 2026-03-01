@@ -17,4 +17,5 @@ services:
       OPENCLAW_GATEWAY_URL: http://localhost:18789
       DEBUG: ganglia:*
       LOG_LEVEL: debug
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     restart: unless-stopped

@@ -211,6 +211,7 @@ export class OpenClawClient {
       options.sessionKey?.type ?? 'none',
     );
 
+    const fetchStart = performance.now();
     let response: Response;
     try {
       response = await fetch(url, {
@@ -224,7 +225,8 @@ export class OpenClawClient {
       throw fetchError;
     }
 
-    dbg.openclawClient('response %d %s', response.status, response.statusText);
+    const responseMs = Math.round(performance.now() - fetchStart);
+    dbg.openclawClient('response %d %s (fetchLatency=%dms)', response.status, response.statusText, responseMs);
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error');
@@ -268,6 +270,8 @@ export class OpenClawClient {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let firstChunkAt: number | undefined;
+    let chunkCount = 0;
 
     try {
       while (true) {
@@ -284,6 +288,11 @@ export class OpenClawClient {
           if (trimmedLine.startsWith('data: ')) {
             try {
               const data = JSON.parse(trimmedLine.slice(6));
+              chunkCount++;
+              if (!firstChunkAt) {
+                firstChunkAt = performance.now();
+                dbg.openclawClient('timing: fetchStart→firstChunk=%dms', Math.round(firstChunkAt - fetchStart));
+              }
               yield data as OpenClawChatResponse;
             } catch (e) {
               this.logger.warn(`Error parsing JSON chunk: ${trimmedLine}`);
@@ -295,6 +304,8 @@ export class OpenClawClient {
       controller.abort();
       throw err;
     } finally {
+      const streamEndMs = Math.round(performance.now() - fetchStart);
+      dbg.openclawClient('timing: totalStreamDuration=%dms chunks=%d', streamEndMs, chunkCount);
       reader.releaseLock();
     }
   }

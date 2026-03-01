@@ -26,6 +26,8 @@ import * as deepgram from '@livekit/agents-plugin-deepgram';
 import * as cartesia from '@livekit/agents-plugin-cartesia';
 import { createGangliaFromEnv, resolveSessionKeySimple } from '@knittt/livekit-agent-ganglia';
 import pino from 'pino';
+import { TurnMetricsCollector } from './metrics';
+import { initTelemetry, shutdownTelemetry } from './telemetry';
 
 // ---------------------------------------------------------------------------
 // Logger setup — pretty-print when running locally, JSON in production
@@ -70,6 +72,8 @@ logger.info({
 // ---------------------------------------------------------------------------
 export default defineAgent({
   entry: async (ctx: JobContext) => {
+    await initTelemetry(logger);
+
     const gangliaLlm = await createGangliaFromEnv({ logger });
     logger.info(`Using ganglia backend: ${gangliaLlm.gangliaType()}`);
 
@@ -83,6 +87,39 @@ export default defineAgent({
     });
     await ctx.connect();
     logger.info(`Connected to room: ${ctx.room.name}`);
+
+    // -----------------------------------------------------------------------
+    // Metrics & observability — listen to SDK pipeline events
+    // -----------------------------------------------------------------------
+    const turnCollector = new TurnMetricsCollector(logger);
+
+    session.on(voice.AgentSessionEventTypes.MetricsCollected, (ev) => {
+      const m = ev.metrics;
+      // Log individual component metrics at debug level
+      switch (m.type) {
+        case 'llm_metrics':
+          logger.debug({ ttftMs: m.ttftMs, durationMs: m.durationMs, tokensPerSecond: Math.round(m.tokensPerSecond), speechId: m.speechId }, 'LLM metrics');
+          break;
+        case 'tts_metrics':
+          logger.debug({ ttfbMs: m.ttfbMs, durationMs: m.durationMs, speechId: m.speechId }, 'TTS metrics');
+          break;
+        case 'eou_metrics':
+          logger.debug({ endOfUtteranceDelayMs: m.endOfUtteranceDelayMs, transcriptionDelayMs: m.transcriptionDelayMs, speechId: m.speechId }, 'EOU metrics');
+          break;
+      }
+      // Correlate into per-turn summaries
+      turnCollector.collect(m);
+    });
+
+    session.on(voice.AgentSessionEventTypes.AgentStateChanged, (ev) => {
+      logger.info({ from: ev.oldState, to: ev.newState }, 'Agent state changed');
+    });
+
+    session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (ev) => {
+      if (ev.isFinal) {
+        logger.info({ transcript: ev.transcript }, 'User input (final)');
+      }
+    });
 
     const participant = await ctx.waitForParticipant();
     logger.info(`Participant joined: ${participant.identity}`);
@@ -109,6 +146,7 @@ export default defineAgent({
     ctx.addShutdownCallback(async () => {
       logger.info('Shutting down voice agent...');
       await session.close();
+      await shutdownTelemetry();
     });
   },
 });
