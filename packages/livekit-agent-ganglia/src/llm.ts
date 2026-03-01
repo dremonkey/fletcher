@@ -86,6 +86,19 @@ export class OpenClawLLM extends LLMBase implements GangliaLLM {
     super();
     this.client = new OpenClawClient(config);
     this._model = config.model || 'openclaw-gateway';
+
+    // Guard against duplicate @livekit/agents installs — the voice pipeline
+    // uses `instanceof LLM` to gate the chat() call, and a second copy of the
+    // package silently breaks that check.  Fail loudly instead.
+    if (!(this instanceof LLMBase)) {
+      const msg = [
+        'OpenClawLLM: instanceof LLM check failed — likely duplicate @livekit/agents installs.',
+        'Ensure @livekit/agents is a peerDependency (not a direct dependency) in livekit-agent-ganglia.',
+        'Run: bun why @livekit/agents',
+      ].join(' ');
+      dbg.openclawStream(msg);
+      throw new Error(msg);
+    }
   }
 
   /**
