@@ -84,6 +84,24 @@ function getLanIp(): string | null {
   return ip || null;
 }
 
+/** Find this machine's Tailscale IP (100.64.0.0/10 CGNAT range) from hostname -I output. */
+function getTailscaleIp(): string | null {
+  const proc = Bun.spawnSync(["hostname", "-I"], { stdout: "pipe", stderr: "pipe" });
+  if (proc.exitCode !== 0) return null;
+  const ips = proc.stdout.toString().trim().split(/\s+/);
+  for (const ip of ips) {
+    const parts = ip.split(".");
+    if (parts.length !== 4) continue;
+    const first = parseInt(parts[0]);
+    const second = parseInt(parts[1]);
+    // 100.64.0.0/10 = first octet 100, second octet 64-127
+    if (first === 100 && second >= 64 && second <= 127) {
+      return ip;
+    }
+  }
+  return null;
+}
+
 function updateMobileEnv(): void {
   const mobileEnvPath = join(ROOT, "apps", "mobile", ".env");
   let livekitUrl = env("LIVEKIT_URL") || "";
@@ -113,6 +131,14 @@ function updateMobileEnv(): void {
   };
 
   updateKey(mobileEnvPath, "LIVEKIT_URL", livekitUrl);
+
+  // Write Tailscale URL if the dev machine has a Tailscale IP
+  const tailscaleIp = getTailscaleIp();
+  if (tailscaleIp) {
+    const tailscaleUrl = livekitUrl.replace(/\d+\.\d+\.\d+\.\d+/, tailscaleIp);
+    updateKey(mobileEnvPath, "LIVEKIT_URL_TAILSCALE", tailscaleUrl);
+    p.log.info(`Mobile LIVEKIT_URL_TAILSCALE rewritten to ${tailscaleUrl}`);
+  }
 }
 
 export async function deployToDevice(): Promise<Subprocess | null> {

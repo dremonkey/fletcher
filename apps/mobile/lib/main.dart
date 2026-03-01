@@ -28,6 +28,7 @@ class FletcherApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final livekitUrl = dotenv.env['LIVEKIT_URL'] ?? '';
     final livekitToken = dotenv.env['LIVEKIT_TOKEN'] ?? '';
+    final livekitUrlTailscale = dotenv.env['LIVEKIT_URL_TAILSCALE'];
 
     return MaterialApp(
       title: 'Fletcher',
@@ -43,6 +44,7 @@ class FletcherApp extends StatelessWidget {
       home: ConversationScreen(
         livekitUrl: livekitUrl,
         token: livekitToken,
+        livekitUrlTailscale: livekitUrlTailscale,
       ),
     );
   }
