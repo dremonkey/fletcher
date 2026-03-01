@@ -75,6 +75,7 @@ A unified LLM plugin (`@knittt/livekit-agent-ganglia`) that bridges LiveKit agen
 - [ ] 003: OpenResponses API Backend — backlog; item-based alternative to Chat Completions with granular SSE, ephemeral files, client-side tools
 - [x] 004: Session Key Routing (spec 08) ✅ — identity-based session routing replaces room-scoped IDs; owner/guest/room routing for both OpenClaw and Nanoclaw; 35 new tests
 - [ ] 005: End-to-End OpenClaw Integration — validate full voice pipeline against real Gateway; session continuity, guest isolation, tool calling
+- [ ] 006: Migrate TTS to ElevenLabs — replace Cartesia for better vocal character; trade minor latency for "Glitch" personality
 
 **Implemented:**
 - Unified `@knittt/livekit-agent-ganglia` package with types, factory, events, tool-interceptor
@@ -137,6 +138,8 @@ Hardening secrets management, auth, and dev environment security.
 
 **Tasks:**
 - [ ] 001: Generate LiveKit API secret at setup time — remove hardcoded secret from `livekit.yaml`, generate per-developer at bootstrap
+- [ ] 002: Explicit Identity in Session Routing — fix "guest_user" anonymity by passing `user` ID from Fletcher to OpenClaw API
+- [ ] 003: Multi-User Privacy Guard — implement "Restricted Mode" for non-owners (e.g., family/guests) to prevent personal memory leaks
 
 ### 9. [TUI Improvements](./tui) 🔄
 Developer experience improvements to the terminal UI launcher.
