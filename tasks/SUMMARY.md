@@ -31,6 +31,8 @@ The LiveKit channel plugin (`@openclaw/channel-livekit`) that integrates voice c
 - [x] 003: Debug voice agent not responding ✅ — fixed via auto-dispatch (agentName + roomConfig in token)
 - [x] 004: Channel plugin approach (implementation guide)
 - [x] 005: Token generation endpoint (Sovereign Pairing) ✅
+- [ ] 007: Noise-Robust Voice Detection 📋
+- [ ] 008: Immediate Acknowledgment 📋
 
 **Implemented:**
 - Full plugin structure with OpenClaw adapters (config, security, gateway, outbound, status)
@@ -105,9 +107,11 @@ Pipeline optimizations to reduce voice-to-voice latency from ~1.4s to <0.8s.
 
 **Tasks:**
 - [ ] 001: Enable preemptive generation & tune endpointing (Phase 1)
-- [ ] 002: Add latency instrumentation & metrics (Phase 1b)
+- [x] 002: Add latency instrumentation & metrics — moved to [Epic 10: Metrics](./10-metrics)
 - [ ] 003: Streaming interim transcripts to LLM (Phase 2)
 - [ ] 004: TTS pre-warming validation (Phase 3)
+
+**Baseline measurement (2026-03-01 field test):** ~8-10s perceived latency. LLM TTFT is ~8s, pipeline overhead ~528ms.
 
 **Spec:** [docs/specs/05-latency-optimization/spec.md](../docs/specs/05-latency-optimization/spec.md)
 
@@ -163,6 +167,22 @@ Bulletproof connection handling: survive network switches, Bluetooth changes, ai
 - [~] 008: Tailscale-aware URL resolution — runtime detection of Tailscale VPN on phone, auto-selects correct URL; code complete, needs user testing
 
 **Depends on:** Epic 3 (Flutter App)
+
+### 10. [Metrics & Observability](./10-metrics) ✅
+OpenTelemetry-compatible instrumentation for the voice pipeline. Measure STT, EOU, LLM TTFT, TTS TTFB, and total round-trip latency per turn.
+
+**Tasks:**
+- [x] 001: Wire up AgentSession metric events (pino logging) ✅
+- [x] 002: HTTP-layer timing in Ganglia (performance.now) ✅
+- [x] 003: OpenTelemetry exporter setup (opt-in OTLP) ✅
+- [x] 004: Per-turn metrics collector (speechId correlation) ✅
+
+**Implemented:**
+- `MetricsCollected`, `AgentStateChanged`, `UserInputTranscribed` event listeners in voice-agent
+- `performance.now()` timing in Ganglia's `client.ts` (fetch→firstChunk→complete) and `llm.ts` (stream timing)
+- Opt-in OTel tracing via `OTEL_EXPORTER_OTLP_ENDPOINT` with `NodeTracerProvider` + `BatchSpanProcessor`
+- `TurnMetricsCollector` correlating EOU + LLM + TTS by `speechId` into per-turn summaries
+- 5 unit tests for metrics collector
 
 ## Development Path
 
