@@ -100,31 +100,47 @@ export function synthesizeAckTone(): Int16Array {
   return pcm;
 }
 
+/** Silence gap between tone repetitions (seconds). */
+const LOOP_GAP_S = 1.5;
+
 /**
- * Create an AsyncIterable<AudioFrame> that yields the acknowledgment tone
- * as a sequence of audio frame chunks.
+ * Create an AsyncIterable<AudioFrame> that loops the acknowledgment tone
+ * indefinitely with silence gaps between repetitions.
  *
  * Compatible with LiveKit's BackgroundAudioPlayer thinkingSound option.
- * The iterable is single-use (plays the tone once, then ends).
+ * The BackgroundAudioPlayer stops iteration when the agent leaves the
+ * "thinking" state, so the infinite loop is safe.
  */
 export async function* ackToneFrames(): AsyncGenerator<AudioFrame> {
   const pcm = synthesizeAckTone();
-  let offset = 0;
+  const gapSamples = Math.round(LOOP_GAP_S * SAMPLE_RATE);
+  const silence = new Int16Array(CHUNK_SAMPLES); // zero-filled
 
-  while (offset < pcm.length) {
-    const remaining = pcm.length - offset;
-    const chunkSize = Math.min(CHUNK_SAMPLES, remaining);
-    const chunkData = pcm.slice(offset, offset + chunkSize);
+  while (true) {
+    // Yield the tone
+    let offset = 0;
+    while (offset < pcm.length) {
+      const remaining = pcm.length - offset;
+      const chunkSize = Math.min(CHUNK_SAMPLES, remaining);
+      const chunkData = pcm.slice(offset, offset + chunkSize);
+      yield new AudioFrame(chunkData, SAMPLE_RATE, NUM_CHANNELS, chunkSize);
+      offset += chunkSize;
+    }
 
-    yield new AudioFrame(chunkData, SAMPLE_RATE, NUM_CHANNELS, chunkSize);
-    offset += chunkSize;
+    // Yield silence gap before next repetition
+    let gapRemaining = gapSamples;
+    while (gapRemaining > 0) {
+      const chunkSize = Math.min(CHUNK_SAMPLES, gapRemaining);
+      const chunkData = chunkSize === CHUNK_SAMPLES ? silence : silence.slice(0, chunkSize);
+      yield new AudioFrame(chunkData, SAMPLE_RATE, NUM_CHANNELS, chunkSize);
+      gapRemaining -= chunkSize;
+    }
   }
 }
 
 /**
- * Create a factory function that produces a fresh AsyncIterable<AudioFrame>
- * each time it's called. This is necessary because BackgroundAudioPlayer
- * needs a new iterable for each play invocation.
+ * Create an AsyncIterable<AudioFrame> that loops the acknowledgment tone.
+ * Each call to [Symbol.asyncIterator]() returns a fresh generator.
  */
 export function createAckToneSource(): AsyncIterable<AudioFrame> {
   return {

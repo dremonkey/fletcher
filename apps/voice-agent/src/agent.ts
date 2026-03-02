@@ -85,7 +85,7 @@ export default defineAgent({
         : { type: 'status', action, startedAt: Date.now() };
       localParticipant.publishData(
         new TextEncoder().encode(JSON.stringify(event)),
-        { topic: 'ganglia-events' },
+        { topic: 'ganglia-events', reliable: true },
       );
     };
 
@@ -93,10 +93,12 @@ export default defineAgent({
       logger,
       onPondering: (phrase) => {
         if (phrase) {
+          logger.info({ phrase }, 'Pondering status published');
           publishStatus('thinking', phrase);
         } else {
-          // Clear by sending a brief "done" status that will auto-clear
-          publishStatus('thinking');
+          // Don't send a clearing status — the agent state change to
+          // "speaking" will naturally dismiss the status bar.
+          logger.info('Pondering cleared');
         }
       },
     });
