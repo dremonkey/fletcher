@@ -119,6 +119,7 @@ export default defineAgent({
     await session.start({
       agent: new voice.Agent({ instructions: '' }),
       room: ctx.room,
+      outputOptions: { syncTranscription: false },
     });
     await ctx.connect();
     logger.info(`Connected to room: ${ctx.room.name}`);

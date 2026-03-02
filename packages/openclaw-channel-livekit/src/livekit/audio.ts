@@ -173,7 +173,11 @@ export class VoiceAgent {
         llm: this.llmInstance ?? undefined,
       });
 
-      await this.session.start({ agent: this.agent, room });
+      await this.session.start({
+        agent: this.agent,
+        room,
+        outputOptions: { syncTranscription: false },
+      });
       log.info("Voice session started");
     } catch (error) {
       log.error(`Error starting voice session: ${error}`);
