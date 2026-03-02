@@ -179,11 +179,21 @@ export default defineAgent({
     // -----------------------------------------------------------------------
     session.on(voice.AgentSessionEventTypes.Error, (ev) => {
       const err = ev.error as { type?: string; label?: string; error?: Error; recoverable?: boolean };
-      const source = err.type === 'tts_error' ? 'TTS'
-        : err.type === 'stt_error' ? 'STT'
-        : err.type === 'llm_error' ? 'LLM'
-        : 'Pipeline';
       const message = err.error?.message ?? String(err);
+
+      // "Queue is closed" is expected during disconnect — don't forward to client
+      if (message.includes('Queue is closed')) {
+        logger.debug({ label: err.label }, 'Queue closed (expected during disconnect)');
+        return;
+      }
+
+      // Use the SDK label (e.g. "elevenlabs.TTS", "deepgram.STT") for specificity,
+      // fall back to generic category
+      const source = err.label
+        ?? (err.type === 'tts_error' ? 'TTS'
+          : err.type === 'stt_error' ? 'STT'
+          : err.type === 'llm_error' ? 'LLM'
+          : 'Pipeline');
       logger.error({ source, message, recoverable: err.recoverable }, 'Pipeline error');
 
       publishEvent({
