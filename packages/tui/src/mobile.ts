@@ -5,6 +5,10 @@ import { join } from "path";
 import { ROOT, env } from "./env";
 import { runStep, children } from "./services";
 
+/** Debug APK output path from `flutter build apk --debug`. */
+const APK_OUTPUT = join(ROOT, "apps", "mobile", "build", "app", "outputs", "flutter-apk", "app-debug.apk");
+const PACKAGE_NAME = "com.fletcher.fletcher";
+
 interface AdbDevice {
   serial: string;
   status: string;
@@ -141,7 +145,32 @@ function updateMobileEnv(): void {
   }
 }
 
-export async function deployToDevice(): Promise<Subprocess | null> {
+/**
+ * Start building the debug APK in the background.
+ * Call concurrently with Docker service startup to parallelise work.
+ * Returns a promise resolving to true on success, false on failure.
+ * Returns null if flutter is not available.
+ */
+export function startApkBuildInBackground(): Promise<boolean> | null {
+  if (!hasCommand("flutter")) return null;
+
+  // Ensure mobile .env has correct LIVEKIT_URL before build
+  updateMobileEnv();
+
+  const proc = spawn(
+    ["flutter", "build", "apk", "--debug"],
+    { cwd: join(ROOT, "apps", "mobile"), stdout: "pipe", stderr: "pipe" },
+  );
+  children.push(proc);
+
+  return proc.exited.then(exitCode => {
+    const idx = children.indexOf(proc);
+    if (idx !== -1) children.splice(idx, 1);
+    return exitCode === 0;
+  });
+}
+
+export async function deployToDevice(opts?: { apkBuildPromise?: Promise<boolean> | null }): Promise<Subprocess | null> {
   if (!hasCommand("adb")) {
     p.log.warn("adb not found — skipping mobile deploy. Install Android SDK or run inside nix develop.");
     return null;
@@ -211,6 +240,16 @@ export async function deployToDevice(): Promise<Subprocess | null> {
     selection = choice as string;
   }
 
+  // Wait for background APK build (if running) before any flutter
+  // build/run to avoid build-system conflicts on the same project dir.
+  let apkPrebuilt = false;
+  if (opts?.apkBuildPromise) {
+    const s = p.spinner();
+    s.start("Waiting for background APK build");
+    apkPrebuilt = await opts.apkBuildPromise;
+    s.stop(apkPrebuilt ? "APK build complete" : "Background APK build failed");
+  }
+
   if (selection.startsWith("avd:")) {
     // Path A: boot a new emulator, then attach flutter run
     const avdName = selection.slice(4);
@@ -234,14 +273,27 @@ export async function deployToDevice(): Promise<Subprocess | null> {
     return spawnFlutterRun(serial);
   }
 
-  // Path C: physical device, one-shot build+install+launch
+  // Path C: physical device, one-shot install+launch
   updateMobileEnv();
-  await runStep(
-    "Building and installing APK",
-    ["bash", join(ROOT, "scripts", "ensure-mobile-ready.sh"),
-     "--device-id", serial, "--force-build"],
-    { fatal: false },
-  );
+  if (apkPrebuilt) {
+    // APK already built in background — just install and launch
+    const installed = await runStep("Installing APK", [
+      "adb", "-s", serial, "install", "-r", APK_OUTPUT,
+    ], { fatal: false });
+    if (installed) {
+      await runStep("Launching app", [
+        "adb", "-s", serial, "shell", "am", "start", "-n",
+        `${PACKAGE_NAME}/.MainActivity`,
+      ], { fatal: false });
+    }
+  } else {
+    await runStep(
+      "Building and installing APK",
+      ["bash", join(ROOT, "scripts", "ensure-mobile-ready.sh"),
+       "--device-id", serial, "--force-build"],
+      { fatal: false },
+    );
+  }
   return null;
 }
 

@@ -191,7 +191,13 @@ export async function startServices(): Promise<void> {
     }
   }
 
-  // Step 5: Generate token (only after services are confirmed ready)
+}
+
+/**
+ * Generate a LiveKit access token and write it to apps/mobile/.env.
+ * Uses LIVEKIT_API_KEY and LIVEKIT_API_SECRET — no running server needed.
+ */
+export async function generateToken(): Promise<void> {
   const room = env("LIVEKIT_ROOM") || DEFAULT_ROOM;
   await runStep("Generating LiveKit token", [
     "bun", "run", "scripts/generate-token.ts", "--room", room,

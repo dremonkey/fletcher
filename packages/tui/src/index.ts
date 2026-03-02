@@ -16,8 +16,8 @@ import { loadEnv, cancelled } from "./env";
 import { auditEnv } from "./audit";
 import { manageConfiguration, confirmBeforeStart } from "./config";
 import { manageSkills } from "./skills";
-import { startServices, installShutdownHandler } from "./services";
-import { deployToDevice } from "./mobile";
+import { startServices, installShutdownHandler, generateToken } from "./services";
+import { deployToDevice, startApkBuildInBackground } from "./mobile";
 
 // Load .env into process.env on startup
 for (const [k, v] of Object.entries(loadEnv())) {
@@ -68,8 +68,17 @@ while (true) {
   // action === "start" — launch services via docker-compose
   await auditEnv();
   await confirmBeforeStart();
+
+  // Generate token early so it's in apps/mobile/.env before the APK build
+  // reads it (fast — just signs a JWT, no server needed).
+  await generateToken();
+
+  // Start APK build in background while Docker services start up
+  const apkBuildPromise = startApkBuildInBackground();
+  if (apkBuildPromise) p.log.info("APK build started in background");
+
   await startServices();
-  const flutterProc = await deployToDevice();
+  const flutterProc = await deployToDevice({ apkBuildPromise });
 
   // Install AFTER all @clack/prompts spinners and interactive prompts are
   // done.  Bun has a bug where adding then removing a signal handler (which
