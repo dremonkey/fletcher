@@ -148,13 +148,6 @@ bun test
 
 Tests are co-located with source files (e.g., `src/client.spec.ts`).
 
-### Channel Plugin Tests
-
-```bash
-cd packages/openclaw-channel-livekit
-bun test
-```
-
 ### All Tests
 
 ```bash
@@ -179,7 +172,6 @@ bun run test   # From workspace root
 | `bun run test` | Test all packages |
 | `bun run lint` | Lint all packages |
 | `bun run format` | Prettier formatting |
-| `bun run channel:dev` | Watch mode for channel plugin |
 | `bun run brain:dev` | Watch mode for brain plugin |
 | `bun run agent:dev` | Run voice agent |
 | `bun run voice:dev` | Run voice agent (alias) |

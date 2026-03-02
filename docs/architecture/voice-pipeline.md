@@ -157,16 +157,6 @@ The agent registers as a LiveKit worker. When a client joins a room, LiveKit dis
 
 **Load reporting:** The agent reports zero load (`loadFunc: async () => 0`) so LiveKit always dispatches jobs to it. This avoids unreliable CPU sampling in containers.
 
-### OpenClaw Plugin (`packages/openclaw-channel-livekit`)
-
-The channel plugin is started by the OpenClaw Gateway. The `gateway.startAccount()` method:
-
-1. Generates an agent token via `generateAgentToken()`
-2. Connects to a LiveKit room via `connectToRoom()`
-3. Creates a `VoiceAgent` and calls `agent.start(room)`
-4. `VoiceAgent` creates STT, TTS, Ganglia, and AgentSession internally
-5. `ParticipantTracker` starts a session when the first participant joins
-
 ## Transcription & Data Channels
 
 In addition to the audio pipeline, the system sends metadata to the client via LiveKit's text streams and data channels:
@@ -256,6 +246,5 @@ The telemetry module (`apps/voice-agent/src/telemetry.ts`) uses dynamic imports 
 ## Related Documents
 
 - [Brain Plugin](brain-plugin.md) — Ganglia LLM interface and streaming details
-- [Channel Plugin](channel-plugin.md) — VoiceAgent lifecycle in the OpenClaw context
 - [Data Channel Protocol](data-channel-protocol.md) — transcription and event message formats
 - [Session Routing](session-routing.md) — how the pipeline selects a conversation session

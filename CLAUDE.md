@@ -1,14 +1,13 @@
 # Fletcher Project - Static's Guide (⚡)
 
-This project (Fletcher) is an OpenClaw channel plugin for real-time voice conversations via LiveKit.
+This project (Fletcher) is a voice-first bridge for OpenClaw — a standalone voice agent using LiveKit for real-time conversations.
 
 ## Core Directives
 - **Runtime:** This is a **Bun** project. Prefer native Bun tools over external ones (e.g., use `bun test` instead of Vitest/Jest).
-- **Architecture:** Fletcher follows the OpenClaw Channel Plugin model. The voice system lives directly inside the OpenClaw Gateway.
+- **Architecture:** Fletcher is a standalone voice agent that talks to OpenClaw Gateway via its OpenAI-compatible completions API. (We considered the OpenClaw channel plugin approach but opted for standalone — see `docs/architecture-comparison.md`.)
 - **Latency Target:** Aim for sub-1.5s voice-to-voice latency.
 
 ## Project Structure
-- `packages/openclaw-channel-livekit`: The primary OpenClaw channel plugin.
 - `packages/livekit-agent-ganglia`: The unified Brain Plugin (bridges LiveKit to OpenClaw/Nanoclaw).
 - `apps/mobile`: Example Flutter app for testing.
 
@@ -33,7 +32,6 @@ This project (Fletcher) is an OpenClaw channel plugin for real-time voice conver
 - **Changed the voice pipeline (STT, TTS, LLM, AgentSession)?** Update `voice-pipeline.md`
 - **Modified Ganglia (factory, backends, streaming, events)?** Update `brain-plugin.md`
 - **Changed session routing or SessionKey logic?** Update `session-routing.md`
-- **Modified the OpenClaw plugin interface or adapters?** Update `channel-plugin.md`
 - **Changed data channel events, transcription, or chunking?** Update `data-channel-protocol.md`
 - **Changed the Flutter app (services, widgets, state)?** Update `mobile-client.md`
 - **Changed Docker, LiveKit config, Nix, or env vars?** Update `infrastructure.md`

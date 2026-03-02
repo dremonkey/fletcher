@@ -1,6 +1,6 @@
 # Fletcher Architecture
 
-Architecture documentation for Fletcher, an OpenClaw channel plugin for real-time voice conversations via LiveKit.
+Architecture documentation for Fletcher, a standalone voice agent bridging LiveKit to OpenClaw for real-time voice conversations.
 
 ## Reading Order
 
@@ -8,16 +8,15 @@ Start with the system overview, then follow the links based on what you need to 
 
 | # | Document | Summary |
 |---|----------|---------|
-| 1 | [System Overview](system-overview.md) | Three-layer architecture, monorepo structure, deployment topology, two entry points |
+| 1 | [System Overview](system-overview.md) | Two-layer architecture, monorepo structure, deployment topology |
 | 2 | [Voice Pipeline](voice-pipeline.md) | End-to-end audio flow from speech to speech, latency budget, AgentSession orchestration |
 | 3 | [Brain Plugin](brain-plugin.md) | Ganglia LLM bridge — factory system, OpenClaw/Nanoclaw backends, streaming, logging |
 | 4 | [Session Routing](session-routing.md) | SessionKey resolution (owner/guest/room), wire protocol, conversation persistence |
-| 5 | [Channel Plugin](channel-plugin.md) | OpenClaw plugin interface, six adapters, VoiceAgent lifecycle, Sovereign Pairing |
-| 6 | [Data Channel Protocol](data-channel-protocol.md) | Transcription streams, status/artifact events, chunking protocol |
-| 7 | [Mobile Client](mobile-client.md) | Flutter app services, widgets, state model, connection lifecycle, reconnection |
-| 8 | [Infrastructure](infrastructure.md) | Docker Compose, LiveKit config, Nix flake, Tailscale, environment variable reference |
-| 9 | [Developer Workflow](developer-workflow.md) | TUI launcher, manual workflow, testing, startup sequence |
-| 10 | [Network Connectivity](network-connectivity.md) | Tailscale-aware URL resolution, CGNAT detection, health diagnostics |
+| 5 | [Data Channel Protocol](data-channel-protocol.md) | Transcription streams, status/artifact events, chunking protocol |
+| 6 | [Mobile Client](mobile-client.md) | Flutter app services, widgets, state model, connection lifecycle, reconnection |
+| 7 | [Infrastructure](infrastructure.md) | Docker Compose, LiveKit config, Nix flake, Tailscale, environment variable reference |
+| 8 | [Developer Workflow](developer-workflow.md) | TUI launcher, manual workflow, testing, startup sequence |
+| 9 | [Network Connectivity](network-connectivity.md) | Tailscale-aware URL resolution, CGNAT detection, health diagnostics |
 
 ## Quick Reference
 
@@ -25,8 +24,7 @@ Start with the system overview, then follow the links based on what you need to 
 
 | Package | Path | Purpose |
 |---------|------|---------|
-| `@openclaw/channel-livekit` | `packages/openclaw-channel-livekit/` | OpenClaw channel plugin (Layer 1) |
-| `@knittt/livekit-agent-ganglia` | `packages/livekit-agent-ganglia/` | LLM bridge to OpenClaw/Nanoclaw (Layer 3) |
+| `@knittt/livekit-agent-ganglia` | `packages/livekit-agent-ganglia/` | LLM bridge to OpenClaw/Nanoclaw |
 | `@fletcher/voice-agent` | `apps/voice-agent/` | Standalone LiveKit agent runner |
 | `@fletcher/tui` | `packages/tui/` | Developer TUI launcher |
 | Flutter app | `apps/mobile/` | Mobile voice client |

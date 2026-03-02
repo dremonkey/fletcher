@@ -166,4 +166,3 @@ This is used for:
 
 - [Brain Plugin](brain-plugin.md) — how backends receive and use session routing
 - [Voice Pipeline](voice-pipeline.md) — where session routing fits in the agent startup
-- [Channel Plugin](channel-plugin.md) — participant tracking and room lifecycle

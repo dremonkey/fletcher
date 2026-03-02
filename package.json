@@ -16,7 +16,6 @@
     "test": "bun workspaces run test",
     "lint": "bun workspaces run lint",
     "format": "prettier --write '**/*.{ts,tsx,js,json,md}'",
-    "channel:dev": "bun --cwd packages/openclaw-channel-livekit run dev",
     "brain:dev": "bun --cwd packages/livekit-agent-ganglia run dev",
     "mobile:dev": "./scripts/run-mobile.sh",
     "mobile:ensure": "./scripts/ensure-mobile-ready.sh",

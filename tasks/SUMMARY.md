@@ -1,16 +1,12 @@
 # Fletcher Project Roadmap
 
-Fletcher is a high-performance voice-first bridge for OpenClaw using LiveKit, built as an OpenClaw channel plugin.
+Fletcher is a high-performance voice-first bridge for OpenClaw using LiveKit.
 
 ## Architecture
 
-Fletcher is an **OpenClaw Channel Plugin** that integrates LiveKit voice capabilities directly into OpenClaw, similar to Telegram and WhatsApp channels. This provides:
-- Deep integration with OpenClaw core
-- Automatic conversation management
-- Single deployment with OpenClaw Gateway
-- Access to all OpenClaw skills, tools, and memory
+Fletcher is a **standalone voice agent** that connects to the OpenClaw Gateway via its OpenAI-compatible completions API. It runs as an independent LiveKit worker, handling the complete audio pipeline (STT → LLM → TTS) outside the Gateway process.
 
-See [Architecture Comparison](../docs/architecture-comparison.md) for detailed analysis.
+> We initially explored building Fletcher as an OpenClaw channel plugin (running inside the Gateway, like Telegram/WhatsApp channels) but opted for the standalone approach — simpler to develop, deploy, and debug. See [Architecture Comparison](../docs/architecture-comparison.md) for the full analysis.
 
 ## Epics
 
@@ -22,14 +18,13 @@ Setting up the development environment, LiveKit server, and monorepo structure.
 - [x] 002: Repository structure & CI/CD
 - [x] 003: Bootstrap script (cross-platform)
 
-### 2. [OpenClaw Channel Plugin](./02-livekit-agent) 🔄
-The LiveKit channel plugin (`@openclaw/channel-livekit`) that integrates voice capabilities into OpenClaw.
+### 2. [Voice Agent Pipeline](./02-livekit-agent) 🔄
+The voice agent audio pipeline — STT, TTS, voice detection, and agent dispatch.
+
+> Originally scoped as the "OpenClaw Channel Plugin" epic. The channel plugin package has been removed; remaining work focuses on the standalone voice agent pipeline.
 
 **Tasks:**
-- [~] 001: Initialize OpenClaw channel plugin — plugin structure and OpenClaw integration done; testing remaining
-- [~] 002: Implement audio pipeline (STT/TTS) — wired to SDK + Ganglia; actual provider integration, audio track management, latency monitoring remaining
 - [x] 003: Debug voice agent not responding ✅ — fixed via auto-dispatch (agentName + roomConfig in token)
-- [x] 004: Channel plugin approach (implementation guide)
 - [x] 005: Token generation endpoint (Sovereign Pairing) ✅
 - [ ] 007: Noise-Robust Voice Detection 📋
 - [~] 008: Immediate Acknowledgment 🔄 — Phases 1-2 complete: looping two-note chime on EOU via BackgroundAudioPlayer (1.5s gap between repetitions); Phase 3 (client visual pairing) open ([BUG-006](../docs/field-tests/20260301-buglog.md))
@@ -38,16 +33,11 @@ The LiveKit channel plugin (`@openclaw/channel-livekit`) that integrates voice c
 - [ ] 011: Voice Selection Persistent Preferences 📋 — selection UI/API with persistent storage and env-var based config
 
 **Implemented:**
-- Full plugin structure with OpenClaw adapters (config, security, gateway, outbound, status)
 - VoiceAgent wired to `@livekit/agents` SDK (deepgram.STT, cartesia.TTS, voice.AgentSession)
 - Ganglia LLM as brain via `@knittt/livekit-agent-ganglia`
-- Multi-account support with environment variable fallback
 - STT/TTS provider interfaces and factory functions
-- OpenClaw core integration (handleMessage, outbound.sendText, state machine)
-- **Token Endpoint:** `/fletcher/token` with Ed25519 signature verification (Sovereign Pairing)
 
 **Remaining:**
-- Unit/integration tests for channel plugin (mock providers, hello-world test)
 - Full audio track subscription and chunk publishing
 - Latency monitoring and metrics
 
@@ -196,9 +186,7 @@ OpenTelemetry-compatible instrumentation for the voice pipeline. Measure STT, EO
    - Create plugin package structure
    - Set up LiveKit server (local or cloud)
 
-2. **Phase 2: Channel Plugin** 🔄
-   - Implement OpenClaw channel plugin interface
-   - Integrate LiveKit connection
+2. **Phase 2: Voice Agent Pipeline** 🔄
    - Build STT → OpenClaw → TTS pipeline
    - Achieve <1.5s latency target
 
@@ -207,7 +195,3 @@ OpenTelemetry-compatible instrumentation for the voice pipeline. Measure STT, EO
    - Implement Amber Heartbeat visualizer
    - One-button interface to join room
 
-4. **Phase 4: Publishing**
-   - Publish plugin to npm as `@openclaw/channel-livekit`
-   - Open source under MIT license
-   - Submit to OpenClaw plugin directory

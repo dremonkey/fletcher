@@ -1,38 +1,36 @@
 # System Overview
 
-Fletcher is an OpenClaw channel plugin that adds real-time voice conversations via LiveKit. It bridges a Flutter mobile client to the OpenClaw reasoning engine through a voice pipeline built on the LiveKit Agents framework, targeting sub-1.5-second voice-to-voice latency.
+Fletcher is a standalone voice agent that bridges a Flutter mobile client to the OpenClaw reasoning engine through a real-time audio pipeline built on the LiveKit Agents framework, targeting sub-1.5-second voice-to-voice latency. It connects to the OpenClaw Gateway via its OpenAI-compatible completions API.
 
-## Three-Layer Architecture
+> **Design note:** We initially explored building Fletcher as an OpenClaw channel plugin (running inside the Gateway process, like Telegram or WhatsApp channels). We opted for the standalone agent approach instead — it's simpler to develop, deploy, and debug, and talks to OpenClaw through the same public API any other client would use. See `docs/architecture-comparison.md` for the full analysis.
 
-Fletcher is structured as three layers, each independently replaceable:
+## Two-Layer Architecture
+
+Fletcher is structured as two layers, each independently replaceable:
 
 | Layer | Package | Role |
 |-------|---------|------|
-| **Channel** | `@openclaw/channel-livekit` | OpenClaw plugin interface, LiveKit room management, token generation, participant tracking |
-| **Agent Runtime** | `@livekit/agents` (framework) | STT/TTS orchestration, VAD, turn detection, interruption handling |
+| **Agent Runtime** | `@livekit/agents` (framework) + `apps/voice-agent` | STT/TTS orchestration, VAD, turn detection, interruption handling |
 | **Brain** | `@knittt/livekit-agent-ganglia` | LLM bridge to OpenClaw (multi-user) or Nanoclaw (single-user) backends |
 
-The Channel layer can be swapped for other transports (WhatsApp, Discord). The Brain layer can be used with any LiveKit agent project — it has no dependency on the Channel layer.
+The Brain layer can be used with any LiveKit agent project — it has no dependency on the voice agent entry point.
 
 ```mermaid
 flowchart TB
-    subgraph "Layer 1 — Channel"
-        CP["OpenClaw Channel Plugin<br/><code>@openclaw/channel-livekit</code>"]
-    end
-
-    subgraph "Layer 2 — Agent Runtime"
+    subgraph "Layer 1 — Agent Runtime"
+        VA["Voice Agent<br/><code>apps/voice-agent</code>"]
         AS["AgentSession<br/><code>@livekit/agents</code>"]
         STT["Deepgram STT"]
         TTS["Cartesia TTS"]
     end
 
-    subgraph "Layer 3 — Brain"
+    subgraph "Layer 2 — Brain"
         G["Ganglia LLM<br/><code>@knittt/livekit-agent-ganglia</code>"]
         OC["OpenClaw Gateway"]
         NC["Nanoclaw"]
     end
 
-    CP --> AS
+    VA --> AS
     AS --> STT
     AS --> TTS
     AS --> G
@@ -47,11 +45,10 @@ Fletcher is a Bun workspace monorepo. The Flutter mobile app is **not** part of 
 ```
 fletcher/
 ├── packages/
-│   ├── openclaw-channel-livekit/   # Channel plugin (Layer 1)
-│   ├── livekit-agent-ganglia/      # Brain plugin (Layer 3)
+│   ├── livekit-agent-ganglia/      # Brain plugin (Layer 2)
 │   └── tui/                        # Developer TUI launcher
 ├── apps/
-│   ├── voice-agent/                # Standalone agent runner
+│   ├── voice-agent/                # Voice agent entry point (Layer 1)
 │   └── mobile/                     # Flutter app (not in Bun workspace)
 ├── scripts/                        # Token generation, bootstrap, mobile helpers
 ├── docs/
@@ -69,42 +66,27 @@ fletcher/
 ```mermaid
 flowchart TD
     VA["apps/voice-agent"]
-    CP["packages/openclaw-channel-livekit"]
     G["packages/livekit-agent-ganglia"]
     TUI["packages/tui"]
 
     LA["@livekit/agents"]
     DG["@livekit/agents-plugin-deepgram"]
     CA["@livekit/agents-plugin-cartesia"]
-    RTC["@livekit/rtc-node"]
-    SDK["livekit-server-sdk"]
 
     VA --> G
     VA --> LA
     VA --> DG
     VA --> CA
 
-    CP --> G
-    CP --> LA
-    CP --> DG
-    CP --> CA
-    CP --> RTC
-    CP --> SDK
-
     G -.->|"peer dependency"| LA
 ```
 
 **Key relationships:**
-- `voice-agent` is the standalone entry point — it imports Ganglia and the LiveKit agent plugins directly
-- `openclaw-channel-livekit` is the OpenClaw-integrated entry point — it wraps the same pipeline behind the OpenClaw plugin interface
+- `voice-agent` is the entry point — it imports Ganglia and the LiveKit agent plugins directly
 - `ganglia` depends on `@livekit/agents` as a **peer dependency** to avoid duplicate installs
 - `tui` has no code dependencies on other packages — it orchestrates via `docker compose` and shell commands
 
-## Two Entry Points
-
-Fletcher can run in two modes:
-
-### Standalone Agent (`apps/voice-agent`)
+## Voice Agent (`apps/voice-agent`)
 
 The voice agent runs as an independent LiveKit worker. It registers with LiveKit, accepts job dispatches, and connects to rooms automatically.
 
@@ -113,13 +95,7 @@ bun run apps/voice-agent/src/agent.ts dev      # Worker mode (accepts dispatches
 bun run apps/voice-agent/src/agent.ts connect   # Direct mode (joins specific room)
 ```
 
-This is the primary development mode. The agent is packaged as a Docker container via `apps/voice-agent/Dockerfile`.
-
-### OpenClaw Plugin (`packages/openclaw-channel-livekit`)
-
-The channel plugin runs inside the OpenClaw Gateway process. OpenClaw manages the lifecycle — starting/stopping voice agents per account, routing messages, and providing configuration.
-
-This is the production deployment model. The plugin registers an HTTP route (`POST /fletcher/token`) for device authentication and exposes the voice pipeline through OpenClaw's channel abstraction.
+The agent is packaged as a Docker container via `apps/voice-agent/Dockerfile`.
 
 ## Deployment Topology
 
@@ -173,6 +149,5 @@ The system is configured entirely through environment variables. See [Infrastruc
 
 - [Voice Pipeline](voice-pipeline.md) — end-to-end audio flow and latency budget
 - [Brain Plugin](brain-plugin.md) — Ganglia LLM interface and backend implementations
-- [Channel Plugin](channel-plugin.md) — OpenClaw integration and adapter interfaces
 - [Session Routing](session-routing.md) — how conversations are mapped to sessions
 - [Infrastructure](infrastructure.md) — Docker, LiveKit, Nix, and environment configuration

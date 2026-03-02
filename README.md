@@ -1,37 +1,39 @@
 # Fletcher
 
-An OpenClaw channel plugin that enables real-time voice conversations via LiveKit.
+A voice-first bridge for OpenClaw using LiveKit, targeting sub-1.5-second voice-to-voice latency.
 
 ## Overview
 
-Fletcher is a **LiveKit channel plugin for OpenClaw** that provides voice interaction capabilities with sub-1.5 second latency. It integrates directly into OpenClaw as a native channel (similar to Telegram or WhatsApp channels), handling the complete audio pipeline from speech-to-text through to text-to-speech.
+Fletcher is a **standalone voice agent** that bridges a Flutter mobile client to the OpenClaw reasoning engine through a real-time audio pipeline built on the LiveKit Agents framework. It connects to the OpenClaw Gateway via its OpenAI-compatible completions API, handling the complete pipeline from speech-to-text through to text-to-speech.
+
+> **Note:** We initially explored building Fletcher as an OpenClaw channel plugin (similar to Telegram or WhatsApp channels), but opted for the standalone voice agent approach instead. The standalone model is simpler to develop and deploy, avoids coupling to the Gateway process lifecycle, and talks to OpenClaw through the same public API any other client would use. See [Architecture Comparison](./docs/architecture-comparison.md) for background.
 
 This repository contains:
 
-1. **OpenClaw LiveKit Plugin** (primary) — The channel plugin that runs within OpenClaw Gateway
-2. **Example Flutter App** — A minimal mobile client for testing and demonstrating the plugin
+1. **Voice Agent** (`apps/voice-agent`) — A standalone LiveKit agent that runs as an independent worker
+2. **Brain Plugin** (`packages/livekit-agent-ganglia`) — LLM bridge to OpenClaw/Nanoclaw backends
+3. **Example Flutter App** (`apps/mobile`) — A minimal mobile client for testing
 
 ## Architecture
 
-### OpenClaw LiveKit Plugin (`packages/openclaw-channel-livekit`)
+### Voice Agent (`apps/voice-agent`)
 
-The main component of this repository. A TypeScript plugin that:
+The main entry point. A TypeScript LiveKit agent that:
 
 - **Runtime:** Bun (TypeScript)
-- **Library:** `livekit-server-sdk`
+- **Framework:** `@livekit/agents`
 - **Function:**
-  - Acts as a participant in a LiveKit room
-  - Handles real-time audio streams (STT → OpenClaw Logic → TTS)
-  - Integrates with the Vercel AI SDK for orchestration
-  - Implements the OpenClaw channel plugin interface
+  - Runs as an independent LiveKit worker, accepting job dispatches
+  - Handles real-time audio streams (STT → OpenClaw → TTS)
+  - Uses Ganglia (`@knittt/livekit-agent-ganglia`) as the LLM bridge
 
 ### Example Mobile App (`apps/mobile`)
 
-A minimal Flutter application for testing the plugin. Not intended as a production app.
+A minimal Flutter application for testing the voice agent. Not intended as a production app.
 
 - **Framework:** Flutter (Dart)
 - **Library:** `livekit_client`
-- **Purpose:** Test client for plugin development
+- **Purpose:** Test client for voice agent development
 - **Features:**
   - One-button interface to join a LiveKit room
   - "Amber Heartbeat" audio visualizer for voice intensity feedback
@@ -65,16 +67,6 @@ Fletcher uses a bring-your-own-key (BYOK) model for AI services. You'll need to 
 - **License:** MIT
 - **Repository:** `dremonkey/openclaw-plugin-livekit`
 - **Contribution:** Docker Compose configuration provided for plug-and-play community setup
-
-## Why a Channel Plugin?
-
-Fletcher is built as an **OpenClaw Channel Plugin** (not a standalone service or tool plugin). This approach provides:
-
-- **Deep Integration:** Direct access to OpenClaw core, skills, tools, and memory
-- **Automatic Management:** OpenClaw handles conversation state and routing
-- **Unified Deployment:** Runs within the OpenClaw Gateway process
-
-For background on this architectural decision, see the [Architecture Comparison](./docs/architecture-comparison.md).
 
 ## Getting Started
 

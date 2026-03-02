@@ -211,5 +211,4 @@ When the tester says the session is over (or you're asked to stop):
 - Docker config: `docker-compose.yml`
 - Voice agent: `apps/voice-agent/src/agent.ts`
 - Ganglia: `packages/livekit-agent-ganglia/src/`
-- Channel plugin: `packages/openclaw-channel-livekit/src/`
 - Task tracking: `tasks/SUMMARY.md`
