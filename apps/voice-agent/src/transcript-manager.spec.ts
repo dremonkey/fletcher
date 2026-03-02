@@ -330,4 +330,225 @@ describe('TranscriptManager', () => {
       expect(finals).toHaveLength(0);
     });
   });
+
+  // =========================================================================
+  // BUG-011: Zombie stream pondering storm
+  // =========================================================================
+  describe('BUG-011: zombie stream pondering rotation', () => {
+    // -----------------------------------------------------------------------
+    // 9. Pondering rotation on active stream — updates status, keeps segment
+    // -----------------------------------------------------------------------
+    it('publishes status but reuses segment for active stream rotation', () => {
+      mgr.onPondering('Thinking...', 'stream-1');
+      const segId = mgr._segments.get('stream-1')?.segId;
+      expect(deps.statuses).toHaveLength(1);
+
+      // Pondering rotation on same stream (3-second timer)
+      mgr.onPondering('Still thinking...', 'stream-1');
+      expect(deps.statuses).toHaveLength(2);
+      expect(deps.statuses[1]).toEqual({ action: 'thinking', detail: 'Still thinking...' });
+
+      // Segment is reused — NOT recreated
+      expect(mgr._segments.size).toBe(1);
+      expect(mgr._segments.get('stream-1')?.segId).toBe(segId);
+      expect(mgr._activeStreamId).toBe('stream-1');
+    });
+
+    // -----------------------------------------------------------------------
+    // 10. Zombie pondering after finalization — silently ignored
+    // -----------------------------------------------------------------------
+    it('ignores pondering rotation from a finalized zombie stream', () => {
+      // Stream 1 starts and gets content
+      mgr.onPondering('A', 'stream-1');
+      mgr.onPondering(null, 'stream-1');
+      mgr.onContent('Data', 'Data', 'stream-1');
+
+      // Stream 2 starts — finalizes stream 1
+      mgr.onPondering('B', 'stream-2');
+      expect(mgr._activeStreamId).toBe('stream-2');
+      const statusCountBefore = deps.statuses.length;
+
+      // Stream 1 zombie rotates pondering (HTTP connection still open)
+      mgr.onPondering('Zombie rotation', 'stream-1');
+
+      // Active stream should NOT have changed
+      expect(mgr._activeStreamId).toBe('stream-2');
+      // No new status event published for zombie
+      expect(deps.statuses).toHaveLength(statusCountBefore);
+      // Only stream-2's segment exists
+      expect(mgr._segments.size).toBe(1);
+      expect(mgr._segments.has('stream-2')).toBe(true);
+    });
+
+    // -----------------------------------------------------------------------
+    // 11. Zombie pondering storm — 6 concurrent zombie streams
+    // -----------------------------------------------------------------------
+    it('handles 6 concurrent zombie streams without segment ID explosion', () => {
+      // Simulate a session with 6 turns — each creates a new stream
+      mgr.onPondering('A', 's_1');
+      mgr.onPondering(null, 's_1');
+      mgr.onContent('R1', 'R1', 's_1');
+
+      mgr.onPondering('B', 's_2');
+      mgr.onPondering(null, 's_2');
+      mgr.onContent('R2', 'R2', 's_2');
+
+      mgr.onPondering('C', 's_3');
+      mgr.onPondering(null, 's_3');
+      mgr.onContent('R3', 'R3', 's_3');
+
+      mgr.onPondering('D', 's_4');
+      mgr.onPondering(null, 's_4');
+      mgr.onContent('R4', 'R4', 's_4');
+
+      mgr.onPondering('E', 's_5');
+      mgr.onPondering(null, 's_5');
+      mgr.onContent('R5', 'R5', 's_5');
+
+      mgr.onPondering('F', 's_6');
+      // s_6 is active, s_1-s_5 are finalized
+
+      expect(mgr._activeStreamId).toBe('s_6');
+      expect(mgr._segments.size).toBe(1);
+      const segIdAfterSetup = mgr._segments.get('s_6')?.segId;
+      expect(segIdAfterSetup).toBe(6);
+
+      const statusCountBefore = deps.statuses.length;
+      const eventCountBefore = deps.events.length;
+
+      // ALL zombie streams rotate pondering simultaneously (the BUG-011 storm)
+      mgr.onPondering('Zombie s_1', 's_1');
+      mgr.onPondering('Zombie s_2', 's_2');
+      mgr.onPondering('Zombie s_3', 's_3');
+      mgr.onPondering('Zombie s_4', 's_4');
+      mgr.onPondering('Zombie s_5', 's_5');
+
+      // Active stream should NOT have changed
+      expect(mgr._activeStreamId).toBe('s_6');
+      // No new segments created
+      expect(mgr._segments.size).toBe(1);
+      // Segment ID should NOT have incremented
+      expect(mgr._segments.get('s_6')?.segId).toBe(segIdAfterSetup);
+      // No new status or transcript events from zombies
+      expect(deps.statuses).toHaveLength(statusCountBefore);
+      expect(deps.events).toHaveLength(eventCountBefore);
+
+      // Active stream rotation DOES publish status
+      mgr.onPondering('Active rotation', 's_6');
+      expect(deps.statuses).toHaveLength(statusCountBefore + 1);
+      expect(deps.statuses[deps.statuses.length - 1]).toEqual({
+        action: 'thinking',
+        detail: 'Active rotation',
+      });
+
+      // Active stream completes normally
+      mgr.onPondering(null, 's_6');
+      mgr.onContent('Final', 'Final', 's_6');
+      mgr.onPondering(null, 's_6');
+
+      const finalEvent = deps.events.find(
+        (e) => e.final === true && e.segmentId === 'seg_6',
+      );
+      expect(finalEvent).toMatchObject({ text: 'Final', final: true });
+    });
+
+    // -----------------------------------------------------------------------
+    // 12. Content from stale (non-active) stream with live segment — ignored
+    // -----------------------------------------------------------------------
+    it('ignores content from stale stream even if segment still exists', () => {
+      // This can happen if a stream was created but not yet finalized
+      // when a zombie delivers late content
+      mgr.onPondering('A', 'stream-1');
+      mgr.onPondering(null, 'stream-1');
+      mgr.onContent('Data', 'Data', 'stream-1');
+
+      // New stream — finalizes stream-1
+      mgr.onPondering('B', 'stream-2');
+
+      // stream-1 is finalized (segment deleted)
+      // stream-2 is active with empty segment
+      expect(mgr._activeStreamId).toBe('stream-2');
+
+      // stream-2 gets content
+      mgr.onContent('Good', 'Good', 'stream-2');
+
+      const stream2Events = deps.events.filter(
+        (e) => e.segmentId === 'seg_2' && e.final === false,
+      );
+      expect(stream2Events).toHaveLength(1);
+      expect(stream2Events[0]).toMatchObject({ delta: 'Good', text: 'Good' });
+    });
+
+    // -----------------------------------------------------------------------
+    // 13. Zombie stream finally block fires — no crash, no stopAck
+    // -----------------------------------------------------------------------
+    it('handles zombie finally blocks gracefully', () => {
+      mgr.onPondering('A', 'stream-1');
+      mgr.onPondering('B', 'stream-2');  // finalizes stream-1
+      mgr.onPondering('C', 'stream-3');  // finalizes stream-2
+
+      deps.stopAckCalls = 0;
+
+      // All zombie finally blocks fire
+      mgr.onPondering(null, 'stream-1');
+      mgr.onPondering(null, 'stream-2');
+
+      // No stopAck calls from zombies
+      expect(deps.stopAckCalls).toBe(0);
+
+      // Active stream's finally still works
+      mgr.onPondering(null, 'stream-3');
+      expect(deps.stopAckCalls).toBe(1);
+    });
+
+    // -----------------------------------------------------------------------
+    // 14. knownStreamIds tracks all seen streams
+    // -----------------------------------------------------------------------
+    it('tracks all stream IDs in knownStreamIds', () => {
+      mgr.onPondering('A', 'stream-1');
+      mgr.onPondering('B', 'stream-2');
+      mgr.onPondering('C', 'stream-3');
+
+      expect(mgr._knownStreamIds.has('stream-1')).toBe(true);
+      expect(mgr._knownStreamIds.has('stream-2')).toBe(true);
+      expect(mgr._knownStreamIds.has('stream-3')).toBe(true);
+      expect(mgr._knownStreamIds.size).toBe(3);
+    });
+
+    // -----------------------------------------------------------------------
+    // 15. Interleaved zombie rotations don't corrupt active content
+    // -----------------------------------------------------------------------
+    it('active stream content survives interleaved zombie rotations', () => {
+      // Stream 1 starts, gets content, then stream 2 takes over
+      mgr.onPondering('A', 'stream-1');
+      mgr.onPondering(null, 'stream-1');
+      mgr.onContent('Old', 'Old', 'stream-1');
+      mgr.onPondering('B', 'stream-2');  // finalizes stream-1
+
+      // Stream 2 is active, getting content
+      mgr.onPondering(null, 'stream-2');
+      mgr.onContent('Hello', 'Hello', 'stream-2');
+
+      // Zombie stream-1 rotates in the middle of stream-2's content
+      mgr.onPondering('Zombie!', 'stream-1');
+
+      // Stream 2 should still be active and receiving content
+      expect(mgr._activeStreamId).toBe('stream-2');
+      mgr.onContent(' world', 'Hello world', 'stream-2');
+
+      // Finalize stream 2
+      mgr.onPondering(null, 'stream-2');
+
+      const finalEvent = deps.events.find(
+        (e) => e.final === true && e.segmentId === 'seg_2',
+      );
+      expect(finalEvent).toEqual({
+        type: 'agent_transcript',
+        segmentId: 'seg_2',
+        delta: '',
+        text: 'Hello world',
+        final: true,
+      });
+    });
+  });
 });

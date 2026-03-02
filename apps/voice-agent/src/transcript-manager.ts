@@ -3,11 +3,17 @@
  *
  * Manages per-stream transcript segments to avoid race conditions where
  * concurrent LLM streams (old HTTP connections still draining) corrupt
- * newer streams' transcript events.  See BUG-010.
+ * newer streams' transcript events.  See BUG-010, BUG-011.
  *
  * The key invariant: each LLM stream gets its own segment keyed by streamId.
  * Only the active stream may trigger UI side-effects (stopAck, publishStatus).
  * Stale streams silently finalize without touching shared UI state.
+ *
+ * BUG-011 fix: Track all known stream IDs to distinguish pondering rotation
+ * (same stream, already seen) from a truly new stream starting (unseen streamId).
+ * Zombie streams whose HTTP connections linger emit pondering rotations every
+ * 3 seconds — these must NOT steal the active stream slot or create new segments,
+ * even after their original segment has been finalized and deleted.
  */
 
 export interface TranscriptManagerDeps {
@@ -25,6 +31,7 @@ interface StreamSegment {
 
 export class TranscriptManager {
   private streamSegments = new Map<string, StreamSegment>();
+  private knownStreamIds = new Set<string>();
   private activeStreamId: string | null = null;
   private nextSegmentId = 0;
 
@@ -33,8 +40,11 @@ export class TranscriptManager {
   /**
    * Called when the LLM stream enters or exits the "pondering" phase.
    *
-   * - `phrase` truthy: New stream starting — finalize any previous active
-   *   stream, allocate a new segment, publish "thinking" status.
+   * - `phrase` truthy + unseen streamId: New stream starting — finalize any
+   *   previous active stream, allocate a new segment, publish "thinking" status.
+   * - `phrase` truthy + known streamId: Pondering rotation on an existing or
+   *   previously-finalized stream.  Only publish status if this is the active
+   *   stream; silently ignore if stale or zombie (BUG-011 fix).
    * - `phrase` null: Pondering cleared.  Fires TWICE per stream in llm.ts:
    *     1. When first content chunk arrives (BEFORE onContent)
    *     2. In the finally block (AFTER all content)
@@ -42,7 +52,20 @@ export class TranscriptManager {
    */
   onPondering(phrase: string | null, streamId: string): void {
     if (phrase) {
-      // New LLM stream starting — finalize previous active stream
+      if (this.knownStreamIds.has(streamId)) {
+        // Already-seen stream — pondering rotation or zombie.
+        // Only publish status if this is the active stream with a live segment.
+        const existingSeg = this.streamSegments.get(streamId);
+        if (existingSeg && streamId === this.activeStreamId) {
+          this.deps.logger.info({ phrase, segmentId: existingSeg.segId, streamId }, 'Pondering status published');
+          this.deps.publishStatus('thinking', phrase);
+        }
+        // Stale/zombie streams silently ignored (BUG-011).
+        return;
+      }
+
+      // Truly new stream (unseen streamId) — finalize previous active stream
+      this.knownStreamIds.add(streamId);
       if (this.activeStreamId && this.streamSegments.has(this.activeStreamId)) {
         this.finalizeStream(this.activeStreamId);
       }
@@ -72,11 +95,15 @@ export class TranscriptManager {
 
   /**
    * Called for each content delta from the LLM stream.
-   * Silently ignored if the streamId is unknown (already finalized/deleted).
+   * Silently ignored if the streamId is unknown (already finalized/deleted)
+   * or if the stream is not the active one (stale zombie stream — BUG-011).
    */
   onContent(delta: string, fullText: string, streamId: string): void {
     const seg = this.streamSegments.get(streamId);
     if (!seg) return;
+    // Only accept content from the active stream — stale zombie streams
+    // whose HTTP connections linger may deliver late content (BUG-011).
+    if (streamId !== this.activeStreamId) return;
     seg.contentStarted = true;
     seg.text = fullText;
     this.deps.publishEvent({
@@ -106,4 +133,5 @@ export class TranscriptManager {
   // Expose internals for testing
   get _activeStreamId(): string | null { return this.activeStreamId; }
   get _segments(): ReadonlyMap<string, StreamSegment> { return this.streamSegments; }
+  get _knownStreamIds(): ReadonlySet<string> { return this.knownStreamIds; }
 }
