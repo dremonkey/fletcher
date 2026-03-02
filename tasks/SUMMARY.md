@@ -179,6 +179,13 @@ OpenTelemetry-compatible instrumentation for the voice pipeline. Measure STT, EO
 - `TurnMetricsCollector` correlating EOU + LLM + TTS by `speechId` into per-turn summaries
 - 5 unit tests for metrics collector
 
+### 11. [UI Improvements](./07-ui-ux) 📋
+High-fidelity UI enhancements for the Fletcher Flutter app.
+
+**Tasks:**
+- [ ] 008: Collaborative Waveform — 8-bit histogram/audio graph with dual-color blending and front-and-center transcript
+- [ ] 009: Persistent History Discovery — fetch recent history from OpenClaw on rejoin, add Session List UI
+
 ## Development Path
 
 1. **Phase 1: Infrastructure** ✅
