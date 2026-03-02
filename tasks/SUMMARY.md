@@ -47,7 +47,7 @@ The mobile client for real-time voice interaction and visualization.
 **Tasks:**
 - [x] 001: Initialize Flutter app ✅
 - [x] 002: Implement Amber Heartbeat visualizer ✅
-- [~] 003: Voice activity indicator & real-time STT display — audio waveform + STT subtitle + transcript drawer implemented; e2e UI tests passing; end-to-end audio flow verification remaining
+- [~] 003: Voice activity indicator & real-time STT display — audio waveform + STT subtitle + transcript drawer implemented; e2e UI tests passing; [BUG-013] Transcript UI stale when panel open; [BUG-014] Premature EOU detection
 
 **Implemented:**
 - Full Flutter app with livekit_client integration
