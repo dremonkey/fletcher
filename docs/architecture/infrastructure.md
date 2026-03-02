@@ -156,6 +156,7 @@ See [Network Connectivity](network-connectivity.md) for the full URL resolution 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `FLETCHER_OWNER_IDENTITY` | No | — | Participant identity that maps to owner session |
+| `FLETCHER_ACK_SOUND` | No | `builtin` | Acknowledgment sound on EOU: `builtin`, file path, or `disabled` |
 
 ### Logging & Debug
 

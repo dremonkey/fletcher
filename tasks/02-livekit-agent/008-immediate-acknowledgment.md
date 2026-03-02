@@ -33,12 +33,12 @@ Emit an immediate non-verbal audio cue as soon as end-of-utterance (EOU) is dete
 
 ## Implementation
 
-### Phase 1: Single acknowledgment tone
+### Phase 1: Single acknowledgment tone ✅
 
-- [ ] Source or synthesize a short acknowledgment sound (~200-500ms)
-- [ ] Play the sound immediately on EOU detection (before LLM response starts)
-- [ ] Cut off the acknowledgment when first TTS audio frame arrives
-- [ ] Make the sound configurable (path to audio file or disable entirely)
+- [x] Source or synthesize a short acknowledgment sound (~200-500ms) — built-in two-note chime (C5→E5, ~280ms) synthesized programmatically in `ack-tone.ts`
+- [x] Play the sound immediately on EOU detection (before LLM response starts) — uses LiveKit SDK `BackgroundAudioPlayer.thinkingSound` which triggers on agent state `thinking` (set on EOU)
+- [x] Cut off the acknowledgment when first TTS audio frame arrives — `BackgroundAudioPlayer` stops thinking sound when agent state transitions from `thinking` to `speaking`
+- [x] Make the sound configurable (path to audio file or disable entirely) — `FLETCHER_ACK_SOUND` env var: `builtin` (default), custom file path, or `disabled`
 
 ### Phase 2: Looping indicator for long waits
 
@@ -54,8 +54,12 @@ Emit an immediate non-verbal audio cue as soon as end-of-utterance (EOU) is dete
 
 ## Files
 
-- `packages/openclaw-channel-livekit/src/livekit/audio.ts` — EOU detection, audio publishing
-- `apps/mobile/lib/` — client-side visual indicator
+- `apps/voice-agent/src/ack-tone.ts` — synthesizes the two-note acknowledgment chime (C5→E5)
+- `apps/voice-agent/src/ack-tone.spec.ts` — 9 unit tests for tone generation
+- `apps/voice-agent/src/ack-sound-config.ts` — resolves FLETCHER_ACK_SOUND env var to audio source
+- `apps/voice-agent/src/ack-sound-config.spec.ts` — 12 unit tests for config resolution
+- `apps/voice-agent/src/agent.ts` — wires BackgroundAudioPlayer with thinkingSound
+- `apps/mobile/lib/` — client-side visual indicator (Phase 3)
 
 ## Context
 
@@ -68,4 +72,4 @@ Emit an immediate non-verbal audio cue as soon as end-of-utterance (EOU) is dete
 
 - **Date:** 2026-03-01
 - **Priority:** High
-- **Status:** Open
+- **Status:** Phase 1 complete, Phases 2-3 open

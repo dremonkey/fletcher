@@ -18,6 +18,7 @@
  *   FLETCHER_OWNER_IDENTITY - Participant identity of the owner (for session routing)
  *   DEEPGRAM_API_KEY - Deepgram API key for STT
  *   CARTESIA_API_KEY - Cartesia API key for TTS
+ *   FLETCHER_ACK_SOUND - Acknowledgment sound on EOU: path to audio file, 'builtin' (default), or 'disabled'
  */
 
 import { defineAgent, cli, ServerOptions, type JobContext } from '@livekit/agents';
@@ -28,6 +29,7 @@ import { createGangliaFromEnv, resolveSessionKeySimple } from '@knittt/livekit-a
 import pino from 'pino';
 import { TurnMetricsCollector } from './metrics';
 import { initTelemetry, shutdownTelemetry } from './telemetry';
+import { resolveAckSound } from './ack-sound-config';
 
 // ---------------------------------------------------------------------------
 // Logger setup — pretty-print when running locally, JSON in production
@@ -112,6 +114,24 @@ export default defineAgent({
     logger.info(`Connected to room: ${ctx.room.name}`);
 
     // -----------------------------------------------------------------------
+    // Acknowledgment sound — plays a short tone on EOU detection to bridge
+    // the silence gap while the LLM processes. Stops when TTS audio starts.
+    // Configure via FLETCHER_ACK_SOUND: 'builtin' (default), path, or 'disabled'.
+    // -----------------------------------------------------------------------
+    const ackSound = resolveAckSound(process.env.FLETCHER_ACK_SOUND, logger);
+    let bgAudioPlayer: voice.BackgroundAudioPlayer | undefined;
+
+    if (ackSound) {
+      bgAudioPlayer = new voice.BackgroundAudioPlayer({
+        thinkingSound: { source: ackSound, volume: 0.8 },
+      });
+      await bgAudioPlayer.start({ room: ctx.room, agentSession: session });
+      logger.info('Acknowledgment sound enabled (plays on EOU detection)');
+    } else {
+      logger.info('Acknowledgment sound disabled');
+    }
+
+    // -----------------------------------------------------------------------
     // Metrics & observability — listen to SDK pipeline events
     // -----------------------------------------------------------------------
     const turnCollector = new TurnMetricsCollector(logger);
@@ -168,6 +188,7 @@ export default defineAgent({
 
     ctx.addShutdownCallback(async () => {
       logger.info('Shutting down voice agent...');
+      await bgAudioPlayer?.close();
       await session.close();
       await shutdownTelemetry();
     });
