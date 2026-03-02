@@ -20,19 +20,19 @@
   },
   "dependencies": {
     "@knittt/livekit-agent-ganglia": "workspace:*",
-    "@livekit/agents": "^1.0.0",
-    "@livekit/agents-plugin-cartesia": "^1.0.0",
-    "@livekit/agents-plugin-deepgram": "^1.0.0",
-    "@livekit/agents-plugin-elevenlabs": "^1.0.48",
-    "@livekit/rtc-node": "^0.13.0",
+    "@livekit/agents": "catalog:",
+    "@livekit/agents-plugin-cartesia": "catalog:",
+    "@livekit/agents-plugin-deepgram": "catalog:",
+    "@livekit/agents-plugin-elevenlabs": "catalog:",
+    "@livekit/rtc-node": "catalog:",
     "@sinclair/typebox": "^0.32.0",
-    "livekit-server-sdk": "^2.0.0"
+    "livekit-server-sdk": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/node": "^20.0.0"
   },
   "peerDependencies": {
-    "openclaw": ">=2.0.0"
+    "openclaw": "^2026.3.1"
   }
 }

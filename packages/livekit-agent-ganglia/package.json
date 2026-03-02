@@ -17,7 +17,7 @@
     "debug": "^4.4.0"
   },
   "peerDependencies": {
-    "@livekit/agents": "^1.0.0"
+    "@livekit/agents": "catalog:"
   },
   "devDependencies": {
     "@types/debug": "^4.1.12",
