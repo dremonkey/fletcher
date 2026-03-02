@@ -71,7 +71,7 @@ class StatusEvent {
   String get displayText {
     switch (action) {
       case StatusAction.thinking:
-        return 'Thinking...';
+        return detail ?? 'Thinking...';
       case StatusAction.searchingFiles:
         return detail != null ? 'Searching: $detail' : 'Searching files...';
       case StatusAction.readingFile:

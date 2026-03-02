@@ -33,6 +33,8 @@ export interface OpenClawConfig {
   apiKey: string;
   /** Optional logger for production-level logging (defaults to silent) */
   logger?: import('./logger.js').Logger;
+  /** Callback for pondering status phrases while waiting for LLM first token. */
+  onPondering?: (phrase: string | null) => void;
 }
 
 /**

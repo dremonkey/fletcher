@@ -10,6 +10,7 @@ import {
   LiveKitSessionInfo,
 } from './types/index.js';
 import { dbg } from './logger.js';
+import { getShuffledPhrases } from './pondering.js';
 
 // Re-export types from @livekit/agents
 type ChatChunk = llm.ChatChunk;
@@ -81,11 +82,13 @@ export class OpenClawLLM extends LLMBase implements GangliaLLM {
   private client: OpenClawClient;
   private _model: string;
   private _sessionKey?: SessionKey;
+  private _onPondering?: (phrase: string | null) => void;
 
   constructor(config: OpenClawConfig = {}) {
     super();
     this.client = new OpenClawClient(config);
     this._model = config.model || 'openclaw-gateway';
+    this._onPondering = config.onPondering;
 
     // Guard against duplicate @livekit/agents installs — the voice pipeline
     // uses `instanceof LLM` to gate the chat() call, and a second copy of the
@@ -162,13 +165,18 @@ export class OpenClawLLM extends LLMBase implements GangliaLLM {
       toolCtx,
       connOptions: connOptions || { maxRetry: 3, retryIntervalMs: 2000, timeoutMs: 10000 },
       sessionKey: this._sessionKey,
+      onPondering: this._onPondering,
     });
   }
 }
 
+/** How often to rotate the pondering phrase (ms). */
+const PONDERING_INTERVAL_MS = 3000;
+
 class OpenClawChatStream extends LLMStream {
   private openclawClient: OpenClawClient;
   private _sessionKey?: SessionKey;
+  private _onPondering?: (phrase: string | null) => void;
 
   constructor(
     llmInstance: OpenClawLLM,
@@ -178,16 +186,19 @@ class OpenClawChatStream extends LLMStream {
       toolCtx,
       connOptions,
       sessionKey,
+      onPondering,
     }: {
       chatCtx: ChatContext;
       toolCtx?: ToolContext;
       connOptions: APIConnectOptions;
       sessionKey?: SessionKey;
+      onPondering?: (phrase: string | null) => void;
     },
   ) {
     super(llmInstance, { chatCtx, toolCtx, connOptions });
     this.openclawClient = client;
     this._sessionKey = sessionKey;
+    this._onPondering = onPondering;
   }
 
   protected async run(): Promise<void> {
@@ -248,6 +259,8 @@ class OpenClawChatStream extends LLMStream {
       }
     }
 
+    let ponderingTimer: ReturnType<typeof setInterval> | undefined;
+
     try {
       // Get tools from tool context (ToolContext is an object where keys are tool names)
       const tools = toolCtx ? Object.values(toolCtx).map((tool: any) => ({
@@ -280,13 +293,39 @@ class OpenClawChatStream extends LLMStream {
         sessionKey: this._sessionKey,
       });
 
+      // Start pondering: emit rotating fun phrases while waiting for first content
+      if (this._onPondering) {
+        const phrases = getShuffledPhrases();
+        let idx = 0;
+        this._onPondering(phrases[idx]);
+        dbg.openclawStream('pondering: "%s"', phrases[idx]);
+        ponderingTimer = setInterval(() => {
+          idx = (idx + 1) % phrases.length;
+          this._onPondering!(phrases[idx]);
+          dbg.openclawStream('pondering: "%s"', phrases[idx]);
+        }, PONDERING_INTERVAL_MS);
+      }
+
       let chunkCount = 0;
       let firstChunkAt: number | undefined;
+      let firstContentSeen = false;
       for await (const chunk of stream) {
         chunkCount++;
         if (!firstChunkAt) {
           firstChunkAt = performance.now();
           dbg.openclawStream('timing: streamStart→firstChunk=%dms', Math.round(firstChunkAt - streamStart));
+        }
+
+        // Stop pondering on first content-bearing chunk
+        const hasContent = !!chunk.choices[0]?.delta?.content;
+        if (hasContent && !firstContentSeen) {
+          firstContentSeen = true;
+          if (ponderingTimer) {
+            clearInterval(ponderingTimer);
+            ponderingTimer = undefined;
+          }
+          this._onPondering?.(null);
+          dbg.openclawStream('pondering: cleared (first content at %dms)', Math.round(performance.now() - streamStart));
         }
 
         const delta = chunk.choices[0]?.delta;
@@ -328,6 +367,10 @@ class OpenClawChatStream extends LLMStream {
       this.logger.error(`OpenClawChatStream error: ${error}`);
       throw error;
     } finally {
+      if (ponderingTimer) {
+        clearInterval(ponderingTimer);
+      }
+      this._onPondering?.(null);
       this.output.close();
     }
   }

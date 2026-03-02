@@ -6,6 +6,12 @@ export interface OpenClawConfig {
   defaultSession?: LiveKitSessionInfo;
   /** Optional logger for production-level logging (defaults to silent) */
   logger?: import('../logger.js').Logger;
+  /**
+   * Callback emitted while waiting for the first content token from the LLM.
+   * Receives a fun "pondering" phrase that rotates every few seconds.
+   * Called with `null` when content starts (clear the status).
+   */
+  onPondering?: (phrase: string | null) => void;
 }
 
 /**

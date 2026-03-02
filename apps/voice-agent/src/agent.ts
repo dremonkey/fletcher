@@ -74,7 +74,30 @@ export default defineAgent({
   entry: async (ctx: JobContext) => {
     await initTelemetry(logger);
 
-    const gangliaLlm = await createGangliaFromEnv({ logger });
+    // Publish a ganglia status event to the data channel
+    const publishStatus = (action: string, detail?: string | null) => {
+      const localParticipant = ctx.room.localParticipant;
+      if (!localParticipant) return;
+      const event = detail != null
+        ? { type: 'status', action, detail, startedAt: Date.now() }
+        : { type: 'status', action, startedAt: Date.now() };
+      localParticipant.publishData(
+        new TextEncoder().encode(JSON.stringify(event)),
+        { topic: 'ganglia-events' },
+      );
+    };
+
+    const gangliaLlm = await createGangliaFromEnv({
+      logger,
+      onPondering: (phrase) => {
+        if (phrase) {
+          publishStatus('thinking', phrase);
+        } else {
+          // Clear by sending a brief "done" status that will auto-clear
+          publishStatus('thinking');
+        }
+      },
+    });
     logger.info(`Using ganglia backend: ${gangliaLlm.gangliaType()}`);
 
     const stt = new deepgram.STT({ apiKey: process.env.DEEPGRAM_API_KEY });

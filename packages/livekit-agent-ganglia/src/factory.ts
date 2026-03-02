@@ -106,7 +106,11 @@ export function isGangliaAvailable(type: string): boolean {
  * - OPENCLAW_GATEWAY_URL, OPENCLAW_API_KEY (for openclaw)
  * - NANOCLAW_URL (for nanoclaw)
  */
-export async function createGangliaFromEnv(opts?: { logger?: Logger }): Promise<GangliaLLM> {
+export async function createGangliaFromEnv(opts?: {
+  logger?: Logger;
+  /** Callback for pondering status phrases while waiting for LLM first token. */
+  onPondering?: (phrase: string | null) => void;
+}): Promise<GangliaLLM> {
   const logger = opts?.logger || noopLogger;
   const type = (process.env.GANGLIA_TYPE || process.env.BRAIN_TYPE || 'openclaw') as GangliaConfig['type'];
   dbg.factory('createGangliaFromEnv: GANGLIA_TYPE=%s BRAIN_TYPE=%s resolved=%s',
@@ -123,6 +127,7 @@ export async function createGangliaFromEnv(opts?: { logger?: Logger }): Promise<
         baseUrl,
         apiKey: process.env.OPENCLAW_API_KEY || '',
         logger,
+        onPondering: opts?.onPondering,
       },
     });
   }
