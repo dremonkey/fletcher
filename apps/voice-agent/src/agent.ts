@@ -95,8 +95,8 @@ export default defineAgent({
 
     // -----------------------------------------------------------------------
     // Acknowledgment sound — plays a looping chime while the brain is
-    // processing.  Starts when the first pondering phrase arrives (brain API
-    // is active), stops when the first content token arrives or on error.
+    // processing.  Starts on EOU detection (agent enters 'thinking' state),
+    // stops when the first content token arrives or on pipeline error.
     // Configure via FLETCHER_ACK_SOUND: 'builtin' (default), path, or 'disabled'.
     // -----------------------------------------------------------------------
     const ackSound = resolveAckSound(process.env.FLETCHER_ACK_SOUND, logger);
@@ -116,10 +116,6 @@ export default defineAgent({
         if (phrase) {
           logger.info({ phrase }, 'Pondering status published');
           publishStatus('thinking', phrase);
-          // Play ack on first pondering phrase (brain API is active, no immediate error)
-          if (bgAudioPlayer && ackSound && !ackPlayHandle) {
-            ackPlayHandle = bgAudioPlayer.play({ source: ackSound, volume: 0.8 });
-          }
         } else {
           // First content token arrived — stop ack
           logger.info('Pondering cleared');
@@ -150,7 +146,7 @@ export default defineAgent({
     if (ackSound) {
       bgAudioPlayer = new voice.BackgroundAudioPlayer();
       await bgAudioPlayer.start({ room: ctx.room, agentSession: session });
-      logger.info('Acknowledgment sound enabled (plays on brain API call)');
+      logger.info('Acknowledgment sound enabled (plays on EOU, stops on first token or error)');
     } else {
       logger.info('Acknowledgment sound disabled');
     }
@@ -180,6 +176,10 @@ export default defineAgent({
 
     session.on(voice.AgentSessionEventTypes.AgentStateChanged, (ev) => {
       logger.info({ from: ev.oldState, to: ev.newState }, 'Agent state changed');
+      // Start ack on EOU detection (thinking state)
+      if (ev.newState === 'thinking' && bgAudioPlayer && ackSound && !ackPlayHandle) {
+        ackPlayHandle = bgAudioPlayer.play({ source: ackSound, volume: 0.8 });
+      }
     });
 
     session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (ev) => {
