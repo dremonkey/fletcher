@@ -19,13 +19,14 @@
     "lint": "eslint src --ext .ts"
   },
   "dependencies": {
-    "@livekit/agents": "^1.0.0",
-    "@livekit/agents-plugin-deepgram": "^1.0.0",
-    "@livekit/agents-plugin-cartesia": "^1.0.0",
-    "@livekit/rtc-node": "^0.13.0",
     "@knittt/livekit-agent-ganglia": "workspace:*",
-    "livekit-server-sdk": "^2.0.0",
-    "@sinclair/typebox": "^0.32.0"
+    "@livekit/agents": "^1.0.0",
+    "@livekit/agents-plugin-cartesia": "^1.0.0",
+    "@livekit/agents-plugin-deepgram": "^1.0.0",
+    "@livekit/agents-plugin-elevenlabs": "^1.0.48",
+    "@livekit/rtc-node": "^0.13.0",
+    "@sinclair/typebox": "^0.32.0",
+    "livekit-server-sdk": "^2.0.0"
   },
   "devDependencies": {
     "@types/bun": "latest",

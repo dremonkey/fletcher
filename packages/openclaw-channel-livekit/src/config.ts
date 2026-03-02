@@ -43,8 +43,8 @@ export function loadEnvCredentials(): Partial<LivekitAccountConfig> {
       apiKey: process.env[ENV_VARS.DEEPGRAM_API_KEY],
     },
     tts: {
-      provider: "cartesia",
-      apiKey: process.env[ENV_VARS.CARTESIA_API_KEY],
+      provider: "elevenlabs",
+      apiKey: process.env[ENV_VARS.ELEVENLABS_API_KEY],
     },
   };
 }
@@ -104,7 +104,7 @@ const STTConfigSchema = Type.Object({
  */
 const TTSConfigSchema = Type.Object({
   provider: Type.Union([Type.Literal("cartesia"), Type.Literal("elevenlabs")], {
-    default: "cartesia",
+    default: "elevenlabs",
   }),
   apiKey: Type.Optional(Type.String()),
   cartesia: Type.Optional(CartesiaConfigSchema),
@@ -166,7 +166,7 @@ const DEFAULTS = {
     },
   },
   tts: {
-    provider: "cartesia" as const,
+    provider: "elevenlabs" as const,
     cartesia: {
       voiceId: "", // Must be provided by user
       model: "sonic-3",

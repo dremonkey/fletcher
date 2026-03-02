@@ -12,7 +12,7 @@ sequenceDiagram
     participant Agent as AgentSession
     participant LLM as Ganglia LLM
     participant Brain as OpenClaw/Nanoclaw
-    participant TTS as Cartesia TTS
+    participant TTS as ElevenLabs TTS
 
     Phone->>LK: WebRTC audio track
     LK->>STT: Audio frames (streaming)
@@ -110,14 +110,13 @@ Ganglia converts between the LiveKit `llm.LLM` interface and the OpenClaw/Nanocl
 - Each chunk may contain `content` (text) or `tool_calls` (function invocations)
 - Ganglia emits these as `ChatChunk` events that AgentSession forwards to TTS
 
-### Text-to-Speech (Cartesia)
+### Text-to-Speech (ElevenLabs)
 
-- **Provider:** Cartesia Sonic via `@livekit/agents-plugin-cartesia`
-- **Model:** Sonic-3 (configurable)
-- **Default voice:** The Alchemist (`597926e8-3233-4f9a-9e1d-91b53e89c62a`)
-- **Options:** speed (0.5-2.0, default 1.0), emotion (default "neutral")
-- **TTFB (Time to First Byte):** < 200ms
-- **Alternative:** ElevenLabs Turbo v2.5 (configured but not default)
+- **Provider:** ElevenLabs via `@livekit/agents-plugin-elevenlabs`
+- **Model:** Eleven Turbo v2.5 (configurable)
+- **Options:** stability (0-1), similarity boost (0-1), style (0-1), speaker boost
+- **TTFB (Time to First Byte):** ~200ms
+- **Fallback:** Cartesia Sonic via `@livekit/agents-plugin-cartesia` (set `tts.provider: "cartesia"` in config)
 
 ## Latency Budget
 
@@ -127,7 +126,7 @@ Target: **sub-1.5 second** voice-to-voice round trip.
 |-------|---------|-------|
 | STT (end of speech → final transcript) | 200-400ms | Deepgram streaming + endpointing |
 | LLM (request → first token) | 300-800ms | Depends on backend, network, context size |
-| TTS (text → first audio frame) | 100-200ms | Cartesia Sonic streaming |
+| TTS (text → first audio frame) | 100-200ms | ElevenLabs Turbo streaming |
 | Network overhead (WebRTC) | 50-100ms | UDP, typically low |
 | **Total** | **650-1500ms** | |
 

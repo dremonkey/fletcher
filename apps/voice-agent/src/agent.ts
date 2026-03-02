@@ -17,14 +17,14 @@
  *   OPENCLAW_API_KEY - OpenClaw API key (if using openclaw)
  *   FLETCHER_OWNER_IDENTITY - Participant identity of the owner (for session routing)
  *   DEEPGRAM_API_KEY - Deepgram API key for STT
- *   CARTESIA_API_KEY - Cartesia API key for TTS
+ *   ELEVENLABS_API_KEY - ElevenLabs API key for TTS
  *   FLETCHER_ACK_SOUND - Acknowledgment sound on EOU: path to audio file, 'builtin' (default), or 'disabled'
  */
 
 import { defineAgent, cli, ServerOptions, type JobContext } from '@livekit/agents';
 import { voice } from '@livekit/agents';
 import * as deepgram from '@livekit/agents-plugin-deepgram';
-import * as cartesia from '@livekit/agents-plugin-cartesia';
+import * as elevenlabs from '@livekit/agents-plugin-elevenlabs';
 import { createGangliaFromEnv, resolveSessionKeySimple } from '@knittt/livekit-agent-ganglia';
 import pino from 'pino';
 import { TurnMetricsCollector } from './metrics';
@@ -48,7 +48,7 @@ const REQUIRED_ENV = [
   'LIVEKIT_API_KEY',
   'LIVEKIT_API_SECRET',
   'DEEPGRAM_API_KEY',
-  'CARTESIA_API_KEY',
+  'ELEVENLABS_API_KEY',
 ] as const;
 
 const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
@@ -109,7 +109,11 @@ export default defineAgent({
     logger.info(`Using ganglia backend: ${gangliaLlm.gangliaType()}`);
 
     const stt = new deepgram.STT({ apiKey: process.env.DEEPGRAM_API_KEY });
-    const tts = new cartesia.TTS({ apiKey: process.env.CARTESIA_API_KEY });
+    const tts = new elevenlabs.TTS({
+      apiKey: process.env.ELEVENLABS_API_KEY,
+      modelId: 'eleven_turbo_v2_5',
+      voiceId: process.env.ELEVENLABS_VOICE_ID,
+    });
 
     const session = new voice.AgentSession({ stt, tts, llm: gangliaLlm });
     await session.start({

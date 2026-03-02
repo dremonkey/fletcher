@@ -1,13 +1,14 @@
 /**
  * Voice agent implementation using @livekit/agents SDK + Ganglia.
  *
- * Uses deepgram.STT, cartesia.TTS, and ganglia LLM to handle the full
+ * Uses deepgram.STT, ElevenLabs/Cartesia TTS, and ganglia LLM to handle the full
  * audio pipeline. The SDK's voice.AgentSession manages STT → LLM → TTS routing.
  */
 import type { Room } from "@livekit/rtc-node";
 import { voice } from "@livekit/agents";
 import * as deepgram from "@livekit/agents-plugin-deepgram";
 import * as cartesia from "@livekit/agents-plugin-cartesia";
+import * as elevenlabs from "@livekit/agents-plugin-elevenlabs";
 import {
   createGanglia,
   type GangliaLLM,
@@ -36,7 +37,7 @@ type AgentState = "idle" | "listening" | "thinking" | "speaking";
  * All personality, instructions, and tools are owned by the OpenClaw agent —
  * the voice.Agent here is an empty shell required by AgentSession.start().
  *
- * Pipeline: deepgram.STT → Ganglia LLM (OpenClaw) → cartesia.TTS
+ * Pipeline: deepgram.STT → Ganglia LLM (OpenClaw) → ElevenLabs/Cartesia TTS
  * Orchestration: voice.AgentSession handles VAD, turn detection, interruptions.
  *
  * Caveats of the passthrough approach:
@@ -58,7 +59,7 @@ export class VoiceAgent {
 
   // SDK components
   private sttInstance: deepgram.STT | null = null;
-  private ttsInstance: cartesia.TTS | null = null;
+  private ttsInstance: cartesia.TTS | elevenlabs.TTS | null = null;
   private llmInstance: GangliaLLM | null = null;
   private agent: voice.Agent | null = null;
   private session: voice.AgentSession | null = null;
@@ -92,16 +93,24 @@ export class VoiceAgent {
       apiKey: this.account.stt.apiKey,
     });
 
-    // Create TTS from account config
-    this.ttsInstance = new cartesia.TTS({
-      model: this.account.tts.cartesia.model,
-      voice: this.account.tts.cartesia.voiceId,
-      speed: this.account.tts.cartesia.speed as any,
-      emotion: this.account.tts.cartesia.emotion
-        ? [this.account.tts.cartesia.emotion]
-        : undefined,
-      apiKey: this.account.tts.apiKey,
-    });
+    // Create TTS from account config (provider toggle)
+    if (this.account.tts.provider === "elevenlabs") {
+      this.ttsInstance = new elevenlabs.TTS({
+        modelId: this.account.tts.elevenlabs.model,
+        voiceId: this.account.tts.elevenlabs.voiceId,
+        apiKey: this.account.tts.apiKey,
+      });
+    } else {
+      this.ttsInstance = new cartesia.TTS({
+        model: this.account.tts.cartesia.model,
+        voice: this.account.tts.cartesia.voiceId,
+        speed: this.account.tts.cartesia.speed as any,
+        emotion: this.account.tts.cartesia.emotion
+          ? [this.account.tts.cartesia.emotion]
+          : undefined,
+        apiKey: this.account.tts.apiKey,
+      });
+    }
 
     // Create Ganglia LLM
     this.llmInstance = await createGanglia({
