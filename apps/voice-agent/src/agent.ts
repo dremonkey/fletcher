@@ -76,17 +76,21 @@ export default defineAgent({
   entry: async (ctx: JobContext) => {
     await initTelemetry(logger);
 
-    // Publish a ganglia status event to the data channel
-    const publishStatus = (action: string, detail?: string | null) => {
+    // Publish a ganglia event to the data channel
+    const publishEvent = (event: Record<string, unknown>) => {
       const localParticipant = ctx.room.localParticipant;
       if (!localParticipant) return;
-      const event = detail != null
-        ? { type: 'status', action, detail, startedAt: Date.now() }
-        : { type: 'status', action, startedAt: Date.now() };
       localParticipant.publishData(
         new TextEncoder().encode(JSON.stringify(event)),
         { topic: 'ganglia-events', reliable: true },
       );
+    };
+
+    const publishStatus = (action: string, detail?: string | null) => {
+      const event = detail != null
+        ? { type: 'status', action, detail, startedAt: Date.now() }
+        : { type: 'status', action, startedAt: Date.now() };
+      publishEvent(event);
     };
 
     const gangliaLlm = await createGangliaFromEnv({
@@ -164,6 +168,26 @@ export default defineAgent({
       if (ev.isFinal) {
         logger.info({ transcript: ev.transcript }, 'User input (final)');
       }
+    });
+
+    // -----------------------------------------------------------------------
+    // Pipeline error reporting — forward TTS/STT/LLM errors to the client
+    // -----------------------------------------------------------------------
+    session.on(voice.AgentSessionEventTypes.Error, (ev) => {
+      const err = ev.error as { type?: string; label?: string; error?: Error; recoverable?: boolean };
+      const source = err.type === 'tts_error' ? 'TTS'
+        : err.type === 'stt_error' ? 'STT'
+        : err.type === 'llm_error' ? 'LLM'
+        : 'Pipeline';
+      const message = err.error?.message ?? String(err);
+      logger.error({ source, message, recoverable: err.recoverable }, 'Pipeline error');
+
+      publishEvent({
+        type: 'artifact',
+        artifact_type: 'error',
+        title: `${source} Error`,
+        message,
+      });
     });
 
     const participant = await ctx.waitForParticipant();
