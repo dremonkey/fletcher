@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 import '../models/conversation_state.dart';
+import '../services/livekit_service.dart';
 
 /// Shows the transcript drawer as a bottom sheet.
+///
+/// Accepts a [LiveKitService] so the drawer can listen for live updates
+/// while it's open (fixes BUG-013: stale transcript when panel is mounted).
 void showTranscriptDrawer(
   BuildContext context, {
-  required List<TranscriptEntry> transcript,
+  required LiveKitService service,
 }) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (context) => TranscriptDrawer(transcript: transcript),
+    builder: (context) => TranscriptDrawer(service: service),
   );
 }
 
@@ -71,12 +75,15 @@ class TranscriptChip extends StatelessWidget {
 }
 
 /// Full transcript drawer with chat-style layout.
+///
+/// Listens to [LiveKitService] directly so it receives live transcript
+/// updates while the bottom sheet is open (BUG-013 fix).
 class TranscriptDrawer extends StatefulWidget {
-  final List<TranscriptEntry> transcript;
+  final LiveKitService service;
 
   const TranscriptDrawer({
     super.key,
-    required this.transcript,
+    required this.service,
   });
 
   @override
@@ -85,27 +92,57 @@ class TranscriptDrawer extends StatefulWidget {
 
 class _TranscriptDrawerState extends State<TranscriptDrawer> {
   final ScrollController _scrollController = ScrollController();
+  int _lastTranscriptLength = 0;
 
   @override
   void initState() {
     super.initState();
+    widget.service.addListener(_onServiceChanged);
+    _lastTranscriptLength = widget.service.state.transcript.length;
     // Scroll to bottom after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-      }
+      _scrollToBottom();
     });
   }
 
   @override
   void dispose() {
+    widget.service.removeListener(_onServiceChanged);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onServiceChanged() {
+    if (!mounted) return;
+    final newLength = widget.service.state.transcript.length;
+    final shouldScroll = newLength > _lastTranscriptLength;
+    _lastTranscriptLength = newLength;
+    setState(() {});
+    if (shouldScroll) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToBottom(animate: true);
+      });
+    }
+  }
+
+  void _scrollToBottom({bool animate = false}) {
+    if (!_scrollController.hasClients) return;
+    final target = _scrollController.position.maxScrollExtent;
+    if (animate) {
+      _scrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    } else {
+      _scrollController.jumpTo(target);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final height = MediaQuery.of(context).size.height * 0.7;
+    final transcript = widget.service.state.transcript;
 
     return Container(
       height: height,
@@ -159,7 +196,7 @@ class _TranscriptDrawerState extends State<TranscriptDrawer> {
 
           // Transcript messages
           Expanded(
-            child: widget.transcript.isEmpty
+            child: transcript.isEmpty
                 ? const Center(
                     child: Text(
                       'No transcript yet',
@@ -172,9 +209,9 @@ class _TranscriptDrawerState extends State<TranscriptDrawer> {
                       horizontal: 16,
                       vertical: 8,
                     ),
-                    itemCount: widget.transcript.length,
+                    itemCount: transcript.length,
                     itemBuilder: (context, index) {
-                      final entry = widget.transcript[index];
+                      final entry = transcript[index];
                       return _TranscriptBubble(entry: entry);
                     },
                   ),

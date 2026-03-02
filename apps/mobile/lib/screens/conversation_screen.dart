@@ -70,7 +70,7 @@ class _ConversationScreenState extends State<ConversationScreen>
   void _openTranscriptDrawer() {
     showTranscriptDrawer(
       context,
-      transcript: _liveKitService.state.transcript,
+      service: _liveKitService,
     );
   }
 
