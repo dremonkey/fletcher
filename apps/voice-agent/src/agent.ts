@@ -133,12 +133,19 @@ export default defineAgent({
     // gets its own segment so concurrent streams (old HTTP connections
     // still draining) cannot corrupt newer streams' transcript events.
     // See BUG-010 for the race condition this solves.
-    const streamSegments = new Map<string, { segId: number; text: string }>();
+    //
+    // IMPORTANT: onPondering(null) fires TWICE per stream in llm.ts:
+    //   1. When first content chunk arrives (line ~342) — BEFORE onContent
+    //   2. In the finally block (line ~394) — AFTER all content
+    // We use `contentStarted` to distinguish these: only finalize the
+    // segment on the second call (when content has been received).
+    const streamSegments = new Map<string, { segId: number; text: string; contentStarted: boolean }>();
     let activeStreamId: string | null = null;
 
     const finalizeStream = (streamId: string) => {
       const seg = streamSegments.get(streamId);
-      if (seg && seg.text) {
+      if (!seg) return;
+      if (seg.text) {
         publishEvent({
           type: 'agent_transcript',
           segmentId: `seg_${seg.segId}`,
@@ -159,22 +166,32 @@ export default defineAgent({
             finalizeStream(activeStreamId);
           }
           const segId = ++nextSegmentId;
-          streamSegments.set(streamId, { segId, text: '' });
+          streamSegments.set(streamId, { segId, text: '', contentStarted: false });
           activeStreamId = streamId;
           logger.info({ phrase, segmentId: segId, streamId }, 'Pondering status published');
           publishStatus('thinking', phrase);
         } else {
-          // First content token arrived or stream ended — stop ack
-          logger.info({ streamId }, 'Pondering cleared');
-          stopAck();
-          // Only finalize THIS stream's segment — stale streams
-          // finalize themselves without affecting the active stream.
-          finalizeStream(streamId);
+          // Pondering cleared (first content arrived OR stream ended).
+          // Only touch UI if this is the current active stream — stale
+          // streams must not clobber newer streams' pondering/ack state.
+          if (streamId === activeStreamId) {
+            logger.info({ streamId }, 'Pondering cleared');
+            stopAck();
+          }
+          // Finalize only if content was already received (= stream done).
+          // The first onPondering(null) fires BEFORE any onContent, so
+          // contentStarted is still false — we correctly skip finalization.
+          // The second call (from the finally block) sees contentStarted=true.
+          const seg = streamSegments.get(streamId);
+          if (seg?.contentStarted) {
+            finalizeStream(streamId);
+          }
         }
       },
       onContent: (delta, fullText, streamId) => {
         const seg = streamSegments.get(streamId);
         if (!seg) return;
+        seg.contentStarted = true;
         seg.text = fullText;
         publishEvent({
           type: 'agent_transcript',
