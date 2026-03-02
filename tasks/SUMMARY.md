@@ -32,7 +32,7 @@ The LiveKit channel plugin (`@openclaw/channel-livekit`) that integrates voice c
 - [x] 004: Channel plugin approach (implementation guide)
 - [x] 005: Token generation endpoint (Sovereign Pairing) ✅
 - [ ] 007: Noise-Robust Voice Detection 📋
-- [ ] 008: Immediate Acknowledgment 📋 — non-verbal audio cue on EOU to bridge LLM wait time ([BUG-006](../docs/field-tests/20260301-buglog.md))
+- [~] 008: Immediate Acknowledgment 🔄 — Phase 1 complete: built-in two-note chime on EOU via BackgroundAudioPlayer; Phases 2-3 (looping pulse, client visual) open ([BUG-006](../docs/field-tests/20260301-buglog.md))
 - [ ] 009: TTS Empty Chunk Guard 📋 — buffer initial TTS input to avoid Cartesia rejecting punctuation-only chunks ([BUG-005](../docs/field-tests/20260301-buglog.md))
 
 **Implemented:**

@@ -59,6 +59,29 @@ AgentSession({ stt, tts, llm })
 
 The `Agent` object is an "empty shell" — OpenClaw owns personality, instructions, and tools. The agent passes an empty instructions string, relying entirely on the brain backend for conversation context.
 
+### Acknowledgment Sound (Background Audio)
+
+When end-of-utterance is detected, the agent state transitions from `listening` to `thinking`. With slow LLM backends (8-17s for OpenClaw), this creates a long silence that makes users think the system is broken.
+
+The voice agent uses the LiveKit SDK's `BackgroundAudioPlayer` with a `thinkingSound` to bridge this gap:
+
+1. **On EOU** (agent state -> `thinking`): a short two-note chime plays (~280ms, C5->E5)
+2. **On TTS start** (agent state -> `speaking`): the sound stops automatically
+
+The acknowledgment tone is synthesized programmatically in `apps/voice-agent/src/ack-tone.ts` — a pair of sine waves with smooth attack/decay envelopes at 25% amplitude. No external audio files are needed.
+
+The `BackgroundAudioPlayer` publishes a separate `background_audio` track to the LiveKit room, independent of the main agent speech track. This avoids any interference with TTS audio.
+
+**Configuration** via `FLETCHER_ACK_SOUND`:
+- `builtin` (default) — uses the synthesized chime
+- Path to audio file — uses a custom sound (decoded via FFmpeg)
+- `disabled` — no acknowledgment sound
+
+**Implementation files:**
+- `apps/voice-agent/src/ack-tone.ts` — tone synthesis
+- `apps/voice-agent/src/ack-sound-config.ts` — env var resolution
+- `apps/voice-agent/src/agent.ts` — BackgroundAudioPlayer wiring
+
 ### LLM Bridge (Ganglia)
 
 Ganglia converts between the LiveKit `llm.LLM` interface and the OpenClaw/Nanoclaw HTTP API. See [Brain Plugin](brain-plugin.md) for details.
