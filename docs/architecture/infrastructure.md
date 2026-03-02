@@ -54,9 +54,12 @@ The agent Dockerfile is a multi-stage Bun build:
 | `rtc.port_range_end` | 60000 | WebRTC UDP media range end |
 | `rtc.node_ip` | 100.87.219.109 | Tailscale IP — forces stable ICE candidates |
 | `rtc.use_external_ip` | true | Advertise `node_ip` to clients |
+| `room.departure_timeout` | 120 | Seconds to keep room alive after last participant leaves |
 | `keys.devkey` | `9B8mAgLb7...` | API key and secret for development |
 
 **Tailscale IP pinning:** Setting `node_ip` to a Tailscale address ensures that ICE candidates use a routable IP accessible from both LAN and Tailscale VPN. Without this, LiveKit may advertise a LAN IP that's unreachable when the mobile device is on Tailscale, or vice versa.
+
+**Departure timeout:** WiFi→5G is a "break before make" transition — WiFi drops before 5G activates, creating a 40-80s connectivity gap (including Tailscale tunnel re-establishment). The default 20s `departure_timeout` closed the room before the client could reconnect. 120s provides comfortable margin. The voice agent logs participant disconnect/reconnect events for observability during these windows.
 
 ## Nix Development Environment
 
