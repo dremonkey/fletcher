@@ -130,6 +130,7 @@ export default defineAgent({
       apiKey: process.env.ELEVENLABS_API_KEY,
       modelId: 'eleven_turbo_v2_5',
       voiceId: process.env.ELEVENLABS_VOICE_ID,
+      syncAlignment: false,
     });
 
     const session = new voice.AgentSession({ stt, tts, llm: gangliaLlm });
