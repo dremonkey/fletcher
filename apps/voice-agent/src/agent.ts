@@ -25,6 +25,8 @@ import { defineAgent, cli, ServerOptions, type JobContext } from '@livekit/agent
 import { voice } from '@livekit/agents';
 import * as deepgram from '@livekit/agents-plugin-deepgram';
 import * as elevenlabs from '@livekit/agents-plugin-elevenlabs';
+import * as silero from '@livekit/agents-plugin-silero';
+import * as livekit from '@livekit/agents-plugin-livekit';
 import { createGangliaFromEnv, resolveSessionKeySimple } from '@knittt/livekit-agent-ganglia';
 import pino from 'pino';
 import { TurnMetricsCollector } from './metrics';
@@ -137,6 +139,19 @@ export default defineAgent({
     });
     logger.info(`Using ganglia backend: ${gangliaLlm.gangliaType()}`);
 
+    // -----------------------------------------------------------------------
+    // VAD & turn detection — Silero VAD for robust speech/silence detection,
+    // LiveKit turn detector for context-aware end-of-turn prediction.
+    // This replaces the SDK's default VAD-only endpointing which caused
+    // premature EOU during natural pauses (BUG-014).
+    // -----------------------------------------------------------------------
+    const vad = await silero.VAD.load({
+      // Slightly higher than default (0.5) to reduce false triggers from
+      // background noise — TV, other speakers, wind, etc.
+      activationThreshold: 0.6,
+    });
+    const turnDetection = new livekit.turnDetector.EnglishModel();
+
     const stt = new deepgram.STT({ apiKey: process.env.DEEPGRAM_API_KEY });
     // syncAlignment: false — ElevenLabs defaults syncAlignment to true, which
     // advertises alignedTranscript capability to the SDK.  The SDK then waits
@@ -151,7 +166,19 @@ export default defineAgent({
       syncAlignment: false,
     });
 
-    const session = new voice.AgentSession({ stt, tts, llm: gangliaLlm });
+    const session = new voice.AgentSession({
+      vad,
+      turnDetection,
+      stt,
+      tts,
+      llm: gangliaLlm,
+      voiceOptions: {
+        // Give the turn detector more time to decide if the user is done.
+        // Default 0.5s was too aggressive for natural speech pauses (BUG-014).
+        minEndpointingDelay: 0.8,
+        maxEndpointingDelay: 3.0,
+      },
+    });
     await session.start({
       agent: new voice.Agent({ instructions: '' }),
       room: ctx.room,

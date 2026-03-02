@@ -48,6 +48,8 @@
     "@livekit/agents-plugin-cartesia": "^1.0.0",
     "@livekit/agents-plugin-deepgram": "^1.0.48",
     "@livekit/agents-plugin-elevenlabs": "^1.0.48",
+    "@livekit/agents-plugin-silero": "^1.0.44",
+    "@livekit/agents-plugin-livekit": "^1.0.2",
     "@livekit/rtc-node": "^0.13.24",
     "livekit-server-sdk": "^2.15.0"
   }
