@@ -67,14 +67,15 @@ The voice agent provides two layers of feedback during this gap:
 
 #### Audio: Looping Acknowledgment Chime
 
-The LiveKit SDK's `BackgroundAudioPlayer` plays a looping chime while the agent is in the `thinking` state:
+The LiveKit SDK's `BackgroundAudioPlayer` publishes a separate `background_audio` track to the LiveKit room, independent of the main agent speech track. The voice agent controls playback manually (the SDK's built-in `thinkingSound` auto-play is not used):
 
-1. **On EOU** (agent state -> `thinking`): a two-note chime plays (~280ms, C5->E5), then repeats every 1.5 seconds
-2. **On TTS start** (agent state -> `speaking`): the loop stops automatically
+1. **On EOU** (agent state -> `thinking`): `bgAudioPlayer.play()` starts the chime (~280ms, C5->E5), repeating every 1.5 seconds
+2. **On first LLM content token** (pondering cleared): `playHandle.stop()` stops the loop
+3. **On pipeline error** (TTS/STT/LLM failure): `playHandle.stop()` stops the loop
 
-The acknowledgment tone is synthesized programmatically in `apps/voice-agent/src/ack-tone.ts` — a pair of sine waves with smooth attack/decay envelopes at 25% amplitude. The generator yields tone + silence in an infinite loop; the `BackgroundAudioPlayer` stops iteration when the agent leaves the thinking state.
+This decouples the ack lifecycle from TTS — the chime stops when the brain responds, not when TTS produces audio. If TTS fails, the ack still stops cleanly and the response text is delivered via transcription.
 
-The `BackgroundAudioPlayer` publishes a separate `background_audio` track to the LiveKit room, independent of the main agent speech track. This avoids any interference with TTS audio.
+The acknowledgment tone is synthesized programmatically in `apps/voice-agent/src/ack-tone.ts` — a pair of sine waves with smooth attack/decay envelopes at 25% amplitude. The generator yields tone + silence in an infinite loop.
 
 **Configuration** via `FLETCHER_ACK_SOUND`:
 - `builtin` (default) — uses the synthesized chime
