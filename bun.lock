@@ -23,6 +23,7 @@
         "@livekit/agents": "catalog:",
         "@livekit/agents-plugin-deepgram": "catalog:",
         "@livekit/agents-plugin-elevenlabs": "catalog:",
+        "@livekit/rtc-node": "catalog:",
         "@opentelemetry/api": "^1.9.0",
         "@opentelemetry/exporter-trace-otlp-proto": "^0.57.0",
         "@opentelemetry/resources": "^1.30.0",
