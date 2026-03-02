@@ -126,6 +126,12 @@ export default defineAgent({
     logger.info(`Using ganglia backend: ${gangliaLlm.gangliaType()}`);
 
     const stt = new deepgram.STT({ apiKey: process.env.DEEPGRAM_API_KEY });
+    // syncAlignment: false — ElevenLabs defaults syncAlignment to true, which
+    // advertises alignedTranscript capability to the SDK.  The SDK then waits
+    // for TTS word-timing data to build transcripts instead of using raw LLM
+    // text.  ElevenLabs returns alignment: null for our model/voice, so
+    // transcripts silently break.  Disabling it makes the SDK fall back to
+    // raw LLM token text, which is delivered immediately and reliably.
     const tts = new elevenlabs.TTS({
       apiKey: process.env.ELEVENLABS_API_KEY,
       modelId: 'eleven_turbo_v2_5',
