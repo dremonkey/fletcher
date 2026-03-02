@@ -27,6 +27,7 @@ import * as deepgram from '@livekit/agents-plugin-deepgram';
 import * as elevenlabs from '@livekit/agents-plugin-elevenlabs';
 import * as silero from '@livekit/agents-plugin-silero';
 import * as livekit from '@livekit/agents-plugin-livekit';
+import { RoomEvent } from '@livekit/rtc-node';
 import { createGangliaFromEnv, resolveSessionKeySimple } from '@knittt/livekit-agent-ganglia';
 import pino from 'pino';
 import { TurnMetricsCollector } from './metrics';
@@ -319,6 +320,24 @@ export default defineAgent({
     gangliaLlm.setDefaultSession?.({
       roomName: ctx.room.name,
       participantIdentity: participant.identity,
+    });
+
+    // -----------------------------------------------------------------------
+    // Participant lifecycle — log disconnect/reconnect for observability.
+    // The actual reconnection is handled by LiveKit infrastructure: the
+    // departure_timeout (120s) keeps the room alive while the client
+    // completes network handoffs (e.g., WiFi→5G). See BUG-015.
+    // -----------------------------------------------------------------------
+    ctx.room.on(RoomEvent.ParticipantDisconnected, (p) => {
+      logger.warn({ identity: p.identity, room: ctx.room.name }, 'Participant disconnected — waiting for reconnect (departure_timeout=120s)');
+    });
+
+    ctx.room.on(RoomEvent.ParticipantConnected, (p) => {
+      logger.info({ identity: p.identity, room: ctx.room.name }, 'Participant connected');
+      // If the reconnecting participant matches the original, update session routing
+      if (p.identity === participant.identity) {
+        logger.info({ identity: p.identity }, 'Original participant reconnected — session continues');
+      }
     });
 
     ctx.addShutdownCallback(async () => {

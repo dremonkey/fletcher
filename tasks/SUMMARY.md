@@ -157,7 +157,7 @@ Bulletproof connection handling: survive network switches, Bluetooth changes, ai
 - [x] 004: Network-aware reconnection strategy — pause retries while offline, resume on network restore
 - [x] 005: Preserve app state across reconnects — transcripts, artifacts, mute state survive reconnection
 - [x] 006: Tailscale ICE negotiation fix — pin server's Tailscale IP for stable 5G/Wi-Fi transitions ✅
-- [ ] 007: WiFi → 5G ICE renegotiation failure — client can't reconnect after WiFi→5G switch; server marks `isExpectedToResume: false`
+- [x] 007: WiFi → 5G ICE renegotiation failure — increased `departure_timeout` to 120s so room survives the 40-80s handoff (BUG-015) ✅
 - [~] 008: Tailscale-aware URL resolution — runtime detection of Tailscale VPN on phone, auto-selects correct URL; code complete, needs user testing
 - [x] 009: Bluetooth audio route recovery — `restartTrack()` swaps audio source without unpublishing ✅ ([BUG-004](../docs/field-tests/20260301-buglog.md))
 

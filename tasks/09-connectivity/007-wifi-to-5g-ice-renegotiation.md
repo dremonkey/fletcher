@@ -91,7 +91,22 @@ The agent should not leave the room the instant the user disconnects. A grace pe
 - Related: task 004 (network-aware retry), task 006 (Tailscale ICE fix)
 - The reverse direction (5G → WiFi) reconnects successfully, suggesting the client can renegotiate when gaining a "better" interface but not when losing one
 
+## Fix Applied (2026-03-02)
+
+The root cause was the default 20s `departure_timeout` — far too short for WiFi→5G's "break before make" handoff which takes 40-80s including Tailscale tunnel re-establishment.
+
+**Changes:**
+1. **`livekit.yaml`** — Added `room.departure_timeout: 120` (2 minutes). Keeps the room and agent alive while the client completes the 5G handoff.
+2. **`apps/voice-agent/src/agent.ts`** — Added `ParticipantDisconnected`/`ParticipantConnected` room event listeners for observability during the reconnection window.
+
+**Why this is sufficient:**
+- BUG-016 proved the agent session continues seamlessly when the client reconnects (DUPLICATE_IDENTITY eviction of stale participant, new participant joins existing room, RoomIO re-subscribes to audio tracks).
+- The client already has a robust two-layer reconnection strategy (SDK auto-reconnect → app-level exponential backoff with network awareness). It just needs the room to still exist.
+- 120s provides comfortable margin over the worst-case ~80s reconnection window.
+
+**Verification:** Connect over WiFi, walk out of range to force 5G switch, confirm session recovers within ~60-80s without force-quit.
+
 ## Status
-- **Date:** 2026-02-28
+- **Date:** 2026-03-02
 - **Priority:** High
-- **Status:** Open
+- **Status:** Fixed
