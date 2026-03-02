@@ -29,7 +29,6 @@
       "dependencies": {
         "@knittt/livekit-agent-ganglia": "workspace:*",
         "@livekit/agents": "^1.0.48",
-        "@livekit/agents-plugin-cartesia": "^1.0.48",
         "@livekit/agents-plugin-deepgram": "^1.0.48",
         "@livekit/agents-plugin-elevenlabs": "^1.0.48",
         "@opentelemetry/api": "^1.9.0",
@@ -1924,8 +1923,6 @@
     "@cacheable/utils/keyv": ["keyv@5.6.0", "", { "dependencies": { "@keyv/serialize": "^1.1.1" } }, "sha512-CYDD3SOtsHtyXeEORYRx2qBtpDJFjRTGXUtmNEMGyzYOKj1TE3tycdlho7kA1Ufx9OYWZzg52QFBGALTirzDSw=="],
 
     "@eslint/eslintrc/strip-json-comments": ["strip-json-comments@3.1.1", "", {}, "sha512-6fPc+R4ihwqP6N/aIv2f1gMH8lOVtWQHoqC4yK6oSDVVocumAsfCqjkXnqiYMhmMwS/mEHLp7Vehlt3ql6lEig=="],
-
-    "@fletcher/voice-agent/@livekit/agents-plugin-cartesia": ["@livekit/agents-plugin-cartesia@1.0.48", "", { "dependencies": { "ws": "^8.16.0" }, "peerDependencies": { "@livekit/agents": "1.0.48", "@livekit/rtc-node": "^0.13.24", "zod": "^3.25.76 || ^4.1.8" } }, "sha512-4+zDO+5SObdooC/K59VvYj5SITGyL/m1XihGMBWlJa8J17ydUMwRYeG3fjno9PGUZPaOPbwzVzV4SHi7N2ml5A=="],
 
     "@fletcher/voice-agent/@livekit/agents-plugin-deepgram": ["@livekit/agents-plugin-deepgram@1.0.48", "", { "dependencies": { "ws": "^8.16.0" }, "peerDependencies": { "@livekit/agents": "1.0.48", "@livekit/rtc-node": "^0.13.24" } }, "sha512-RRMkqGPqVMCwckn90tMHZifK8ElekysNC6/7iX10GghZq4nzqIUke1ebHpnekR63SLEaXdSUK9h4hCl8YEtG7Q=="],
 
