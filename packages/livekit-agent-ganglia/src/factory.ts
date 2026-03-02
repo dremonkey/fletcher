@@ -109,7 +109,9 @@ export function isGangliaAvailable(type: string): boolean {
 export async function createGangliaFromEnv(opts?: {
   logger?: Logger;
   /** Callback for pondering status phrases while waiting for LLM first token. */
-  onPondering?: (phrase: string | null) => void;
+  onPondering?: (phrase: string | null, streamId: string) => void;
+  /** Callback for each content chunk from the LLM stream. */
+  onContent?: (delta: string, fullText: string, streamId: string) => void;
 }): Promise<GangliaLLM> {
   const logger = opts?.logger || noopLogger;
   const type = (process.env.GANGLIA_TYPE || process.env.BRAIN_TYPE || 'openclaw') as GangliaConfig['type'];
@@ -128,6 +130,7 @@ export async function createGangliaFromEnv(opts?: {
         apiKey: process.env.OPENCLAW_API_KEY || '',
         logger,
         onPondering: opts?.onPondering,
+        onContent: opts?.onContent,
       },
     });
   }

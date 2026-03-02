@@ -110,17 +110,79 @@ export default defineAgent({
       ackPlayHandle = undefined;
     };
 
+    // -----------------------------------------------------------------------
+    // Agent transcript — bypass SDK transcription pipeline.
+    //
+    // The SDK's performTextForwarding task is created AFTER speech handle
+    // scheduling/authorization.  When the user speaks during the agent's
+    // thinking phase, the speech handle is interrupted and text forwarding
+    // is never created — even though the LLM produces a full response.
+    //
+    // We work around this by forwarding LLM content directly via the data
+    // channel using the onContent callback.  The Flutter app handles
+    // 'agent_transcript' events alongside existing status/artifact events.
+    //
+    // IMPORTANT: Transcript state is scoped per-stream to avoid a race
+    // condition where concurrent OpenClawChatStream instances (old streams
+    // whose HTTP connections haven't closed yet) mutate shared state and
+    // corrupt newer streams' transcript events.  See BUG-010.
+    // -----------------------------------------------------------------------
+    let nextSegmentId = 0;
+
+    // Per-stream transcript state, keyed by streamId.  Each LLM stream
+    // gets its own segment so concurrent streams (old HTTP connections
+    // still draining) cannot corrupt newer streams' transcript events.
+    // See BUG-010 for the race condition this solves.
+    const streamSegments = new Map<string, { segId: number; text: string }>();
+    let activeStreamId: string | null = null;
+
+    const finalizeStream = (streamId: string) => {
+      const seg = streamSegments.get(streamId);
+      if (seg && seg.text) {
+        publishEvent({
+          type: 'agent_transcript',
+          segmentId: `seg_${seg.segId}`,
+          delta: '',
+          text: seg.text,
+          final: true,
+        });
+      }
+      streamSegments.delete(streamId);
+    };
+
     const gangliaLlm = await createGangliaFromEnv({
       logger,
-      onPondering: (phrase) => {
+      onPondering: (phrase, streamId) => {
         if (phrase) {
-          logger.info({ phrase }, 'Pondering status published');
+          // New LLM stream starting — finalize previous active stream
+          if (activeStreamId && streamSegments.has(activeStreamId)) {
+            finalizeStream(activeStreamId);
+          }
+          const segId = ++nextSegmentId;
+          streamSegments.set(streamId, { segId, text: '' });
+          activeStreamId = streamId;
+          logger.info({ phrase, segmentId: segId, streamId }, 'Pondering status published');
           publishStatus('thinking', phrase);
         } else {
-          // First content token arrived — stop ack
-          logger.info('Pondering cleared');
+          // First content token arrived or stream ended — stop ack
+          logger.info({ streamId }, 'Pondering cleared');
           stopAck();
+          // Only finalize THIS stream's segment — stale streams
+          // finalize themselves without affecting the active stream.
+          finalizeStream(streamId);
         }
+      },
+      onContent: (delta, fullText, streamId) => {
+        const seg = streamSegments.get(streamId);
+        if (!seg) return;
+        seg.text = fullText;
+        publishEvent({
+          type: 'agent_transcript',
+          segmentId: `seg_${seg.segId}`,
+          delta,
+          text: fullText,
+          final: false,
+        });
       },
     });
     logger.info(`Using ganglia backend: ${gangliaLlm.gangliaType()}`);
@@ -143,7 +205,11 @@ export default defineAgent({
     await session.start({
       agent: new voice.Agent({ instructions: '' }),
       room: ctx.room,
-      outputOptions: { syncTranscription: false },
+      // Disable SDK transcription — we publish agent text ourselves via
+      // the onContent callback → ganglia-events data channel.  This avoids
+      // the SDK bug where performTextForwarding is gated behind speech
+      // handle scheduling and never created when the user interrupts.
+      outputOptions: { transcriptionEnabled: false },
     });
     await ctx.connect();
     logger.info(`Connected to room: ${ctx.room.name}`);

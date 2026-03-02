@@ -10,8 +10,21 @@ export interface OpenClawConfig {
    * Callback emitted while waiting for the first content token from the LLM.
    * Receives a fun "pondering" phrase that rotates every few seconds.
    * Called with `null` when content starts (clear the status).
+   *
+   * @param phrase - The pondering phrase, or `null` when content starts / stream ends
+   * @param streamId - Unique identifier for the LLM stream instance
    */
-  onPondering?: (phrase: string | null) => void;
+  onPondering?: (phrase: string | null, streamId: string) => void;
+  /**
+   * Callback emitted for each content-bearing chunk from the LLM stream.
+   * Bypasses the SDK's transcription pipeline — use this to forward text
+   * directly to the client (e.g. via data channel).
+   *
+   * @param delta - The text delta from this chunk
+   * @param fullText - Accumulated full text so far
+   * @param streamId - Unique identifier for the LLM stream instance
+   */
+  onContent?: (delta: string, fullText: string, streamId: string) => void;
 }
 
 /**

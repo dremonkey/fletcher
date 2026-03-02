@@ -431,6 +431,21 @@ class LiveKitService extends ChangeNotifier {
       }
       _updateState(artifacts: newArtifacts);
       debugPrint('[Ganglia] Artifact: ${artifactEvent.displayTitle}');
+    } else if (eventType == 'agent_transcript') {
+      // Agent transcript forwarded directly from Ganglia LLM content stream.
+      // Bypasses the SDK's lk.transcription pipeline which breaks when the
+      // speech handle is interrupted before text forwarding is created.
+      final segmentId = json['segmentId'] as String? ?? 'unknown';
+      final text = json['text'] as String? ?? '';
+      final isFinal = json['final'] == true;
+      if (text.isNotEmpty) {
+        _upsertTranscript(
+          segmentId: segmentId,
+          role: TranscriptRole.agent,
+          text: text,
+          isFinal: isFinal,
+        );
+      }
     }
   }
 

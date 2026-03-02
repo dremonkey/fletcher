@@ -61,12 +61,14 @@ New backends can be added without modifying factory code.
 
 ```typescript
 const llm = await createGangliaFromEnv({
-  logger,                          // pino-compatible logger
-  onPondering: (phrase) => { ... } // Called with rotating phrases while waiting for first content token; null when cleared
+  logger,                                    // pino-compatible logger
+  onPondering: (phrase) => { ... },          // Rotating phrases while waiting for first content token; null when cleared
+  onContent: (delta, fullText) => { ... },   // Called for each content-bearing LLM chunk
 });
 ```
 
-The `onPondering` callback enables the voice agent to publish "thinking" status events to the data channel while the LLM backend processes. See [Voice Pipeline](voice-pipeline.md#visual-pondering-status-phrases) for details.
+- **`onPondering`** — enables the voice agent to publish "thinking" status events to the data channel while the LLM backend processes. See [Voice Pipeline](voice-pipeline.md#visual-pondering-status-phrases) for details.
+- **`onContent`** — fires for each content-bearing chunk with the text delta and accumulated full text. The voice agent uses this to publish `agent_transcript` events via the data channel, bypassing the SDK's transcription pipeline (see [Voice Pipeline — Agent Transcript Bypass](voice-pipeline.md#agent-transcript-bypass)).
 
 ### GangliaLLM Interface
 
@@ -92,6 +94,7 @@ Extends `LLMBase` from `@livekit/agents`. On each `chat()` call, it creates an `
 4. Starts the pondering timer (if `onPondering` callback is set) — emits rotating phrases every 3s
 5. Parses response chunks into LiveKit `ChatChunk` events
 6. On first content chunk: clears pondering and proceeds with normal streaming
+7. On each content chunk: fires `onContent(delta, fullText)` with the text delta and accumulated response
 
 ### OpenClawClient
 

@@ -171,10 +171,42 @@ The channel plugin is started by the OpenClaw Gateway. The `gateway.startAccount
 
 In addition to the audio pipeline, the system sends metadata to the client via LiveKit's text streams and data channels:
 
-- **`lk.transcription` text stream** — real-time transcription of both user and agent speech
-- **`ganglia-events` data channel** — status updates (what the agent is doing) and artifacts (code, diffs, search results)
+- **`lk.transcription` text stream** — real-time transcription of user speech (STT output)
+- **`ganglia-events` data channel** — agent transcripts, status updates, and artifacts
 
 See [Data Channel Protocol](data-channel-protocol.md) for the message format and chunking protocol.
+
+### Agent Transcript Bypass
+
+The SDK's built-in agent transcription pipeline (`performTextForwarding`) is disabled (`transcriptionEnabled: false`). Instead, agent response text is forwarded directly via the `ganglia-events` data channel using Ganglia's `onContent` callback.
+
+**Why:** The SDK creates `performTextForwarding` only after `speechHandle.waitForScheduled()` and `waitForAuthorization()`. When the user speaks during the agent's thinking phase, the speech handle is interrupted and the text forwarding task is never created — even though the LLM produces a full response. This causes agent transcripts to silently drop on all but the first turn.
+
+**How it works:**
+
+1. Ganglia's `onContent(delta, fullText)` fires for each content-bearing LLM chunk
+2. The voice agent publishes each chunk as an `agent_transcript` event on the `ganglia-events` data channel
+3. Each LLM stream gets a unique `segmentId` (incremented when pondering starts)
+4. When the stream completes (pondering cleared), a final event with `final: true` is sent
+5. The Flutter app's `_processGangliaEvent()` feeds these into the same `_upsertTranscript()` used by the SDK's `lk.transcription` protocol
+
+User transcription (STT) still uses the SDK's `lk.transcription` text stream — only agent output is bypassed.
+
+**Event format:**
+```json
+{
+  "type": "agent_transcript",
+  "segmentId": "seg_1",
+  "delta": "Hello, ",
+  "text": "Hello, how can I help?",
+  "final": false
+}
+```
+
+**Implementation files:**
+- `packages/livekit-agent-ganglia/src/llm.ts` — `onContent` callback in `OpenClawChatStream`
+- `apps/voice-agent/src/agent.ts` — publishes `agent_transcript` events, disables SDK transcription
+- `apps/mobile/lib/services/livekit_service.dart` — handles `agent_transcript` in `_processGangliaEvent()`
 
 ## Metrics & Observability
 

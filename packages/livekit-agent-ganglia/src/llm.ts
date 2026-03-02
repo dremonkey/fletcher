@@ -82,13 +82,16 @@ export class OpenClawLLM extends LLMBase implements GangliaLLM {
   private client: OpenClawClient;
   private _model: string;
   private _sessionKey?: SessionKey;
-  private _onPondering?: (phrase: string | null) => void;
+  private _onPondering?: (phrase: string | null, streamId: string) => void;
+  private _onContent?: (delta: string, fullText: string, streamId: string) => void;
+  private _nextStreamSeq = 0;
 
   constructor(config: OpenClawConfig = {}) {
     super();
     this.client = new OpenClawClient(config);
     this._model = config.model || 'openclaw-gateway';
     this._onPondering = config.onPondering;
+    this._onContent = config.onContent;
 
     // Guard against duplicate @livekit/agents installs — the voice pipeline
     // uses `instanceof LLM` to gate the chat() call, and a second copy of the
@@ -160,12 +163,15 @@ export class OpenClawLLM extends LLMBase implements GangliaLLM {
     toolChoice?: ToolChoice;
     extraKwargs?: Record<string, unknown>;
   }): OpenClawChatStream {
+    const streamId = `s_${++this._nextStreamSeq}`;
     return new OpenClawChatStream(this, this.client, {
       chatCtx,
       toolCtx,
       connOptions: connOptions || { maxRetry: 3, retryIntervalMs: 2000, timeoutMs: 10000 },
       sessionKey: this._sessionKey,
       onPondering: this._onPondering,
+      onContent: this._onContent,
+      streamId,
     });
   }
 }
@@ -176,7 +182,9 @@ const PONDERING_INTERVAL_MS = 3000;
 class OpenClawChatStream extends LLMStream {
   private openclawClient: OpenClawClient;
   private _sessionKey?: SessionKey;
-  private _onPondering?: (phrase: string | null) => void;
+  private _onPondering?: (phrase: string | null, streamId: string) => void;
+  private _onContent?: (delta: string, fullText: string, streamId: string) => void;
+  private _streamId: string;
 
   constructor(
     llmInstance: OpenClawLLM,
@@ -187,18 +195,24 @@ class OpenClawChatStream extends LLMStream {
       connOptions,
       sessionKey,
       onPondering,
+      onContent,
+      streamId,
     }: {
       chatCtx: ChatContext;
       toolCtx?: ToolContext;
       connOptions: APIConnectOptions;
       sessionKey?: SessionKey;
-      onPondering?: (phrase: string | null) => void;
+      onPondering?: (phrase: string | null, streamId: string) => void;
+      onContent?: (delta: string, fullText: string, streamId: string) => void;
+      streamId: string;
     },
   ) {
     super(llmInstance, { chatCtx, toolCtx, connOptions });
     this.openclawClient = client;
     this._sessionKey = sessionKey;
     this._onPondering = onPondering;
+    this._onContent = onContent;
+    this._streamId = streamId;
   }
 
   protected async run(): Promise<void> {
@@ -297,18 +311,19 @@ class OpenClawChatStream extends LLMStream {
       if (this._onPondering) {
         const phrases = getShuffledPhrases();
         let idx = 0;
-        this._onPondering(phrases[idx]);
-        dbg.openclawStream('pondering: "%s"', phrases[idx]);
+        this._onPondering(phrases[idx], this._streamId);
+        dbg.openclawStream('pondering: "%s" streamId=%s', phrases[idx], this._streamId);
         ponderingTimer = setInterval(() => {
           idx = (idx + 1) % phrases.length;
-          this._onPondering!(phrases[idx]);
-          dbg.openclawStream('pondering: "%s"', phrases[idx]);
+          this._onPondering!(phrases[idx], this._streamId);
+          dbg.openclawStream('pondering: "%s" streamId=%s', phrases[idx], this._streamId);
         }, PONDERING_INTERVAL_MS);
       }
 
       let chunkCount = 0;
       let firstChunkAt: number | undefined;
       let firstContentSeen = false;
+      let accumulatedContent = '';
       for await (const chunk of stream) {
         chunkCount++;
         if (!firstChunkAt) {
@@ -324,8 +339,8 @@ class OpenClawChatStream extends LLMStream {
             clearInterval(ponderingTimer);
             ponderingTimer = undefined;
           }
-          this._onPondering?.(null);
-          dbg.openclawStream('pondering: cleared (first content at %dms)', Math.round(performance.now() - streamStart));
+          this._onPondering?.(null, this._streamId);
+          dbg.openclawStream('pondering: cleared (first content at %dms) streamId=%s', Math.round(performance.now() - streamStart), this._streamId);
         }
 
         const delta = chunk.choices[0]?.delta;
@@ -337,6 +352,12 @@ class OpenClawChatStream extends LLMStream {
         if (chunkCount <= 3 || delta.tool_calls) {
           dbg.openclawStream('chunk %d: role=%s content="%s" hasToolCalls=%s',
             chunkCount, delta.role, (delta.content || '').slice(0, 50), !!delta.tool_calls);
+        }
+
+        // Fire onContent for each content-bearing chunk
+        if (delta.content && this._onContent) {
+          accumulatedContent += delta.content;
+          this._onContent(delta.content, accumulatedContent, this._streamId);
         }
 
         // Map tool calls to FunctionCall format if present
@@ -370,7 +391,7 @@ class OpenClawChatStream extends LLMStream {
       if (ponderingTimer) {
         clearInterval(ponderingTimer);
       }
-      this._onPondering?.(null);
+      this._onPondering?.(null, this._streamId);
       this.output.close();
     }
   }

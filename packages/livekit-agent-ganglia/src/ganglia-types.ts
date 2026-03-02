@@ -34,7 +34,9 @@ export interface OpenClawConfig {
   /** Optional logger for production-level logging (defaults to silent) */
   logger?: import('./logger.js').Logger;
   /** Callback for pondering status phrases while waiting for LLM first token. */
-  onPondering?: (phrase: string | null) => void;
+  onPondering?: (phrase: string | null, streamId: string) => void;
+  /** Callback for each content chunk from the LLM stream. */
+  onContent?: (delta: string, fullText: string, streamId: string) => void;
 }
 
 /**
