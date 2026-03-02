@@ -23,10 +23,11 @@ These are different problems requiring different solutions — (1) is a speaker 
 
 ### Noise Filtering (secondary issue)
 
-5. **Silero VAD:** Use Silero VAD (via `@livekit/agents-plugin-silero`) as a more robust speech/non-speech classifier before Deepgram.
+5. **Silero VAD:** Use Silero VAD (via `@livekit/agents-plugin-silero`) as a more robust speech/non-speech classifier before Deepgram. ✅ **Implemented** — `activationThreshold: 0.6` (BUG-014 fix)
 6. **Noise suppression:** Integrate WebRTC noise suppression or Krisp before the VAD stage.
-7. **VAD threshold tuning:** Expose and tune VAD parameters (threshold, prefix/suffix padding) in the `AgentSession` configuration.
-8. **Deepgram feature flags:** Enable Deepgram's noise reduction or background audio filtering features.
+7. **VAD threshold tuning:** Expose and tune VAD parameters (threshold, prefix/suffix padding) in the `AgentSession` configuration. ✅ **Implemented** — `minEndpointingDelay: 0.8`, `maxEndpointingDelay: 3.0` (BUG-014 fix)
+8. **LiveKit turn detector:** Use `@livekit/agents-plugin-livekit` `EnglishModel` for context-aware end-of-turn prediction — uses language understanding alongside VAD to distinguish pauses from turn ends. ✅ **Implemented** (BUG-014 fix)
+9. **Deepgram feature flags:** Enable Deepgram's noise reduction or background audio filtering features.
 
 ## Relationship to Other Tasks
 
