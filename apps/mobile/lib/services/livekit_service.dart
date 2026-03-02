@@ -39,7 +39,7 @@ class LiveKitService extends ChangeNotifier {
   // Audio device change handling
   StreamSubscription<List<MediaDevice>>? _deviceChangeSub;
   Timer? _deviceChangeDebounce;
-  bool _isReconnecting = false;
+  bool _isRefreshingAudio = false;
 
   // Network connectivity subscription
   StreamSubscription<bool>? _connectivitySub;
@@ -466,7 +466,7 @@ class LiveKitService extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
-  // Audio device change → auto-reconnect
+  // Audio device change → refresh audio track
   // ---------------------------------------------------------------------------
 
   void _subscribeToDeviceChanges() {
@@ -477,33 +477,41 @@ class LiveKitService extends ChangeNotifier {
   }
 
   void _onDeviceChange() {
-    // Skip if already reconnecting or fully disconnected
-    if (_isReconnecting || _reconnecting || _room == null) return;
+    // Skip if already refreshing audio or fully disconnected
+    if (_isRefreshingAudio || _reconnecting || _room == null) return;
 
-    // Debounce: audio route changes can fire multiple events rapidly
+    // Debounce: Bluetooth transitions fire multiple rapid events and need
+    // more settling time than wired headphones
     _deviceChangeDebounce?.cancel();
-    _deviceChangeDebounce = Timer(const Duration(seconds: 1), () {
-      _reconnectAudioDevice();
+    _deviceChangeDebounce = Timer(const Duration(seconds: 2), () {
+      _refreshAudioTrack();
     });
   }
 
-  Future<void> _reconnectAudioDevice() async {
-    if (_isReconnecting || _url == null || _token == null) return;
-    _isReconnecting = true;
+  Future<void> _refreshAudioTrack() async {
+    if (_isRefreshingAudio || _localParticipant == null) return;
+    _isRefreshingAudio = true;
 
-    debugPrint('[Fletcher] Audio device changed — reconnecting');
-    _updateState(status: ConversationStatus.reconnecting);
+    debugPrint('[Fletcher] Audio device changed — refreshing audio track');
 
-    // Tear down connection but keep transcript history
-    await disconnect(preserveTranscripts: true);
+    try {
+      // Wait for the OS to settle the new Bluetooth audio route
+      await Future.delayed(const Duration(seconds: 1));
 
-    // Brief pause to let the OS settle the new audio route
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    _isReconnecting = false;
-
-    // Reconnect with cached credentials (re-resolves URL for network changes)
-    await connect(url: _url!, token: _token!, tailscaleUrl: _tailscaleUrl);
+      // Use restartTrack() to swap the audio capture source via WebRTC's
+      // replaceTrack(). This picks up the new active device WITHOUT
+      // unpublishing — the agent session stays alive.
+      final publication = _localParticipant!.audioTrackPublications.firstOrNull;
+      final track = publication?.track;
+      if (track != null && !_isMuted) {
+        await track.restartTrack();
+        debugPrint('[Fletcher] Audio track restarted successfully');
+      }
+    } catch (e) {
+      debugPrint('[Fletcher] Audio track refresh failed: $e');
+    } finally {
+      _isRefreshingAudio = false;
+    }
   }
 
   void _updateAudioLevels() {

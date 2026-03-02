@@ -41,12 +41,13 @@ Android changes the audio input device when Bluetooth connects/disconnects, but 
 
 ### Client-side (Flutter)
 
-- [ ] Add `audio_session` plugin dependency (or use `AudioManager` APIs)
-- [ ] Listen for audio route change events (`AudioSession.instance.devicesChangedStream` or equivalent)
-- [ ] On route change: re-publish the audio track with the new input device
-  - Option A: `localParticipant.unpublishTrack()` + `publishAudioTrack()` with new device
-  - Option B: Restart audio capture on the existing track (`MediaStreamTrack.restart()` if available)
-- [ ] Show brief UI indicator when audio route changes ("Switching to Bluetooth...")
+- [x] ~~Add `audio_session` plugin dependency~~ — not needed; `Hardware.instance.onDeviceChange` already fires for BT transitions
+- [x] Listen for audio route change events — using existing `Hardware.instance.onDeviceChange.stream`
+- [x] On route change: restart audio capture via `LocalTrack.restartTrack()` (WebRTC `replaceTrack()`)
+  - ~~Option A: mic toggle~~ — REJECTED: `setMicrophoneEnabled(false)` unpublishes the track, agent sees `onTrackUnpublished` and closes session
+  - Option B used: `restartTrack()` swaps the underlying MediaStream atomically via WebRTC's `replaceTrack()` — track stays published, agent session unaffected
+  - Increased debounce from 1s to 2s for Bluetooth settling time
+- [x] Show brief UI indicator when audio route changes ("Switching audio...")
 - [ ] Test recovery for all transition directions (speaker↔BT, BT↔BT)
 
 ### Agent-side (optional, defense in depth)
@@ -72,4 +73,4 @@ Android changes the audio input device when Bluetooth connects/disconnects, but 
 
 - **Date:** 2026-03-01
 - **Priority:** High
-- **Status:** Open
+- **Status:** Implementation complete (v2: restartTrack), pending field test
