@@ -446,6 +446,22 @@ class LiveKitService extends ChangeNotifier {
           isFinal: isFinal,
         );
       }
+    } else if (eventType == 'user_transcript') {
+      // User STT transcript forwarded from voice agent (BUG-012 fix).
+      // The SDK's lk.transcription forwarding is disabled alongside agent
+      // transcription (outputOptions.transcriptionEnabled = false), so we
+      // publish user transcripts via the data channel instead.
+      final segmentId = json['segmentId'] as String? ?? 'unknown';
+      final text = json['text'] as String? ?? '';
+      final isFinal = json['final'] == true;
+      if (text.isNotEmpty) {
+        _upsertTranscript(
+          segmentId: segmentId,
+          role: TranscriptRole.user,
+          text: text,
+          isFinal: isFinal,
+        );
+      }
     }
   }
 

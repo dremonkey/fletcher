@@ -205,9 +205,37 @@ export default defineAgent({
       }
     });
 
+    // -----------------------------------------------------------------------
+    // User transcript forwarding — publish STT results to the data channel.
+    //
+    // The SDK's built-in lk.transcription forwarding for user input is gated
+    // behind outputOptions.transcriptionEnabled, which we disabled to work
+    // around the broken agent transcript pipeline (BUG-010).  Disabling it
+    // also killed user transcript forwarding (BUG-012).
+    //
+    // We forward both interim and final user transcripts ourselves via the
+    // ganglia-events data channel, matching the pattern used for agent
+    // transcripts.
+    // -----------------------------------------------------------------------
+    let userSegmentCounter = 0;
+    let currentUserSegmentId: string | null = null;
+
     session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (ev) => {
       if (ev.isFinal) {
         logger.info({ transcript: ev.transcript }, 'User input (final)');
+      }
+      // Allocate a new segment on first interim of a new utterance
+      if (!currentUserSegmentId) {
+        currentUserSegmentId = `user_seg_${++userSegmentCounter}`;
+      }
+      publishEvent({
+        type: 'user_transcript',
+        segmentId: currentUserSegmentId,
+        text: ev.transcript,
+        final: ev.isFinal,
+      });
+      if (ev.isFinal) {
+        currentUserSegmentId = null;
       }
     });
 
