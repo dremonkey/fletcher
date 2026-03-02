@@ -47,8 +47,8 @@ Android changes the audio input device when Bluetooth connects/disconnects, but 
   - ~~Option A: mic toggle~~ — REJECTED: `setMicrophoneEnabled(false)` unpublishes the track, agent sees `onTrackUnpublished` and closes session
   - Option B used: `restartTrack()` swaps the underlying MediaStream atomically via WebRTC's `replaceTrack()` — track stays published, agent session unaffected
   - Increased debounce from 1s to 2s for Bluetooth settling time
-- [x] Show brief UI indicator when audio route changes ("Switching audio...")
-- [ ] Test recovery for all transition directions (speaker↔BT, BT↔BT)
+- [x] ~~Show brief UI indicator~~ — removed; restartTrack() is fast enough to be transparent
+- [x] Test recovery for BT transitions — field-tested on Pixel 9 (speaker→BT, BT→speaker)
 
 ### Agent-side (optional, defense in depth)
 
@@ -59,8 +59,8 @@ Android changes the audio input device when Bluetooth connects/disconnects, but 
 ## Files
 
 - `apps/mobile/lib/services/livekit_service.dart` — audio track management
-- `apps/mobile/pubspec.yaml` — add `audio_session` dependency
-- `apps/mobile/lib/widgets/` — UI indicator for route changes
+- `docs/architecture/mobile-client.md` — reconnection strategy docs
+- `docs/architecture/network-connectivity.md` — reconnection flow docs
 
 ## Context
 
@@ -73,4 +73,4 @@ Android changes the audio input device when Bluetooth connects/disconnects, but 
 
 - **Date:** 2026-03-01
 - **Priority:** High
-- **Status:** Implementation complete (v2: restartTrack), pending field test
+- **Status:** Complete ✅ — field-tested 2026-03-02

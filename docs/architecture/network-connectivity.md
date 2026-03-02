@@ -62,7 +62,7 @@ URL resolution runs on every connection attempt, not just the initial one:
 
 1. **`connect()`**: Resolves URL before connecting. Caches `_tailscaleUrl` for reconnects.
 2. **`_doReconnectAttempt()`** (disconnect/sleep recovery): Passes cached `_tailscaleUrl` to `connect()`, which re-resolves the URL. If the user toggled Tailscale during the disconnect, the new URL is picked up.
-3. **`_reconnectAudioDevice()`** (headphone plug/unplug): Same — re-resolves URL on reconnect.
+3. **`_refreshAudioTrack()`** (Bluetooth/headphone change): Does **not** reconnect — uses `restartTrack()` to swap audio capture in-place. URL is unaffected.
 4. **`disconnect(preserveTranscripts: false)`**: Clears `_tailscaleUrl` alongside `_url` and `_token`.
 
 ## Health Diagnostics

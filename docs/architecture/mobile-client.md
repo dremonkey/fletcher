@@ -161,9 +161,10 @@ Fletcher uses two layers of reconnection:
 - **Transient disconnect:** Exponential backoff from 1s to 16s, max 5 attempts
 - **Network offline:** Waits for `ConnectivityService` to report online, then retries
 - **Non-transient:** Shows error state (room deleted, duplicate identity, participant removed, etc.)
-- **Device change:** Audio route changes (headphone plug/unplug) trigger a 1-second debounced reconnect
 
 Transcripts are preserved across reconnects via `disconnect(preserveTranscripts: true)`.
+
+**Audio device recovery:** When Bluetooth headphones connect/disconnect or the audio route changes, `Hardware.instance.onDeviceChange` fires. The app debounces these events (2 seconds for Bluetooth settling time), then calls `LocalTrack.restartTrack()` on the published audio track. This uses WebRTC's `RTCRtpSender.replaceTrack()` to atomically swap the audio capture source — the track stays published throughout, so the agent session is unaffected. This is deliberately **not** a reconnect: `setMicrophoneEnabled(false)` would unpublish the track and cause the agent to close the session.
 
 ### App Lifecycle
 
