@@ -32,7 +32,7 @@ The LiveKit channel plugin (`@openclaw/channel-livekit`) that integrates voice c
 - [x] 004: Channel plugin approach (implementation guide)
 - [x] 005: Token generation endpoint (Sovereign Pairing) ✅
 - [ ] 007: Noise-Robust Voice Detection 📋
-- [~] 008: Immediate Acknowledgment 🔄 — Phase 1 complete: built-in two-note chime on EOU via BackgroundAudioPlayer; Phases 2-3 (looping pulse, client visual) open ([BUG-006](../docs/field-tests/20260301-buglog.md))
+- [~] 008: Immediate Acknowledgment 🔄 — Phases 1-2 complete: looping two-note chime on EOU via BackgroundAudioPlayer (1.5s gap between repetitions); Phase 3 (client visual pairing) open ([BUG-006](../docs/field-tests/20260301-buglog.md))
 - [ ] 009: TTS Empty Chunk Guard 📋 — buffer initial TTS input to avoid Cartesia rejecting punctuation-only chunks ([BUG-005](../docs/field-tests/20260301-buglog.md))
 
 **Implemented:**
@@ -111,7 +111,7 @@ Pipeline optimizations to reduce voice-to-voice latency from ~1.4s to <0.8s.
 - [x] 002: Add latency instrumentation & metrics — moved to [Epic 10: Metrics](./10-metrics)
 - [ ] 003: Streaming interim transcripts to LLM (Phase 2)
 - [ ] 004: TTS pre-warming validation (Phase 3)
-- [ ] 005: Investigate & reduce OpenClaw TTFT — 8-17s first-token latency is the dominant bottleneck ([BUG-006](../docs/field-tests/20260301-buglog.md))
+- [~] 005: Investigate & reduce OpenClaw TTFT 🔄 — Phase 1 complete: pondering status phrases + looping chime fill silence during thinking; Phase 2 (vocalized inner monologue) deferred ([BUG-006](../docs/field-tests/20260301-buglog.md))
 
 **Baseline measurement (2026-03-01 field test):** ~8-10s perceived latency. LLM TTFT is ~8s, pipeline overhead ~528ms.
 

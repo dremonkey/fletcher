@@ -61,14 +61,18 @@ The `Agent` object is an "empty shell" — OpenClaw owns personality, instructio
 
 ### Acknowledgment Sound (Background Audio)
 
-When end-of-utterance is detected, the agent state transitions from `listening` to `thinking`. With slow LLM backends (8-17s for OpenClaw), this creates a long silence that makes users think the system is broken.
+When end-of-utterance is detected, the agent state transitions from `listening` to `thinking`. With slow LLM backends (8-17s for OpenClaw with thinking enabled), this creates a long silence that makes users think the system is broken.
 
-The voice agent uses the LiveKit SDK's `BackgroundAudioPlayer` with a `thinkingSound` to bridge this gap:
+The voice agent provides two layers of feedback during this gap:
 
-1. **On EOU** (agent state -> `thinking`): a short two-note chime plays (~280ms, C5->E5)
-2. **On TTS start** (agent state -> `speaking`): the sound stops automatically
+#### Audio: Looping Acknowledgment Chime
 
-The acknowledgment tone is synthesized programmatically in `apps/voice-agent/src/ack-tone.ts` — a pair of sine waves with smooth attack/decay envelopes at 25% amplitude. No external audio files are needed.
+The LiveKit SDK's `BackgroundAudioPlayer` plays a looping chime while the agent is in the `thinking` state:
+
+1. **On EOU** (agent state -> `thinking`): a two-note chime plays (~280ms, C5->E5), then repeats every 1.5 seconds
+2. **On TTS start** (agent state -> `speaking`): the loop stops automatically
+
+The acknowledgment tone is synthesized programmatically in `apps/voice-agent/src/ack-tone.ts` — a pair of sine waves with smooth attack/decay envelopes at 25% amplitude. The generator yields tone + silence in an infinite loop; the `BackgroundAudioPlayer` stops iteration when the agent leaves the thinking state.
 
 The `BackgroundAudioPlayer` publishes a separate `background_audio` track to the LiveKit room, independent of the main agent speech track. This avoids any interference with TTS audio.
 
@@ -77,10 +81,24 @@ The `BackgroundAudioPlayer` publishes a separate `background_audio` track to the
 - Path to audio file — uses a custom sound (decoded via FFmpeg)
 - `disabled` — no acknowledgment sound
 
+#### Visual: Pondering Status Phrases
+
+While the LLM stream is open but no content tokens have arrived (i.e., the backend is "thinking"), Ganglia emits rotating fun phrases as `StatusEvent` messages on the data channel:
+
+1. **On stream open**: first phrase emitted immediately (e.g., "Dreaming of electric sheep...")
+2. **Every 3 seconds**: next phrase from a shuffled list of ~30 whimsical phrases
+3. **On first content token**: pondering stops (no clearing event sent — the agent's state change to `speaking` naturally dismisses the status bar)
+
+The phrase list lives in `packages/livekit-agent-ganglia/src/pondering.ts` and is Fisher-Yates shuffled per stream to avoid repetitive patterns. The `onPondering` callback is wired from the voice agent to `publishData()` on the `ganglia-events` topic.
+
+The mobile app's `StatusBar` widget displays the phrase text via the existing `StatusEvent.detail` field.
+
 **Implementation files:**
-- `apps/voice-agent/src/ack-tone.ts` — tone synthesis
+- `apps/voice-agent/src/ack-tone.ts` — tone synthesis (looping)
 - `apps/voice-agent/src/ack-sound-config.ts` — env var resolution
-- `apps/voice-agent/src/agent.ts` — BackgroundAudioPlayer wiring
+- `apps/voice-agent/src/agent.ts` — BackgroundAudioPlayer wiring + onPondering callback
+- `packages/livekit-agent-ganglia/src/pondering.ts` — phrase list and shuffle
+- `packages/livekit-agent-ganglia/src/llm.ts` — pondering timer in OpenClawChatStream
 
 ### LLM Bridge (Ganglia)
 

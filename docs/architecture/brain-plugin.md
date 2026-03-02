@@ -57,6 +57,17 @@ New backends can be added without modifying factory code.
 | `NANOCLAW_URL` | Nanoclaw | `http://localhost:18789` |
 | `NANOCLAW_CHANNEL_PREFIX` | Nanoclaw | `lk` |
 
+**Optional callbacks:**
+
+```typescript
+const llm = await createGangliaFromEnv({
+  logger,                          // pino-compatible logger
+  onPondering: (phrase) => { ... } // Called with rotating phrases while waiting for first content token; null when cleared
+});
+```
+
+The `onPondering` callback enables the voice agent to publish "thinking" status events to the data channel while the LLM backend processes. See [Voice Pipeline](voice-pipeline.md#visual-pondering-status-phrases) for details.
+
 ### GangliaLLM Interface
 
 All backends implement this interface (extending `llm.LLM`):
@@ -78,7 +89,9 @@ Extends `LLMBase` from `@livekit/agents`. On each `chat()` call, it creates an `
 1. Converts LiveKit `ChatContext` items to OpenClaw message format
 2. Attaches session routing headers (see [Session Routing](session-routing.md))
 3. Opens an SSE connection to the gateway
-4. Parses response chunks into LiveKit `ChatChunk` events
+4. Starts the pondering timer (if `onPondering` callback is set) — emits rotating phrases every 3s
+5. Parses response chunks into LiveKit `ChatChunk` events
+6. On first content chunk: clears pondering and proceeds with normal streaming
 
 ### OpenClawClient
 

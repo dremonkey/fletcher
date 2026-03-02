@@ -40,10 +40,10 @@ Emit an immediate non-verbal audio cue as soon as end-of-utterance (EOU) is dete
 - [x] Cut off the acknowledgment when first TTS audio frame arrives — `BackgroundAudioPlayer` stops thinking sound when agent state transitions from `thinking` to `speaking`
 - [x] Make the sound configurable (path to audio file or disable entirely) — `FLETCHER_ACK_SOUND` env var: `builtin` (default), custom file path, or `disabled`
 
-### Phase 2: Looping indicator for long waits
+### Phase 2: Looping indicator for long waits ✅
 
-- [ ] If no TTS audio arrives within ~3s of EOU, begin a subtle repeating pulse
-- [ ] Fade/stop the pulse seamlessly when TTS audio begins
+- [x] Chime loops continuously while agent is in `thinking` state (1.5s gap between repetitions)
+- [x] `BackgroundAudioPlayer` stops the loop automatically when agent state transitions to `speaking`
 - [ ] Cap the indicator at some maximum duration (e.g., 30s) to avoid infinite loops
 
 ### Phase 3: Client-side visual pairing
@@ -72,4 +72,4 @@ Emit an immediate non-verbal audio cue as soon as end-of-utterance (EOU) is dete
 
 - **Date:** 2026-03-01
 - **Priority:** High
-- **Status:** Phase 1 complete, Phases 2-3 open
+- **Status:** Phases 1-2 complete, Phase 3 open

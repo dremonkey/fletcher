@@ -114,19 +114,22 @@ Multiple unmerged PRs address voice latency:
 
 **Key insight:** Thinking tokens are not the enemy — their *suppression* is. If OpenClaw passes thinking tokens through (tagged) instead of stripping them, the TTFT problem disappears because thinking tokens become the first content the user sees. The latency is converted from dead silence into meaningful, visible reasoning.
 
-#### Phase 1: Thinking text via data channel (immediate goal)
+#### Phase 1: Pondering status phrases via data channel ✅
 
-Get OpenClaw to emit thinking tokens as tagged SSE chunks, then send them to the Flutter client via LiveKit data channel — displayed as a visual "inner monologue" (distinct from spoken output). Combined with Task 008 (acknowledgment sound on EOU), this gives the user two layers of feedback during the wait:
+Instead of requiring OpenClaw changes to pass thinking tokens through, Phase 1 takes a simpler approach: detect the "thinking phase" implicitly (SSE stream open but no content chunks yet) and send rotating fun status phrases to the client via the existing data channel.
 
-1. **Audio:** Acknowledgment tone on EOU (Task 008)
-2. **Visual:** Streaming thinking text on the Flutter client (this task)
-3. **Audio+Visual:** Spoken response arrives when content tokens begin
+Combined with Task 008 (looping acknowledgment chime on EOU), this gives the user two layers of feedback during the wait:
+
+1. **Audio:** Looping acknowledgment chime while thinking (Task 008)
+2. **Visual:** Rotating pondering phrases in status bar (e.g., "Dreaming of electric sheep...", "Slaying demons...")
+3. **Audio+Visual:** Both stop when spoken response arrives
 
 **Implementation:**
-- [ ] **OpenClaw: emit thinking tokens tagged** — Modify `handleMessageUpdate()` to pass through `<thinking>` content with a distinguishing marker (e.g., `"thinking": true` on the SSE delta, or a separate `stream: "thinking"` event type). Requires upstream change or local patch.
-- [ ] **Ganglia: parse thinking vs. content chunks** — Detect the thinking/content boundary in the SSE stream. Emit thinking chunks as data channel events (not TTS). Emit content chunks normally (TTS + data channel).
-- [ ] **Data channel: new `thinking` event type** — Define a new event type in the data channel protocol for streaming thinking text to the client.
-- [ ] **Flutter: display thinking text** — Render thinking tokens visually distinct from the response (dimmed, italics, smaller font, different color). Clear/collapse when spoken response begins.
+- [x] **Ganglia: `onPondering` callback** — `OpenClawChatStream.run()` starts emitting rotating phrases on stream open, clears on first content chunk. Callback passed via `createGangliaFromEnv({ onPondering })`.
+- [x] **Pondering phrases** — ~30 fun/whimsical phrases in `pondering.ts`, Fisher-Yates shuffled per stream, rotating every 3s.
+- [x] **Data channel: reuse `StatusEvent`** — Pondering sends `{ type: 'status', action: 'thinking', detail: 'phrase...' }` via the existing ganglia-events topic. No new event type needed.
+- [x] **Flutter: display pondering text** — `conversation_state.dart` updated to show `detail` field when present for thinking status (falls back to "Thinking..." if no detail).
+- [x] **Voice agent: wire callback** — `agent.ts` publishes pondering phrases to data channel via `publishData()` on `ganglia-events` topic.
 
 #### Phase 2: Vocalized inner monologue (future exploration)
 
@@ -151,17 +154,21 @@ Once thinking text is flowing through the pipeline, explore speaking it aloud wi
 ## Related Tasks
 
 - [x] Instrumentation — already measuring TTFT per turn (Epic 10)
-- [ ] **[Task 008](../02-livekit-agent/008-immediate-acknowledgment.md): Acknowledgment sound** — Complements this task; audio cue on EOU bridges the gap before thinking text starts arriving
+- [x] **[Task 008](../02-livekit-agent/008-immediate-acknowledgment.md): Acknowledgment sound** — Looping chime on EOU bridges the audio gap while pondering phrases provide visual feedback
 - [ ] Task 001: Preemptive generation (saves ~200-400ms)
 - [ ] Task 003: Streaming interim transcripts (saves ~200-400ms)
 
 ## Files
 
+- `packages/livekit-agent-ganglia/src/pondering.ts` — shuffled phrase list (~30 phrases)
+- `packages/livekit-agent-ganglia/src/pondering.spec.ts` — 3 tests
+- `packages/livekit-agent-ganglia/src/llm.ts` — `onPondering` timer in `OpenClawChatStream.run()`
+- `packages/livekit-agent-ganglia/src/factory.ts` — passes `onPondering` through to OpenClaw backend
+- `packages/livekit-agent-ganglia/src/types/index.ts` — `onPondering` on `OpenClawConfig`
+- `apps/voice-agent/src/agent.ts` — wires `onPondering` to data channel `publishData()`
+- `apps/mobile/lib/models/conversation_state.dart` — shows pondering phrase in status bar
 - `packages/livekit-agent-ganglia/src/client.ts` — HTTP timing data (no buffering, yields chunks immediately)
-- `packages/livekit-agent-ganglia/src/llm.ts` — stream timing (no buffering, puts chunks immediately)
 - `/home/ahanyu/.openclaw/openclaw.json` — Gateway config (port 18789, model aliases, agent list)
-- `/home/ahanyu/openclaw-agents/glitch/` — Glitch workspace (AGENTS.md, SOUL.md, IDENTITY.md, etc.)
-- OpenClaw gateway source: `dist/gateway-cli-CVadMy8v.js` (bundled, `handleOpenAiHttpRequest()` at line ~13195)
 
 ## Context
 
@@ -176,4 +183,4 @@ Once thinking text is flowing through the pipeline, explore speaking it aloud wi
 
 - **Date:** 2026-03-01
 - **Priority:** Critical
-- **Status:** In Progress — investigation complete, remediation direction set (surface thinking tokens)
+- **Status:** Phase 1 complete (pondering phrases + looping chime); Phase 2 (vocalized inner monologue) deferred
