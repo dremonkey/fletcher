@@ -170,8 +170,8 @@ _listener?.on<TrackUnsubscribedEvent>((event) {
 
 ## Acceptance Criteria
 
-- [ ] After WiFi→cellular transition, BT audio is restored automatically (no manual toggle)
-- [ ] UI shows "Reconnecting..." during the full transition (not just signaling)
+- [x] After WiFi→cellular transition, BT audio is restored automatically (no manual toggle)
+- [x] UI shows "Reconnecting..." during the full transition (not just signaling)
 - [ ] After track re-subscribes, agent can hear user speech within 2s
 - [ ] Second transition (cellular→cellular) remains fast (< 5s)
 - [ ] BT toggle during transition doesn't cause crash or state corruption
@@ -185,4 +185,4 @@ _listener?.on<TrackUnsubscribedEvent>((event) {
 ## Status
 - **Date:** 2026-03-03
 - **Priority:** High
-- **Status:** Not started
+- **Status:** Code complete — awaiting field test verification
