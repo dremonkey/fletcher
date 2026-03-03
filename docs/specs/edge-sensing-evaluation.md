@@ -2,7 +2,6 @@
 
 **Status:** Draft
 **Date:** 2026-03-02
-**Supersedes:** `edge-sensing-pivot.md` (initial sketch)
 **Question:** Is running VAD/STT/TTS on the edge device while keeping only the LLM brain remote viable and beneficial?
 
 ---
