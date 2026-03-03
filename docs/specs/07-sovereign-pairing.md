@@ -96,8 +96,6 @@ api.registerHttpRoute({
 
 ## Current State: Prototype Token Flow
 
-> **Sovereign Pairing is not yet active.** The server-side verification logic exists in `packages/openclaw-channel-livekit/src/auth.ts` (Ed25519 signature check, replay protection, token issuance), but the Flutter app does not use it. The current dev workflow uses a pre-generated token instead.
-
 ### What happens today
 
 1. Developer runs `bun run token:generate --identity <name>` (see `scripts/generate-token.ts`)

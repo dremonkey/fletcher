@@ -118,8 +118,8 @@ Risk:
 
 Feasibility by target:
 
-- **Knittt Thread (RK3588 w/ NPU)** — Viable. 6 TOPS NPU handles Whisper Tiny + VAD comfortably. Piper TTS is lightweight. This is the natural home for edge sensing.
-- **Knittt Thread (RK3562)** — Marginal. Weaker NPU (1 TOP), Whisper Tiny feasible but tight. May need Whisper ONNX quantized (int8).
+- **Dedicated Hub (RK3588 w/ NPU)** — Viable. 6 TOPS NPU handles Whisper Tiny + VAD comfortably. Piper TTS is lightweight. This is the natural home for edge sensing.
+- **Dedicated Hub (RK3562)** — Marginal. Weaker NPU (1 TOP), Whisper Tiny feasible but tight. May need Whisper ONNX quantized (int8).
 - **Mobile (Pixel 9, Snapdragon 8 Gen 3)** — Viable but battery-intensive. Hexagon NPU can run Whisper Tiny. Expect 10-15% additional battery drain during active conversation.
 - **Mobile (mid-range Android)** — Risky. No NPU, ARM CPU only. Whisper Tiny at 500-800ms may be acceptable; Whisper Small is too slow.
 - **Raspberry Pi 4** — Marginal. No NPU. Whisper Tiny works but at upper latency bound (~800ms). Fine for prototyping.
@@ -143,7 +143,7 @@ Edge sensing:
 - **Raw audio never leaves the device** — only text transcripts sent to hub
 - **Hub never touches audio** — can't leak, can't be subpoenaed, can't be breached
 - **Cloud APIs eliminated for sensing** — no Deepgram, no ElevenLabs dependency
-- **Aligns with Knittt "local-first" promise** — audio processing within user's physical control
+- **Aligns with local-first philosophy** — audio processing within user's physical control
 - **GDPR/privacy story simplified** — no third-party audio processors
 
 Risk:
@@ -177,7 +177,7 @@ Risk:
 ### New Complexity
 
 - **Model distribution** — shipping/updating Whisper + Piper models to edge devices
-- **Platform fragmentation** — Rust (Knittt Thread) vs Dart/native (Flutter mobile) vs potential Swift (iOS)
+- **Platform fragmentation** — Rust (dedicated hub) vs Dart/native (Flutter mobile) vs potential Swift (iOS)
 - **Quality parity** — ensuring local STT accuracy matches Deepgram for the use case
 - **Hybrid fallback** — option to fall back to cloud STT/TTS when local quality is insufficient or device is low-power
 
@@ -199,9 +199,9 @@ Risk:
 
 **Yes, viable and beneficial — with a phased approach:**
 
-1. **Phase 1 (now):** Prototype local VAD + Whisper Tiny on Pixel 9 (Flutter). Benchmark battery, STT accuracy vs Deepgram, and EOU responsiveness. This validates the mobile path and informs Knittt Thread hardware spec.
+1. **Phase 1 (now):** Prototype local VAD + Whisper Tiny on Pixel 9 (Flutter). Benchmark battery, STT accuracy vs Deepgram, and EOU responsiveness. This validates the mobile path and informs dedicated hub hardware spec.
 
-2. **Phase 2 (Knittt Thread):** Implement full edge sensing in the Rust audio service (already spec'd in `awakening-edge.md`). RK3588 NPU makes this the natural first-class target. VAD + Whisper + Piper, text-only to hub.
+2. **Phase 2 (dedicated hub):** Implement full edge sensing in the Rust audio service (already spec'd in `awakening-edge.md`). RK3588 NPU makes this the natural first-class target. VAD + Whisper + Piper, text-only to hub.
 
 3. **Phase 3 (hybrid mode):** Support both paths — edge sensing for capable devices, hub sensing as fallback for thin clients. LiveKit data channels already support this (just change what's in the payload).
 

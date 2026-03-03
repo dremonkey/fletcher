@@ -1,6 +1,6 @@
 # Epic: Voice Fingerprinting (Sovereign Identification)
 
-The goal of this epic is to implement a local-first voice fingerprinting system ("Voice Key") that allows Fletcher (and eventually Knittt) to identify speakers in real-time without external APIs. This enables personalized interactions ("Hi Andre!") by injecting the speaker's identity into the LLM context.
+The goal of this epic is to implement a local-first voice fingerprinting system ("Voice Key") that allows Fletcher to identify speakers in real-time without external APIs. This enables personalized interactions ("Hi Andre!") by injecting the speaker's identity into the LLM context.
 
 ## Tasks
 
@@ -41,4 +41,4 @@ The goal of this epic is to implement a local-first voice fingerprinting system 
 ## Future / Out of Scope (for now)
 - Real-time Diarization (separating overlapping speakers).
 - Continuous learning (updating the embedding as the user speaks more).
-- Knittt integration (desktop app).
+- Standalone desktop app integration.

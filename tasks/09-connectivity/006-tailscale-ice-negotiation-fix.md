@@ -25,7 +25,7 @@ rtc:
 While hardcoding IPs is generally discouraged, pinning the **Tailscale IP** is the recommended "Best Practice" for stable WebRTC (LiveKit) over a mesh VPN:
 - **Static Identity:** Tailscale IPs are stable for the life of the device on the tailnet. Unlike LAN IPs (DHCP) or Public IPs (ISP rotation), this virtual IP will not change.
 - **ICE Advertisement:** WebRTC's ICE negotiation often defaults to the first interface it finds (usually the local Wi-Fi/Ethernet). By pinning the Tailscale IP, we force the server to advertise a routable address that the client (phone) can reach from any network (5G, coffee shop Wi-Fi, etc.) via the Tailscale tunnel.
-- **Knittt Hardware Implications:** For future Knittt/Toch hardware, the pairing process should include a step to automatically detect and pin the Tailscale IP in the hub's configuration. This ensures the "Heirloom Hub" is reachable globally out-of-the-box without manual port forwarding or complex STUN/TURN setups.
+- **Dedicated Hardware:** For future dedicated hub hardware, the pairing process should include a step to automatically detect and pin the Tailscale IP in the hub's configuration. This ensures the hub is reachable globally out-of-the-box without manual port forwarding or complex STUN/TURN setups.
 
 ## Verification
 - [x] Patch `livekit.yaml` with explicit RTC settings.
