@@ -230,13 +230,13 @@ Future<bool> requestPermissions() async {
 
 ## Acceptance Criteria
 
-- [ ] App shows "Fletcher — Voice session active" notification while connected
+- [x] App shows "Fletcher — Voice session active" notification while connected
 - [ ] Microphone continues working when app goes to background (screen lock, home button)
 - [ ] Session survives putting phone in pocket for 60+ seconds
-- [ ] Notification disappears when session disconnects
-- [ ] No notification when app is not in a voice session
-- [ ] Mic permission still requested and required before connecting
-- [ ] Notification permission requested on Android 13+ (graceful fallback if denied)
+- [x] Notification disappears when session disconnects
+- [x] No notification when app is not in a voice session
+- [x] Mic permission still requested and required before connecting
+- [x] Notification permission requested on Android 13+ (graceful fallback if denied)
 - [ ] Field test: walk with phone in pocket for 5+ minutes, verify voice session stays active
 
 ## Files
@@ -248,4 +248,4 @@ Future<bool> requestPermissions() async {
 ## Status
 - **Date:** 2026-03-03
 - **Priority:** High (critical for real-world usage — walking with phone in pocket)
-- **Status:** Not started
+- **Status:** Code complete — awaiting field test verification
