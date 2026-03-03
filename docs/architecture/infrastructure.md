@@ -150,9 +150,11 @@ See [Network Connectivity](network-connectivity.md) for the full URL resolution 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `DEEPGRAM_API_KEY` | Yes | — | Deepgram STT API key |
-| `CARTESIA_API_KEY` | Yes | — | Cartesia TTS API key |
-| `CARTESIA_VOICE_ID` | No | `597926e8-...` | TTS voice (The Alchemist) |
-| `ELEVENLABS_API_KEY` | No | — | ElevenLabs TTS API key (alternative) |
+| `TTS_PROVIDER` | No | `elevenlabs` | TTS backend: `elevenlabs` or `google` |
+| `ELEVENLABS_API_KEY` | If `TTS_PROVIDER=elevenlabs` | — | ElevenLabs TTS API key |
+| `ELEVENLABS_VOICE_ID` | No | SDK default | ElevenLabs voice ID |
+| `GOOGLE_API_KEY` | If `TTS_PROVIDER=google` | — | Google AI Studio API key |
+| `GOOGLE_TTS_VOICE` | No | `Kore` | Gemini TTS voice name |
 
 ### Session & Identity
 

@@ -12,7 +12,7 @@ sequenceDiagram
     participant Agent as AgentSession
     participant LLM as Ganglia LLM
     participant Brain as OpenClaw/Nanoclaw
-    participant TTS as ElevenLabs TTS
+    participant TTS as TTS (ElevenLabs or Gemini)
 
     Phone->>LK: WebRTC audio track
     LK->>STT: Audio frames (streaming)
@@ -111,13 +111,24 @@ Ganglia converts between the LiveKit `llm.LLM` interface and the OpenClaw/Nanocl
 - Each chunk may contain `content` (text) or `tool_calls` (function invocations)
 - Ganglia emits these as `ChatChunk` events that AgentSession forwards to TTS
 
-### Text-to-Speech (ElevenLabs)
+### Text-to-Speech (Configurable Provider)
 
-- **Provider:** ElevenLabs via `@livekit/agents-plugin-elevenlabs`
-- **Model:** Eleven Turbo v2.5 (configurable)
-- **Options:** stability (0-1), similarity boost (0-1), style (0-1), speaker boost
-- **TTFB (Time to First Byte):** ~200ms
-- **Fallback:** Cartesia Sonic via `@livekit/agents-plugin-cartesia` (set `tts.provider: "cartesia"` in config)
+The TTS provider is selected by the `TTS_PROVIDER` env var. A factory in `apps/voice-agent/src/tts-provider.ts` returns the configured instance.
+
+**ElevenLabs** (`TTS_PROVIDER=elevenlabs`, default):
+- Plugin: `@livekit/agents-plugin-elevenlabs`
+- Model: Eleven Turbo v2.5
+- Streaming: true incremental audio chunks
+- `syncAlignment: false` — disables word-timing alignment (ElevenLabs returns `alignment: null` for our model/voice, which breaks SDK transcripts)
+- TTFB: ~200ms
+
+**Google Gemini** (`TTS_PROVIDER=google`):
+- Plugin: `@livekit/agents-plugin-google` (beta TTS)
+- Model: `gemini-2.5-flash-preview-tts`
+- Voice: configurable via `GOOGLE_TTS_VOICE` (default: `Kore`)
+- Output: PCM16 at 24kHz (matches LiveKit default sample rate)
+- **Caveat:** the streaming API returns audio in a single chunk rather than streaming incrementally, so there is a latency hit on longer responses
+- Added as a workaround for BUG-018 (ElevenLabs 402 on free plan)
 
 ## Latency Budget
 
@@ -127,7 +138,7 @@ Target: **sub-1.5 second** voice-to-voice round trip.
 |-------|---------|-------|
 | STT (end of speech → final transcript) | 200-400ms | Deepgram streaming + endpointing |
 | LLM (request → first token) | 300-800ms | Depends on backend, network, context size |
-| TTS (text → first audio frame) | 100-200ms | ElevenLabs Turbo streaming |
+| TTS (text → first audio frame) | 100-200ms | ElevenLabs Turbo streaming; Gemini may be higher (single-chunk) |
 | Network overhead (WebRTC) | 50-100ms | UDP, typically low |
 | **Total** | **650-1500ms** | |
 
