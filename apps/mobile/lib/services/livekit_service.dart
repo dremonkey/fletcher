@@ -114,23 +114,30 @@ class LiveKitService extends ChangeNotifier {
         return;
       }
 
-      _room = Room();
+      _room = Room(
+        roomOptions: const RoomOptions(
+          adaptiveStream: true,
+          dynacast: true,
+          defaultAudioCaptureOptions: AudioCaptureOptions(
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            voiceIsolation: true,
+            highPassFilter: true,
+            typingNoiseDetection: true,
+          ),
+          defaultAudioPublishOptions: AudioPublishOptions(
+            audioBitrate: AudioPreset.speech,
+            dtx: true,
+          ),
+        ),
+      );
 
       _listener = _room!.createListener();
       _setupRoomListeners();
 
       debugPrint('[Fletcher] Connecting to $resolvedUrl');
-      await _room!.connect(
-        resolvedUrl,
-        token,
-        roomOptions: const RoomOptions(
-          adaptiveStream: true,
-          dynacast: true,
-          defaultAudioPublishOptions: AudioPublishOptions(
-            // audioBitrate: AudioPresets.music,
-          ),
-        ),
-      );
+      await _room!.connect(resolvedUrl, token);
 
       debugPrint('[Fletcher] Connected to room');
       _localParticipant = _room!.localParticipant;
@@ -145,6 +152,7 @@ class LiveKitService extends ChangeNotifier {
 
       // Enable microphone — respect mute state across reconnects
       await _localParticipant!.setMicrophoneEnabled(!_isMuted);
+      debugPrint('[Fletcher] Audio config: AEC=on NS=on AGC=on voiceIsolation=on highPass=on bitrate=speech(24k) dtx=on');
 
       _startAudioLevelMonitoring();
       _subscribeToDeviceChanges();

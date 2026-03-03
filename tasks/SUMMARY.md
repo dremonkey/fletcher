@@ -186,6 +186,27 @@ High-fidelity UI enhancements for the Fletcher Flutter app.
 - [ ] 008: Collaborative Waveform — 8-bit histogram/audio graph with dual-color blending and front-and-center transcript
 - [ ] 009: Persistent History Discovery — fetch recent history from OpenClaw on rejoin, add Session List UI
 
+### 12. [Speaker Isolation (Voice Lock)](./11-speaker-isolation) 🔄
+Lock onto the primary speaker's voice in a 1-on-1 conversation — reject background speech, ambient noise, and echo so only the intended user is transcribed.
+
+**Tasks (4 tiers, low→high effort):**
+- [x] 001: Audit Android AudioSource selection — explicit audio config, highPassFilter enabled, speech bitrate
+- [x] 002: Verify AEC is active on-device — AEC + voiceIsolation explicitly configured
+- [ ] 003: Near-field energy gating
+- [ ] 004: Adaptive noise floor subtraction
+- [ ] 005: Speaker F0 (pitch) tracking
+- [ ] 006: Research Target Speaker Extraction (TSE) models
+- [ ] 007: TSE enrollment from first utterance
+- [ ] 008: TSE integration into voice pipeline
+- [ ] 009: Personalized noise suppression fallback
+- [ ] 010: Turn-based speaker gating
+- [ ] 011: Enrollment prompt design
+- [ ] 012: STT confidence-based crosstalk detection
+
+**Recommended order:** 001+002 (audit) → 010+011 (conversational gating) → 003 (energy gate) → 006→008 (TSE spike & integration)
+
+**Depends on:** Epic 6 (voice-key embeddings reusable for TSE), Epic 10 (latency measurement)
+
 ## Development Path
 
 1. **Phase 1: Infrastructure** ✅

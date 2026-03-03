@@ -56,6 +56,23 @@ The central service managing the entire LiveKit lifecycle:
 - **Reconnection** — automatic recovery from network changes and disconnects
 - **Mute state** — persists across reconnects
 
+### Audio Capture Configuration
+
+The app configures explicit WebRTC audio processing options via `RoomOptions.defaultAudioCaptureOptions`. These are passed through to the browser/native WebRTC layer as media track constraints.
+
+| Option | Value | Purpose |
+|--------|-------|---------|
+| `echoCancellation` | `true` | Removes agent TTS leaking back through mic (AEC) |
+| `noiseSuppression` | `true` | WebRTC's built-in noise suppression |
+| `autoGainControl` | `true` | Normalizes volume for near-field speech |
+| `voiceIsolation` | `true` | ML-based voice extraction (WebRTC neural noise suppression) |
+| `highPassFilter` | `true` | Cuts low-frequency rumble (wind, handling noise) |
+| `typingNoiseDetection` | `true` | Suppresses keyboard noise |
+
+Audio is published at `AudioPreset.speech` (24kbps) rather than the default `music` (48kbps). Voice doesn't need music-quality bandwidth, and the lower bitrate lets the codec focus on voice frequencies. DTX (discontinuous transmission) saves bandwidth during silence.
+
+These options are explicitly set even when they match SDK defaults, so the configuration is auditable and won't silently change if defaults shift in a future SDK version. The `highPassFilter` is the one non-default option — it's off by default in LiveKit but useful for mobile where handling noise and wind are common.
+
 ### HealthService
 
 Runs diagnostic checks and reports overall system health:
