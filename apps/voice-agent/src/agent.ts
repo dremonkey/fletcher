@@ -306,6 +306,19 @@ export default defineAgent({
       stopAck();
     });
 
+    // -----------------------------------------------------------------------
+    // Session death — disconnect from room so LiveKit can dispatch fresh agent.
+    // Without this, a dead session leaves a zombie agent in the room for the
+    // full departure_timeout (120s), blocking recovery. See BUG-020.
+    // -----------------------------------------------------------------------
+    session.on(voice.AgentSessionEventTypes.Close, (ev: any) => {
+      logger.info({ reason: ev.reason }, 'AgentSession closed');
+      if (ev.reason === 'error') {
+        logger.error({ error: ev.error }, 'AgentSession died — disconnecting from room to allow fresh dispatch');
+        ctx.room.disconnect();
+      }
+    });
+
     const participant = await ctx.waitForParticipant();
     logger.info(`Participant joined: ${participant.identity}`);
 
