@@ -67,7 +67,8 @@ class LiveKitService extends ChangeNotifier {
     // Bluetooth permission is needed so audio routing survives headphone
     // connect/disconnect on Android 12+.  We request it but don't gate
     // the connection on it — the user can still use the speaker.
-    await Permission.bluetoothConnect.request();
+    final btStatus = await Permission.bluetoothConnect.request();
+    debugPrint('[Fletcher] Permissions: mic=${status.name} bt=${btStatus.name}');
     return status.isGranted;
   }
 
@@ -139,6 +140,7 @@ class LiveKitService extends ChangeNotifier {
 
       // Check if agent is already in the room
       final hasAgent = _room!.remoteParticipants.isNotEmpty;
+      debugPrint('[Fletcher] Room joined: participants=${_room!.remoteParticipants.length} agent=$hasAgent');
       healthService.updateAgentPresent(present: hasAgent);
 
       // Enable microphone — respect mute state across reconnects
@@ -211,22 +213,22 @@ class LiveKitService extends ChangeNotifier {
     });
 
     _listener?.on<ParticipantConnectedEvent>((event) {
-      // Remote participant joined (the AI agent)
-      debugPrint('Participant connected: ${event.participant.identity}');
+      debugPrint('[Fletcher] Remote participant connected: ${event.participant.identity}');
       healthService.updateAgentPresent(present: true);
     });
 
     _listener?.on<ParticipantDisconnectedEvent>((event) {
-      debugPrint('Participant disconnected: ${event.participant.identity}');
-      final hasAgent = _room?.remoteParticipants.isNotEmpty ?? false;
-      healthService.updateAgentPresent(present: hasAgent);
+      final remaining = _room?.remoteParticipants.length ?? 0;
+      debugPrint('[Fletcher] Remote participant disconnected: ${event.participant.identity} (remaining=$remaining)');
+      healthService.updateAgentPresent(present: remaining > 0);
     });
 
     _listener?.on<TrackSubscribedEvent>((event) {
-      // Subscribed to remote track (AI audio)
-      if (event.track is AudioTrack) {
-        debugPrint('Subscribed to audio track');
-      }
+      debugPrint('[Fletcher] Track subscribed: ${event.track.kind} from ${event.participant.identity}');
+    });
+
+    _listener?.on<TrackUnsubscribedEvent>((event) {
+      debugPrint('[Fletcher] Track unsubscribed: ${event.track.kind} from ${event.participant.identity}');
     });
 
     // Subscribe to ganglia events via data channel
@@ -489,9 +491,12 @@ class LiveKitService extends ChangeNotifier {
   void _subscribeToConnectivity() {
     _connectivitySub?.cancel();
     // Sync initial state to health service
-    healthService.updateNetworkStatus(online: connectivityService.isOnline);
+    final initialOnline = connectivityService.isOnline;
+    debugPrint('[Fletcher] Network status: online=$initialOnline');
+    healthService.updateNetworkStatus(online: initialOnline);
     _connectivitySub =
         connectivityService.onConnectivityChanged.listen((online) {
+      debugPrint('[Fletcher] Network changed: online=$online');
       healthService.updateNetworkStatus(online: online);
     });
   }
@@ -509,8 +514,12 @@ class LiveKitService extends ChangeNotifier {
 
   void _onDeviceChange() {
     // Skip if already refreshing audio or fully disconnected
-    if (_isRefreshingAudio || _reconnecting || _room == null) return;
+    if (_isRefreshingAudio || _reconnecting || _room == null) {
+      debugPrint('[Fletcher] Device change ignored: refreshing=$_isRefreshingAudio reconnecting=$_reconnecting room=${_room != null}');
+      return;
+    }
 
+    debugPrint('[Fletcher] Device change detected — debouncing (2s)');
     // Debounce: Bluetooth transitions fire multiple rapid events and need
     // more settling time than wired headphones
     _deviceChangeDebounce?.cancel();
@@ -606,6 +615,7 @@ class LiveKitService extends ChangeNotifier {
 
   void toggleMute() {
     _isMuted = !_isMuted;
+    debugPrint('[Fletcher] Mute toggled: muted=$_isMuted');
     _localParticipant?.setMicrophoneEnabled(!_isMuted);
 
     if (_isMuted) {
@@ -712,6 +722,7 @@ class LiveKitService extends ChangeNotifier {
     _reconnectAttempt++;
 
     if (_reconnectAttempt > _maxReconnectAttempts) {
+      debugPrint('[Fletcher] Reconnect exhausted after $_maxReconnectAttempts attempts — giving up');
       _reconnecting = false;
       _reconnectAttempt = 0;
       _updateState(
@@ -764,6 +775,7 @@ class LiveKitService extends ChangeNotifier {
   }
 
   Future<void> disconnect({bool preserveTranscripts = false}) async {
+    debugPrint('[Fletcher] Disconnecting (preserveTranscripts=$preserveTranscripts)');
     _audioLevelTimer?.cancel();
     _statusClearTimer?.cancel();
     _userSubtitleClearTimer?.cancel();

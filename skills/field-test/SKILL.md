@@ -206,7 +206,7 @@ When the tester says the session is over (or you're asked to stop — e.g., "fie
    Then determine the filename from the first and last timestamps in the dump:
    - Parse the first log line's timestamp → `HHMM` start
    - Parse the last log line's timestamp → `HHMM` end
-   - Save to: `docs/field-tests/YYYYMMDD-client-HHMM-HHMM.log`
+   - Save to: `docs/field-tests/YYYYMMDD-client-HHMM-HHMM.txt`
    - If the dump is empty (logcat was not prepared, or buffer rotated), note it and skip.
 
 2. **Review the buglog** — Ensure all entries are complete with analysis and status.
@@ -229,7 +229,7 @@ When the tester says the session is over (or you're asked to stop — e.g., "fie
 ## Files
 
 - Bug logs: `docs/field-tests/YYYYMMDD-buglog.md`
-- Client logs: `docs/field-tests/YYYYMMDD-client-HHMM-HHMM.log`
+- Client logs: `docs/field-tests/YYYYMMDD-client-HHMM-HHMM.txt`
 - Docker config: `docker-compose.yml`
 - Voice agent: `apps/voice-agent/src/agent.ts`
 - Ganglia: `packages/livekit-agent-ganglia/src/`
