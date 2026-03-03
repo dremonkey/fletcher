@@ -55,23 +55,26 @@ const REQUIRED_ENV = [
   'ELEVENLABS_API_KEY',
 ] as const;
 
-const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
-if (missing.length > 0) {
-  logger.fatal(`Missing required environment variables: ${missing.join(', ')}`);
-  process.exit(1);
-}
+// Skip env validation for download-files (runs during Docker build without env)
+if (!process.argv.includes('download-files')) {
+  const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
+  if (missing.length > 0) {
+    logger.fatal(`Missing required environment variables: ${missing.join(', ')}`);
+    process.exit(1);
+  }
 
-// Ganglia-specific validation
-const gangliaType = process.env.GANGLIA_TYPE ?? 'openclaw';
-if (gangliaType === 'openclaw' && !process.env.OPENCLAW_API_KEY) {
-  logger.fatal('GANGLIA_TYPE=openclaw requires OPENCLAW_API_KEY');
-  process.exit(1);
-}
+  // Ganglia-specific validation
+  const gangliaType = process.env.GANGLIA_TYPE ?? 'openclaw';
+  if (gangliaType === 'openclaw' && !process.env.OPENCLAW_API_KEY) {
+    logger.fatal('GANGLIA_TYPE=openclaw requires OPENCLAW_API_KEY');
+    process.exit(1);
+  }
 
-logger.info({
-  livekitUrl: process.env.LIVEKIT_URL,
-  gangliaType,
-}, 'Environment validated');
+  logger.info({
+    livekitUrl: process.env.LIVEKIT_URL,
+    gangliaType,
+  }, 'Environment validated');
+}
 
 // ---------------------------------------------------------------------------
 // Agent definition
