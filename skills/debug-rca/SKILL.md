@@ -191,9 +191,22 @@ Before finishing, check:
 - [ ] Are edge cases considered?
 - [ ] Is there a way to test the fix?
 
-### Phase 4: Commit
+### Phase 4: Link Task to Bug
 
-Commit the task file (and any updated bug logs):
+After creating or updating the task file, **update the buglog entry** to link back to it:
+
+1. In the buglog file, add a `**Task:**` line to the relevant BUG-NNN entry:
+   ```markdown
+   **Task:** [`tasks/XX-epic/NNN-short-name.md`](../../tasks/XX-epic/NNN-short-name.md)
+   ```
+
+2. If the bug entry has a "New Issues Identified" section at the bottom of the buglog, update its status from `OPEN` to `RCA COMPLETE` and replace the `**Proposed fix:**` with `**Root cause:**` (one-line summary) and the `**Task:**` link.
+
+3. Update `tasks/SUMMARY.md` to include the new task in the relevant epic section.
+
+### Phase 5: Commit
+
+Commit the task file and updated bug logs together:
 ```
 docs(tasks): root-cause analysis for BUG-NNN — [short description]
 ```
