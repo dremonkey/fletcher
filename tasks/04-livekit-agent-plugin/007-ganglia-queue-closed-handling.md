@@ -191,12 +191,12 @@ finally {
 
 ## Acceptance Criteria
 
-- [ ] User can interrupt the agent mid-response without killing the session
-- [ ] After interruption, the agent returns to "listening" state and processes the next turn normally
-- [ ] Rapid interruptions (3+ in quick succession) do not accumulate unrecoverable errors
-- [ ] LLM metrics (TTFT, tokens/sec) are correctly reported (no longer always 0/-1)
-- [ ] Unit test: verify `run()` exits cleanly when stream is closed mid-processing
-- [ ] Unit test: verify non-queue errors still propagate correctly
+- [x] User can interrupt the agent mid-response without killing the session
+- [x] After interruption, the agent returns to "listening" state and processes the next turn normally
+- [x] Rapid interruptions (3+ in quick succession) do not accumulate unrecoverable errors
+- [x] LLM metrics (TTFT, tokens/sec) are correctly reported (no longer always 0/-1)
+- [x] Unit test: verify `run()` exits cleanly when stream is closed mid-processing
+- [x] Unit test: verify non-queue errors still propagate correctly
 - [ ] Field test: interrupt agent 5+ times in a session, verify session survives
 
 ## Files
@@ -211,4 +211,4 @@ finally {
 ## Status
 - **Date:** 2026-03-03
 - **Priority:** Critical
-- **Status:** Not started
+- **Status:** Code complete — awaiting field test verification
