@@ -1,8 +1,6 @@
 port: 7880
 bind_addresses:
   - ""
-keys:
-  devkey: 9B8mAgLb7vX2GVlgjGmWWisW5BkxppzvVnxx2Kod60I=
 rtc:
   node_ip: 100.87.219.109 # NixOS Tailscale IP — forces ICE candidates to use this routable address
   tcp_port: 7881

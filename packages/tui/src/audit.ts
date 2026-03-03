@@ -8,17 +8,18 @@ const LIVEKIT_YAML = join(ROOT, "livekit.yaml");
 export const DEFAULT_ROOM = "fletcher-dev";
 
 function readLocalLiveKitConfig(): { url: string; key: string; secret: string } | null {
+  // Read key/secret from .env (keys are no longer stored in livekit.yaml)
+  const key = env("LIVEKIT_API_KEY");
+  const secret = env("LIVEKIT_API_SECRET");
+  if (!key || !secret) return null;
+
   try {
     const content = readFileSync(LIVEKIT_YAML, "utf-8");
-    // Parse port
     const portMatch = content.match(/^port:\s*(\d+)/m);
     const port = portMatch ? portMatch[1] : "7880";
-    // Parse first key/secret pair
-    const keysMatch = content.match(/^keys:\s*\n\s+(\S+):\s*(\S+)/m);
-    if (!keysMatch) return null;
-    return { url: `ws://localhost:${port}`, key: keysMatch[1], secret: keysMatch[2] };
+    return { url: `ws://localhost:${port}`, key, secret };
   } catch {
-    return null;
+    return { url: "ws://localhost:7880", key, secret };
   }
 }
 
