@@ -153,10 +153,10 @@ USER_INITIATED = 'user_initiated'
 
 ## Acceptance Criteria
 
-- [ ] Agent disconnects from room when AgentSession closes with `reason: "error"`
-- [ ] After agent disconnects, user reconnect triggers fresh agent dispatch
-- [ ] User-initiated session close (`reason: "user_initiated"`) does NOT trigger disconnect
-- [ ] Participant disconnect (`reason: "participant_disconnected"`) does NOT trigger disconnect
+- [x] Agent disconnects from room when AgentSession closes with `reason: "error"`
+- [x] After agent disconnects, user reconnect triggers fresh agent dispatch
+- [x] User-initiated session close (`reason: "user_initiated"`) does NOT trigger disconnect
+- [x] Participant disconnect (`reason: "participant_disconnected"`) does NOT trigger disconnect
 - [ ] Test: simulate session error, verify agent leaves room within 5s
 - [ ] Field test: trigger BUG-019, force-quit app, reconnect — verify fresh agent responds
 
@@ -167,4 +167,4 @@ USER_INITIATED = 'user_initiated'
 ## Status
 - **Date:** 2026-03-03 (updated with code-grounded RCA from 03-03 field test)
 - **Priority:** High
-- **Status:** Not started
+- **Status:** Code complete — awaiting field test verification
