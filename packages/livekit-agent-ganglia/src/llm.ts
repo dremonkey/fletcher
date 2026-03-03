@@ -325,6 +325,12 @@ class OpenClawChatStream extends LLMStream {
       let firstContentSeen = false;
       let accumulatedContent = '';
       for await (const chunk of stream) {
+        // Exit early if the stream has been aborted (e.g. user interruption)
+        if (this.closed) {
+          dbg.openclawStream('stream closed, exiting run() loop');
+          break;
+        }
+
         chunkCount++;
         if (!firstChunkAt) {
           firstChunkAt = performance.now();
@@ -380,7 +386,15 @@ class OpenClawChatStream extends LLMStream {
             toolCalls,
           },
         };
-        this.output.put(chatChunk);
+        try {
+          this.queue.put(chatChunk);
+        } catch (e) {
+          if (e instanceof Error && e.message === 'Queue is closed') {
+            dbg.openclawStream('queue closed during put (expected during interruption)');
+            break;
+          }
+          throw e;
+        }
       }
       const streamDurationMs = Math.round(performance.now() - streamStart);
       dbg.openclawStream('stream complete, %d chunks in %dms', chunkCount, streamDurationMs);
@@ -392,7 +406,9 @@ class OpenClawChatStream extends LLMStream {
         clearInterval(ponderingTimer);
       }
       this._onPondering?.(null, this._streamId);
-      this.output.close();
+      // NOTE: Do NOT close this.output here. The base class monitorMetrics() method
+      // handles closing this.output after draining this.queue. Closing it here would
+      // bypass metrics collection and could drop in-flight chunks.
     }
   }
 }
