@@ -32,6 +32,16 @@ docker compose logs --tail 50 voice-agent 2>&1 | grep -c "registered worker"
 
 If 0, wait a few seconds and retry (up to 30s). Do not proceed until the agent is registered.
 
+### 1b. Prepare device logcat
+
+Clear the Android logcat buffer and increase it to 16MB so client-side logs survive the entire field test:
+
+```sh
+adb logcat -G 16M && adb logcat -c
+```
+
+If `adb` is not connected (device not plugged in / wireless debugging not active), skip this step and note it — client logs won't be available for this session.
+
 ### 2. Create today's bug log
 
 Check for an existing buglog for today:
@@ -187,13 +197,24 @@ Example:
 
 ### 6. Session wrap-up
 
-When the tester says the session is over (or you're asked to stop):
+When the tester says the session is over (or you're asked to stop — e.g., "field test done", "dump logs", "end field test"):
 
-1. **Review the buglog** — Ensure all entries are complete with analysis and status.
-2. **Check for missing tasks** — For each bug logged, verify a corresponding task exists in `tasks/`. If not, create one in the appropriate epic.
-3. **Update SUMMARY.md** — If new tasks were created, update `tasks/SUMMARY.md`.
-4. **Commit the buglog** — Stage and commit the buglog file.
-5. **Print a session summary** — List all bugs found, their severity, and status.
+1. **Dump client logs** — Pull the Flutter/app logs from the device:
+   ```sh
+   adb logcat -d -v time *:S flutter:V FlutterJNI:V System.out:V 2>&1 | grep -i '\[Fletcher\]\|flutter\|dart' > /tmp/fletcher-client-dump.log
+   ```
+   Then determine the filename from the first and last timestamps in the dump:
+   - Parse the first log line's timestamp → `HHMM` start
+   - Parse the last log line's timestamp → `HHMM` end
+   - Save to: `docs/field-tests/YYYYMMDD-client-HHMM-HHMM.log`
+   - If the dump is empty (logcat was not prepared, or buffer rotated), note it and skip.
+
+2. **Review the buglog** — Ensure all entries are complete with analysis and status.
+3. **Cross-reference client logs** — Scan the client log dump for `[Fletcher]` lines around timestamps of known bugs. Add client-side context to buglog entries where it helps (e.g., which disconnect reason the client saw, whether `_onDeviceChange` fired).
+4. **Check for missing tasks** — For each bug logged, verify a corresponding task exists in `tasks/`. If not, create one in the appropriate epic.
+5. **Update SUMMARY.md** — If new tasks were created, update `tasks/SUMMARY.md`.
+6. **Commit everything** — Stage and commit the buglog and client log dump.
+7. **Print a session summary** — List all bugs found, their severity, and status. Note whether client logs were captured.
 
 ## Tips
 
@@ -208,6 +229,7 @@ When the tester says the session is over (or you're asked to stop):
 ## Files
 
 - Bug logs: `docs/field-tests/YYYYMMDD-buglog.md`
+- Client logs: `docs/field-tests/YYYYMMDD-client-HHMM-HHMM.log`
 - Docker config: `docker-compose.yml`
 - Voice agent: `apps/voice-agent/src/agent.ts`
 - Ganglia: `packages/livekit-agent-ganglia/src/`
