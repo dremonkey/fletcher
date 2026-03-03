@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/conversation_state.dart';
@@ -68,7 +69,9 @@ class LiveKitService extends ChangeNotifier {
     // connect/disconnect on Android 12+.  We request it but don't gate
     // the connection on it — the user can still use the speaker.
     final btStatus = await Permission.bluetoothConnect.request();
-    debugPrint('[Fletcher] Permissions: mic=${status.name} bt=${btStatus.name}');
+    // Android 13+ requires POST_NOTIFICATIONS for foreground service notification (BUG-022)
+    final notifStatus = await Permission.notification.request();
+    debugPrint('[Fletcher] Permissions: mic=${status.name} bt=${btStatus.name} notif=${notifStatus.name}');
     return status.isGranted;
   }
 
@@ -157,6 +160,11 @@ class LiveKitService extends ChangeNotifier {
       _startAudioLevelMonitoring();
       _subscribeToDeviceChanges();
       _subscribeToConnectivity();
+
+      // Start foreground service to prevent Android from silencing
+      // the microphone when the app goes to background (BUG-022)
+      await _startForegroundService();
+
       _updateState(
         status: _isMuted ? ConversationStatus.muted : ConversationStatus.idle,
       );
@@ -574,6 +582,42 @@ class LiveKitService extends ChangeNotifier {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Foreground service — keeps microphone active in background (BUG-022)
+  // ---------------------------------------------------------------------------
+
+  /// Start foreground service to maintain microphone access in background.
+  /// Must be called while the app is in foreground (Android 14+ restriction).
+  Future<void> _startForegroundService() async {
+    FlutterForegroundTask.init(
+      androidNotificationOptions: AndroidNotificationOptions(
+        channelId: 'fletcher_voice',
+        channelName: 'Voice Session',
+        channelDescription: 'Keeps microphone active during voice conversations',
+        channelImportance: NotificationChannelImportance.LOW,
+        priority: NotificationPriority.LOW,
+      ),
+      iosNotificationOptions: const IOSNotificationOptions(
+        showNotification: false,
+      ),
+      foregroundTaskOptions: ForegroundTaskOptions(
+        eventAction: ForegroundTaskEventAction.nothing(),
+        autoRunOnBoot: false,
+        allowWifiLock: true,
+      ),
+    );
+    await FlutterForegroundTask.startService(
+      notificationTitle: 'Fletcher',
+      notificationText: 'Voice session active',
+    );
+    debugPrint('[Fletcher] Foreground service started');
+  }
+
+  Future<void> _stopForegroundService() async {
+    await FlutterForegroundTask.stopService();
+    debugPrint('[Fletcher] Foreground service stopped');
+  }
+
   void _updateAudioLevels() {
     if (_room == null) return;
 
@@ -796,6 +840,7 @@ class LiveKitService extends ChangeNotifier {
 
   Future<void> disconnect({bool preserveTranscripts = false}) async {
     debugPrint('[Fletcher] Disconnecting (preserveTranscripts=$preserveTranscripts)');
+    await _stopForegroundService();
     _audioLevelTimer?.cancel();
     _statusClearTimer?.cancel();
     _userSubtitleClearTimer?.cancel();
