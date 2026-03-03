@@ -195,6 +195,12 @@ class LiveKitService extends ChangeNotifier {
       _updateState(
         status: _isMuted ? ConversationStatus.muted : ConversationStatus.idle,
       );
+
+      // After reconnection, refresh audio track to restore BT routing.
+      // Network transitions (WiFi→cellular) tear down the old audio session,
+      // causing Android to fall back to speaker. restartTrack() re-establishes
+      // the correct audio route (BT SCO if headset is connected). (BUG-021)
+      _refreshAudioTrack();
     });
 
     _listener?.on<RoomDisconnectedEvent>((event) {
@@ -237,6 +243,12 @@ class LiveKitService extends ChangeNotifier {
 
     _listener?.on<TrackUnsubscribedEvent>((event) {
       debugPrint('[Fletcher] Track unsubscribed: ${event.track.kind} from ${event.participant.identity}');
+      // If the agent's audio track is unsubscribed during a network transition,
+      // keep the reconnecting state visible until re-subscribed. Without this,
+      // the UI briefly shows "idle" during the 55s publish gap. (BUG-021)
+      if (event.track.kind == TrackType.AUDIO) {
+        _updateState(status: ConversationStatus.reconnecting);
+      }
     });
 
     // Subscribe to ganglia events via data channel
