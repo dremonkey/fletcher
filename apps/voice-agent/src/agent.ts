@@ -17,14 +17,16 @@
  *   OPENCLAW_API_KEY - OpenClaw API key (if using openclaw)
  *   FLETCHER_OWNER_IDENTITY - Participant identity of the owner (for session routing)
  *   DEEPGRAM_API_KEY - Deepgram API key for STT
- *   ELEVENLABS_API_KEY - ElevenLabs API key for TTS
+ *   TTS_PROVIDER - TTS backend: 'elevenlabs' (default) or 'google'
+ *   ELEVENLABS_API_KEY - ElevenLabs API key for TTS (when TTS_PROVIDER=elevenlabs)
+ *   GOOGLE_API_KEY - Google AI Studio API key (when TTS_PROVIDER=google)
+ *   GOOGLE_TTS_VOICE - Gemini voice name (default: 'Kore')
  *   FLETCHER_ACK_SOUND - Acknowledgment sound on EOU: path to audio file, 'builtin' (default), or 'disabled'
  */
 
 import { defineAgent, cli, ServerOptions, type JobContext } from '@livekit/agents';
 import { voice } from '@livekit/agents';
 import * as deepgram from '@livekit/agents-plugin-deepgram';
-import * as elevenlabs from '@livekit/agents-plugin-elevenlabs';
 import * as silero from '@livekit/agents-plugin-silero';
 import * as livekit from '@livekit/agents-plugin-livekit';
 import { RoomEvent } from '@livekit/rtc-node';
@@ -33,6 +35,7 @@ import pino from 'pino';
 import { TurnMetricsCollector } from './metrics';
 import { initTelemetry, shutdownTelemetry } from './telemetry';
 import { resolveAckSound } from './ack-sound-config';
+import { createTTS, type TTSProvider } from './tts-provider';
 import { TranscriptManager } from './transcript-manager';
 
 // ---------------------------------------------------------------------------
@@ -52,12 +55,22 @@ const REQUIRED_ENV = [
   'LIVEKIT_API_KEY',
   'LIVEKIT_API_SECRET',
   'DEEPGRAM_API_KEY',
-  'ELEVENLABS_API_KEY',
 ] as const;
+
+const ttsProvider = (process.env.TTS_PROVIDER ?? 'elevenlabs') as TTSProvider;
 
 // Skip env validation for download-files (runs during Docker build without env)
 if (!process.argv.includes('download-files')) {
   const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
+
+  // TTS-provider-specific requirements
+  if (ttsProvider === 'elevenlabs' && !process.env.ELEVENLABS_API_KEY) {
+    missing.push('ELEVENLABS_API_KEY');
+  }
+  if (ttsProvider === 'google' && !process.env.GOOGLE_API_KEY) {
+    missing.push('GOOGLE_API_KEY');
+  }
+
   if (missing.length > 0) {
     logger.fatal(`Missing required environment variables: ${missing.join(', ')}`);
     process.exit(1);
@@ -73,6 +86,7 @@ if (!process.argv.includes('download-files')) {
   logger.info({
     livekitUrl: process.env.LIVEKIT_URL,
     gangliaType,
+    ttsProvider,
   }, 'Environment validated');
 }
 
@@ -157,18 +171,7 @@ export default defineAgent({
     const turnDetection = new livekit.turnDetector.EnglishModel();
 
     const stt = new deepgram.STT({ apiKey: process.env.DEEPGRAM_API_KEY });
-    // syncAlignment: false — ElevenLabs defaults syncAlignment to true, which
-    // advertises alignedTranscript capability to the SDK.  The SDK then waits
-    // for TTS word-timing data to build transcripts instead of using raw LLM
-    // text.  ElevenLabs returns alignment: null for our model/voice, so
-    // transcripts silently break.  Disabling it makes the SDK fall back to
-    // raw LLM token text, which is delivered immediately and reliably.
-    const tts = new elevenlabs.TTS({
-      apiKey: process.env.ELEVENLABS_API_KEY,
-      modelId: 'eleven_turbo_v2_5',
-      voiceId: process.env.ELEVENLABS_VOICE_ID,
-      syncAlignment: false,
-    });
+    const tts = createTTS(ttsProvider, logger);
 
     const session = new voice.AgentSession({
       vad,

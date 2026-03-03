@@ -12,6 +12,7 @@
     "@livekit/agents": "catalog:",
     "@livekit/agents-plugin-deepgram": "catalog:",
     "@livekit/agents-plugin-elevenlabs": "catalog:",
+    "@livekit/agents-plugin-google": "catalog:",
     "@livekit/agents-plugin-silero": "catalog:",
     "@livekit/agents-plugin-livekit": "catalog:",
     "@livekit/rtc-node": "catalog:",
