@@ -33,6 +33,9 @@ Thumbs.db
 # Claude Code
 .claude/
 
+# git-crypt symmetric key (do NOT commit)
+git-crypt-key
+
 # Docker build staleness markers
 .docker-build-hash
 .docker-pull-timestamp
