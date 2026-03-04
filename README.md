@@ -158,6 +158,17 @@ docker compose up -d
 
 The server will be available at `http://localhost:7880`. Use the default keys provided in `livekit.yaml` for development.
 
+## Encrypted Files
+
+Field-test raw logs (`docs/field-tests/*.txt`) are encrypted with [git-crypt](https://github.com/AGWA/git-crypt) because they may contain PII (names, IP addresses, full conversation transcripts). To read them:
+
+```bash
+# Obtain the symmetric key file from a project maintainer, then:
+git-crypt unlock ./git-crypt-key
+```
+
+The curated bug logs (`docs/field-tests/*-buglog.md`) are **not** encrypted and are readable without unlocking.
+
 ## Project Roadmap
 
 See the [tasks roadmap](./tasks/README.md) for development progress and next steps.
