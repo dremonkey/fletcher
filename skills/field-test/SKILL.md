@@ -216,6 +216,18 @@ When the tester says the session is over (or you're asked to stop — e.g., "fie
 6. **Commit everything** — Stage and commit the buglog and client log dump.
 7. **Print a session summary** — List all bugs found, their severity, and status. Note whether client logs were captured.
 
+## PII Handling (IMPORTANT — public repo)
+
+This repo is **public**. Raw `.txt` log files are encrypted via git-crypt, but **buglog `.md` files are plaintext** and visible to anyone. Follow these rules:
+
+- **No real names.** Use `tester` or initials (e.g., `AH`) instead of first/last names in buglogs.
+- **No IP addresses.** Never include Tailscale IPs, public IPs, or any network addresses in buglogs. Reference them generically (e.g., "Tailscale tunnel" not "100.x.y.z").
+- **No device serial numbers.** Use generic device names (e.g., "Pixel 9") without serial/IMEI.
+- **Sanitize log excerpts.** When pasting log lines into buglogs, redact any PII (names, IPs, emails, phone numbers) with `[REDACTED]`.
+- **Conversation content.** Do not paste full user conversation transcripts into buglogs. Summarize what happened instead, or use anonymized excerpts.
+
+The encrypted `.txt` files (raw dumps) can contain PII since they're never visible in the public repo.
+
 ## Tips
 
 - **Don't flood the user with every log line.** Only report issues that are genuinely new or impactful. DTLS timeouts on disconnect are expected for mobile; don't report them unless they're excessive.
