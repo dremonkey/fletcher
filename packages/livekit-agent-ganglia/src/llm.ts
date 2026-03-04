@@ -244,17 +244,6 @@ class OpenClawChatStream extends LLMStream {
           ].join('\n');
         }
 
-        // TASK-013: Voice-Aware Metadata Tagging
-        // Wrap transcribed text in a warning block to trigger High-Skepticism mode in OpenClaw.
-        if (item.role === 'user' && content) {
-          content = [
-            'Text below is from Speech-to-Text. Transcription errors are likely.',
-            'If an input is short, ambiguous, or nonsensical, ALWAYS clarify before using tools.',
-            '---',
-            content,
-          ].join('\n');
-        }
-
         const msg: OpenClawMessage = {
           role: item.role as OpenClawMessage['role'],
           content,
