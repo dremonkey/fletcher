@@ -1,0 +1,46 @@
+diff --git a/dist/beta/gemini_tts.js b/dist/beta/gemini_tts.js
+index 747d356e5525eabb2eefef7672acde7994389df3..a5f876072bcf2c8725c258c643f6a0ea4dae62c7 100644
+--- a/dist/beta/gemini_tts.js
++++ b/dist/beta/gemini_tts.js
+@@ -130,12 +130,12 @@ class ChunkedStream extends tts.ChunkedStream {
+         parts: [{ text: inputText }]
+       }
+     ];
+-    const responseStream = await this.#tts.client.models.generateContentStream({
+-      model: this.#tts.opts.model,
+-      contents,
+-      config
+-    });
+     try {
++      const responseStream = await this.#tts.client.models.generateContentStream({
++        model: this.#tts.opts.model,
++        contents,
++        config
++      });
+       for await (const response of responseStream) {
+         await this.#processResponse(response, bstream, requestId);
+       }
+diff --git a/src/beta/gemini_tts.ts b/src/beta/gemini_tts.ts
+index 9fb6331da3c892dea24b61db4a20b16dee23fa41..5762f03f4c3768e108a10dbb278d3992319b27f1 100644
+--- a/src/beta/gemini_tts.ts
++++ b/src/beta/gemini_tts.ts
+@@ -213,13 +213,13 @@ export class ChunkedStream extends tts.ChunkedStream {
+       },
+     ];
+ 
+-    const responseStream = await this.#tts.client.models.generateContentStream({
+-      model: this.#tts.opts.model,
+-      contents,
+-      config,
+-    });
+-
+     try {
++      const responseStream = await this.#tts.client.models.generateContentStream({
++        model: this.#tts.opts.model,
++        contents,
++        config,
++      });
++
+       for await (const response of responseStream) {
+         await this.#processResponse(response, bstream, requestId);
+       }

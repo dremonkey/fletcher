@@ -1,6 +1,6 @@
 # TASK-014: TTS Error Graceful Degradation
 
-**Status:** `[ ]` RCA COMPLETE — ready to implement
+**Status:** `[x]` IMPLEMENTED
 **Priority:** HIGH
 **Bug ref:** BUG-024
 **Created:** 2026-03-04

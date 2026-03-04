@@ -53,5 +53,8 @@
     "@livekit/agents-plugin-livekit": "^1.0.2",
     "@livekit/rtc-node": "^0.13.24",
     "livekit-server-sdk": "^2.15.0"
+  },
+  "patchedDependencies": {
+    "@livekit/agents-plugin-google@1.0.48": "patches/@livekit%2Fagents-plugin-google@1.0.48.patch"
   }
 }

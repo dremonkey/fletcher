@@ -191,6 +191,14 @@ export default defineAgent({
         // non-speech sounds (coughs, sighs) from cutting off the agent.
         minInterruptionWords: 1,
       },
+      connOptions: {
+        // Allow TTS to fail without killing the session.  When TTS hits a
+        // rate limit (e.g. Gemini 429), multiple parallel sentence failures
+        // each emit a separate error event — the default threshold of 3 is
+        // exceeded in a single turn.  Text transcriptions still flow via the
+        // data channel regardless of TTS state. (BUG-024)
+        maxUnrecoverableErrors: Infinity,
+      },
     });
     await session.start({
       agent: new voice.Agent({ instructions: '' }),
@@ -280,8 +288,15 @@ export default defineAgent({
     });
 
     // -----------------------------------------------------------------------
-    // Pipeline error reporting — forward TTS/STT/LLM errors to the client
+    // Pipeline error reporting — forward TTS/STT/LLM errors to the client.
+    //
+    // TTS errors are debounced: when quota is exhausted, N parallel sentence
+    // failures each emit a separate error event within milliseconds.  We send
+    // one user-friendly "Voice Unavailable" artifact per burst. (BUG-024)
     // -----------------------------------------------------------------------
+    let lastTtsErrorArtifact = 0;
+    const TTS_ERROR_DEBOUNCE_MS = 5_000;
+
     session.on(voice.AgentSessionEventTypes.Error, (ev) => {
       const err = ev.error as { type?: string; label?: string; error?: Error; recoverable?: boolean };
       const message = err.error?.message ?? String(err);
@@ -301,12 +316,27 @@ export default defineAgent({
           : 'Pipeline');
       logger.error({ source, message, recoverable: err.recoverable }, 'Pipeline error');
 
-      publishEvent({
-        type: 'artifact',
-        artifact_type: 'error',
-        title: `${source} Error`,
-        message,
-      });
+      if (err.type === 'tts_error') {
+        // Debounce TTS error artifacts — multiple sentence failures fire
+        // within milliseconds of each other during a quota exhaustion burst.
+        const now = Date.now();
+        if (now - lastTtsErrorArtifact > TTS_ERROR_DEBOUNCE_MS) {
+          lastTtsErrorArtifact = now;
+          publishEvent({
+            type: 'artifact',
+            artifact_type: 'error',
+            title: 'Voice Unavailable',
+            message: 'Text responses will continue to appear.',
+          });
+        }
+      } else {
+        publishEvent({
+          type: 'artifact',
+          artifact_type: 'error',
+          title: `${source} Error`,
+          message,
+        });
+      }
 
       // Stop ack sound on pipeline error
       stopAck();
