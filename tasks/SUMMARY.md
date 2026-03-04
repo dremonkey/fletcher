@@ -52,6 +52,7 @@ The mobile client for real-time voice interaction and visualization.
 - [x] 001: Initialize Flutter app ✅
 - [x] 002: Implement Amber Heartbeat visualizer ✅
 - [~] 003: Voice activity indicator & real-time STT display — audio waveform + STT subtitle + transcript drawer implemented; e2e UI tests passing; [BUG-013] Transcript UI stale when panel open; [BUG-014] Premature EOU detection
+- [ ] 004: Fix `addTransceiver: track is null` During Reconnect 📋 — null track reference during `rePublishAllTracks` after rapid reconnect cycles ([BUG-025](../docs/field-tests/20260303-buglog.md))
 
 **Implemented:**
 - Full Flutter app with livekit_client integration
@@ -169,6 +170,7 @@ Bulletproof connection handling: survive network switches, Bluetooth changes, ai
 - [ ] 010: Diagnostics Stale After Reconnect 📋 — HealthService doesn't re-enumerate participants after DUPLICATE_IDENTITY reconnect ([BUG-016](../docs/field-tests/20260302-buglog.md))
 - [ ] 011: Network Transition Audio Track Timeout 📋 — WiFi→cellular causes 55s audio track publish delay (Tailscale tunnel re-establishment) + BT audio route disruption ([BUG-021](../docs/field-tests/20260303-buglog.md))
 - [ ] 012: Foreground Service for Background Microphone 📋 — Android 14+ silences mic within 5s of backgrounding; add `FOREGROUND_SERVICE_MICROPHONE` to keep voice session alive in pocket ([BUG-022](../docs/field-tests/20260303-buglog.md))
+- [ ] 013: Client-Side Audio Buffering 📋 — buffer audio locally during network dead zones to prevent speech loss; deliver buffered audio on reconnect ([BUG-027](../docs/field-tests/20260303-buglog.md))
 
 **Depends on:** Epic 3 (Flutter App)
 
