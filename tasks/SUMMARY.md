@@ -34,6 +34,7 @@ The voice agent audio pipeline — STT, TTS, voice detection, and agent dispatch
 - [ ] 012: Agent Self-Terminate on Session Error 📋 — disconnect from room when AgentSession dies to prevent zombie agent blocking fresh dispatch ([BUG-020](../docs/field-tests/20260302-buglog.md))
 - [ ] 013: Voice-Aware Metadata Tagging 📋 — inject `is_stt: true` into metadata sent to OpenClaw to enable higher verification thresholds for noisy inputs
 - [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 complete: fixed endpointing delay units bug (0.8→800ms), increased `minInterruptionDuration` to 800ms, added `minInterruptionWords: 1` to reduce false interruptions; Phase 2-3 (ack sound edge cases, soft TTS fade) deferred pending field testing
+- [ ] 014: TTS Error Graceful Degradation 📋 (RCA COMPLETE) — two root causes: (1) Google plugin `generateContentStream` outside try/catch bypasses retries, (2) error multiplication from parallel sentence TTS calls exceeds `maxUnrecoverableErrors: 3`. Fix: set threshold to Infinity + patch plugin. ([BUG-024](../docs/field-tests/20260303-buglog.md))
 
 **Implemented:**
 - VoiceAgent wired to `@livekit/agents` SDK (deepgram.STT, cartesia.TTS, voice.AgentSession)
