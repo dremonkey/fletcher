@@ -181,9 +181,15 @@ export default defineAgent({
       llm: gangliaLlm,
       voiceOptions: {
         // Give the turn detector more time to decide if the user is done.
-        // Default 0.5s was too aggressive for natural speech pauses (BUG-014).
-        minEndpointingDelay: 0.8,
-        maxEndpointingDelay: 3.0,
+        // Default 500ms was too aggressive for natural speech pauses (BUG-014).
+        minEndpointingDelay: 800,
+        maxEndpointingDelay: 3000,
+        // Require deliberate speech before interrupting agent TTS — reduces
+        // false interruptions from brief noises that pass VAD (TASK-014).
+        minInterruptionDuration: 800,
+        // Require at least 1 transcribed word before interrupting — prevents
+        // non-speech sounds (coughs, sighs) from cutting off the agent.
+        minInterruptionWords: 1,
       },
     });
     await session.start({

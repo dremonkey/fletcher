@@ -33,6 +33,7 @@ The voice agent audio pipeline — STT, TTS, voice detection, and agent dispatch
 - [ ] 011: Voice Selection Persistent Preferences 📋 — selection UI/API with persistent storage and env-var based config
 - [ ] 012: Agent Self-Terminate on Session Error 📋 — disconnect from room when AgentSession dies to prevent zombie agent blocking fresh dispatch ([BUG-020](../docs/field-tests/20260302-buglog.md))
 - [ ] 013: Voice-Aware Metadata Tagging 📋 — inject `is_stt: true` into metadata sent to OpenClaw to enable higher verification thresholds for noisy inputs
+- [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 complete: fixed endpointing delay units bug (0.8→800ms), increased `minInterruptionDuration` to 800ms, added `minInterruptionWords: 1` to reduce false interruptions; Phase 2-3 (ack sound edge cases, soft TTS fade) deferred pending field testing
 
 **Implemented:**
 - VoiceAgent wired to `@livekit/agents` SDK (deepgram.STT, cartesia.TTS, voice.AgentSession)
@@ -192,6 +193,7 @@ High-fidelity UI enhancements for the Fletcher Flutter app.
 **Tasks:**
 - [ ] 008: Collaborative Waveform — 8-bit histogram/audio graph with dual-color blending and front-and-center transcript
 - [ ] 009: Persistent History Discovery — fetch recent history from OpenClaw on rejoin, add Session List UI
+- [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 done: tuned interruption sensitivity (units bug fix, minInterruptionDuration 800ms, minInterruptionWords 1); Phase 3 (soft TTS fade) needs SDK support
 
 ### 12. [Speaker Isolation (Voice Lock)](./11-speaker-isolation) 🔄
 Lock onto the primary speaker's voice in a 1-on-1 conversation — reject background speech, ambient noise, and echo so only the intended user is transcribed.
