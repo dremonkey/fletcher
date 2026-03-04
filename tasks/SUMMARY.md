@@ -32,6 +32,7 @@ The voice agent audio pipeline — STT, TTS, voice detection, and agent dispatch
 - [ ] 010: Fix Agent Dispatch in `dev` Mode 📋 — worker registers but LiveKit never dispatches jobs; `connect --room` workaround ([BUG-007](../docs/field-tests/20260301-buglog.md))
 - [ ] 011: Voice Selection Persistent Preferences 📋 — selection UI/API with persistent storage and env-var based config
 - [ ] 012: Agent Self-Terminate on Session Error 📋 — disconnect from room when AgentSession dies to prevent zombie agent blocking fresh dispatch ([BUG-020](../docs/field-tests/20260302-buglog.md))
+- [ ] 013: Voice-Aware Metadata Tagging 📋 — inject `is_stt: true` into metadata sent to OpenClaw to enable higher verification thresholds for noisy inputs
 
 **Implemented:**
 - VoiceAgent wired to `@livekit/agents` SDK (deepgram.STT, cartesia.TTS, voice.AgentSession)
