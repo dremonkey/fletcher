@@ -99,6 +99,14 @@ tasks/
   - `dbg.*`: Request/response details, chunk counts, instanceof checks, session metadata — anything useful for debugging but noisy in production.
   - `this.logger` / injected `logger`: Errors, warnings, key lifecycle events (backend created, stream failed).
 
+## PII & Privacy (IMPORTANT — public repo)
+This is a **public repository**. Never commit PII in plaintext.
+
+- **Raw logs** (`docs/field-tests/*.txt`): Encrypted via `git-crypt`. Safe to contain PII. Unlock with `git-crypt unlock ./git-crypt-key`.
+- **Buglogs** (`docs/field-tests/*-buglog.md`): Plaintext, publicly visible. **No real names** (use "tester" or initials), **no IP addresses**, **no device serials**. Sanitize log excerpts before pasting.
+- **Conversation transcripts**: Never paste full transcripts into public-facing files. Summarize or anonymize.
+- **Secrets**: Never commit API keys, tokens, or credentials. Use `.env` files (gitignored).
+
 ## Commit Discipline (IMPORTANT)
 Commit early and often. Do NOT batch up large amounts of work into a single mega-commit at the end.
 
