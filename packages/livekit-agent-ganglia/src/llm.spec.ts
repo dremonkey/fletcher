@@ -48,6 +48,38 @@ describe('Message Mapping', () => {
     const stream = llm.chat({ chatCtx: chatCtx as any });
     expect(stream).toBeDefined();
   });
+
+  it('should skip empty system messages to prevent LLM hang', async () => {
+    async function* gen() {
+      yield {
+        id: 'chatcmpl-test',
+        choices: [{ delta: { role: 'assistant', content: 'Hello' } }],
+      };
+    }
+
+    const llm = new OpenClawLLM();
+    const client = llm.getClient();
+
+    // Capture the messages sent to the client
+    let capturedMessages: any[] = [];
+    (client as any).chat = (opts: any) => {
+      capturedMessages = opts.messages;
+      return gen();
+    };
+
+    const chatCtx = new (agents as any).ChatContext();
+    // Empty system message (as created by `new voice.Agent({ instructions: '' })`)
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'system', text: '' }));
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'user', text: 'Hello' }));
+
+    const stream = llm.chat({ chatCtx });
+    await (stream as any).run();
+
+    // The empty system message should be filtered out
+    expect(capturedMessages.length).toBe(1);
+    expect(capturedMessages[0].role).toBe('user');
+    expect(capturedMessages[0].content).toBe('Hello');
+  });
 });
 
 describe('extractSessionFromContext', () => {

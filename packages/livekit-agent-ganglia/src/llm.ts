@@ -227,6 +227,9 @@ class OpenClawChatStream extends LLMStream {
       dbg.openclawStream('item type=%s instanceof ChatMessage=%s FunctionCall=%s',
         item?.constructor?.name, item instanceof ChatMessageClass, item instanceof FunctionCallClass);
       if (item instanceof ChatMessageClass) {
+        // Skip empty system messages — an empty system content causes some
+        // LLM backends to hang (no SSE chunks returned).
+        if (item.role === 'system' && !item.textContent) continue;
         const msg: OpenClawMessage = {
           role: item.role as OpenClawMessage['role'],
           content: item.textContent || undefined,
