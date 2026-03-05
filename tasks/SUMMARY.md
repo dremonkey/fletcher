@@ -34,6 +34,7 @@ The voice agent audio pipeline — STT, TTS, voice detection, and agent dispatch
 - [ ] 013: Voice-Aware Metadata Tagging 📋 — inject `is_stt: true` into metadata sent to OpenClaw to enable higher verification thresholds for noisy inputs
 - [~] 015: Tiered Edge TTS Prototype 🔄 — PiperTTS plugin + FallbackAdapter wired; Piper sidecar in docker-compose; UX feedback artifact remaining
 - [ ] 016: Buffer Catch-Up Optimization 📋 — Research accelerated PCM playout and transcript-only catch-up to sync conversation after blackouts
+- [ ] 017: Voice Agent Memory Leak 📋 — SDK `_AudioOut.audio` array accumulates all TTS frames (never cleared); OTel span leak on abort; `TranscriptManager.knownStreamIds` unbounded ([BUG-004](../docs/field-tests/20260305-buglog.md))
 - [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 complete: fixed endpointing delay units bug (0.8→800ms), increased `minInterruptionDuration` to 800ms, added `minInterruptionWords: 1` to reduce false interruptions; Phase 2-3 (ack sound edge cases, soft TTS fade) deferred pending field testing
 - [x] 014: TTS Error Graceful Degradation ✅ — `maxUnrecoverableErrors: Infinity` prevents session death; `ttsConnOptions: { maxRetry: 0 }` eliminates 429 retry storms; debounced "Voice Unavailable" artifact sent to client ([BUG-024](../docs/field-tests/20260304-buglog.md))
 
