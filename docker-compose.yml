@@ -15,6 +15,14 @@ services:
     image: waveoffire/piper-tts-server
     network_mode: host
     restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: cdi
+              device_ids:
+                - nvidia.com/gpu=all
+              capabilities: [gpu]
   voice-agent:
     build:
       context: .

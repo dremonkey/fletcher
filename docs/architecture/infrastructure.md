@@ -26,9 +26,19 @@ piper:
   image: waveoffire/piper-tts-server
   network_mode: host
   restart: unless-stopped
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: cdi
+            device_ids:
+              - nvidia.com/gpu=all
+            capabilities: [gpu]
 ```
 
 A lightweight local TTS engine used as a fallback when cloud TTS providers (ElevenLabs, Google) fail due to rate limits or errors. Runs on port 5000 and accepts POST requests with JSON `{ "text": "...", "voice": "..." }`, returning WAV audio. See [Voice Pipeline](voice-pipeline.md) for the tiered TTS strategy.
+
+**GPU requirement:** The `waveoffire/piper-tts-server` image bundles ONNX Runtime with CUDA. It requires GPU passthrough via CDI (Container Device Interface). On NixOS, enable `hardware.nvidia-container-toolkit.enable = true;` in your system configuration and run `nixos-rebuild switch`. The CDI generator service creates the device spec at `/var/run/cdi/nvidia-container-toolkit.json`. Without this, the container crashes with "CUDA driver version is insufficient for CUDA runtime version".
 
 ### Voice Agent
 
@@ -103,6 +113,18 @@ The agent Dockerfile is a multi-stage Bun build:
 | `JAVA_HOME` | JDK17 home |
 | `LD_LIBRARY_PATH` | GPU and C++ runtime libraries (Linux) |
 | `VK_ICD_FILENAMES` | Vulkan ICD config for emulator GPU |
+
+### NixOS Prerequisites
+
+The following NixOS configuration options must be enabled for the full stack:
+
+```nix
+# configuration.nix
+programs.nix-ld.enable = true;                    # Run unpatched binaries (Android tools, Bun)
+hardware.nvidia-container-toolkit.enable = true;   # GPU passthrough for Piper TTS container
+```
+
+After changing these, run `sudo nixos-rebuild switch` and restart Docker (`sudo systemctl restart docker`).
 
 ### Bootstrap
 
