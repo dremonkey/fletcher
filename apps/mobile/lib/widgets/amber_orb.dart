@@ -141,6 +141,9 @@ class _AmberOrbState extends State<AmberOrb> with TickerProviderStateMixin {
           case ConversationStatus.connecting:
             opacity = 0.5;
             break;
+          case ConversationStatus.listeningForWakeWord:
+            opacity = 0.6;
+            break;
           case ConversationStatus.muted:
             opacity = 0.3;
             break;

@@ -36,6 +36,7 @@ class _ConversationScreenState extends State<ConversationScreen>
     WidgetsBinding.instance.addObserver(this);
     _liveKitService.addListener(_onStateChanged);
     _liveKitService.healthService.addListener(_onStateChanged);
+    _liveKitService.initWakeWord();
     _connect();
   }
 
@@ -85,10 +86,13 @@ class _ConversationScreenState extends State<ConversationScreen>
           children: [
             // Main content - centered orb
             Center(
-              child: AmberOrb(
-                status: state.status,
-                userAudioLevel: state.userAudioLevel,
-                aiAudioLevel: state.aiAudioLevel,
+              child: GestureDetector(
+                onTap: () => _liveKitService.debugSimulateWakeWord(),
+                child: AmberOrb(
+                  status: state.status,
+                  userAudioLevel: state.userAudioLevel,
+                  aiAudioLevel: state.aiAudioLevel,
+                ),
               ),
             ),
 
@@ -248,6 +252,10 @@ class _ConversationScreenState extends State<ConversationScreen>
       case ConversationStatus.connecting:
         statusText = 'Connecting...';
         statusColor = const Color(0xFF4B5563);
+        break;
+      case ConversationStatus.listeningForWakeWord:
+        statusText = 'Listening for \'Hey Fletcher\'';
+        statusColor = const Color(0xFFF59E0B).withOpacity(0.7);
         break;
       case ConversationStatus.reconnecting:
         statusText = 'Reconnecting...';

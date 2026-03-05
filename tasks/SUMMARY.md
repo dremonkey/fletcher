@@ -224,6 +224,18 @@ Lock onto the primary speaker's voice in a 1-on-1 conversation — reject backgr
 
 **Depends on:** Epic 6 (voice-key embeddings reusable for TSE), Epic 10 (latency measurement)
 
+### 13. [Edge Intelligence](./13-edge-intelligence) 📋
+Move sensing capabilities (Wake Word, VAD, STT) to the edge device to improve privacy, battery life, and latency.
+
+**Tasks:**
+- [x] 001: Create Wake Word Spec ✅
+- [x] 002: Wake Word Prototype (Spike) ✅ — `onnxruntime` + `mic_stream` + `hey_jarvis` model implemented (mock inference)
+- [~] 003: Integrated Wake Word 🔄 — Wired into Amber Orb state machine; debug trigger added
+- [ ] 004: Local VAD Evaluation 📋 — Benchmark Silero VAD on-device vs server-side
+- [ ] 005: Offline Mode 📋 — Cache interactions when offline
+
+**Spec:** [docs/specs/wake-word-integration.md](../docs/specs/wake-word-integration.md)
+
 ## Development Path
 
 1. **Phase 1: Infrastructure** ✅
