@@ -237,8 +237,9 @@ class OpenClawChatStream extends LLMStream {
         // Wrap transcribed text in a warning block to trigger High-Skepticism mode in OpenClaw.
         if (item.role === 'user' && content) {
           content = [
-            'Text below is from Speech-to-Text. Transcription errors are likely.',
+            'Text below is from Speech-to-Text (STT). Transcription errors are likely.',
             'If an input is short, ambiguous, or nonsensical, ALWAYS clarify before using tools.',
+            'Your response is sent through Text-to-Speech (TTS) so avoid using symbols that do not translate well to voice. 
             '---',
             content,
           ].join('\n');
