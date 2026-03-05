@@ -198,6 +198,12 @@ export default defineAgent({
         // exceeded in a single turn.  Text transcriptions still flow via the
         // data channel regardless of TTS state. (BUG-024)
         maxUnrecoverableErrors: Infinity,
+        // Don't retry TTS on 429 — the SDK's fixed-interval retries (0.1ms,
+        // 2s, 2s) are too aggressive for rate limits.  With N parallel
+        // sentences hitting 429, retries multiply the storm.  Let each
+        // sentence fail once; the rate limit window resets naturally and
+        // the next turn's TTS calls succeed. (BUG-024)
+        ttsConnOptions: { maxRetry: 0 },
       },
     });
     await session.start({

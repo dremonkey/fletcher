@@ -35,7 +35,7 @@ The voice agent audio pipeline — STT, TTS, voice detection, and agent dispatch
 - [~] 015: Tiered Edge TTS Prototype 🔄 — Priority: Hub-side local fallback (Piper/ONNX) to mitigate API limits
 - [ ] 016: Buffer Catch-Up Optimization 📋 — Research accelerated PCM playout and transcript-only catch-up to sync conversation after blackouts
 - [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 complete: fixed endpointing delay units bug (0.8→800ms), increased `minInterruptionDuration` to 800ms, added `minInterruptionWords: 1` to reduce false interruptions; Phase 2-3 (ack sound edge cases, soft TTS fade) deferred pending field testing
-- [x] 014: TTS Error Graceful Degradation ✅ — `maxUnrecoverableErrors: Infinity` prevents session death; Bun patch moves `generateContentStream` inside try/catch for proper retries; debounced "Voice Unavailable" artifact sent to client ([BUG-024](../docs/field-tests/20260303-buglog.md))
+- [x] 014: TTS Error Graceful Degradation ✅ — `maxUnrecoverableErrors: Infinity` prevents session death; `ttsConnOptions: { maxRetry: 0 }` eliminates 429 retry storms; debounced "Voice Unavailable" artifact sent to client ([BUG-024](../docs/field-tests/20260304-buglog.md))
 
 **Implemented:**
 - VoiceAgent wired to `@livekit/agents` SDK (deepgram.STT, cartesia.TTS, voice.AgentSession)
