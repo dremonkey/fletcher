@@ -12,8 +12,19 @@ const BUILD_HASH_FILE = join(ROOT, ".docker-build-hash");
 const PULL_MARKER_FILE = join(ROOT, ".docker-pull-timestamp");
 /** Minimum interval between upstream image pulls (24 hours). */
 const PULL_INTERVAL_MS = 24 * 60 * 60 * 1000;
-/** Upstream images that must be present locally before starting services. */
-const UPSTREAM_IMAGES = ["livekit/livekit-server", "waveoffire/piper-tts-server"];
+/**
+ * Read upstream (non-build) image names from docker-compose.yml.
+ * Filters out locally-built images (those without a '/') like "fletcher-voice-agent".
+ */
+function getUpstreamImages(): string[] {
+  const result = Bun.spawnSync(["docker", "compose", "config", "--images"], {
+    cwd: ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) return [];
+  return result.stdout.toString().trim().split("\n").filter((img) => img.includes("/"));
+}
 
 /**
  * Glob patterns for every file that feeds into the voice-agent Docker image.
@@ -107,7 +118,7 @@ function shouldPullImages(): boolean {
 
   // Even if we pulled recently, check that all images exist locally.
   // Catches the case where a new service was added since the last pull.
-  for (const image of UPSTREAM_IMAGES) {
+  for (const image of getUpstreamImages()) {
     const result = Bun.spawnSync(["docker", "image", "inspect", image], {
       stdout: "pipe",
       stderr: "pipe",
@@ -126,8 +137,8 @@ export async function startServices(): Promise<void> {
   if (isLocalLiveKit()) {
     // Pull upstream images (at most once per 24h)
     if (shouldPullImages()) {
-      await runStep("Pulling latest images (LiveKit, Piper)", [
-        "docker", "compose", "pull", "livekit", "piper",
+      await runStep("Pulling upstream images", [
+        "docker", "compose", "pull", "--ignore-buildable",
       ]);
       writeFileSync(PULL_MARKER_FILE, String(Date.now()));
     }
