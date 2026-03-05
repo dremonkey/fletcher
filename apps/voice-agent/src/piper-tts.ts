@@ -24,8 +24,6 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 export interface PiperTTSOptions {
   /** Base URL of the Piper HTTP sidecar (e.g. "http://localhost:5000") */
   baseUrl: string;
-  /** Piper voice name (default: uses sidecar default) */
-  voice?: string;
   /** Request timeout in milliseconds (default: 10 000) */
   timeoutMs?: number;
   /** Sample rate of Piper output (default: 22 050 Hz) */
@@ -41,20 +39,14 @@ export interface PiperTTSOptions {
 export async function piperSynthesize(opts: {
   baseUrl: string;
   text: string;
-  voice?: string;
   timeoutMs: number;
 }): Promise<ArrayBuffer> {
-  const body: Record<string, string> = { text: opts.text };
-  if (opts.voice) {
-    body.voice = opts.voice;
-  }
-
   let response: Response;
   try {
-    response = await fetch(`${opts.baseUrl}/synthesize`, {
+    response = await fetch(opts.baseUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'text/plain' },
+      body: opts.text,
       signal: AbortSignal.timeout(opts.timeoutMs),
     });
   } catch (err: unknown) {
@@ -87,14 +79,12 @@ export class PiperTTS extends tts.TTS {
   readonly label = 'piper';
 
   readonly #baseUrl: string;
-  readonly #voice: string | undefined;
   readonly #timeoutMs: number;
 
   constructor(opts: PiperTTSOptions) {
     const sampleRate = opts.sampleRate ?? DEFAULT_SAMPLE_RATE;
     super(sampleRate, 1, { streaming: false });
     this.#baseUrl = opts.baseUrl.replace(/\/+$/, '');
-    this.#voice = opts.voice;
     this.#timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
@@ -105,7 +95,6 @@ export class PiperTTS extends tts.TTS {
   ): tts.ChunkedStream {
     return new PiperChunkedStream(this, text, {
       baseUrl: this.#baseUrl,
-      voice: this.#voice,
       timeoutMs: this.#timeoutMs,
       sampleRate: this.sampleRate,
       connOptions,
@@ -120,7 +109,6 @@ export class PiperTTS extends tts.TTS {
 
 interface PiperChunkedStreamOpts {
   baseUrl: string;
-  voice: string | undefined;
   timeoutMs: number;
   sampleRate: number;
   connOptions?: APIConnectOptions;
@@ -131,14 +119,12 @@ class PiperChunkedStream extends tts.ChunkedStream {
   readonly label = 'piper';
 
   readonly #baseUrl: string;
-  readonly #voice: string | undefined;
   readonly #timeoutMs: number;
   readonly #piperSampleRate: number;
 
   constructor(piperTts: PiperTTS, text: string, opts: PiperChunkedStreamOpts) {
     super(text, piperTts, opts.connOptions, opts.abortSignal);
     this.#baseUrl = opts.baseUrl;
-    this.#voice = opts.voice;
     this.#timeoutMs = opts.timeoutMs;
     this.#piperSampleRate = opts.sampleRate;
   }
@@ -150,7 +136,6 @@ class PiperChunkedStream extends tts.ChunkedStream {
     const wavBuffer = await piperSynthesize({
       baseUrl: this.#baseUrl,
       text: this.inputText,
-      voice: this.#voice,
       timeoutMs: this.#timeoutMs,
     });
 

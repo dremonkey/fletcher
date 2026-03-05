@@ -96,7 +96,7 @@ describe('PiperTTS', () => {
     }
   });
 
-  it('synthesize() passes voice in request body', async () => {
+  it('synthesize() sends raw text body', async () => {
     const samples = new Int16Array(100);
     const wavBuf = createTestWav(samples);
     let capturedBody: string | undefined;
@@ -106,13 +106,11 @@ describe('PiperTTS', () => {
       return new Response(wavBuf, { status: 200 });
     }) as typeof fetch;
 
-    const piperTts = new PiperTTS({ baseUrl: BASE_URL, voice: 'en_US-lessac-medium' });
+    const piperTts = new PiperTTS({ baseUrl: BASE_URL });
     const stream = piperTts.synthesize('Hi');
     for await (const _ of stream) { /* drain */ }
 
-    const parsed = JSON.parse(capturedBody!);
-    expect(parsed.text).toBe('Hi');
-    expect(parsed.voice).toBe('en_US-lessac-medium');
+    expect(capturedBody).toBe('Hi');
   });
 
   it('uses custom sampleRate', async () => {
@@ -147,7 +145,7 @@ describe('PiperTTS', () => {
     const stream = piperTts.synthesize('Test');
     for await (const _ of stream) { /* drain */ }
 
-    expect(capturedUrl).toBe('http://piper:5000/synthesize');
+    expect(capturedUrl).toBe('http://piper:5000');
   });
 
   it('stream() throws (not supported)', () => {
@@ -242,7 +240,7 @@ describe('PiperTTS', () => {
     }
   });
 
-  it('piperSynthesize() includes voice in request body', async () => {
+  it('piperSynthesize() sends raw text body', async () => {
     const samples = new Int16Array(100);
     const wavBuf = createTestWav(samples);
     let capturedBody: string | undefined;
@@ -255,12 +253,9 @@ describe('PiperTTS', () => {
     await piperSynthesize({
       baseUrl: BASE_URL,
       text: 'Hi',
-      voice: 'en_US-lessac-medium',
       timeoutMs: 5000,
     });
 
-    const parsed = JSON.parse(capturedBody!);
-    expect(parsed.text).toBe('Hi');
-    expect(parsed.voice).toBe('en_US-lessac-medium');
+    expect(capturedBody).toBe('Hi');
   });
 });
