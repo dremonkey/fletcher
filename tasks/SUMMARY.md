@@ -173,6 +173,7 @@ Bulletproof connection handling: survive network switches, Bluetooth changes, ai
 - [ ] 011: Network Transition Audio Track Timeout 📋 — WiFi→cellular causes 55s audio track publish delay (Tailscale tunnel re-establishment) + BT audio route disruption ([BUG-021](../docs/field-tests/20260303-buglog.md))
 - [ ] 012: Foreground Service for Background Microphone 📋 — Android 14+ silences mic within 5s of backgrounding; add `FOREGROUND_SERVICE_MICROPHONE` to keep voice session alive in pocket ([BUG-022](../docs/field-tests/20260303-buglog.md))
 - [~] 013: Client-Side Audio Buffering 🔄 — switched from broken `AudioCaptureService` stub to SDK's `PreConnectAudioBuffer`; mic audio captured natively during SDK reconnect and sent to agent via `streamBytes()` on reconnection (BUG-027). Remaining: verify agent-side handles `lk.agent.pre-connect-audio-buffer` topic. See [013-audio-buffering-plan.md](./09-connectivity/013-audio-buffering-plan.md).
+- [ ] 017: Time-Budgeted Reconnect 📋 — extend client retry window from ~71s to match server departure_timeout (120s+); add slow-poll phase after fast retries exhaust ([BUG-028](../docs/field-tests/20260304-buglog.md))
 
 **Depends on:** Epic 3 (Flutter App)
 
