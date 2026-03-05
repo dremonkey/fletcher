@@ -7,7 +7,7 @@ services:
       - ./livekit.yaml:/etc/livekit.yaml
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:7880 || exit 1"]
+      test: ["CMD-SHELL", "nc -z localhost 7880"]
       interval: 2s
       timeout: 3s
       retries: 15
