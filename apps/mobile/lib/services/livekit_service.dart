@@ -8,6 +8,7 @@ import '../models/conversation_state.dart';
 import 'connectivity_service.dart';
 import 'disconnect_reason.dart' as dr;
 import 'health_service.dart';
+import 'reconnect_scheduler.dart';
 import 'url_resolver.dart';
 
 /// Max waveform samples (~30 samples at 100ms = 3s history)
@@ -53,12 +54,7 @@ class LiveKitService extends ChangeNotifier {
 
   // Room reconnection state (sleep/disconnect recovery)
   bool _reconnecting = false;
-  int _reconnectAttempt = 0;
-  DateTime? _disconnectTime;
-  static const _fastRetryAttempts = 5;
-  static const _slowPollInterval = Duration(seconds: 10);
-  // Budget matches server departure_timeout (120s) + 10s margin
-  static const _reconnectBudget = Duration(seconds: 130);
+  final ReconnectScheduler _reconnectScheduler = ReconnectScheduler();
 
   // Connectivity-driven reconnect: waits for network restore when offline
   StreamSubscription<bool>? _networkRestoreSub;
@@ -152,9 +148,8 @@ class LiveKitService extends ChangeNotifier {
       debugPrint('[Fletcher] Connected to room');
       _localParticipant = _room!.localParticipant;
 
-      _reconnectAttempt = 0;
+      _reconnectScheduler.reset();
       _reconnecting = false;
-      _disconnectTime = null;
       healthService.updateRoomConnected(connected: true);
 
       // Check if agent is already in the room
@@ -209,9 +204,8 @@ class LiveKitService extends ChangeNotifier {
 
     _listener?.on<RoomReconnectedEvent>((_) async {
       debugPrint('[Fletcher] SDK reconnected successfully');
-      _reconnectAttempt = 0;
+      _reconnectScheduler.reset();
       _reconnecting = false;
-      _disconnectTime = null;
       healthService.updateRoomConnected(connected: true);
       // Restore status: respect mute state, otherwise go idle
       _updateState(
@@ -771,10 +765,11 @@ class LiveKitService extends ChangeNotifier {
   /// - If offline, show "Waiting for network..." and subscribe to
   ///   connectivity changes. Retries start when the network returns.
   /// - Phase 1 (fast): 5 attempts with exponential backoff (1s, 2s, 4s, 8s, 16s)
-  /// - Phase 2 (slow): poll every 10s until [_reconnectBudget] expires
+  /// - Phase 2 (slow): poll every 10s until budget expires (130s)
   ///
-  /// The budget (130s) matches the server's departure_timeout (120s) + margin,
+  /// The budget matches the server's departure_timeout (120s) + margin,
   /// ensuring the client keeps trying as long as the server-side session is alive.
+  /// See [ReconnectScheduler] for the pure scheduling logic. (BUG-028)
   Future<void> _reconnectRoom() async {
     if (_reconnecting) return;
     if (_url == null || _token == null) {
@@ -786,7 +781,7 @@ class LiveKitService extends ChangeNotifier {
     }
 
     _reconnecting = true;
-    _disconnectTime ??= DateTime.now();
+    _reconnectScheduler.begin();
     _updateState(status: ConversationStatus.reconnecting);
 
     // If offline, wait for network to come back before burning retries
@@ -812,51 +807,42 @@ class LiveKitService extends ChangeNotifier {
         debugPrint('[Fletcher] Network restored — starting reconnect');
         _networkRestoreSub?.cancel();
         _networkRestoreSub = null;
-        // Reset attempt counter since this is a fresh network
-        _reconnectAttempt = 0;
         _doReconnectAttempt();
       }
     });
   }
 
-  /// Execute a single reconnect attempt.
+  /// Execute a single reconnect attempt using [_reconnectScheduler].
   ///
-  /// Phase 1 (fast): exponential backoff (1s, 2s, 4s, 8s, 16s) for the first
-  /// [_fastRetryAttempts] attempts. Phase 2 (slow): fixed-interval poll every
-  /// [_slowPollInterval] until [_reconnectBudget] expires. This ensures the
-  /// client keeps trying for the full server departure_timeout window. (BUG-028)
+  /// The scheduler decides the phase (fast/slow/exhausted) and delay.
+  /// This method handles the actual disconnect/connect and offline checks.
   Future<void> _doReconnectAttempt() async {
-    _reconnectAttempt++;
+    final action = _reconnectScheduler.nextAttempt();
 
-    // Check time budget — give up once the server session has certainly expired
-    final elapsed = DateTime.now().difference(_disconnectTime!);
-    if (elapsed > _reconnectBudget) {
-      debugPrint('[Fletcher] Reconnect budget exhausted (${elapsed.inSeconds}s) — giving up');
-      _reconnecting = false;
-      _reconnectAttempt = 0;
-      _disconnectTime = null;
-      _updateState(
-        status: ConversationStatus.error,
-        errorMessage: 'Failed to reconnect — session expired',
-      );
-      return;
-    }
+    switch (action.phase) {
+      case ReconnectPhase.exhausted:
+        debugPrint('[Fletcher] Reconnect budget exhausted (${action.elapsed.inSeconds}s) — giving up');
+        _reconnecting = false;
+        _reconnectScheduler.reset();
+        _updateState(
+          status: ConversationStatus.error,
+          errorMessage: 'Failed to reconnect — session expired',
+        );
+        return;
 
-    // Phase 1: fast retries with exponential backoff
-    if (_reconnectAttempt <= _fastRetryAttempts) {
-      debugPrint('[Fletcher] Fast reconnect $_reconnectAttempt/$_fastRetryAttempts');
-      _updateState(status: ConversationStatus.reconnecting);
-      final delay = Duration(seconds: 1 << (_reconnectAttempt - 1));
-      await Future.delayed(delay);
-    } else {
-      // Phase 2: slow poll every 10s
-      final slowAttempt = _reconnectAttempt - _fastRetryAttempts;
-      debugPrint('[Fletcher] Slow reconnect poll #$slowAttempt (${elapsed.inSeconds}s/${_reconnectBudget.inSeconds}s)');
-      _updateState(
-        status: ConversationStatus.reconnecting,
-        errorMessage: 'Reconnecting (${elapsed.inSeconds}s)...',
-      );
-      await Future.delayed(_slowPollInterval);
+      case ReconnectPhase.fast:
+        debugPrint('[Fletcher] Fast reconnect ${action.attempt}/${_reconnectScheduler.fastRetryCount}');
+        _updateState(status: ConversationStatus.reconnecting);
+        await Future.delayed(action.delay);
+
+      case ReconnectPhase.slow:
+        final slowAttempt = action.attempt - _reconnectScheduler.fastRetryCount;
+        debugPrint('[Fletcher] Slow reconnect poll #$slowAttempt (${action.elapsed.inSeconds}s/${_reconnectScheduler.budget.inSeconds}s)');
+        _updateState(
+          status: ConversationStatus.reconnecting,
+          errorMessage: 'Reconnecting (${action.elapsed.inSeconds}s)...',
+        );
+        await Future.delayed(action.delay);
     }
 
     // Bail out if we went offline during the wait
@@ -890,9 +876,8 @@ class LiveKitService extends ChangeNotifier {
       debugPrint('[Fletcher] tryReconnect skipped — offline');
       return;
     }
-    _reconnectAttempt = 0;
+    _reconnectScheduler.reset();
     _reconnecting = false;
-    _disconnectTime = null;
     await _reconnectRoom();
   }
 
