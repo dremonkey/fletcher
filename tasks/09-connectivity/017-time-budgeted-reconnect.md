@@ -249,4 +249,4 @@ Future<void> tryReconnect() async {
 - **Date:** 2026-03-04
 - **Priority:** HIGH
 - **Bug:** BUG-028
-- **Status:** RCA complete, ready for implementation
+- **Status:** Implemented (`livekit_service.dart`), needs field testing
