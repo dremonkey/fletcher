@@ -4,7 +4,7 @@ Fletcher runs on Docker Compose with host networking, managed by Nix for develop
 
 ## Docker Compose
 
-The `docker-compose.yml` defines two services:
+The `docker-compose.yml` defines three services:
 
 ### LiveKit Server
 
@@ -19,6 +19,17 @@ livekit:
 
 **Why host networking:** LiveKit requires direct access to UDP ports 50000-60000 for WebRTC media. Docker's port mapping adds overhead and can break ICE negotiation. Host networking is required, not optional.
 
+### Piper TTS Sidecar
+
+```yaml
+piper:
+  image: waveoffire/piper-tts-server
+  network_mode: host
+  restart: unless-stopped
+```
+
+A lightweight local TTS engine used as a fallback when cloud TTS providers (ElevenLabs, Google) fail due to rate limits or errors. Runs on port 5000 and accepts POST requests with JSON `{ "text": "...", "voice": "..." }`, returning WAV audio. See [Voice Pipeline](voice-pipeline.md) for the tiered TTS strategy.
+
 ### Voice Agent
 
 ```yaml
@@ -31,6 +42,7 @@ voice-agent:
   environment:
     LIVEKIT_URL: ws://localhost:7880
     OPENCLAW_GATEWAY_URL: http://localhost:18789
+    PIPER_URL: http://localhost:5000
     DEBUG: ganglia:*
     LOG_LEVEL: debug
   restart: unless-stopped
@@ -155,6 +167,8 @@ See [Network Connectivity](network-connectivity.md) for the full URL resolution 
 | `ELEVENLABS_VOICE_ID` | No | SDK default | ElevenLabs voice ID |
 | `GOOGLE_API_KEY` | If `TTS_PROVIDER=google` | — | Google AI Studio API key |
 | `GOOGLE_TTS_VOICE` | No | `Kore` | Gemini TTS voice name |
+| `PIPER_URL` | No | — | Piper TTS sidecar URL for local fallback (enables FallbackAdapter) |
+| `PIPER_VOICE` | No | sidecar default | Piper voice name |
 
 ### Session & Identity
 
@@ -178,6 +192,7 @@ See [Network Connectivity](network-connectivity.md) for the full URL resolution 
 | 7880 | TCP | LiveKit | HTTP API + WebSocket signaling |
 | 7881 | TCP | LiveKit | RTC over TCP (fallback) |
 | 50000-60000 | UDP | LiveKit | WebRTC media streams |
+| 5000 | TCP | Piper | TTS sidecar HTTP API |
 | 18789 | TCP | OpenClaw/Nanoclaw | Gateway HTTP API |
 
 ## Related Documents

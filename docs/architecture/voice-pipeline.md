@@ -12,7 +12,7 @@ sequenceDiagram
     participant Agent as AgentSession
     participant LLM as Ganglia LLM
     participant Brain as OpenClaw/Nanoclaw
-    participant TTS as TTS (ElevenLabs or Gemini)
+    participant TTS as TTS (ElevenLabs/Gemini → Piper fallback)
 
     Phone->>LK: WebRTC audio track
     LK->>STT: Audio frames (streaming)
@@ -111,9 +111,23 @@ Ganglia converts between the LiveKit `llm.LLM` interface and the OpenClaw/Nanocl
 - Each chunk may contain `content` (text) or `tool_calls` (function invocations)
 - Ganglia emits these as `ChatChunk` events that AgentSession forwards to TTS
 
-### Text-to-Speech (Configurable Provider)
+### Text-to-Speech (Tiered Provider)
 
-The TTS provider is selected by the `TTS_PROVIDER` env var. A factory in `apps/voice-agent/src/tts-provider.ts` returns the configured instance.
+The TTS subsystem uses a tiered strategy to ensure the user hears *something* even when cloud providers fail:
+
+| Tier | Provider | When | Quality |
+|------|----------|------|---------|
+| **Tier 3** | ElevenLabs / Google (cloud) | Default — network healthy, quota available | High-fidelity |
+| **Tier 2** | Piper (local sidecar) | Cloud TTS errors (429, 402, timeout) | Lower-fidelity |
+| **Tier 1** | Text only (data channel) | Always — immediate visual feedback | N/A |
+
+The primary TTS provider is selected by `TTS_PROVIDER` env var. When `PIPER_URL` is set, the factory wraps the primary in the LiveKit SDK's `tts.FallbackAdapter`, which handles priority-based failover, background recovery, and automatic audio resampling between providers.
+
+```
+createTTS(provider, logger)
+  ├── PIPER_URL set:    FallbackAdapter([primary, PiperTTS])
+  └── PIPER_URL unset:  primary directly (no wrapper overhead)
+```
 
 **ElevenLabs** (`TTS_PROVIDER=elevenlabs`, default):
 - Plugin: `@livekit/agents-plugin-elevenlabs`
@@ -129,6 +143,18 @@ The TTS provider is selected by the `TTS_PROVIDER` env var. A factory in `apps/v
 - Output: PCM16 at 24kHz (matches LiveKit default sample rate)
 - **Caveat:** the streaming API returns audio in a single chunk rather than streaming incrementally, so there is a latency hit on longer responses
 - Added as a workaround for BUG-018 (ElevenLabs 402 on free plan)
+
+**Piper** (local fallback, `PIPER_URL` env var):
+- Custom `PiperTTS` plugin in `apps/voice-agent/src/piper-tts.ts`
+- Non-streaming only (`capabilities: { streaming: false }`) — FallbackAdapter auto-wraps with `StreamAdapter`
+- POST text to Piper HTTP sidecar → receive WAV → strip 44-byte header → feed PCM into `AudioByteStream`
+- Default sample rate: 22050 Hz (standard Piper output)
+- Sidecar: `waveoffire/piper-tts-server` Docker image on port 5000
+- Error types: `APIStatusError` (4xx/5xx), `APIConnectionError` (network/timeout) — compatible with FallbackAdapter's error handling
+
+**FallbackAdapter configuration:**
+- `maxRetryPerTTS: 0` — any error immediately falls through to the next TTS (no retries within a single provider)
+- The adapter runs background recovery tasks: after falling back to Piper, it periodically tests the primary provider and restores it when healthy
 
 ## Latency Budget
 
