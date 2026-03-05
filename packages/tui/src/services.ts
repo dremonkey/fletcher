@@ -8,10 +8,12 @@ import { DEFAULT_ROOM } from "./audit";
 
 /** Marker file storing the SHA-256 hash of voice-agent build inputs. */
 const BUILD_HASH_FILE = join(ROOT, ".docker-build-hash");
-/** Marker file storing the epoch-ms timestamp of the last `docker compose pull livekit`. */
+/** Marker file storing the epoch-ms timestamp of the last `docker compose pull`. */
 const PULL_MARKER_FILE = join(ROOT, ".docker-pull-timestamp");
-/** Minimum interval between upstream LiveKit image pulls (24 hours). */
+/** Minimum interval between upstream image pulls (24 hours). */
 const PULL_INTERVAL_MS = 24 * 60 * 60 * 1000;
+/** Upstream images that must be present locally before starting services. */
+const UPSTREAM_IMAGES = ["livekit/livekit-server", "waveoffire/piper-tts-server"];
 
 /**
  * Glob patterns for every file that feeds into the voice-agent Docker image.
@@ -97,11 +99,22 @@ function computeSourceHash(): string {
   return hash.digest("hex").slice(0, 16);
 }
 
-/** Returns `true` when we haven't pulled upstream images in the last 24 hours. */
+/** Returns `true` when we haven't pulled recently or an image is missing locally. */
 function shouldPullImages(): boolean {
   if (!existsSync(PULL_MARKER_FILE)) return true;
   const ts = parseInt(readFileSync(PULL_MARKER_FILE, "utf-8").trim(), 10);
-  return Date.now() - ts > PULL_INTERVAL_MS;
+  if (Date.now() - ts > PULL_INTERVAL_MS) return true;
+
+  // Even if we pulled recently, check that all images exist locally.
+  // Catches the case where a new service was added since the last pull.
+  for (const image of UPSTREAM_IMAGES) {
+    const result = Bun.spawnSync(["docker", "image", "inspect", image], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (result.exitCode !== 0) return true;
+  }
+  return false;
 }
 
 function isLocalLiveKit(): boolean {
