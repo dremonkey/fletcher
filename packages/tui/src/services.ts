@@ -97,8 +97,8 @@ function computeSourceHash(): string {
   return hash.digest("hex").slice(0, 16);
 }
 
-/** Returns `true` when we haven't pulled the upstream LiveKit image in the last 24 hours. */
-function shouldPullLivekit(): boolean {
+/** Returns `true` when we haven't pulled upstream images in the last 24 hours. */
+function shouldPullImages(): boolean {
   if (!existsSync(PULL_MARKER_FILE)) return true;
   const ts = parseInt(readFileSync(PULL_MARKER_FILE, "utf-8").trim(), 10);
   return Date.now() - ts > PULL_INTERVAL_MS;
@@ -111,10 +111,10 @@ function isLocalLiveKit(): boolean {
 
 export async function startServices(): Promise<void> {
   if (isLocalLiveKit()) {
-    // Pull latest livekit image (at most once per 24h)
-    if (shouldPullLivekit()) {
-      await runStep("Pulling latest LiveKit server image", [
-        "docker", "compose", "pull", "livekit",
+    // Pull upstream images (at most once per 24h)
+    if (shouldPullImages()) {
+      await runStep("Pulling latest images (LiveKit, Piper)", [
+        "docker", "compose", "pull", "livekit", "piper",
       ]);
       writeFileSync(PULL_MARKER_FILE, String(Date.now()));
     }
