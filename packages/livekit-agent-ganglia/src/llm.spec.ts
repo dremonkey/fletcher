@@ -78,7 +78,9 @@ describe('Message Mapping', () => {
     // The empty system message should be filtered out
     expect(capturedMessages.length).toBe(1);
     expect(capturedMessages[0].role).toBe('user');
-    expect(capturedMessages[0].content).toBe('Hello');
+    // TASK-013: user messages are wrapped with STT skepticism metadata
+    expect(capturedMessages[0].content).toContain('Hello');
+    expect(capturedMessages[0].content).toContain('Speech-to-Text');
   });
 });
 
@@ -348,5 +350,73 @@ describe('OpenClawChatStream interrupt handling (BUG-019)', () => {
 
     // output should NOT be closed by run() — base class monitorMetrics() handles that
     expect((stream as any).output.closed).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// BUG-022: Abort signal propagation — LLMStream.close() → fetch abort
+// ---------------------------------------------------------------------------
+
+describe('Abort signal propagation (BUG-022)', () => {
+  it('should pass abortController.signal to client.chat()', async () => {
+    let capturedSignal: AbortSignal | undefined;
+
+    const llm = new OpenClawLLM();
+    const client = llm.getClient();
+
+    // Intercept client.chat() to capture the signal option
+    async function* fakeChat(opts: any) {
+      capturedSignal = opts.signal;
+      yield makeChunk('hello');
+    }
+    (client as any).chat = fakeChat;
+
+    const chatCtx = new (agents as any).ChatContext();
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'user', text: 'Test' }));
+    const stream = llm.chat({ chatCtx });
+
+    await (stream as any).run();
+
+    expect(capturedSignal).toBeDefined();
+    expect(capturedSignal).toBeInstanceOf(AbortSignal);
+    // The signal should be the stream's own abortController.signal
+    expect(capturedSignal).toBe((stream as any).abortController.signal);
+  });
+
+  it('should abort the client signal when LLMStream.close() is called', async () => {
+    let capturedSignal: AbortSignal | undefined;
+    let resolveHang: (() => void) | undefined;
+
+    const llm = new OpenClawLLM();
+    const client = llm.getClient();
+
+    // Generator that hangs until we resolve — simulates a slow LLM response
+    async function* fakeChat(opts: any) {
+      capturedSignal = opts.signal;
+      yield makeChunk('first');
+      // Hang here until externally resolved
+      await new Promise<void>((resolve) => { resolveHang = resolve; });
+      yield makeChunk('should-not-reach');
+    }
+    (client as any).chat = fakeChat;
+
+    const chatCtx = new (agents as any).ChatContext();
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'user', text: 'Test' }));
+    const stream = llm.chat({ chatCtx });
+
+    // Start run() in the background
+    const runPromise = (stream as any).run();
+
+    // Wait a tick for the generator to yield the first chunk and then hang
+    await new Promise(r => setTimeout(r, 10));
+
+    // Simulate what the SDK does on disconnect: call close()
+    stream.close();
+
+    expect(capturedSignal!.aborted).toBe(true);
+
+    // Unblock the generator so run() can complete
+    resolveHang?.();
+    await runPromise;
   });
 });

@@ -322,6 +322,7 @@ class OpenClawChatStream extends LLMStream {
         tools: tools && tools.length > 0 ? tools : undefined,
         session,
         sessionKey: this._sessionKey,
+        signal: this.abortController.signal,
       });
 
       // Start pondering: emit rotating fun phrases while waiting for first content

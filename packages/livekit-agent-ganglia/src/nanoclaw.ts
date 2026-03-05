@@ -278,6 +278,7 @@ class NanoclawChatStream extends LLMStream {
         tools: tools && tools.length > 0 ? tools : undefined,
         session,
         sessionKey: this._sessionKey,
+        signal: this.abortController.signal,
       });
 
       for await (const chunk of stream) {

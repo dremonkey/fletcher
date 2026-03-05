@@ -72,6 +72,8 @@ export interface OpenClawChatOptions {
   session?: LiveKitSessionInfo;
   /** Resolved session key for routing. Takes priority over session/sessionId for routing. */
   sessionKey?: import('../session-routing.js').SessionKey;
+  /** External abort signal — when aborted, the in-flight fetch is cancelled immediately. */
+  signal?: AbortSignal;
 }
 
 /**

@@ -159,6 +159,9 @@ export class OpenClawClient {
 
   async *chat(options: OpenClawChatOptions): AsyncIterableIterator<OpenClawChatResponse> {
     const controller = new AbortController();
+    const fetchSignal = options.signal
+      ? AbortSignal.any([controller.signal, options.signal])
+      : controller.signal;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
@@ -218,9 +221,15 @@ export class OpenClawClient {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
-        signal: controller.signal,
+        signal: fetchSignal,
       });
     } catch (fetchError) {
+      // If the external signal triggered the abort, return cleanly — this is
+      // a graceful consumer-initiated cancellation (e.g. LLMStream.close()).
+      if (options.signal?.aborted && fetchError instanceof DOMException && fetchError.name === 'AbortError') {
+        dbg.openclawClient('fetch aborted by external signal (graceful cancellation)');
+        return;
+      }
       this.logger.error(`OpenClawClient fetch failed for ${url}: ${fetchError}`);
       throw fetchError;
     }
@@ -301,6 +310,11 @@ export class OpenClawClient {
         }
       }
     } catch (err) {
+      // If the external signal triggered the abort during streaming, return cleanly.
+      if (options.signal?.aborted && err instanceof DOMException && err.name === 'AbortError') {
+        dbg.openclawClient('stream read aborted by external signal (graceful cancellation)');
+        return;
+      }
       controller.abort();
       throw err;
     } finally {

@@ -22,6 +22,7 @@ function createLLMStreamMock() {
     output: MockQueue<any>;
     queue: MockQueue<any>;
     closed = false;
+    abortController = new AbortController();
     logger = { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} };
     chatCtx: any;
     toolCtx: any;
@@ -32,6 +33,10 @@ function createLLMStreamMock() {
       this.connOptions = connOptions;
       this.output = new MockQueue();
       this.queue = new MockQueue();
+    }
+    close() {
+      this.abortController.abort();
+      this.closed = true;
     }
     protected async run() {}
   };
