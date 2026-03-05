@@ -34,6 +34,10 @@ Runtime detection of Tailscale on the phone + automatic URL selection.
 - [ ] User test: Tailscale ON + no URL → warning in health panel
 - [ ] User test: Toggle Tailscale mid-session → reconnect picks correct URL
 
+## Known Issue: Android 11+ VPN Interface Visibility
+
+`NetworkInterface.list()` (`getifaddrs()`) on Android 11+ hides VPN interfaces created by other apps. Tailscale's `tun0` is invisible to the Flutter process, so `hasTailscaleInterface()` always returns false — confirmed in field testing (BUG-031). The detection approach has been replaced with "always use Tailscale URL when configured" (task 018).
+
 ## Status
-- **Date:** 2026-02-28
+- **Date:** 2026-02-28 (implemented), 2026-03-04 (detection replaced — task 018)
 - **Priority:** Medium

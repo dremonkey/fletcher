@@ -174,7 +174,7 @@ Bulletproof connection handling: survive network switches, Bluetooth changes, ai
 - [ ] 012: Foreground Service for Background Microphone 📋 — Android 14+ silences mic within 5s of backgrounding; add `FOREGROUND_SERVICE_MICROPHONE` to keep voice session alive in pocket ([BUG-022](../docs/field-tests/20260303-buglog.md))
 - [~] 013: Client-Side Audio Buffering 🔄 — switched from broken `AudioCaptureService` stub to SDK's `PreConnectAudioBuffer`; mic audio captured natively during SDK reconnect and sent to agent via `streamBytes()` on reconnection (BUG-027). Remaining: verify agent-side handles `lk.agent.pre-connect-audio-buffer` topic. See [013-audio-buffering-plan.md](./09-connectivity/013-audio-buffering-plan.md).
 - [~] 017: Time-Budgeted Reconnect 🔄 — extend client retry window from ~71s to match server departure_timeout (130s); two-phase strategy: 5 fast retries + slow 10s poll until budget expires; implemented, needs field testing ([BUG-028](../docs/field-tests/20260304-buglog.md))
-- [ ] 018: Fix URL Resolver VPN Detection 📋 — `NetworkInterface.list()` can't see Tailscale tun0 on Android 11+ (OS hides other apps' VPN interfaces); blocks all cellular use ([BUG-031](../docs/field-tests/20260304-buglog.md))
+- [~] 018: Fix URL Resolver VPN Detection 🔄 — replaced broken `NetworkInterface.list()` detection with "always use Tailscale URL when configured"; needs field test ([BUG-031](../docs/field-tests/20260304-buglog.md))
 
 **Depends on:** Epic 3 (Flutter App)
 

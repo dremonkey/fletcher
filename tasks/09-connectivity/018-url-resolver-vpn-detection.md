@@ -77,12 +77,12 @@ If `LIVEKIT_URL_TAILSCALE` is set, always use it. Tailscale routes LAN traffic e
 
 ## Checklist
 
-- [ ] Implement chosen solution (A, B, or C)
-- [ ] Remove or deprecate `hasTailscaleInterface()` (broken on Android 11+)
-- [ ] Update `url_resolver.dart` tests
-- [ ] Update task 008 to note the Android limitation
+- [x] Implement Option C: always use Tailscale URL when configured
+- [x] Remove `hasTailscaleInterface()` (broken on Android 11+)
+- [x] Update task 008 to note the Android limitation
+- [x] Update `docs/architecture/network-connectivity.md`
 - [ ] Field test: verify cellular connectivity with Tailscale active
-- [ ] Update `docs/architecture/network-connectivity.md`
+- [ ] Rebuild and deploy Flutter app to device
 
 ## Related
 
