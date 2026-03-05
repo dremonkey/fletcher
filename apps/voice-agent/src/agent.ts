@@ -296,14 +296,15 @@ export default defineAgent({
     });
 
     // -----------------------------------------------------------------------
-    // Pipeline error reporting — forward TTS/STT/LLM errors to the client.
+    // Pipeline error reporting — forward errors to the client as artifacts.
     //
-    // TTS errors are debounced: when quota is exhausted, N parallel sentence
-    // failures each emit a separate error event within milliseconds.  We send
-    // one user-friendly "Voice Unavailable" artifact per burst. (BUG-024)
+    // All error artifacts are debounced to at most 1 per minute.  During a
+    // TTS quota burst (e.g. Gemini 429), hundreds of errors fire within
+    // seconds — we log them all server-side but only surface one artifact
+    // to the user per minute to avoid spamming the UI.
     // -----------------------------------------------------------------------
-    let lastTtsErrorArtifact = 0;
-    const TTS_ERROR_DEBOUNCE_MS = 5_000;
+    let lastErrorArtifact = 0;
+    const ERROR_ARTIFACT_DEBOUNCE_MS = 60_000;
 
     session.on(voice.AgentSessionEventTypes.Error, (ev) => {
       const err = ev.error as { type?: string; label?: string; error?: Error; recoverable?: boolean };
@@ -324,25 +325,18 @@ export default defineAgent({
           : 'Pipeline');
       logger.error({ source, message, recoverable: err.recoverable }, 'Pipeline error');
 
-      if (err.type === 'tts_error') {
-        // Debounce TTS error artifacts — multiple sentence failures fire
-        // within milliseconds of each other during a quota exhaustion burst.
-        const now = Date.now();
-        if (now - lastTtsErrorArtifact > TTS_ERROR_DEBOUNCE_MS) {
-          lastTtsErrorArtifact = now;
-          publishEvent({
-            type: 'artifact',
-            artifact_type: 'error',
-            title: 'Voice Unavailable',
-            message: 'Text responses will continue to appear.',
-          });
-        }
-      } else {
+      // Debounce all error artifacts — at most 1 per minute
+      const now = Date.now();
+      if (now - lastErrorArtifact > ERROR_ARTIFACT_DEBOUNCE_MS) {
+        lastErrorArtifact = now;
+        const isTts = err.type === 'tts_error' || message.includes('TTS');
         publishEvent({
           type: 'artifact',
           artifact_type: 'error',
-          title: `${source} Error`,
-          message,
+          title: isTts ? 'Voice Unavailable' : `${source} Error`,
+          message: isTts
+            ? 'Text responses will continue to appear.'
+            : message,
         });
       }
 

@@ -239,7 +239,7 @@ class OpenClawChatStream extends LLMStream {
           content = [
             'Text below is from Speech-to-Text (STT). Transcription errors are likely.',
             'If an input is short, ambiguous, or nonsensical, ALWAYS clarify before using tools.',
-            'Your response is sent through Text-to-Speech (TTS) so avoid using symbols that do not translate well to voice. 
+            'Your response is sent through Text-to-Speech (TTS) so avoid using symbols that do not translate well to voice.',
             '---',
             content,
           ].join('\n');
