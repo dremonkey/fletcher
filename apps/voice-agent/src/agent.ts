@@ -22,6 +22,8 @@
  *   GOOGLE_API_KEY - Google AI Studio API key (when TTS_PROVIDER=google)
  *   GOOGLE_TTS_VOICE - Gemini voice name (default: 'Kore')
  *   FLETCHER_ACK_SOUND - Acknowledgment sound on EOU: path to audio file, 'builtin' (default), or 'disabled'
+ *   PIPER_URL - Piper TTS sidecar URL for local fallback (e.g. 'http://localhost:5000')
+ *   PIPER_VOICE - Piper voice name (default: sidecar default)
  */
 
 import { defineAgent, cli, ServerOptions, type JobContext } from '@livekit/agents';

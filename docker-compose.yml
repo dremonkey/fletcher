@@ -6,6 +6,10 @@ services:
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml
     restart: unless-stopped
+  piper:
+    image: waveoffire/piper-tts-server
+    network_mode: host
+    restart: unless-stopped
   voice-agent:
     build:
       context: .
@@ -15,6 +19,7 @@ services:
     environment:
       LIVEKIT_URL: ws://localhost:7880
       OPENCLAW_GATEWAY_URL: http://localhost:18789
+      PIPER_URL: http://localhost:5000
       DEBUG: ganglia:*
       LOG_LEVEL: debug
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
