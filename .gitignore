@@ -36,6 +36,9 @@ Thumbs.db
 # git-crypt symmetric key (do NOT commit)
 git-crypt-key
 
+# Piper voice models (large binaries)
+models/
+
 # Docker build staleness markers
 .docker-build-hash
 .docker-pull-timestamp

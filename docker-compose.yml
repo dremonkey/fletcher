@@ -13,8 +13,11 @@ services:
       retries: 15
   piper:
     image: waveoffire/piper-tts-server
+    command: python3.10 -m piper.http_server --model /models/en_US-lessac-medium.onnx --cuda
     network_mode: host
     restart: unless-stopped
+    volumes:
+      - ./models/piper:/models
     deploy:
       resources:
         reservations:
