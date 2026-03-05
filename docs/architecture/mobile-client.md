@@ -156,8 +156,15 @@ sequenceDiagram
 
     Note over LK,Room: Connection active
 
+    Room-->>LK: RoomReconnectingEvent
+    LK->>LK: Create PreConnectAudioBuffer<br/>Start recording mic (60s timeout)
+
+    Room-->>LK: RoomReconnectedEvent
+    LK->>Room: sendAudioData(agents)<br/>Flush buffer via streamBytes()
+    LK->>LK: Reset buffer
+
     Room-->>LK: RoomDisconnectedEvent<br/>(transient reason)
-    LK->>LK: Is network online?
+    LK->>LK: Discard buffer, check network
 
     alt Offline
         LK->>LK: Wait for network restore
@@ -180,6 +187,8 @@ Fletcher uses two layers of reconnection:
 - **Non-transient:** Shows error state (room deleted, duplicate identity, participant removed, etc.)
 
 Transcripts are preserved across reconnects via `disconnect(preserveTranscripts: true)`.
+
+**Reconnection audio buffering:** During SDK reconnection (Layer 1), the app creates a `PreConnectAudioBuffer` (from `livekit_client`) to capture microphone audio natively while the WebRTC transport is down. On `RoomReconnectedEvent`, the buffered audio is sent to agent participants via `sendAudioData()` which uses `streamBytes()` on the `lk.agent.pre-connect-audio-buffer` topic. The buffer has a 10MB ring limit and a 60-second recording timeout. If the room fully disconnects (Layer 2), the buffer is discarded since the room can't send data.
 
 **Audio device recovery:** When Bluetooth headphones connect/disconnect or the audio route changes, `Hardware.instance.onDeviceChange` fires. The app debounces these events (2 seconds for Bluetooth settling time), then calls `LocalTrack.restartTrack()` on the published audio track. This uses WebRTC's `RTCRtpSender.replaceTrack()` to atomically swap the audio capture source — the track stays published throughout, so the agent session is unaffected. This is deliberately **not** a reconnect: `setMicrophoneEnabled(false)` would unpublish the track and cause the agent to close the session.
 
@@ -240,7 +249,7 @@ Circular button with microphone icon. Amber border when muted.
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `livekit_client` | 2.5.0 | LiveKit WebRTC SDK |
+| `livekit_client` | 2.5.4 | LiveKit WebRTC SDK |
 | `flutter_dotenv` | 5.2.1 | Environment variable loading |
 | `flutter_markdown` | 0.7.6 | Markdown rendering in artifacts |
 | `connectivity_plus` | 6.1.4 | Network state monitoring |

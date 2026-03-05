@@ -17,11 +17,10 @@ Setting up the development environment, LiveKit server, and monorepo structure.
 - [x] 001: Setup LiveKit server (local or cloud)
 - [x] 002: Repository structure & CI/CD
 - [x] 003: Bootstrap script (cross-platform)
+- [ ] 004: Remote Reboot "Hail Mary" Fallback 📋
 
 ### 2. [Voice Agent Pipeline](./02-livekit-agent) 🔄
 The voice agent audio pipeline — STT, TTS, voice detection, and agent dispatch.
-
-> Originally scoped as the "OpenClaw Channel Plugin" epic. The channel plugin package has been removed; remaining work focuses on the standalone voice agent pipeline.
 
 **Tasks:**
 - [x] 003: Debug voice agent not responding ✅ — fixed via auto-dispatch (agentName + roomConfig in token)
@@ -31,8 +30,10 @@ The voice agent audio pipeline — STT, TTS, voice detection, and agent dispatch
 - [ ] 009: TTS Empty Chunk Guard 📋 — buffer initial TTS input to avoid Cartesia rejecting punctuation-only chunks ([BUG-005](../docs/field-tests/20260301-buglog.md))
 - [ ] 010: Fix Agent Dispatch in `dev` Mode 📋 — worker registers but LiveKit never dispatches jobs; `connect --room` workaround ([BUG-007](../docs/field-tests/20260301-buglog.md))
 - [ ] 011: Voice Selection Persistent Preferences 📋 — selection UI/API with persistent storage and env-var based config
-- [ ] 012: Agent Self-Terminate on Session Error 📋 — disconnect from room when AgentSession dies to prevent zombie agent blocking fresh dispatch ([BUG-020](../docs/field-tests/20260302-buglog.md))
+- [~] 012: Agent Self-Terminate on Session Error 🔄 — Priority: prevent zombie agents; disconnect from room when session dies
 - [ ] 013: Voice-Aware Metadata Tagging 📋 — inject `is_stt: true` into metadata sent to OpenClaw to enable higher verification thresholds for noisy inputs
+- [~] 015: Tiered Edge TTS Prototype 🔄 — Priority: Hub-side local fallback (Piper/ONNX) to mitigate API limits
+- [ ] 016: Buffer Catch-Up Optimization 📋 — Research accelerated PCM playout and transcript-only catch-up to sync conversation after blackouts
 - [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 complete: fixed endpointing delay units bug (0.8→800ms), increased `minInterruptionDuration` to 800ms, added `minInterruptionWords: 1` to reduce false interruptions; Phase 2-3 (ack sound edge cases, soft TTS fade) deferred pending field testing
 - [x] 014: TTS Error Graceful Degradation ✅ — `maxUnrecoverableErrors: Infinity` prevents session death; Bun patch moves `generateContentStream` inside try/catch for proper retries; debounced "Voice Unavailable" artifact sent to client ([BUG-024](../docs/field-tests/20260303-buglog.md))
 
@@ -78,6 +79,7 @@ A unified LLM plugin (`@knittt/livekit-agent-ganglia`) that bridges LiveKit agen
 - [ ] 006: Migrate TTS to ElevenLabs — replace Cartesia for better vocal character; trade minor latency for "Glitch" personality
 - [ ] 007: Handle "Queue is closed" Gracefully 📋 — catch queue-closed error during user interruption instead of propagating as fatal llm_error ([BUG-019](../docs/field-tests/20260302-buglog.md))
 - [ ] 008: Fix Zombie Agent on Disconnect 📋 — ensure agent disconnects from room when AgentSession dies or user leaves ([BUG-020](../docs/field-tests/20260302-buglog.md))
+- [ ] 016: Explicit Turn Cancellation & Lane Management 📋 — use AbortController to unlock OpenClaw session lanes after network drops
 
 **Implemented:**
 - Unified `@knittt/livekit-agent-ganglia` package with types, factory, events, tool-interceptor
@@ -170,7 +172,7 @@ Bulletproof connection handling: survive network switches, Bluetooth changes, ai
 - [ ] 010: Diagnostics Stale After Reconnect 📋 — HealthService doesn't re-enumerate participants after DUPLICATE_IDENTITY reconnect ([BUG-016](../docs/field-tests/20260302-buglog.md))
 - [ ] 011: Network Transition Audio Track Timeout 📋 — WiFi→cellular causes 55s audio track publish delay (Tailscale tunnel re-establishment) + BT audio route disruption ([BUG-021](../docs/field-tests/20260303-buglog.md))
 - [ ] 012: Foreground Service for Background Microphone 📋 — Android 14+ silences mic within 5s of backgrounding; add `FOREGROUND_SERVICE_MICROPHONE` to keep voice session alive in pocket ([BUG-022](../docs/field-tests/20260303-buglog.md))
-- [ ] 013: Client-Side Audio Buffering 📋 — buffer audio locally during network dead zones to prevent speech loss; deliver buffered audio on reconnect ([BUG-027](../docs/field-tests/20260303-buglog.md))
+- [~] 013: Client-Side Audio Buffering 🔄 — switched from broken `AudioCaptureService` stub to SDK's `PreConnectAudioBuffer`; mic audio captured natively during SDK reconnect and sent to agent via `streamBytes()` on reconnection (BUG-027). Remaining: verify agent-side handles `lk.agent.pre-connect-audio-buffer` topic. See [013-audio-buffering-plan.md](./09-connectivity/013-audio-buffering-plan.md).
 
 **Depends on:** Epic 3 (Flutter App)
 
@@ -234,4 +236,3 @@ Lock onto the primary speaker's voice in a 1-on-1 conversation — reject backgr
    - Create mobile app with LiveKit client
    - Implement Amber Heartbeat visualizer
    - One-button interface to join room
-

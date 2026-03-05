@@ -48,6 +48,9 @@ class LiveKitService extends ChangeNotifier {
   final HealthService healthService = HealthService();
   final ConnectivityService connectivityService = ConnectivityService();
 
+  // Reconnection audio buffer — captures mic during SDK reconnect (BUG-027)
+  PreConnectAudioBuffer? _reconnectBuffer;
+
   // Room reconnection state (sleep/disconnect recovery)
   bool _reconnecting = false;
   int _reconnectAttempt = 0;
@@ -144,6 +147,7 @@ class LiveKitService extends ChangeNotifier {
 
       debugPrint('[Fletcher] Connected to room');
       _localParticipant = _room!.localParticipant;
+
       _reconnectAttempt = 0;
       _reconnecting = false;
       healthService.updateRoomConnected(connected: true);
@@ -185,6 +189,10 @@ class LiveKitService extends ChangeNotifier {
       debugPrint('[Fletcher] SDK reconnecting...');
       _updateState(status: ConversationStatus.reconnecting);
       healthService.updateRoomReconnecting();
+      // Buffer mic audio during reconnection (BUG-027)
+      _reconnectBuffer?.reset();
+      _reconnectBuffer = PreConnectAudioBuffer(_room!);
+      _reconnectBuffer!.startRecording(timeout: const Duration(seconds: 60));
     });
 
     _listener?.on<RoomAttemptReconnectEvent>((event) {
@@ -194,7 +202,7 @@ class LiveKitService extends ChangeNotifier {
       );
     });
 
-    _listener?.on<RoomReconnectedEvent>((_) {
+    _listener?.on<RoomReconnectedEvent>((_) async {
       debugPrint('[Fletcher] SDK reconnected successfully');
       _reconnectAttempt = 0;
       _reconnecting = false;
@@ -204,6 +212,23 @@ class LiveKitService extends ChangeNotifier {
         status: _isMuted ? ConversationStatus.muted : ConversationStatus.idle,
       );
 
+      // Flush buffered audio to agent(s) after reconnection (BUG-027)
+      if (_reconnectBuffer != null) {
+        final agents = _room!.remoteParticipants.values
+            .where((p) => p.kind == ParticipantKind.AGENT)
+            .map((p) => p.identity)
+            .toList();
+        if (agents.isNotEmpty) {
+          try {
+            await _reconnectBuffer!.sendAudioData(agents: agents);
+          } catch (e) {
+            debugPrint('[Fletcher] Failed to send reconnect audio buffer: $e');
+          }
+        }
+        await _reconnectBuffer!.reset();
+        _reconnectBuffer = null;
+      }
+
       // After reconnection, refresh audio track to restore BT routing.
       // Network transitions (WiFi→cellular) tear down the old audio session,
       // causing Android to fall back to speaker. restartTrack() re-establishes
@@ -211,10 +236,13 @@ class LiveKitService extends ChangeNotifier {
       _refreshAudioTrack();
     });
 
-    _listener?.on<RoomDisconnectedEvent>((event) {
+    _listener?.on<RoomDisconnectedEvent>((event) async {
       final reason = event.reason ?? DisconnectReason.unknown;
       debugPrint('[Fletcher] Disconnected: $reason');
       healthService.updateAgentPresent(present: false);
+      // Clean up reconnect buffer — room is disconnecting, can't send via it
+      await _reconnectBuffer?.reset();
+      _reconnectBuffer = null;
 
       if (dr.shouldReconnect(reason)) {
         healthService.updateRoomConnected(
@@ -841,6 +869,8 @@ class LiveKitService extends ChangeNotifier {
   Future<void> disconnect({bool preserveTranscripts = false}) async {
     debugPrint('[Fletcher] Disconnecting (preserveTranscripts=$preserveTranscripts)');
     await _stopForegroundService();
+    await _reconnectBuffer?.reset();
+    _reconnectBuffer = null;
     _audioLevelTimer?.cancel();
     _statusClearTimer?.cancel();
     _userSubtitleClearTimer?.cancel();

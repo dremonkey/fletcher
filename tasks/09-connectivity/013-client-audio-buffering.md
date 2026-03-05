@@ -35,11 +35,11 @@ Implement a client-side audio capture buffer that:
 
 ## Acceptance Criteria
 
-- [ ] Audio is captured locally during network interruptions
-- [ ] Buffered audio is delivered to the agent on reconnection
-- [ ] Agent processes buffered audio and responds appropriately
+- [x] Audio is captured locally during network interruptions — via SDK `PreConnectAudioBuffer`
+- [x] Buffered audio is delivered to the agent on reconnection — via `sendAudioData()` on `RoomReconnectedEvent`
+- [ ] Agent processes buffered audio and responds appropriately — requires agent-side handler for `lk.agent.pre-connect-audio-buffer` topic
 - [ ] UI indicates when audio is being buffered locally
-- [ ] Buffer has a reasonable size limit with graceful overflow handling
+- [x] Buffer has a reasonable size limit with graceful overflow handling — 10MB ring buffer in SDK, 60s timeout
 
 ## Files
 
@@ -54,4 +54,4 @@ Implement a client-side audio capture buffer that:
 ## Status
 - **Date:** 2026-03-04
 - **Priority:** High
-- **Status:** Not started
+- **Status:** In progress — client-side buffering implemented via SDK `PreConnectAudioBuffer`; agent-side handling not yet verified
