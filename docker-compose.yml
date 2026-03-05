@@ -6,6 +6,11 @@ services:
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7880 || exit 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
   piper:
     image: waveoffire/piper-tts-server
     network_mode: host
@@ -23,4 +28,9 @@ services:
       DEBUG: ganglia:*
       LOG_LEVEL: debug
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    depends_on:
+      livekit:
+        condition: service_healthy
+      piper:
+        condition: service_started
     restart: unless-stopped

@@ -3,7 +3,6 @@ import { spawn, type Subprocess } from "bun";
 import { createHash } from "crypto";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
-import { connect, type Socket } from "net";
 import { ROOT, env } from "./env";
 import { DEFAULT_ROOM } from "./audit";
 
@@ -59,29 +58,6 @@ export async function runStep(
 
   s.stop(`${label} — done`);
   return true;
-}
-
-/**
- * Poll a TCP port until it accepts connections or the timeout expires.
- * Returns true if the port became reachable, false on timeout.
- */
-async function waitForPort(host: string, port: number, timeoutMs: number = 30_000): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const reachable = await new Promise<boolean>((resolve) => {
-      const sock: Socket = connect({ host, port }, () => {
-        sock.destroy();
-        resolve(true);
-      });
-      sock.on("error", () => {
-        sock.destroy();
-        resolve(false);
-      });
-    });
-    if (reachable) return true;
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  return false;
 }
 
 /**
@@ -158,41 +134,22 @@ export async function startServices(): Promise<void> {
       p.log.info(`Voice-agent image up to date (${currentHash.slice(0, 8)})`);
     }
 
-    // Step 1: Start LiveKit server
-    await runStep("Starting LiveKit server", [
-      "docker", "compose", "up", "-d", "livekit",
-    ]);
-
-    // Step 2: Wait for LiveKit to accept connections on port 7880
-    const s1 = p.spinner();
-    s1.start("Waiting for LiveKit to be ready (port 7880)");
-    const livekitReady = await waitForPort("127.0.0.1", 7880);
-    if (!livekitReady) {
-      s1.stop("LiveKit failed to become ready within 30s");
-      p.cancel("Service startup failed.");
-      process.exit(1);
-    }
-    s1.stop("LiveKit is ready");
-
-    // Step 3: Start Piper TTS sidecar (local fallback for cloud TTS failures)
-    await runStep("Starting Piper TTS sidecar", [
-      "docker", "compose", "up", "-d", "piper",
-    ]);
-
-    // Step 4: Start voice agent (LiveKit is confirmed ready)
-    await runStep("Starting voice agent", [
+    // Start all services — docker-compose handles dependency ordering:
+    //   livekit (healthcheck: port 7880) → voice-agent
+    //   piper (started) → voice-agent
+    await runStep("Starting services (LiveKit, Piper, voice agent)", [
       "docker", "compose", "up", "-d", "voice-agent",
     ]);
 
-    // Step 5: Wait for agent to register with LiveKit
-    const s2 = p.spinner();
-    s2.start("Waiting for voice agent to register");
+    // Wait for agent to register with LiveKit
+    const s1 = p.spinner();
+    s1.start("Waiting for voice agent to register");
     const agentReady = await waitForAgentRegistration();
     if (!agentReady) {
-      s2.stop("Voice agent failed to register within 30s");
+      s1.stop("Voice agent failed to register within 30s");
       p.log.warn("Agent may not have connected — check `docker compose logs voice-agent`");
     } else {
-      s2.stop("Voice agent registered");
+      s1.stop("Voice agent registered");
     }
   }
 
