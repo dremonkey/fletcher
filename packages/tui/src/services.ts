@@ -174,12 +174,17 @@ export async function startServices(): Promise<void> {
     }
     s1.stop("LiveKit is ready");
 
-    // Step 3: Start voice agent (LiveKit is confirmed ready)
+    // Step 3: Start Piper TTS sidecar (local fallback for cloud TTS failures)
+    await runStep("Starting Piper TTS sidecar", [
+      "docker", "compose", "up", "-d", "piper",
+    ]);
+
+    // Step 4: Start voice agent (LiveKit is confirmed ready)
     await runStep("Starting voice agent", [
       "docker", "compose", "up", "-d", "voice-agent",
     ]);
 
-    // Step 4: Wait for agent to register with LiveKit
+    // Step 5: Wait for agent to register with LiveKit
     const s2 = p.spinner();
     s2.start("Waiting for voice agent to register");
     const agentReady = await waitForAgentRegistration();
