@@ -193,6 +193,16 @@ interface OpenClawChatResponse {
 
 5. **Tool calls** arrive as deltas — the `id` and `function.name` come in the first chunk, subsequent chunks append to `function.arguments`
 
+### Abort Signal Propagation
+
+When the LiveKit SDK detects a participant disconnect or interruption, it calls `LLMStream.close()` which fires `abortController.abort()`. The stream threads this signal through to the client's `fetch()` call via `AbortSignal.any()`, combining it with the client's internal abort controller. This ensures:
+
+1. The in-flight HTTP request is immediately terminated (TCP RST)
+2. The upstream gateway detects the client disconnect and releases any session lane locks
+3. Subsequent requests on the same session key are not blocked by stale turns
+
+Without this, a network drop during an active LLM request would leave the gateway lane locked indefinitely, causing all future requests to return 0 chunks.
+
 ## Logging
 
 Ganglia uses a two-tier logging system:
