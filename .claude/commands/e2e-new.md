@@ -1,0 +1,1 @@
+../../skills/e2e-generator/SKILL.md

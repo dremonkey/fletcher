@@ -1,0 +1,54 @@
+--------- beginning of main
+02-27 09:22:05.281  6758  6758 I etcher.fletcher: Late-enabling -Xcheck:jni
+02-27 09:22:05.308  6758  6758 I etcher.fletcher: Using CollectorTypeCMC GC.
+02-27 09:22:05.308  6758  6758 W etcher.fletcher: Unexpected CPU variant for x86: x86_64.
+02-27 09:22:05.308  6758  6758 W etcher.fletcher: Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, goldmont-without-sha-xsaves, tremont, kabylake, alderlake, default
+02-27 09:22:05.313  6758  6758 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+02-27 09:22:05.327  6758  6758 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.extensions.jar
+02-27 09:22:05.327  6758  6758 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.sidecar.jar
+02-27 09:22:05.396  6758  6758 D nativeloader: Configuring clns-9 for other apk /data/app/~~56G2UqPnqph9BTCCy5CsPg==/com.fletcher.fletcher-mNy4ZTgpfTxlLtqNiscodA==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~56G2UqPnqph9BTCCy5CsPg==/com.fletcher.fletcher-mNy4ZTgpfTxlLtqNiscodA==/lib/x86_64:/data/app/~~56G2UqPnqph9BTCCy5CsPg==/com.fletcher.fletcher-mNy4ZTgpfTxlLtqNiscodA==/base.apk!/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.fletcher.fletcher
+02-27 09:22:05.398  6758  6758 I etcher.fletcher: AssetManager2(0x6fff4f38df38) locale list changing from [] to [en-US]
+02-27 09:22:05.400  6758  6758 V GraphicsEnvironment: Currently set values for:
+02-27 09:22:05.400  6758  6758 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+02-27 09:22:05.400  6758  6758 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+02-27 09:22:05.400  6758  6758 V GraphicsEnvironment: com.fletcher.fletcher is not listed in per-application setting
+02-27 09:22:05.400  6758  6758 V GraphicsEnvironment: ANGLE allowlist from config: com.dreamgames.royalmatch com.dts.freefiremax com.dxx.firenow com.gramgames.mergedragons com.ludo.king com.mojang.minecraftpe com.my.defense com.nintendo.zaka com.os.airforce com.playrix.fishdomdd.gplay io.teslatech.callbreak jp.konami.prospia net.peakgames.toonblast
+02-27 09:22:05.400  6758  6758 V GraphicsEnvironment: com.fletcher.fletcher is not listed in ANGLE allowlist or settings, returning default
+02-27 09:22:05.400  6758  6758 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+--------- beginning of system
+02-27 09:22:05.409  6758  6774 I DisplayManager: Choreographer implicitly registered for the refresh rate.
+02-27 09:22:05.410  6758  6758 I etcher.fletcher: AssetManager2(0x6fff4f3842f8) locale list changing from [] to [en-US]
+02-27 09:22:05.413  6758  6758 E ashmem  : Pinning is deprecated since Android Q. Please use trim or other methods.
+02-27 09:22:05.418  6758  6777 I ResourceExtractor: Found extracted resources res_timestamp-1-1772179723996
+02-27 09:22:05.418  6758  6776 D FlutterJNI: Beginning load of flutter...
+02-27 09:22:05.435  6758  6776 D nativeloader: Load /data/app/~~56G2UqPnqph9BTCCy5CsPg==/com.fletcher.fletcher-mNy4ZTgpfTxlLtqNiscodA==/base.apk!/lib/x86_64/libflutter.so using class loader ns clns-9 (caller=/data/app/~~56G2UqPnqph9BTCCy5CsPg==/com.fletcher.fletcher-mNy4ZTgpfTxlLtqNiscodA==/base.apk): ok
+02-27 09:22:05.435  6758  6776 D FlutterJNI: flutter (null) was loaded normally!
+02-27 09:22:05.437  6758  6774 I EGL_emulation: Opening libGLESv1_CM_emulation.so
+02-27 09:22:05.437  6758  6774 I EGL_emulation: Opening libGLESv2_emulation.so
+02-27 09:22:05.442  6758  6758 I etcher.fletcher: AssetManager2(0x6fff4f38c318) locale list changing from [] to [en-US]
+02-27 09:22:05.443  6758  6774 W HWUI    : Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+02-27 09:22:05.443  6758  6774 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+02-27 09:22:05.440  6758  6758 W etcher.fletcher: type=1400 audit(0.0:26): avc:  denied  { read } for  name="max_map_count" dev="proc" ino=40776 scontext=u:r:untrusted_app:s0:c217,c256,c512,c768 tcontext=u:object_r:proc_max_map_count:s0 tclass=file permissive=0 app=com.fletcher.fletcher
+02-27 09:22:05.455  6758  6758 D DesktopModeFlags: Toggle override initialized to: OVERRIDE_UNSET
+02-27 09:22:05.482  6758  6779 I flutter : [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(104)] Using the Impeller rendering backend (OpenGLES).
+02-27 09:22:05.505  6758  6786 I flutter : The Dart VM service is listening on http://127.0.0.1:40833/7Mly1_hvqi8=/
+02-27 09:22:05.700  6758  6758 I etcher.fletcher: hiddenapi: Accessing hidden method Landroid/view/accessibility/AccessibilityNodeInfo;->getSourceNodeId()J (runtime_flags=0, domain=platform, api=unsupported,test-api) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app) using reflection: allowed
+02-27 09:22:05.700  6758  6758 I etcher.fletcher: hiddenapi: Accessing hidden method Landroid/view/accessibility/AccessibilityRecord;->getSourceNodeId()J (runtime_flags=0, domain=platform, api=unsupported) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app) using reflection: allowed
+02-27 09:22:05.700  6758  6758 I etcher.fletcher: hiddenapi: Accessing hidden field Landroid/view/accessibility/AccessibilityNodeInfo;->mChildNodeIds:Landroid/util/LongArray; (runtime_flags=0, domain=platform, api=unsupported) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app) using reflection: allowed
+02-27 09:22:05.701  6758  6758 I etcher.fletcher: hiddenapi: Accessing hidden method Landroid/util/LongArray;->get(I)J (runtime_flags=0, domain=platform, api=unsupported) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app) using reflection: allowed
+02-27 09:22:05.712  6758  6758 D CompatChangeReporter: Compat change id reported: 377864165; UID 10217; state: ENABLED
+02-27 09:22:05.718  6758  6758 W HWUI    : Unknown dataspace 0
+02-27 09:22:05.821  6758  6758 D AudioSystem: onNewService: media.audio_policy service obtained 0x6ffe3f3f7fb0
+02-27 09:22:05.822  6758  6758 D AudioSystem: getService: checking for service media.audio_policy: 0x6ffe3f3f7fb0
+02-27 09:22:06.153  6758  6758 I WindowExtensionsImpl: Initializing Window Extensions, vendor API level=9, activity embedding enabled=true
+02-27 09:22:06.163  6758  6763 I etcher.fletcher: Compiler allocated 5042KB to compile void android.view.ViewRootImpl.performTraversals()
+02-27 09:22:06.304  6758  6758 W FlutterWebRTCPlugin: audioFocusChangeListener [Speakerphone(name=Speakerphone)] Speakerphone(name=Speakerphone)
+02-27 09:22:06.354  6758  6758 I org.webrtc.Logging: NativeLibrary: Loading native library: jingle_peerconnection_so
+02-27 09:22:06.354  6758  6758 I org.webrtc.Logging: NativeLibrary: Loading library: jingle_peerconnection_so
+02-27 09:22:06.360  6758  6758 D nativeloader: Load /data/app/~~56G2UqPnqph9BTCCy5CsPg==/com.fletcher.fletcher-mNy4ZTgpfTxlLtqNiscodA==/base.apk!/lib/x86_64/libjingle_peerconnection_so.so using class loader ns clns-9 (caller=/data/app/~~56G2UqPnqph9BTCCy5CsPg==/com.fletcher.fletcher-mNy4ZTgpfTxlLtqNiscodA==/base.apk): ok
+02-27 09:22:06.365  6758  6758 D AudioSystem: onNewServiceWithAdapter: media.audio_flinger service obtained 0x6ffe7f401100
+02-27 09:22:06.365  6758  6758 D AudioSystem: getService: checking for service media.audio_flinger: 0x6ffe3f418ee0
+02-27 09:22:06.401  6758  6758 D WindowLayoutComponentImpl: Register WindowLayoutInfoListener on Context=com.fletcher.fletcher.MainActivity@2d6ba18, of which baseContext=android.app.ContextImpl@2f8d948
+02-27 09:22:06.421  6758  6758 D InsetsController: hide(ime(), fromIme=false)
+02-27 09:22:06.421  6758  6758 I ImeTracker: com.fletcher.fletcher:742ee92: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+02-27 09:22:11.006  6758  6806 D ProfileInstaller: Installing profile for com.fletcher.fletcher

@@ -1,0 +1,101 @@
+--------- beginning of main
+02-27 09:18:02.021  4176  4176 I etcher.fletcher: Late-enabling -Xcheck:jni
+02-27 09:18:02.048  4176  4176 I etcher.fletcher: Using CollectorTypeCMC GC.
+02-27 09:18:02.048  4176  4176 W etcher.fletcher: Unexpected CPU variant for x86: x86_64.
+02-27 09:18:02.048  4176  4176 W etcher.fletcher: Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, goldmont-without-sha-xsaves, tremont, kabylake, alderlake, default
+02-27 09:18:02.055  4176  4176 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+02-27 09:18:02.079  4176  4176 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.extensions.jar
+02-27 09:18:02.079  4176  4176 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.sidecar.jar
+02-27 09:18:02.163  4176  4176 D nativeloader: Configuring clns-9 for other apk /data/app/~~56G2UqPnqph9BTCCy5CsPg==/com.fletcher.fletcher-mNy4ZTgpfTxlLtqNiscodA==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~56G2UqPnqph9BTCCy5CsPg==/com.fletcher.fletcher-mNy4ZTgpfTxlLtqNiscodA==/lib/x86_64:/data/app/~~56G2UqPnqph9BTCCy5CsPg==/com.fletcher.fletcher-mNy4ZTgpfTxlLtqNiscodA==/base.apk!/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.fletcher.fletcher
+02-27 09:18:02.166  4176  4176 I etcher.fletcher: AssetManager2(0x6fff4f38df38) locale list changing from [] to [en-US]
+02-27 09:18:02.171  4176  4176 V GraphicsEnvironment: Currently set values for:
+02-27 09:18:02.171  4176  4176 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+02-27 09:18:02.171  4176  4176 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+02-27 09:18:02.171  4176  4176 V GraphicsEnvironment: com.fletcher.fletcher is not listed in per-application setting
+02-27 09:18:02.171  4176  4176 V GraphicsEnvironment: ANGLE allowlist from config: com.dreamgames.royalmatch com.dts.freefiremax com.dxx.firenow com.gramgames.mergedragons com.ludo.king com.mojang.minecraftpe com.my.defense com.nintendo.zaka com.os.airforce com.playrix.fishdomdd.gplay io.teslatech.callbreak jp.konami.prospia net.peakgames.toonblast
+02-27 09:18:02.171  4176  4176 V GraphicsEnvironment: com.fletcher.fletcher is not listed in ANGLE allowlist or settings, returning default
+02-27 09:18:02.171  4176  4176 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+--------- beginning of system
+02-27 09:18:02.183  4176  4204 I DisplayManager: Choreographer implicitly registered for the refresh rate.
+02-27 09:18:02.184  4176  4176 I etcher.fletcher: AssetManager2(0x6fff4f387b38) locale list changing from [] to [en-US]
+02-27 09:18:02.186  4176  4176 E ashmem  : Pinning is deprecated since Android Q. Please use trim or other methods.
+02-27 09:18:02.192  4176  4206 D FlutterJNI: Beginning load of flutter...
+02-27 09:18:02.192  4176  4207 I ResourceExtractor: Found extracted resources res_timestamp-1-1772179723996
+02-27 09:18:02.208  4176  4206 D nativeloader: Load /data/app/~~56G2UqPnqph9BTCCy5CsPg==/com.fletcher.fletcher-mNy4ZTgpfTxlLtqNiscodA==/base.apk!/lib/x86_64/libflutter.so using class loader ns clns-9 (caller=/data/app/~~56G2UqPnqph9BTCCy5CsPg==/com.fletcher.fletcher-mNy4ZTgpfTxlLtqNiscodA==/base.apk): ok
+02-27 09:18:02.209  4176  4206 D FlutterJNI: flutter (null) was loaded normally!
+02-27 09:18:02.215  4176  4204 I EGL_emulation: Opening libGLESv1_CM_emulation.so
+02-27 09:18:02.215  4176  4204 I EGL_emulation: Opening libGLESv2_emulation.so
+02-27 09:18:02.217  4176  4176 I etcher.fletcher: AssetManager2(0x6fff4f390198) locale list changing from [] to [en-US]
+02-27 09:18:02.218  4176  4204 W HWUI    : Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+02-27 09:18:02.218  4176  4204 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+02-27 09:18:02.216  4176  4176 W etcher.fletcher: type=1400 audit(0.0:20): avc:  denied  { read } for  name="max_map_count" dev="proc" ino=21276 scontext=u:r:untrusted_app:s0:c217,c256,c512,c768 tcontext=u:object_r:proc_max_map_count:s0 tclass=file permissive=0 app=com.fletcher.fletcher
+02-27 09:18:02.237  4176  4176 D DesktopModeFlags: Toggle override initialized to: OVERRIDE_UNSET
+02-27 09:18:02.258  4176  4209 I flutter : [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(104)] Using the Impeller rendering backend (OpenGLES).
+02-27 09:18:02.295  4176  4216 I flutter : The Dart VM service is listening on http://127.0.0.1:39679/LkSidEMBzvA=/
+02-27 09:18:02.513  4176  4176 I etcher.fletcher: hiddenapi: Accessing hidden method Landroid/view/accessibility/AccessibilityNodeInfo;->getSourceNodeId()J (runtime_flags=0, domain=platform, api=unsupported,test-api) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app) using reflection: allowed
+02-27 09:18:02.513  4176  4176 I etcher.fletcher: hiddenapi: Accessing hidden method Landroid/view/accessibility/AccessibilityRecord;->getSourceNodeId()J (runtime_flags=0, domain=platform, api=unsupported) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app) using reflection: allowed
+02-27 09:18:02.513  4176  4176 I etcher.fletcher: hiddenapi: Accessing hidden field Landroid/view/accessibility/AccessibilityNodeInfo;->mChildNodeIds:Landroid/util/LongArray; (runtime_flags=0, domain=platform, api=unsupported) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app) using reflection: allowed
+02-27 09:18:02.513  4176  4176 I etcher.fletcher: hiddenapi: Accessing hidden method Landroid/util/LongArray;->get(I)J (runtime_flags=0, domain=platform, api=unsupported) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app) using reflection: allowed
+02-27 09:18:02.524  4176  4176 D CompatChangeReporter: Compat change id reported: 377864165; UID 10217; state: ENABLED
+02-27 09:18:02.532  4176  4176 W HWUI    : Unknown dataspace 0
+02-27 09:18:02.614  4176  4176 D AudioSystem: onNewService: media.audio_policy service obtained 0x6ffe3f3f0080
+02-27 09:18:02.617  4176  4176 D AudioSystem: getService: checking for service media.audio_policy: 0x6ffe3f3f0080
+02-27 09:18:02.965  4176  4176 I Choreographer: Skipped 46 frames!  The application may be doing too much work on its main thread.
+02-27 09:18:02.969  4176  4176 I WindowExtensionsImpl: Initializing Window Extensions, vendor API level=9, activity embedding enabled=true
+02-27 09:18:02.982  4176  4181 I etcher.fletcher: Compiler allocated 5042KB to compile void android.view.ViewRootImpl.performTraversals()
+02-27 09:18:03.125  4176  4176 W FlutterWebRTCPlugin: audioFocusChangeListener [Speakerphone(name=Speakerphone)] Speakerphone(name=Speakerphone)
+02-27 09:18:03.197  4176  4176 I org.webrtc.Logging: NativeLibrary: Loading native library: jingle_peerconnection_so
+02-27 09:18:03.197  4176  4176 I org.webrtc.Logging: NativeLibrary: Loading library: jingle_peerconnection_so
+02-27 09:18:03.200  4176  4176 D nativeloader: Load /data/app/~~56G2UqPnqph9BTCCy5CsPg==/com.fletcher.fletcher-mNy4ZTgpfTxlLtqNiscodA==/base.apk!/lib/x86_64/libjingle_peerconnection_so.so using class loader ns clns-9 (caller=/data/app/~~56G2UqPnqph9BTCCy5CsPg==/com.fletcher.fletcher-mNy4ZTgpfTxlLtqNiscodA==/base.apk): ok
+02-27 09:18:03.206  4176  4176 D AudioSystem: onNewServiceWithAdapter: media.audio_flinger service obtained 0x6ffe7f3f7da0
+02-27 09:18:03.209  4176  4176 D AudioSystem: getService: checking for service media.audio_flinger: 0x6ffe3f3e7430
+02-27 09:18:03.267  4176  4176 D WindowLayoutComponentImpl: Register WindowLayoutInfoListener on Context=com.fletcher.fletcher.MainActivity@2d6ba18, of which baseContext=android.app.ContextImpl@2f8d948
+02-27 09:18:03.285  4176  4176 D InsetsController: hide(ime(), fromIme=false)
+02-27 09:18:03.287  4176  4176 I ImeTracker: com.fletcher.fletcher:9d7e636d: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+02-27 09:18:09.021  4176  4326 D ProfileInstaller: Installing profile for com.fletcher.fletcher
+02-27 09:18:13.588  4176  4176 D ActivityThread: Package [com.google.android.webview] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:13.596  4176  4176 D ActivityThread: Package [com.google.android.webview] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:15.106  4176  4176 D ActivityThread: Package [com.google.android.as.oss] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:15.109  4176  4176 D ActivityThread: Package [com.google.android.as.oss] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:28.519  4176  4176 D ActivityThread: Package [com.android.chrome] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:28.546  4176  4176 D ActivityThread: Package [com.android.chrome] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:30.106  4176  4176 D ActivityThread: Package [com.google.android.apps.wellbeing] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:30.112  4176  4176 D ActivityThread: Package [com.google.android.apps.wellbeing] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:31.047  4176  4176 D ActivityThread: Package [com.google.android.apps.restore] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:31.052  4176  4176 D ActivityThread: Package [com.google.android.apps.restore] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:31.427  4176  4176 D ActivityThread: Package [com.google.android.partnersetup] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:31.431  4176  4176 D ActivityThread: Package [com.google.android.partnersetup] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:34.871  4176  4176 D ActivityThread: Package [com.google.android.tts] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:34.901  4176  4176 D ActivityThread: Package [com.google.android.tts] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:39.980  4176  4176 D ActivityThread: Package [com.google.android.apps.photos] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:39.987  4176  4176 D ActivityThread: Package [com.google.android.apps.photos] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:41.139  4176  4176 D ActivityThread: Package [com.google.android.apps.accessibility.voiceaccess] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:41.148  4176  4176 D ActivityThread: Package [com.google.android.apps.accessibility.voiceaccess] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:45.485  4176  4176 D ActivityThread: Package [com.google.android.apps.youtube.music] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:45.497  4176  4176 D ActivityThread: Package [com.google.android.apps.youtube.music] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:46.421  4176  4176 D ActivityThread: Package [com.google.android.apps.docs] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:46.446  4176  4176 D ActivityThread: Package [com.google.android.apps.docs] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:50.792  4176  4176 D ActivityThread: Package [com.google.android.dialer] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:50.812  4176  4176 D ActivityThread: Package [com.google.android.dialer] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:52.607  4176  4176 D ActivityThread: Package [com.google.android.deskclock] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:52.631  4176  4176 D ActivityThread: Package [com.google.android.deskclock] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:53.919  4176  4176 D ActivityThread: Package [com.google.android.apps.safetyhub] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:53.931  4176  4176 D ActivityThread: Package [com.google.android.apps.safetyhub] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:58.620  4176  4176 D ActivityThread: Package [com.google.android.apps.maps] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:18:58.625  4176  4176 D ActivityThread: Package [com.google.android.apps.maps] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:19:02.899  4176  4176 D ActivityThread: Package [com.google.android.apps.messaging] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:19:02.928  4176  4176 D ActivityThread: Package [com.google.android.apps.messaging] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:19:13.064  4176  4176 D ActivityThread: Package [com.google.android.googlequicksearchbox] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:19:13.064  4176  4176 D ActivityThread: Package [com.google.android.googlequicksearchbox] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:19:21.525  4176  4176 D ActivityThread: Package [com.google.android.youtube] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:19:21.527  4176  4176 D ActivityThread: Package [com.google.android.youtube] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:19:23.453  4176  4176 D ActivityThread: Package [com.google.android.contacts] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:19:23.453  4176  4176 D ActivityThread: Package [com.google.android.contacts] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:19:25.040  4176  4176 D ActivityThread: Package [com.google.android.accessibility.switchaccess] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:19:25.092  4176  4176 D ActivityThread: Package [com.google.android.accessibility.switchaccess] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:19:30.594  4176  4176 D ActivityThread: Package [com.google.android.gm] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:19:30.595  4176  4176 D ActivityThread: Package [com.google.android.gm] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:19:32.451  4176  4176 D ActivityThread: Package [com.google.android.inputmethod.latin] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:19:32.480  4176  4176 D ActivityThread: Package [com.google.android.inputmethod.latin] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:19:37.016  4176  4176 D ActivityThread: Package [com.google.android.calendar] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-27 09:19:37.019  4176  4176 D ActivityThread: Package [com.google.android.calendar] reported as REPLACED, but missing application info. Assuming REMOVED.
