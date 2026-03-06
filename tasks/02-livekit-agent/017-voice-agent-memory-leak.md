@@ -242,9 +242,65 @@ This provides a safety net — the container will be OOM-killed and restarted by
   - `@livekit/agents/src/tts/tts.ts` — Fix 3 (TTS span cleanup)
   - `@livekit/agents/src/llm/llm.ts` — Fix 3 (LLM span cleanup)
 
+## 2026-03-06 Field Test Update
+
+### New data: Idle-session leak (zero voice interactions)
+
+The 2026-03-06 field test reproduced the memory leak with **zero voice interactions** — no STT, no TTS, no LLM calls. Memory grew from 332 MB to 2.6 GB in ~2 hours, eventually killing the agent's DTLS connections (agent dropped from room at 10:51 UTC). The client stayed connected for 7+ hours talking to an empty room.
+
+This means Theory 1 (`_AudioOut.audio` accumulation) is **not the only leak vector**. It explains active-session leaks (TTS frames retained) but cannot explain idle-session growth since no TTS frames were generated.
+
+### Heap snapshot analysis
+
+A heap snapshot was auto-captured at 09:30 UTC (~53 min into idle session):
+**File:** `heap-snapshots/fletcher-heap-2026-03-06T09-30-17-261Z.heapsnapshot` (135 MB)
+
+Top object counts (JSC Inspector v3 format, stride 4, classNameIndex at position 1):
+
+| Class | Instances | Rate |
+|---|---|---|
+| GoogleAuth | 836,183 | ~263/sec |
+| AsyncFunction | 547,487 | closures from auth cycles |
+| AbortSignal | 513,817 | correlates with GoogleAuth |
+| Pino | 24,331 | logger instances |
+| Agent (http) | 23,369 | HTTP agent pool |
+| NapiExternal | 18,892 | native objects |
+
+### Theory 7: GoogleAuth / Google TTS Plugin Idle Churn
+
+**Status: SUSPECTED — NEEDS INVESTIGATION**
+
+836K GoogleAuth-related objects in 53 minutes of idle operation (no `synthesize()` calls). The Google TTS plugin (`@livekit/agents-plugin-google`) creates one `GoogleGenAI` client with one `NodeAuth` / `GoogleAuth` instance at startup. Yet the heap shows 836K instances — ~263 per second.
+
+Possible causes:
+1. **Token refresh timer** — `google-auth-library` may have a background refresh interval that leaks credential/token objects
+2. **Eager connection warmup** — the plugin or `@google/genai` may pre-establish connections or run health checks in a loop
+3. **Event listener accumulation** — auth event handlers registered but never removed
+4. **Internal caching** — `GoogleAuth.getRequestHeaders()` or token cache growing unbounded
+
+The correlated counts (836K GoogleAuth, 548K AsyncFunction, 514K AbortSignal) suggest a recurring async operation creating auth + signal + closure objects in a tight loop.
+
+**Next steps:**
+- Instrument `GoogleAuth` constructor to trace creation callstacks
+- Check if `@google/genai` or `google-auth-library` has known memory leaks
+- Test with Google TTS disabled to isolate whether the leak disappears
+- Profile with `--inspect` and Chrome DevTools for live heap tracking
+
+### Updated memory timeline (2026-03-06)
+
+| Time | RSS | Context |
+|---|---|---|
+| 08:37 | ~332 MB | Agent start (includes 1.2 GB ONNX baseline in child process — RSS is parent only) |
+| 08:52 | 513 MB | Warnings begin (15 min idle) |
+| 09:30 | ~1 GB+ | Heap snapshot triggered; inference slower than realtime |
+| 10:50 | 2,598 MB | Last logged value |
+| 10:51 | — | DTLS timeout, agent drops from room |
+| 16:12 | 332 MB | Fresh session |
+| 16:45 | 1,342 MB | 4x baseline after ~30 min (same leak pattern) |
+
 ## Status
 
-- **Date:** 2026-03-05
+- **Date:** 2026-03-06
 - **Priority:** HIGH
-- **Status:** RCA COMPLETE
-- **Related bugs:** [BUG-004](../../docs/field-tests/20260305-buglog.md)
+- **Status:** RCA IN PROGRESS (new idle-session vector found)
+- **Related bugs:** [BUG-004 (2026-03-05)](../../docs/field-tests/20260305-buglog.md), [BUG-001 (2026-03-06)](../../docs/field-tests/20260306-buglog.md)
