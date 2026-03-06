@@ -8,6 +8,6 @@ rtc:
   port_range_end: 60000
   use_external_ip: true
 room:
-  departure_timeout: 120 # 2 minutes — survive WiFi→5G "break before make" handoff (BUG-015)
+  departure_timeout: 120 # 2 minutes — must match DEPARTURE_TIMEOUT_S in apps/mobile/.env (BUG-015)
 logging:
   level: info

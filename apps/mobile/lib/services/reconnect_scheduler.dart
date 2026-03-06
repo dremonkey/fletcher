@@ -46,10 +46,18 @@ class ReconnectAction {
   final Duration elapsed;
 }
 
+/// Default reconnect budget: departure_timeout + 10s margin.
+/// Read from DEPARTURE_TIMEOUT_S env var at construction time.
+const _defaultBudgetSeconds = 130;
+
 /// Pure scheduling logic for two-phase reconnection (BUG-028).
 ///
 /// Phase 1 (fast): exponential backoff (1s, 2s, 4s, 8s, 16s)
 /// Phase 2 (slow): fixed interval poll until time budget expires
+///
+/// The budget defaults to DEPARTURE_TIMEOUT_S + 10s (matching the server's
+/// room departure_timeout plus margin for network delays). Both values are
+/// derived from the same source: `DEPARTURE_TIMEOUT_S` in `.env`.
 ///
 /// This class is stateful: call [begin] when a disconnect is detected,
 /// [nextAttempt] for each retry, and [reset] on successful reconnection.
@@ -59,9 +67,18 @@ class ReconnectScheduler {
   ReconnectScheduler({
     this.fastRetryCount = 5,
     this.slowPollInterval = const Duration(seconds: 10),
-    this.budget = const Duration(seconds: 130),
+    Duration? budget,
     DateTime Function()? clock,
-  }) : _clock = clock ?? DateTime.now;
+  })  : budget = budget ?? const Duration(seconds: _defaultBudgetSeconds),
+        _clock = clock ?? DateTime.now;
+
+  /// Create a scheduler with budget derived from departure_timeout.
+  /// Budget = departureTimeout + 10s margin.
+  factory ReconnectScheduler.fromDepartureTimeout(int departureTimeoutSeconds) {
+    return ReconnectScheduler(
+      budget: Duration(seconds: departureTimeoutSeconds + 10),
+    );
+  }
 
   final int fastRetryCount;
   final Duration slowPollInterval;

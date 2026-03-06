@@ -13,14 +13,16 @@ import '../widgets/transcript_subtitle.dart';
 
 class ConversationScreen extends StatefulWidget {
   final String livekitUrl;
-  final String token;
   final String? livekitUrlTailscale;
+  final int tokenServerPort;
+  final int departureTimeoutS;
 
   const ConversationScreen({
     super.key,
     required this.livekitUrl,
-    required this.token,
     this.livekitUrlTailscale,
+    this.tokenServerPort = 7882,
+    this.departureTimeoutS = 120,
   });
 
   @override
@@ -45,10 +47,11 @@ class _ConversationScreenState extends State<ConversationScreen>
   }
 
   Future<void> _connect() async {
-    await _liveKitService.connect(
-      url: widget.livekitUrl,
-      token: widget.token,
+    await _liveKitService.connectWithDynamicRoom(
+      lanUrl: widget.livekitUrl,
       tailscaleUrl: widget.livekitUrlTailscale,
+      tokenServerPort: widget.tokenServerPort,
+      departureTimeoutS: widget.departureTimeoutS,
     );
   }
 

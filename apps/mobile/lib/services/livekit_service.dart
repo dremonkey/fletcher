@@ -9,6 +9,8 @@ import 'connectivity_service.dart';
 import 'disconnect_reason.dart' as dr;
 import 'health_service.dart';
 import 'reconnect_scheduler.dart';
+import 'session_storage.dart';
+import 'token_service.dart';
 import 'url_resolver.dart';
 
 /// Max waveform samples (~30 samples at 100ms = 3s history)
@@ -44,6 +46,11 @@ class LiveKitService extends ChangeNotifier {
   String? _token;
   String? _tailscaleUrl;
 
+  // Dynamic room config (set by connectWithDynamicRoom)
+  int _tokenServerPort = 7882;
+  int _departureTimeoutS = 120;
+  String? _currentRoomName;
+
   // Audio device change handling
   StreamSubscription<List<MediaDevice>>? _deviceChangeSub;
   Timer? _deviceChangeDebounce;
@@ -59,7 +66,7 @@ class LiveKitService extends ChangeNotifier {
 
   // Room reconnection state (sleep/disconnect recovery)
   bool _reconnecting = false;
-  final ReconnectScheduler _reconnectScheduler = ReconnectScheduler();
+  ReconnectScheduler _reconnectScheduler = ReconnectScheduler();
 
   // Connectivity-driven reconnect: waits for network restore when offline
   StreamSubscription<bool>? _networkRestoreSub;
@@ -81,6 +88,125 @@ class LiveKitService extends ChangeNotifier {
     final notifStatus = await Permission.notification.request();
     debugPrint('[Fletcher] Permissions: mic=${status.name} bt=${btStatus.name} notif=${notifStatus.name}');
     return status.isGranted;
+  }
+
+  /// High-level connection flow with dynamic room names.
+  ///
+  /// 1. Check SessionStorage for a recent room (< departure_timeout)
+  /// 2. If recent: reuse that room name; if stale/none: generate new name
+  /// 3. Resolve LiveKit URL (race LAN vs Tailscale)
+  /// 4. Fetch token from token endpoint (using resolved host)
+  /// 5. Connect to LiveKit
+  /// 6. Save session to SessionStorage
+  Future<void> connectWithDynamicRoom({
+    required String lanUrl,
+    String? tailscaleUrl,
+    required int tokenServerPort,
+    required int departureTimeoutS,
+  }) async {
+    _tokenServerPort = tokenServerPort;
+    _departureTimeoutS = departureTimeoutS;
+    _tailscaleUrl = tailscaleUrl;
+    _reconnectScheduler = ReconnectScheduler.fromDepartureTimeout(departureTimeoutS);
+
+    _updateState(status: ConversationStatus.connecting);
+
+    try {
+      // Determine room name: reuse recent session or generate new
+      final stalenessThreshold = Duration(seconds: departureTimeoutS);
+      final recentRoom = await SessionStorage.getRecentRoom(
+        stalenessThreshold: stalenessThreshold,
+      );
+      final roomName = recentRoom ?? _generateRoomName();
+      _currentRoomName = roomName;
+
+      debugPrint('[Fletcher] Room: $roomName (${recentRoom != null ? "reused" : "new"})');
+
+      // Resolve URL (race LAN vs Tailscale)
+      final resolved = await resolveLivekitUrl(
+        lanUrl: lanUrl,
+        tailscaleUrl: tailscaleUrl,
+      );
+
+      // Extract host from resolved URL for token endpoint
+      final resolvedUri = Uri.parse(resolved.url);
+      final tokenHost = resolvedUri.host;
+
+      // Fetch token from endpoint
+      final identity = 'user-${DateTime.now().millisecondsSinceEpoch}';
+      final result = await fetchToken(
+        host: tokenHost,
+        port: tokenServerPort,
+        roomName: roomName,
+        identity: identity,
+      );
+
+      // Connect using the low-level connect method
+      await connect(
+        url: lanUrl,
+        token: result.token,
+        tailscaleUrl: tailscaleUrl,
+      );
+
+      // Save session on successful connect
+      if (_state.status != ConversationStatus.error) {
+        await SessionStorage.saveSession(roomName);
+      }
+    } catch (e) {
+      debugPrint('[Fletcher] Dynamic room connection failed: $e');
+      _updateState(
+        status: ConversationStatus.error,
+        errorMessage: 'Connection failed: $e',
+      );
+    }
+  }
+
+  /// Generate a unique room name: fletcher-<unix-millis>.
+  String _generateRoomName() {
+    return 'fletcher-${DateTime.now().millisecondsSinceEpoch}';
+  }
+
+  /// Create a new room and connect to it (used for recovery after budget exhaustion).
+  Future<void> _connectToNewRoom() async {
+    final roomName = _generateRoomName();
+    _currentRoomName = roomName;
+
+    debugPrint('[Fletcher] Creating new room for recovery: $roomName');
+
+    try {
+      // Resolve URL
+      final resolved = await resolveLivekitUrl(
+        lanUrl: _url!,
+        tailscaleUrl: _tailscaleUrl,
+      );
+
+      final resolvedUri = Uri.parse(resolved.url);
+      final tokenHost = resolvedUri.host;
+
+      final identity = 'user-${DateTime.now().millisecondsSinceEpoch}';
+      final result = await fetchToken(
+        host: tokenHost,
+        port: _tokenServerPort,
+        roomName: roomName,
+        identity: identity,
+      );
+
+      await connect(
+        url: _url!,
+        token: result.token,
+        tailscaleUrl: _tailscaleUrl,
+      );
+
+      if (_state.status != ConversationStatus.error) {
+        await SessionStorage.saveSession(roomName);
+      }
+    } catch (e) {
+      debugPrint('[Fletcher] New room connection failed: $e');
+      _updateState(
+        status: ConversationStatus.error,
+        errorMessage: 'Recovery failed: $e',
+      );
+    }
   }
 
   Future<void> connect({
@@ -826,13 +952,14 @@ class LiveKitService extends ChangeNotifier {
 
     switch (action.phase) {
       case ReconnectPhase.exhausted:
-        debugPrint('[Fletcher] Reconnect budget exhausted (${action.elapsed.inSeconds}s) — giving up');
+        debugPrint('[Fletcher] Reconnect budget exhausted (${action.elapsed.inSeconds}s) — creating new room');
         _reconnecting = false;
         _reconnectScheduler.reset();
-        _updateState(
-          status: ConversationStatus.error,
-          errorMessage: 'Failed to reconnect — session expired',
-        );
+        // Instead of showing an error, create a new room for seamless recovery.
+        // The old room's departure_timeout has expired, so a new room gets
+        // a fresh agent dispatch from LiveKit.
+        await disconnect(preserveTranscripts: true);
+        await _connectToNewRoom();
         return;
 
       case ReconnectPhase.fast:
@@ -862,6 +989,11 @@ class LiveKitService extends ChangeNotifier {
 
     // Attempt fresh connect (re-resolves URL for network changes)
     await connect(url: _url!, token: _token!, tailscaleUrl: _tailscaleUrl);
+
+    // If connect succeeded, refresh session timestamp
+    if (_state.status != ConversationStatus.error && _currentRoomName != null) {
+      await SessionStorage.saveSession(_currentRoomName!);
+    }
 
     // If connect failed (status is error), try again
     if (_state.status == ConversationStatus.error) {

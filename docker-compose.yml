@@ -26,10 +26,25 @@ services:
               device_ids:
                 - nvidia.com/gpu=all
               capabilities: [gpu]
+  token-server:
+    build:
+      context: .
+      dockerfile: apps/voice-agent/Dockerfile
+    command: ["run", "scripts/token-server.ts"]
+    network_mode: host
+    env_file: .env
+    environment:
+      LIVEKIT_URL: ws://localhost:7880
+      TOKEN_SERVER_PORT: 7882
+    depends_on:
+      livekit:
+        condition: service_healthy
+    restart: unless-stopped
   voice-agent:
     build:
       context: .
       dockerfile: apps/voice-agent/Dockerfile
+    init: true
     network_mode: host
     env_file: .env
     volumes:

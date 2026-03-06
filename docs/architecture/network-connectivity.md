@@ -1,4 +1,4 @@
-# Network Connectivity: Tailscale-Aware URL Resolution
+# Network Connectivity: URL Resolution & Dynamic Rooms
 
 ## Overview
 
@@ -7,47 +7,87 @@ The Fletcher mobile app connects to a LiveKit server running on the developer's 
 - **LAN** (default): Phone and dev machine on the same WiFi network. The TUI rewrites `LIVEKIT_URL` in `apps/mobile/.env` from `localhost` to the dev machine's LAN IP (e.g., `ws://192.168.87.59:7880`).
 - **Tailscale**: When the phone is on cellular or otherwise off the LAN, it needs the dev machine's Tailscale IP (e.g., `ws://100.87.219.109:7880`). Tailscale also handles same-LAN routing efficiently, so using the Tailscale URL on WiFi adds negligible overhead.
 
-When a Tailscale URL is configured, the app always uses it. This is simpler and more reliable than runtime VPN detection (see "Why Not Runtime Detection" below).
+When both URLs are configured, the app races a TCP connection to both and uses whichever responds first. This handles all network scenarios without platform-specific VPN detection.
 
-## Flow
+## Connection Flow
 
 ```mermaid
 sequenceDiagram
-    participant TUI as TUI (dev machine)
-    participant Env as apps/mobile/.env
     participant App as Flutter App
+    participant SS as SessionStorage
     participant Resolver as UrlResolver
+    participant TS as Token Server
     participant LK as LiveKit Server
 
-    TUI->>TUI: getLanIp() → 192.168.87.59
-    TUI->>TUI: getTailscaleIp() → 100.87.219.109
-    TUI->>Env: LIVEKIT_URL=ws://192.168.87.59:7880
-    TUI->>Env: LIVEKIT_URL_TAILSCALE=ws://100.87.219.109:7880
-
-    App->>Env: Load dotenv
-    App->>Resolver: resolveLivekitUrl(lanUrl, tailscaleUrl)
-
-    alt Tailscale URL configured
-        Resolver-->>App: ResolvedUrl(tailscaleUrl)
-    else No Tailscale URL
-        Resolver-->>App: ResolvedUrl(lanUrl)
+    App->>SS: getRecentRoom(threshold=120s)
+    alt Recent session exists
+        SS-->>App: "fletcher-1772820000000"
+    else No/stale session
+        App->>App: Generate "fletcher-<timestamp>"
     end
 
+    App->>Resolver: resolveLivekitUrl(lanUrl, tailscaleUrl)
+    Resolver->>Resolver: Race TCP to LAN vs Tailscale
+    Resolver-->>App: Winner URL
+
+    App->>TS: GET /token?room=fletcher-xxx&identity=user-xxx
+    TS-->>App: { token: "jwt...", url: "ws://..." }
+
     App->>LK: connect(resolvedUrl, token)
+    LK-->>App: Connected
+    App->>SS: saveSession("fletcher-xxx")
 ```
+
+## Dynamic Room Names
+
+Room names follow the format `fletcher-<unix-millis>` (e.g., `fletcher-1772820000000`). The client generates a new name on each fresh connection and reuses an existing name if the previous session is recent enough.
+
+### Session Staleness
+
+`SessionStorage` (SharedPreferences) saves the last room name and connection timestamp. On app launch:
+
+- If the saved session is **< departure_timeout** old: reuse that room name (the room and agent may still be alive)
+- If **stale or absent**: generate a new room name (guarantees a fresh agent dispatch)
+
+### Token Endpoint
+
+A lightweight Bun HTTP server (`scripts/token-server.ts`) generates JWT tokens on demand:
+
+- `GET /token?room=<name>&identity=<id>` → `{ "token": "<jwt>", "url": "ws://..." }`
+- Grants: `roomJoin`, `roomCreate`, `canPublish`, `canSubscribe`, `canPublishData`
+- TTL: 24h
+- Port: 7882 (configurable via `TOKEN_SERVER_PORT`)
+- Runs as a separate Docker service from the voice agent, so tokens are available even during agent restarts
+
+### Timeout Coordination
+
+Three values derive from the same source — `departure_timeout`:
+
+| Component | Value | Config | Purpose |
+|-----------|-------|--------|---------|
+| Server `departure_timeout` | 120s | `livekit.yaml` | How long room stays alive after last participant leaves |
+| Client reconnect budget | 130s | `reconnect_scheduler.dart` | departure_timeout + 10s margin |
+| Client session staleness | 120s | `session_storage.dart` | How long a saved room name is worth retrying |
+
+### Recovery on Budget Exhaustion
+
+When the reconnect budget expires (> 130s disconnected), instead of showing an error, the client:
+1. Generates a new room name
+2. Fetches a fresh token from the token endpoint
+3. Connects to LiveKit → agent is dispatched to the new room
+4. Saves the new session
+
+This solves BUG-005: agent not dispatched after worker restart.
 
 ## URL Resolution Logic
 
 Resolution is in `apps/mobile/lib/services/url_resolver.dart`.
 
-The strategy is simple: if `LIVEKIT_URL_TAILSCALE` is configured in `.env`, always use it. Otherwise fall back to the LAN URL. No runtime VPN detection is performed.
-
-### Decision Matrix
-
-| `LIVEKIT_URL_TAILSCALE` in `.env`? | URL used | Notes |
-|---|---|---|
-| Yes | Tailscale URL | Works on both WiFi and cellular |
-| No | LAN URL | Only works on the home LAN |
+When both LAN and Tailscale URLs are configured, the app races TCP connections to both and uses whichever succeeds first. This handles all network scenarios:
+- **On LAN with Tailscale active** → both succeed, LAN usually wins (lower latency)
+- **On LAN without Tailscale** → only LAN succeeds
+- **On cellular with Tailscale** → only Tailscale succeeds
+- **Neither reachable** → timeout after 3s, fall back to LAN URL
 
 ### Why Not Runtime Detection?
 
@@ -80,11 +120,15 @@ If the connection is **fully lost** (ICE restart fails, SDK gives up), the app-l
 
 | File | Responsibility |
 |---|---|
+| `scripts/token-server.ts` | Token endpoint — generates JWTs on demand |
 | `packages/tui/src/mobile.ts` | `getLanIp()`, `getTailscaleIp()`, writes both URLs to `.env` |
-| `apps/mobile/lib/services/url_resolver.dart` | `resolveLivekitUrl()`, `ResolvedUrl` |
-| `apps/mobile/lib/main.dart` | Reads `LIVEKIT_URL_TAILSCALE` from dotenv, passes to screen |
-| `apps/mobile/lib/screens/conversation_screen.dart` | Forwards `livekitUrlTailscale` to `LiveKitService.connect()` |
-| `apps/mobile/lib/services/livekit_service.dart` | Calls resolver before every connect |
+| `apps/mobile/lib/services/url_resolver.dart` | `resolveLivekitUrl()`, TCP race between LAN/Tailscale |
+| `apps/mobile/lib/services/token_service.dart` | `fetchToken()` — calls token endpoint |
+| `apps/mobile/lib/services/session_storage.dart` | Persists room name + timestamp via SharedPreferences |
+| `apps/mobile/lib/services/livekit_service.dart` | `connectWithDynamicRoom()`, `_connectToNewRoom()`, reconnection |
+| `apps/mobile/lib/services/reconnect_scheduler.dart` | Two-phase reconnect with configurable budget from departure_timeout |
+| `apps/mobile/lib/main.dart` | Reads TOKEN_SERVER_PORT, DEPARTURE_TIMEOUT_S from dotenv |
+| `apps/mobile/lib/screens/conversation_screen.dart` | Calls `connectWithDynamicRoom()` |
 
 ## Related Documents
 

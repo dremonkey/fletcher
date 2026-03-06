@@ -26,6 +26,8 @@ flowchart TD
         CONN["ConnectivityService"]
         SSS["ScreenStateService"]
         UR["UrlResolver"]
+        TKS["TokenService"]
+        SES["SessionStorage"]
     end
 
     subgraph "Models"
@@ -41,6 +43,8 @@ flowchart TD
     LKS --> HS
     LKS --> CONN
     LKS --> UR
+    LKS --> TKS
+    LKS --> SES
     CS -->|"lifecycle"| SSS
 
     CS -->|"listens"| LKS
@@ -97,7 +101,19 @@ Lightweight network state tracker. Listens to `Connectivity.onConnectivityChange
 
 ### UrlResolver
 
-Detects Tailscale VPN by scanning network interfaces for the CGNAT IP range (`100.64.0.0/10`). See [Network Connectivity](network-connectivity.md) for the full decision matrix.
+Races TCP connections to LAN and Tailscale URLs, using whichever responds first. See [Network Connectivity](network-connectivity.md) for the full URL resolution logic.
+
+### TokenService
+
+Fetches LiveKit JWTs from the token endpoint (`scripts/token-server.ts`). Called by `LiveKitService.connectWithDynamicRoom()` before every fresh connection. The token endpoint host is derived from the URL resolver winner (same host, port from `TOKEN_SERVER_PORT` env var).
+
+### SessionStorage
+
+Persists room name and connection timestamp via SharedPreferences. Used to decide whether to rejoin an existing room or create a new one:
+- **Recent session** (< `DEPARTURE_TIMEOUT_S`): reuse room name
+- **Stale/absent**: generate new `fletcher-<timestamp>` room name
+
+Updated on every successful connect and reconnect.
 
 ## State Model
 
@@ -134,47 +150,65 @@ ConversationState {
 
 ## Connection Lifecycle
 
+### Initial Connection (Dynamic Rooms)
+
 ```mermaid
 sequenceDiagram
     participant App as ConversationScreen
     participant LK as LiveKitService
+    participant SS as SessionStorage
     participant UR as UrlResolver
-    participant HS as HealthService
+    participant TS as Token Server
     participant Room as LiveKit Room
 
-    App->>LK: connect(url, token, tailscaleUrl)
-    LK->>UR: resolveLivekitUrl(url, tailscaleUrl)
-    UR->>UR: Scan network interfaces<br/>for CGNAT range
-    UR-->>LK: Resolved URL
+    App->>LK: connectWithDynamicRoom(lanUrl, tailscaleUrl, port, timeout)
+    LK->>SS: getRecentRoom(threshold=120s)
+    alt Recent session
+        SS-->>LK: "fletcher-1772820000000"
+    else Stale/absent
+        LK->>LK: Generate "fletcher-<timestamp>"
+    end
 
-    LK->>HS: validateConfig()
-    LK->>LK: Request mic permission
+    LK->>UR: resolveLivekitUrl(lanUrl, tailscaleUrl)
+    UR->>UR: Race TCP to LAN vs Tailscale
+    UR-->>LK: Winner URL + host
+
+    LK->>TS: GET /token?room=fletcher-xxx&identity=user-xxx
+    TS-->>LK: { token, url }
+
     LK->>Room: connect(resolvedUrl, token)
     Room-->>LK: Connected
 
-    LK->>LK: Enable microphone
-    LK->>LK: Start audio level timer (100ms)
-    LK->>LK: Register text stream handler
-    LK->>LK: Subscribe to room events
+    LK->>SS: saveSession("fletcher-xxx")
+    LK->>LK: Enable mic, start audio monitoring
+```
 
-    Note over LK,Room: Connection active
+### Reconnection
+
+```mermaid
+sequenceDiagram
+    participant LK as LiveKitService
+    participant Room as LiveKit Room
+    participant TS as Token Server
+    participant SS as SessionStorage
 
     Room-->>LK: RoomReconnectingEvent
-    LK->>LK: Create PreConnectAudioBuffer<br/>Start recording mic (60s timeout)
+    LK->>LK: Create PreConnectAudioBuffer
 
     Room-->>LK: RoomReconnectedEvent
-    LK->>Room: sendAudioData(agents)<br/>Flush buffer via streamBytes()
-    LK->>LK: Reset buffer
+    LK->>Room: sendAudioData (flush buffer)
 
-    Room-->>LK: RoomDisconnectedEvent<br/>(transient reason)
-    LK->>LK: Discard buffer, check network
+    Room-->>LK: RoomDisconnectedEvent (transient)
 
-    alt Offline
-        LK->>LK: Wait for network restore
-        LK->>Room: Reconnect
-    else Online
-        LK->>LK: Exponential backoff<br/>(1s, 2s, 4s, 8s, 16s)
-        LK->>Room: Retry (max 5 attempts)
+    alt Budget remaining (< 130s)
+        LK->>LK: Exponential backoff → slow poll
+        LK->>Room: Reconnect (same room, cached token)
+        LK->>SS: saveSession (refresh timestamp)
+    else Budget exhausted (> 130s)
+        LK->>LK: Generate new room name
+        LK->>TS: GET /token?room=new-room
+        LK->>Room: connect(new room) → fresh agent dispatch
+        LK->>SS: saveSession(new room)
     end
 ```
 
@@ -184,12 +218,14 @@ Fletcher uses two layers of reconnection:
 
 **Layer 1 — SDK auto-reconnect:** LiveKit's built-in reconnection (up to 10 attempts over ~40 seconds). State is fully preserved. The app shows "Reconnecting..." during this window.
 
-**Layer 2 — App-level reconnect:** If SDK reconnection fails (fires `RoomDisconnectedEvent`), the app takes over:
-- **Transient disconnect:** Exponential backoff from 1s to 16s, max 5 attempts
-- **Network offline:** Waits for `ConnectivityService` to report online, then retries
-- **Non-transient:** Shows error state (room deleted, duplicate identity, participant removed, etc.)
+**Layer 2 — App-level reconnect:** If SDK reconnection fails (fires `RoomDisconnectedEvent`), the app takes over with a time-budgeted strategy (budget = departure_timeout + 10s):
+- **Phase 1 (fast):** 5 attempts with exponential backoff (1s, 2s, 4s, 8s, 16s)
+- **Phase 2 (slow):** Poll every 10s until budget expires (~130s total)
+- **Phase 3 (recovery):** Budget exhausted → generate new room name → fetch fresh token → connect to new room. LiveKit dispatches a fresh agent to the new room.
+- **Network offline:** Pauses retries until `ConnectivityService` reports online, then resumes
+- **Non-transient disconnect:** Shows error state (room deleted, duplicate identity, participant removed, etc.)
 
-Transcripts are preserved across reconnects via `disconnect(preserveTranscripts: true)`.
+Transcripts are preserved across reconnects and room transitions via `disconnect(preserveTranscripts: true)`.
 
 **Reconnection audio buffering:** During SDK reconnection (Layer 1), the app creates a `PreConnectAudioBuffer` (from `livekit_client`) to capture microphone audio natively while the WebRTC transport is down. On `RoomReconnectedEvent`, the buffered audio is sent to agent participants via `sendAudioData()` which uses `streamBytes()` on the `lk.agent.pre-connect-audio-buffer` topic. The buffer has a 10MB ring limit and a 60-second recording timeout. If the room fully disconnects (Layer 2), the buffer is discarded since the room can't send data.
 
@@ -283,6 +319,7 @@ Circular button with microphone icon. Amber border when muted.
 | `flutter_markdown` | 0.7.6 | Markdown rendering in artifacts |
 | `connectivity_plus` | 6.1.4 | Network state monitoring |
 | `permission_handler` | 11.3.0 | Microphone permission management |
+| `shared_preferences` | 2.3.0 | Session persistence (room name + timestamp) |
 
 ## Related Documents
 

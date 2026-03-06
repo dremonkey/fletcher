@@ -4,7 +4,7 @@ Fletcher runs on Docker Compose with host networking, managed by Nix for develop
 
 ## Docker Compose
 
-The `docker-compose.yml` defines three services:
+The `docker-compose.yml` defines four services:
 
 ### LiveKit Server
 
@@ -39,6 +39,26 @@ piper:
 A lightweight local TTS engine used as a fallback when cloud TTS providers (ElevenLabs, Google) fail due to rate limits or errors. Runs on port 5000 and accepts POST requests with JSON `{ "text": "...", "voice": "..." }`, returning WAV audio. See [Voice Pipeline](voice-pipeline.md) for the tiered TTS strategy.
 
 **GPU requirement:** The `waveoffire/piper-tts-server` image bundles ONNX Runtime with CUDA. It requires GPU passthrough via CDI (Container Device Interface). On NixOS, enable `hardware.nvidia-container-toolkit.enable = true;` in your system configuration and run `nixos-rebuild switch`. The CDI generator service creates the device spec at `/var/run/cdi/nvidia-container-toolkit.json`. Without this, the container crashes with "CUDA driver version is insufficient for CUDA runtime version".
+
+### Token Server
+
+```yaml
+token-server:
+  build:
+    context: .
+    dockerfile: apps/voice-agent/Dockerfile
+  command: ["run", "scripts/token-server.ts"]
+  network_mode: host
+  env_file: .env
+  environment:
+    LIVEKIT_URL: ws://localhost:7880
+    TOKEN_SERVER_PORT: 7882
+  restart: unless-stopped
+```
+
+A lightweight HTTP endpoint that generates LiveKit JWT tokens on demand. The mobile client calls `GET /token?room=<name>&identity=<id>` to get a fresh token for any room name. This keeps API secrets off the device and enables dynamic room names.
+
+**Separate from voice-agent:** The token server is a distinct service so tokens are available even during voice-agent restarts. It reuses the same Docker image (which already has `livekit-server-sdk` installed) but overrides the entrypoint to run `scripts/token-server.ts`.
 
 ### Voice Agent
 
@@ -158,7 +178,8 @@ See [Network Connectivity](network-connectivity.md) for the full URL resolution 
 | `LIVEKIT_API_SECRET` | Yes | — | LiveKit API secret |
 | `LIVEKIT_ROOM` | No | `fletcher-dev` | Default room name |
 | `LIVEKIT_URL_TAILSCALE` | No | — | Alternate URL for Tailscale VPN (mobile `.env`) |
-| `LIVEKIT_TOKEN` | No | — | Pre-generated access token (mobile `.env`) |
+| `TOKEN_SERVER_PORT` | No | `7882` | Token endpoint HTTP port |
+| `DEPARTURE_TIMEOUT_S` | No | `120` | Room departure timeout — must match `livekit.yaml` (mobile `.env`) |
 
 ### LiveKit Cloud (Optional)
 
@@ -215,6 +236,7 @@ See [Network Connectivity](network-connectivity.md) for the full URL resolution 
 | 7881 | TCP | LiveKit | RTC over TCP (fallback) |
 | 50000-60000 | UDP | LiveKit | WebRTC media streams |
 | 5000 | TCP | Piper | TTS sidecar HTTP API |
+| 7882 | TCP | Token Server | JWT token generation endpoint |
 | 18789 | TCP | OpenClaw/Nanoclaw | Gateway HTTP API |
 
 ## Related Documents
