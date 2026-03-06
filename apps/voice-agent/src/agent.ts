@@ -17,7 +17,7 @@
  *   OPENCLAW_API_KEY - OpenClaw API key (if using openclaw)
  *   FLETCHER_OWNER_IDENTITY - Participant identity of the owner (for session routing)
  *   DEEPGRAM_API_KEY - Deepgram API key for STT
- *   TTS_PROVIDER - TTS backend: 'elevenlabs' (default) or 'google'
+ *   TTS_PROVIDER - TTS backend: 'elevenlabs' | 'google' | 'piper' (default)
  *   ELEVENLABS_API_KEY - ElevenLabs API key for TTS (when TTS_PROVIDER=elevenlabs)
  *   GOOGLE_API_KEY - Google AI Studio API key (when TTS_PROVIDER=google)
  *   GOOGLE_TTS_VOICE - Gemini voice name (default: 'Kore')
@@ -60,7 +60,7 @@ const REQUIRED_ENV = [
   'DEEPGRAM_API_KEY',
 ] as const;
 
-const ttsProvider = (process.env.TTS_PROVIDER ?? 'elevenlabs') as TTSProvider;
+const ttsProvider = (process.env.TTS_PROVIDER ?? 'piper') as TTSProvider;
 
 // Skip env validation for download-files (runs during Docker build without env)
 if (!process.argv.includes('download-files')) {
