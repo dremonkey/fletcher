@@ -16,8 +16,9 @@ interface Logger {
   info: (obj: Record<string, unknown> | string, msg?: string) => void;
 }
 
-const DEFAULT_RSS_THRESHOLD_MB = 1024; // 1 GB
-const MONITOR_INTERVAL_MS = 30_000;    // 30 seconds
+// Auto-snapshot at these RSS thresholds (MB). Each fires once.
+const SNAPSHOT_THRESHOLDS_MB = [1024, 2048, 2560, 3072, 3584]; // 1, 2, 2.5, 3, 3.5 GB
+const MONITOR_INTERVAL_MS = 30_000; // 30 seconds
 
 function writeSnapshot(logger: Logger, reason: string): string | null {
   try {
@@ -36,8 +37,9 @@ function writeSnapshot(logger: Logger, reason: string): string | null {
 }
 
 export function initHeapDiagnostics(logger: Logger): void {
-  const thresholdMb = Number(process.env.FLETCHER_HEAP_THRESHOLD_MB) || DEFAULT_RSS_THRESHOLD_MB;
-  let autoSnapshotTaken = false;
+  // Track which thresholds have fired
+  const pendingThresholds = [...SNAPSHOT_THRESHOLDS_MB].sort((a, b) => a - b);
+  let nextThresholdIndex = 0;
 
   // SIGUSR1 → manual heap snapshot
   process.on('SIGUSR1', () => {
@@ -51,15 +53,18 @@ export function initHeapDiagnostics(logger: Logger): void {
     const heapUsedMb = Math.round(mem.heapUsed / 1024 / 1024);
     const heapTotalMb = Math.round(mem.heapTotal / 1024 / 1024);
 
-    if (rssMb > thresholdMb) {
+    // Check if we've crossed the next threshold
+    if (nextThresholdIndex < pendingThresholds.length && rssMb >= pendingThresholds[nextThresholdIndex]) {
+      const thresholdMb = pendingThresholds[nextThresholdIndex];
+      nextThresholdIndex++;
+      const remaining = pendingThresholds.length - nextThresholdIndex;
       logger.warn(
-        { rssMb, heapUsedMb, heapTotalMb, thresholdMb },
-        'Memory usage exceeds threshold',
+        { rssMb, heapUsedMb, heapTotalMb, thresholdMb, remainingThresholds: remaining },
+        `Memory threshold ${thresholdMb}MB crossed — capturing snapshot`,
       );
-      if (!autoSnapshotTaken) {
-        autoSnapshotTaken = true;
-        writeSnapshot(logger, `RSS ${rssMb}MB exceeded threshold ${thresholdMb}MB`);
-      }
+      writeSnapshot(logger, `RSS ${rssMb}MB crossed ${thresholdMb}MB threshold`);
+    } else if (rssMb >= (pendingThresholds[0] ?? Infinity)) {
+      logger.warn({ rssMb, heapUsedMb, heapTotalMb }, 'Memory usage elevated');
     } else {
       logger.debug({ rssMb, heapUsedMb, heapTotalMb }, 'Memory usage');
     }
@@ -69,7 +74,7 @@ export function initHeapDiagnostics(logger: Logger): void {
   interval.unref();
 
   logger.info(
-    { thresholdMb, intervalMs: MONITOR_INTERVAL_MS },
+    { thresholdsMb: pendingThresholds, intervalMs: MONITOR_INTERVAL_MS },
     'Heap diagnostics initialized (SIGUSR1 for manual snapshot)',
   );
 }
