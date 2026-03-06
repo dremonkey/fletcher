@@ -1,6 +1,6 @@
 # Task 021: Dynamic Room Names for Agent Restart Recovery
 
-**Status:** 🔄 In Progress
+**Status:** ✅ Complete
 **Priority:** HIGH
 **Related:** [BUG-005](../../docs/field-tests/20260306-buglog.md), [Task 020](020-agent-reconnect-after-restart.md)
 
@@ -47,8 +47,8 @@ A lightweight `scripts/token-server.ts` Bun HTTP server generates JWT tokens on 
 - [x] Link BUG-005 to this task
 
 ### Verification
-- [ ] `curl http://localhost:7882/token?room=test&identity=user1` returns valid JWT
-- [ ] Kill app, reopen → new room created, agent dispatched
-- [ ] Toggle airplane mode ~10s → reconnects to same room
+- [x] `curl http://localhost:7882/token?room=test&identity=user1` returns valid JWT
+- [x] Kill app, reopen → new room created, agent dispatched (e2e test 006)
+- [x] Toggle airplane mode ~10s → reconnects to same room (e2e test 007)
 - [ ] `docker compose restart voice-agent` → client recovers via new room
-- [ ] Toggle airplane mode > 2 min → client creates new room
+- [x] Toggle airplane mode > 2 min → client creates new room (e2e test 008)

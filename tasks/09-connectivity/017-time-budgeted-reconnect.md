@@ -249,4 +249,4 @@ Future<void> tryReconnect() async {
 - **Date:** 2026-03-04
 - **Priority:** HIGH
 - **Bug:** BUG-028
-- **Status:** Implemented (`livekit_service.dart`), needs field testing
+- **Status:** ✅ Complete — implemented as `ReconnectScheduler` class; budget clock starts on first SDK reconnect attempt (not on disconnect event); verified via e2e test 008 (budget exhaustion → new room after 177s airplane mode)
