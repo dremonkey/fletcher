@@ -39,6 +39,7 @@ import { initTelemetry, shutdownTelemetry } from './telemetry';
 import { resolveAckSound } from './ack-sound-config';
 import { createTTS, type TTSProvider } from './tts-provider';
 import { TranscriptManager } from './transcript-manager';
+import { initHeapDiagnostics } from './heap-snapshot';
 
 // ---------------------------------------------------------------------------
 // Logger setup — pretty-print when running locally, JSON in production
@@ -98,6 +99,7 @@ if (!process.argv.includes('download-files')) {
 export default defineAgent({
   entry: async (ctx: JobContext) => {
     await initTelemetry(logger);
+    initHeapDiagnostics(logger);
 
     // Publish a ganglia event to the data channel
     const publishEvent = (event: Record<string, unknown>) => {
