@@ -24,6 +24,7 @@ flowchart TD
         LKS["LiveKitService<br/>(ChangeNotifier)"]
         HS["HealthService<br/>(ChangeNotifier)"]
         CONN["ConnectivityService"]
+        SSS["ScreenStateService"]
         UR["UrlResolver"]
     end
 
@@ -40,6 +41,7 @@ flowchart TD
     LKS --> HS
     LKS --> CONN
     LKS --> UR
+    CS -->|"lifecycle"| SSS
 
     CS -->|"listens"| LKS
     CS -->|"listens"| HS
@@ -54,6 +56,7 @@ The central service managing the entire LiveKit lifecycle:
 - **Transcription processing** — handles text streams with per-segment state
 - **Ganglia events** — processes status updates and artifacts from the data channel
 - **Reconnection** — automatic recovery from network changes and disconnects
+- **Background timeout** — 10-minute countdown when app is backgrounded (not screen-locked), updates foreground notification with countdown, disconnects on expiry
 - **Mute state** — persists across reconnects
 
 ### Audio Capture Configuration
@@ -192,9 +195,34 @@ Transcripts are preserved across reconnects via `disconnect(preserveTranscripts:
 
 **Audio device recovery:** When Bluetooth headphones connect/disconnect or the audio route changes, `Hardware.instance.onDeviceChange` fires. The app debounces these events (2 seconds for Bluetooth settling time), then calls `LocalTrack.restartTrack()` on the published audio track. This uses WebRTC's `RTCRtpSender.replaceTrack()` to atomically swap the audio capture source — the track stays published throughout, so the agent session is unaffected. This is deliberately **not** a reconnect: `setMicrophoneEnabled(false)` would unpublish the track and cause the agent to close the session.
 
+### ScreenStateService
+
+A thin Dart wrapper around a platform method channel (`com.fletcher.fletcher/screen_state`) that exposes a single static method: `isScreenLocked()`.
+
+- **Android:** Calls `KeyguardManager.isKeyguardLocked` (in `MainActivity.kt`)
+- **iOS:** Uses `UIScreen.main.brightness == 0` as a heuristic (in `AppDelegate.swift`). iOS doesn't expose a clean "screen locked" API, so this may false-negative — acceptable since iOS kills backgrounded apps aggressively anyway.
+- **Fallback:** Returns `false` on any error (meaning the background timeout will always start if detection fails).
+
 ### App Lifecycle
 
-The screen registers as a `WidgetsBindingObserver`. When the app resumes from background, it calls `tryReconnect()` to recover the connection.
+The screen registers as a `WidgetsBindingObserver` and handles three lifecycle transitions:
+
+| Event | Action |
+|-------|--------|
+| `paused` (screen locked) | No timeout. Session stays alive (user may be talking via earbuds). |
+| `paused` (app switched) | Start 10-minute background timeout. Foreground notification updates with countdown ("Disconnecting in N min"). |
+| `resumed` | Cancel background timeout if active. Reset notification to "Voice session active". Call `tryReconnect()` if connection was lost. |
+| `detached` | Immediate `disconnect()`. |
+
+**Screen lock vs app-switch:** Both trigger `AppLifecycleState.paused`. The app calls `ScreenStateService.isScreenLocked()` to distinguish them. If the screen is locked, no timeout starts — the user may be intentionally talking with the screen off.
+
+**Swipe-away (Android):** The foreground service has `android:stopWithTask="true"` in `AndroidManifest.xml`. When the user swipes Fletcher from recents, `onTaskRemoved()` fires in the `flutter_foreground_task` plugin, which calls `stopSelf()`. This immediately stops the foreground service and notification — no timeout, no delay.
+
+**Background timeout details:** `LiveKitService` manages two timers:
+- `_backgroundTimeoutTimer` — fires after 10 minutes, calls `disconnect()`
+- `_backgroundCountdownTimer` — fires every minute, updates the foreground notification text with the remaining time
+
+Both timers are cancelled on resume or disconnect. The notification countdown gives the user visibility if they check the notification shade.
 
 ## Widget Overview
 
@@ -250,6 +278,7 @@ Circular button with microphone icon. Amber border when muted.
 | Package | Version | Purpose |
 |---------|---------|---------|
 | `livekit_client` | 2.5.4 | LiveKit WebRTC SDK |
+| `flutter_foreground_task` | 8.17.0 | Foreground service for background mic access + notification |
 | `flutter_dotenv` | 5.2.1 | Environment variable loading |
 | `flutter_markdown` | 0.7.6 | Markdown rendering in artifacts |
 | `connectivity_plus` | 6.1.4 | Network state monitoring |
