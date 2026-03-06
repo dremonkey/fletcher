@@ -10,7 +10,6 @@ import 'disconnect_reason.dart' as dr;
 import 'health_service.dart';
 import 'reconnect_scheduler.dart';
 import 'url_resolver.dart';
-import 'wake_word_service.dart';
 
 /// Max waveform samples (~30 samples at 100ms = 3s history)
 const _maxWaveformSamples = 30;
@@ -55,8 +54,6 @@ class LiveKitService extends ChangeNotifier {
 
   final HealthService healthService = HealthService();
   final ConnectivityService connectivityService = ConnectivityService();
-  final WakeWordService _wakeWordService = WakeWordService();
-
   // Reconnection audio buffer — captures mic during SDK reconnect (BUG-027)
   PreConnectAudioBuffer? _reconnectBuffer;
 
@@ -73,42 +70,6 @@ class LiveKitService extends ChangeNotifier {
   // Rolling waveform buffers
   final List<double> _userWaveformBuffer = [];
   final List<double> _aiWaveformBuffer = [];
-
-  Future<void> initWakeWord() async {
-    await _wakeWordService.init();
-    _wakeWordService.onWakeWord.listen((_) {
-      debugPrint('[Fletcher] Wake word detected!');
-      if (_room == null) {
-        // If disconnected, try to reconnect
-        if (_url != null && _token != null) {
-          _reconnectRoom();
-        }
-      } else if (_isMuted) {
-        // If connected but muted, unmute
-        toggleMute();
-      }
-      
-      // Visual feedback (simulated processing)
-      _updateState(status: ConversationStatus.processing);
-    });
-  }
-
-  Future<void> startWakeWordListening() async {
-    if (_room != null && !_isMuted) return; // Don't listen if already connected and unmuted
-    await _wakeWordService.startListening();
-    _updateState(status: ConversationStatus.listeningForWakeWord);
-  }
-
-  Future<void> stopWakeWordListening() async {
-    await _wakeWordService.stopListening();
-    if (_state.status == ConversationStatus.listeningForWakeWord) {
-      _updateState(status: ConversationStatus.idle);
-    }
-  }
-
-  void debugSimulateWakeWord() {
-    _wakeWordService.debugTriggerWakeWord();
-  }
 
   Future<bool> requestPermissions() async {
     final status = await Permission.microphone.request();

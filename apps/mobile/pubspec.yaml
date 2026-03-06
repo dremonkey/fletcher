@@ -15,8 +15,6 @@ dependencies:
   livekit_client: ^2.5.0
   connectivity_plus: ^6.1.4
   permission_handler: ^11.3.0
-  onnxruntime: ^1.4.1
-  mic_stream: ^0.7.2
 
 dev_dependencies:
   flutter_test:
