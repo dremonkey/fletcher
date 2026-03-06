@@ -73,6 +73,9 @@ if (!process.argv.includes('download-files')) {
   if (ttsProvider === 'google' && !process.env.GOOGLE_API_KEY) {
     missing.push('GOOGLE_API_KEY');
   }
+  if (ttsProvider === 'piper' && !process.env.PIPER_URL) {
+    missing.push('PIPER_URL');
+  }
 
   if (missing.length > 0) {
     logger.fatal(`Missing required environment variables: ${missing.join(', ')}`);

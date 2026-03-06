@@ -4,6 +4,7 @@
  * Set TTS_PROVIDER env var to switch backends:
  *   - 'elevenlabs' (default) — ElevenLabs TTS
  *   - 'google' — Gemini 2.5 Flash Preview TTS (requires GOOGLE_API_KEY)
+ *   - 'piper' — Local Piper TTS only (requires PIPER_URL)
  *
  * Additional env vars:
  *   GOOGLE_TTS_VOICE — Gemini voice name (default: 'Kore')
@@ -18,10 +19,13 @@ import { tts } from '@livekit/agents';
 import type { Logger } from 'pino';
 import { PiperTTS } from './piper-tts';
 
-export type TTSProvider = 'elevenlabs' | 'google';
+export type TTSProvider = 'elevenlabs' | 'google' | 'piper';
 
 export function createTTS(provider: TTSProvider, logger: Logger): tts.TTS {
   const primary = createPrimaryTTS(provider, logger);
+
+  // Piper-as-primary doesn't need a fallback wrapper
+  if (provider === 'piper') return primary;
 
   const piperUrl = process.env.PIPER_URL;
   if (piperUrl) {
@@ -47,6 +51,16 @@ function createPrimaryTTS(provider: TTSProvider, logger: Logger): tts.TTS {
         model: 'gemini-2.5-flash-preview-tts',
         voiceName: process.env.GOOGLE_TTS_VOICE || 'Kore',
       });
+
+    case 'piper': {
+      const piperUrl = process.env.PIPER_URL;
+      if (!piperUrl) throw new Error('PIPER_URL is required when TTS_PROVIDER=piper');
+      logger.info({ piperUrl, voice: process.env.PIPER_VOICE }, 'Using Piper TTS (local)');
+      return new PiperTTS({
+        baseUrl: piperUrl,
+        voice: process.env.PIPER_VOICE,
+      });
+    }
 
     case 'elevenlabs':
     default:
