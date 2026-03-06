@@ -159,10 +159,10 @@ export async function startServices(): Promise<void> {
     }
 
     // Start all services — docker-compose handles dependency ordering:
-    //   livekit (healthcheck: port 7880) → voice-agent
+    //   livekit (healthcheck: port 7880) → voice-agent, token-server
     //   piper (started) → voice-agent
-    await runStep("Starting services (LiveKit, Piper, voice agent)", [
-      "docker", "compose", "up", "-d", "voice-agent",
+    await runStep("Starting services (LiveKit, Piper, token server, voice agent)", [
+      "docker", "compose", "up", "-d", "voice-agent", "token-server",
     ]);
 
     // Wait for agent to register with LiveKit

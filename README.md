@@ -156,7 +156,18 @@ Fletcher uses LiveKit for real-time audio. You can start a local LiveKit instanc
 docker compose up -d
 ```
 
-The server will be available at `http://localhost:7880`. Use the default keys provided in `livekit.yaml` for development.
+This starts four services:
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| `livekit` | 7880 (TCP) | WebSocket signaling + WebRTC media (UDP 50000-60000) |
+| `token-server` | 7882 (TCP) | HTTP endpoint for JWT tokens (dynamic room support) |
+| `piper` | 5000 (TCP) | Local TTS engine |
+| `voice-agent` | — | LiveKit agent worker (connects to LiveKit internally) |
+
+Use the default keys provided in `livekit.yaml` for development.
+
+**NixOS firewall:** Ports 7880, 7881, 7882 (TCP) and 50000-60000 (UDP) must be open for LAN clients. Tailscale traffic bypasses the firewall. See [Networking Guide](./docs/troubleshooting/networking.md).
 
 ## Encrypted Files
 

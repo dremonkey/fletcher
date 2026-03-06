@@ -30,6 +30,7 @@ Works across networks (WiFi, cellular, different offices) without firewall or po
 |---------|-------------|---------|
 | App shows "Connecting..." forever (no error) | Phone can't reach server (Tailscale VPN routing?) | [Step 0](#step-0-verify-phone-can-reach-the-server) |
 | `Connection failed: SocketException: Software caused connection abort` | NixOS firewall blocking port 7880 | [NixOS firewall](#nixos-firewall) |
+| `SocketException: HTTP connection timed out ... port: 7882` | NixOS firewall blocking token server port 7882 | [NixOS firewall](#nixos-firewall) |
 | WebSocket connects but no audio | WebRTC UDP blocked | [Step 3](#step-3-webrtc-udp-connectivity) |
 | Works on emulator, fails on physical device | Wrong IP in .env | [Step 2](#step-2-confirm-mobile-env-has-the-right-ip) |
 
@@ -200,6 +201,7 @@ nixos-option networking.firewall.allowedTCPPorts
 networking.firewall.extraCommands = ''
   iptables -A INPUT -p tcp -s 192.168.87.0/24 --dport 7880 -j ACCEPT
   iptables -A INPUT -p tcp -s 192.168.87.0/24 --dport 7881 -j ACCEPT
+  iptables -A INPUT -p tcp -s 192.168.87.0/24 --dport 7882 -j ACCEPT
   iptables -A INPUT -p udp -s 192.168.87.0/24 --dport 50000:60000 -j ACCEPT
 '';
 ```

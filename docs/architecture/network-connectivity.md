@@ -58,6 +58,7 @@ A lightweight Bun HTTP server (`scripts/token-server.ts`) generates JWT tokens o
 - TTL: 24h
 - Port: 7882 (configurable via `TOKEN_SERVER_PORT`)
 - Runs as a separate Docker service from the voice agent, so tokens are available even during agent restarts
+- **Firewall:** Port 7882/tcp must be open on the host for LAN clients (Tailscale bypasses the firewall)
 
 ### Timeout Coordination
 
@@ -105,6 +106,17 @@ URL resolution runs on every connection attempt, not just the initial one:
 2. **`_doReconnectAttempt()`** (disconnect/sleep recovery): Passes cached `_tailscaleUrl` to `connect()`, which re-resolves the URL.
 3. **`_refreshAudioTrack()`** (Bluetooth/headphone change): Does **not** reconnect — uses `restartTrack()` to swap audio capture in-place. URL is unaffected.
 4. **`disconnect(preserveTranscripts: false)`**: Clears `_tailscaleUrl` alongside `_url` and `_token`.
+
+## Required Ports
+
+| Port | Protocol | Service | Purpose |
+|------|----------|---------|---------|
+| 7880 | TCP | LiveKit | WebSocket signaling |
+| 7881 | TCP | LiveKit | TCP fallback for WebRTC |
+| 7882 | TCP | Token server | JWT endpoint for dynamic rooms |
+| 50000-60000 | UDP | LiveKit | ICE/WebRTC media |
+
+On NixOS, these must be explicitly opened in the firewall for LAN clients. Tailscale traffic bypasses the firewall (trusted interface). See `docs/troubleshooting/networking.md` for firewall configuration.
 
 ## ICE and Network Transitions
 
