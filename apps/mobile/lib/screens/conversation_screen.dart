@@ -12,15 +12,13 @@ import '../widgets/transcript_drawer.dart';
 import '../widgets/transcript_subtitle.dart';
 
 class ConversationScreen extends StatefulWidget {
-  final String livekitUrl;
-  final String? livekitUrlTailscale;
+  final List<String> livekitUrls;
   final int tokenServerPort;
   final int departureTimeoutS;
 
   const ConversationScreen({
     super.key,
-    required this.livekitUrl,
-    this.livekitUrlTailscale,
+    required this.livekitUrls,
     required this.tokenServerPort,
     required this.departureTimeoutS,
   });
@@ -48,8 +46,7 @@ class _ConversationScreenState extends State<ConversationScreen>
 
   Future<void> _connect() async {
     await _liveKitService.connectWithDynamicRoom(
-      lanUrl: widget.livekitUrl,
-      tailscaleUrl: widget.livekitUrlTailscale,
+      urls: widget.livekitUrls,
       tokenServerPort: widget.tokenServerPort,
       departureTimeoutS: widget.departureTimeoutS,
     );

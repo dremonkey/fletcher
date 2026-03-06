@@ -44,7 +44,7 @@ class LiveKitService extends ChangeNotifier {
   // Credential cache for reconnects
   String? _url;
   String? _token;
-  String? _tailscaleUrl;
+  List<String> _allUrls = [];
 
   // Dynamic room config — overwritten by connectWithDynamicRoom() from env.
   // Defaults here are fallbacks only; real values come from DEPARTURE_TIMEOUT_S
@@ -101,14 +101,13 @@ class LiveKitService extends ChangeNotifier {
   /// 5. Connect to LiveKit
   /// 6. Save session to SessionStorage
   Future<void> connectWithDynamicRoom({
-    required String lanUrl,
-    String? tailscaleUrl,
+    required List<String> urls,
     required int tokenServerPort,
     required int departureTimeoutS,
   }) async {
     _tokenServerPort = tokenServerPort;
     _departureTimeoutS = departureTimeoutS;
-    _tailscaleUrl = tailscaleUrl;
+    _allUrls = urls;
     _reconnectScheduler = ReconnectScheduler.fromDepartureTimeout(departureTimeoutS);
 
     _updateState(status: ConversationStatus.connecting);
@@ -124,11 +123,8 @@ class LiveKitService extends ChangeNotifier {
 
       debugPrint('[Fletcher] Room: $roomName (${recentRoom != null ? "reused" : "new"})');
 
-      // Resolve URL (race LAN vs Tailscale)
-      final resolved = await resolveLivekitUrl(
-        lanUrl: lanUrl,
-        tailscaleUrl: tailscaleUrl,
-      );
+      // Resolve URL (race all candidates)
+      final resolved = await resolveLivekitUrl(urls: urls);
 
       // Extract host from resolved URL for token endpoint
       final resolvedUri = Uri.parse(resolved.url);
@@ -145,9 +141,8 @@ class LiveKitService extends ChangeNotifier {
 
       // Connect using the low-level connect method
       await connect(
-        url: lanUrl,
+        url: resolved.url,
         token: result.token,
-        tailscaleUrl: tailscaleUrl,
       );
 
       // Save session on successful connect
@@ -177,10 +172,7 @@ class LiveKitService extends ChangeNotifier {
 
     try {
       // Resolve URL
-      final resolved = await resolveLivekitUrl(
-        lanUrl: _url!,
-        tailscaleUrl: _tailscaleUrl,
-      );
+      final resolved = await resolveLivekitUrl(urls: _allUrls);
 
       final resolvedUri = Uri.parse(resolved.url);
       final tokenHost = resolvedUri.host;
@@ -194,9 +186,8 @@ class LiveKitService extends ChangeNotifier {
       );
 
       await connect(
-        url: _url!,
+        url: resolved.url,
         token: result.token,
-        tailscaleUrl: _tailscaleUrl,
       );
 
       if (_state.status != ConversationStatus.error) {
@@ -214,31 +205,13 @@ class LiveKitService extends ChangeNotifier {
   Future<void> connect({
     required String url,
     required String token,
-    String? tailscaleUrl,
   }) async {
     // Cache credentials for reconnect
     _url = url;
     _token = token;
-    if (tailscaleUrl != null) _tailscaleUrl = tailscaleUrl;
-
-    // Resolve the correct URL based on network state (LAN vs Tailscale)
-    final resolved = await resolveLivekitUrl(
-      lanUrl: url,
-      tailscaleUrl: _tailscaleUrl,
-    );
-    final resolvedUrl = resolved.url;
 
     // Run local config validation checks immediately
-    healthService.validateConfig(livekitUrl: resolvedUrl, livekitToken: token);
-
-    // Surface Tailscale warning through health panel if present
-    if (resolved.warning != null) {
-      healthService.updateNetworkStatus(
-        online: true,
-        detail: 'Connected (Tailscale mismatch)',
-        warning: resolved.warning,
-      );
-    }
+    healthService.validateConfig(livekitUrl: url, livekitToken: token);
 
     try {
       _updateState(status: ConversationStatus.connecting);
@@ -275,8 +248,8 @@ class LiveKitService extends ChangeNotifier {
       _listener = _room!.createListener();
       _setupRoomListeners();
 
-      debugPrint('[Fletcher] Connecting to $resolvedUrl');
-      await _room!.connect(resolvedUrl, token);
+      debugPrint('[Fletcher] Connecting to $url');
+      await _room!.connect(url, token);
 
       debugPrint('[Fletcher] Connected to room');
       _localParticipant = _room!.localParticipant;
@@ -989,8 +962,9 @@ class LiveKitService extends ChangeNotifier {
     // Clean up old room/listeners but keep credentials
     await disconnect(preserveTranscripts: true);
 
-    // Attempt fresh connect (re-resolves URL for network changes)
-    await connect(url: _url!, token: _token!, tailscaleUrl: _tailscaleUrl);
+    // Re-resolve URL (network may have changed, e.g. WiFi→cellular)
+    final resolved = await resolveLivekitUrl(urls: _allUrls);
+    await connect(url: resolved.url, token: _token!);
 
     // If connect succeeded, refresh session timestamp
     if (_state.status != ConversationStatus.error && _currentRoomName != null) {
@@ -1133,7 +1107,7 @@ class LiveKitService extends ChangeNotifier {
     if (!preserveTranscripts) {
       _url = null;
       _token = null;
-      _tailscaleUrl = null;
+      _allUrls = [];
     }
   }
 

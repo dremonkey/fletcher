@@ -11,6 +11,7 @@ void main() {
           shouldReconnect(DisconnectReason.signalingConnectionFailure), isTrue);
       expect(
           shouldReconnect(DisconnectReason.reconnectAttemptsExceeded), isTrue);
+      expect(shouldReconnect(DisconnectReason.stateMismatch), isTrue);
     });
 
     test('returns false for non-reconnectable reasons', () {
@@ -20,7 +21,6 @@ void main() {
       expect(shouldReconnect(DisconnectReason.roomDeleted), isFalse);
       expect(shouldReconnect(DisconnectReason.serverShutdown), isFalse);
       expect(shouldReconnect(DisconnectReason.joinFailure), isFalse);
-      expect(shouldReconnect(DisconnectReason.stateMismatch), isFalse);
     });
   });
 

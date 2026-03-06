@@ -26,8 +26,14 @@ class FletcherApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final livekitUrl = dotenv.env['LIVEKIT_URL'] ?? '';
-    final livekitUrlTailscale = dotenv.env['LIVEKIT_URL_TAILSCALE'];
+    // Collect all configured LiveKit URLs for the resolver to race.
+    // Whichever responds first wins (LAN, Tailscale, emulator — all safe to try).
+    final livekitUrls = [
+      dotenv.env['LIVEKIT_URL'],
+      dotenv.env['LIVEKIT_URL_TAILSCALE'],
+      dotenv.env['LIVEKIT_URL_EMULATOR'],
+    ].where((u) => u != null && u.isNotEmpty).cast<String>().toList();
+
     // TOKEN_SERVER_PORT: must match TOKEN_SERVER_PORT in docker-compose.yml
     final tokenServerPort =
         int.tryParse(dotenv.env['TOKEN_SERVER_PORT'] ?? '') ?? 7882;
@@ -49,8 +55,7 @@ class FletcherApp extends StatelessWidget {
         useMaterial3: true,
       ),
       home: ConversationScreen(
-        livekitUrl: livekitUrl,
-        livekitUrlTailscale: livekitUrlTailscale,
+        livekitUrls: livekitUrls,
         tokenServerPort: tokenServerPort,
         departureTimeoutS: departureTimeoutS,
       ),
