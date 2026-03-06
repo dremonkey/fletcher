@@ -8,10 +8,19 @@ Verify that when the app is force-stopped and relaunched after the departure_tim
 
 ## Steps
 
-### Step 1: Clear app data (wipe SharedPreferences and kill app)
+### Step 1: Clear app data and re-grant permissions
+
+`pm clear` wipes SharedPreferences and all runtime permissions. Re-grant them via adb so no permission dialogs block the test.
 
 ```sh
 adb -s ${DEVICE_ID:-emulator-5554} shell pm clear com.fletcher.fletcher
+```
+
+```sh
+adb -s ${DEVICE_ID:-emulator-5554} shell pm grant com.fletcher.fletcher android.permission.RECORD_AUDIO
+adb -s ${DEVICE_ID:-emulator-5554} shell pm grant com.fletcher.fletcher android.permission.BLUETOOTH_CONNECT
+adb -s ${DEVICE_ID:-emulator-5554} shell pm grant com.fletcher.fletcher android.permission.POST_NOTIFICATIONS
+adb -s ${DEVICE_ID:-emulator-5554} shell pm grant com.fletcher.fletcher android.permission.NEARBY_WIFI_DEVICES
 ```
 
 Wait 2 seconds.
@@ -88,6 +97,13 @@ Clear SharedPreferences again (simulating a launch after departure_timeout has e
 
 ```sh
 adb -s ${DEVICE_ID:-emulator-5554} shell pm clear com.fletcher.fletcher
+```
+
+```sh
+adb -s ${DEVICE_ID:-emulator-5554} shell pm grant com.fletcher.fletcher android.permission.RECORD_AUDIO
+adb -s ${DEVICE_ID:-emulator-5554} shell pm grant com.fletcher.fletcher android.permission.BLUETOOTH_CONNECT
+adb -s ${DEVICE_ID:-emulator-5554} shell pm grant com.fletcher.fletcher android.permission.POST_NOTIFICATIONS
+adb -s ${DEVICE_ID:-emulator-5554} shell pm grant com.fletcher.fletcher android.permission.NEARBY_WIFI_DEVICES
 ```
 
 Wait 2 seconds.
