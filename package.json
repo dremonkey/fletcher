@@ -55,6 +55,7 @@
     "livekit-server-sdk": "^2.15.0"
   },
   "patchedDependencies": {
-    "@livekit/agents-plugin-google@1.0.48": "patches/@livekit%2Fagents-plugin-google@1.0.48.patch"
+    "@livekit/agents-plugin-google@1.0.48": "patches/@livekit%2Fagents-plugin-google@1.0.48.patch",
+    "@livekit/agents@1.0.48": "patches/@livekit%2Fagents@1.0.48.patch"
   }
 }

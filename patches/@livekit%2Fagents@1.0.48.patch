@@ -1,0 +1,66 @@
+diff --git a/dist/llm/llm.js b/dist/llm/llm.js
+index c6ecb72d006e6b541952a9882b2eba3a1ec7c2d9..a5db7bb7261221993c84038476c60f4ba9f3a82a 100644
+--- a/dist/llm/llm.js
++++ b/dist/llm/llm.js
+@@ -52,6 +52,11 @@ class LLMStream {
+     this.abortController.signal.addEventListener("abort", () => {
+       this.output.close();
+       this.closed = true;
++      if (this.#llmRequestSpan) {
++        this.#llmRequestSpan.setAttribute("aborted", true);
++        this.#llmRequestSpan.end();
++        this.#llmRequestSpan = undefined;
++      }
+     });
+     startSoon(() => this.mainTask().finally(() => this.queue.close()));
+   }
+diff --git a/dist/tts/tts.js b/dist/tts/tts.js
+index 093724931bdecce2900e6f02d1edf323080a4dd5..25432e30033abb4cc7135646d6683605a91b1892 100644
+--- a/dist/tts/tts.js
++++ b/dist/tts/tts.js
+@@ -57,6 +57,11 @@ class SynthesizeStream {
+       if (!this.input.closed) this.input.close();
+       if (!this.output.closed) this.output.close();
+       this.closed = true;
++      if (this.#ttsRequestSpan) {
++        this.#ttsRequestSpan.setAttribute("aborted", true);
++        this.#ttsRequestSpan.end();
++        this.#ttsRequestSpan = undefined;
++      }
+     });
+     startSoon(() => this.mainTask().finally(() => this.queue.close()));
+   }
+diff --git a/src/llm/llm.ts b/src/llm/llm.ts
+index 624bea490df0851f306fe194fde5df0d4a9eec33..f301f929bcbc11a705d239bc33b3da3477a96f6d 100644
+--- a/src/llm/llm.ts
++++ b/src/llm/llm.ts
+@@ -130,6 +130,12 @@ export abstract class LLMStream implements AsyncIterableIterator<ChatChunk> {
+       // TODO (AJS-37) clean this up when we refactor with streams
+       this.output.close();
+       this.closed = true;
++      // Patch: end orphaned OTel span on abort
++      if (this.#llmRequestSpan) {
++        this.#llmRequestSpan.setAttribute('aborted', true);
++        this.#llmRequestSpan.end();
++        this.#llmRequestSpan = undefined;
++      }
+     });
+ 
+     // this is a hack to immitate asyncio.create_task so that mainTask
+diff --git a/src/tts/tts.ts b/src/tts/tts.ts
+index 8b8dcfda0d71c73ac9b36260ed4575349ce01245..551a3ee308706174580852cd656c5be6deff3df6 100644
+--- a/src/tts/tts.ts
++++ b/src/tts/tts.ts
+@@ -172,6 +172,12 @@ export abstract class SynthesizeStream
+       if (!this.input.closed) this.input.close();
+       if (!this.output.closed) this.output.close();
+       this.closed = true;
++      // Patch: end orphaned OTel span on abort
++      if (this.#ttsRequestSpan) {
++        this.#ttsRequestSpan.setAttribute('aborted', true);
++        this.#ttsRequestSpan.end();
++        this.#ttsRequestSpan = undefined;
++      }
+     });
+ 
+     // this is a hack to immitate asyncio.create_task so that mainTask
