@@ -46,3 +46,6 @@ models/
 # E2E test captures
 e2e/captures/*
 !e2e/captures/.gitkeep
+
+# Debugging Artifacts / Heap Snapshots
+heap-snapshots/
