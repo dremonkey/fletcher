@@ -68,11 +68,11 @@ e2e/helpers/emu-capture.sh 007-step4-airplane-on
 ```
 
 **Expect:**
-- The status badge transitions away from "Listening" — it should show "Reconnecting..." or a similar connecting/degraded state
-- The orb may dim or pulse differently to indicate lost connectivity
+- The Diagnostics chip dot turns red or amber (health check detects connectivity loss)
+- The status badge may still show "Listening" — the SDK handles brief blips internally without surfacing a state change, which is acceptable
 - No crash dialog is visible
 
-### Step 5: Confirm reconnecting state at mid-interruption
+### Step 5: Confirm stable state at mid-interruption
 
 Wait 5 seconds (total ~8 seconds into the interruption), then capture.
 
@@ -81,7 +81,7 @@ e2e/helpers/emu-capture.sh 007-step5-reconnecting
 ```
 
 **Expect:**
-- The status badge shows "Reconnecting..." (or equivalent — not "Listening" and not a permanent error)
+- The Diagnostics chip dot remains red or amber (connectivity still lost)
 - The app has NOT navigated away or shown a fatal error screen
 - The orb is still visible (app has not crashed)
 
@@ -138,11 +138,13 @@ Dismiss the health panel (tap the X or outside the sheet).
 ### Step 9: Verify same-room reconnection via logcat
 
 ```sh
-adb -s ${DEVICE_ID:-emulator-5554} logcat -d --pid=$(adb -s ${DEVICE_ID:-emulator-5554} shell pidof com.fletcher.fletcher) | grep -E '\[Fletcher\] (Room:|SDK reconnect|Creating new room)' | tail -20
+adb -s ${DEVICE_ID:-emulator-5554} logcat -d --pid=$(adb -s ${DEVICE_ID:-emulator-5554} shell pidof com.fletcher.fletcher) | grep -E '\[Fletcher\] (Room:|SDK reconnect|Creating new room|Disconnected|Fast reconnect|Connected to room)' | tail -20
 ```
 
 **Expect:**
-- A log line `[Fletcher] SDK reconnecting...` is present (SDK detected the disconnection)
-- A log line `[Fletcher] SDK reconnected successfully` is present (SDK recovered on its own without app-level retry)
-- The room name logged after reconnection matches the room name recorded in Step 2 — same `fletcher-NNNNNNNNNNNN` identifier
+- Log lines show `[Fletcher] SDK reconnect attempt` during the outage (SDK detected the disconnection)
+- After network restore, `[Fletcher] Disconnected: DisconnectReason.stateMismatch` fires (SDK gave up internal reconnection)
+- A log line `[Fletcher] Fast reconnect 1/5` is present (app-level ReconnectScheduler takes over)
+- A log line `[Fletcher] Connected to room` appears after the fast reconnect (recovery succeeded)
+- Only one `[Fletcher] Room: fletcher-NNNNNNNNNNNN` line exists, matching Step 2 — the same room was reused
 - NO log line containing `[Fletcher] Creating new room` is present — the cached token and room were reused, not a new room
