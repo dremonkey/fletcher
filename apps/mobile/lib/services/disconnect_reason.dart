@@ -6,6 +6,10 @@ const reconnectableReasons = {
   DisconnectReason.disconnected,
   DisconnectReason.signalingConnectionFailure,
   DisconnectReason.reconnectAttemptsExceeded,
+  // stateMismatch fires when the SDK's internal reconnection fails after a
+  // network outage (e.g., airplane mode blip). The ReconnectScheduler should
+  // handle recovery rather than showing a permanent error.
+  DisconnectReason.stateMismatch,
 };
 
 /// Whether a disconnect reason should trigger auto-reconnection.
