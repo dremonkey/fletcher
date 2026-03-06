@@ -90,6 +90,16 @@ export class TranscriptManager {
       if (seg?.contentStarted) {
         this.finalizeStream(streamId);
       }
+      // Clean up knownStreamIds once the segment is gone.  This fires when:
+      // 1. Natural completion: finalizeStream just deleted the segment above.
+      // 2. Interrupted stream's finally block: segment was already deleted
+      //    when the new stream started — the HTTP connection is now closing,
+      //    so no more zombie rotations will follow.
+      // We do NOT clean up on the first onPondering(null) (pre-content),
+      // because the segment still exists at that point.
+      if (!this.streamSegments.has(streamId)) {
+        this.knownStreamIds.delete(streamId);
+      }
     }
   }
 

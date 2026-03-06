@@ -509,10 +509,35 @@ describe('TranscriptManager', () => {
       mgr.onPondering('B', 'stream-2');
       mgr.onPondering('C', 'stream-3');
 
+      // Interrupted streams stay in knownStreamIds until their finally block
+      // fires — this preserves zombie protection (BUG-011).
       expect(mgr._knownStreamIds.has('stream-1')).toBe(true);
       expect(mgr._knownStreamIds.has('stream-2')).toBe(true);
       expect(mgr._knownStreamIds.has('stream-3')).toBe(true);
       expect(mgr._knownStreamIds.size).toBe(3);
+    });
+
+    // -----------------------------------------------------------------------
+    // 14b. knownStreamIds shrinks after full stream lifecycle
+    // -----------------------------------------------------------------------
+    it('cleans up knownStreamIds after stream finalization', () => {
+      // Full lifecycle: pondering → content → pondering-null → finalize
+      mgr.onPondering('Thinking...', 'stream-1');
+      expect(mgr._knownStreamIds.has('stream-1')).toBe(true);
+
+      mgr.onPondering(null, 'stream-1');
+      mgr.onContent('Hello', 'Hello', 'stream-1');
+      mgr.onPondering(null, 'stream-1'); // finalizes
+
+      // knownStreamIds should be cleaned up after finalization
+      expect(mgr._knownStreamIds.has('stream-1')).toBe(false);
+      expect(mgr._knownStreamIds.size).toBe(0);
+
+      // A new stream with the same ID should be treated as new (not zombie)
+      mgr.onPondering('New thought', 'stream-1');
+      expect(mgr._knownStreamIds.has('stream-1')).toBe(true);
+      expect(mgr._activeStreamId).toBe('stream-1');
+      expect(mgr._segments.size).toBe(1);
     });
 
     // -----------------------------------------------------------------------
