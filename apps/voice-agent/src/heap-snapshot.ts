@@ -22,7 +22,9 @@ const MONITOR_INTERVAL_MS = 30_000;    // 30 seconds
 function writeSnapshot(logger: Logger, reason: string): string | null {
   try {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const path = `/tmp/fletcher-heap-${timestamp}.heapsnapshot`;
+    const dir = '/tmp/heap-snapshots';
+    try { require('fs').mkdirSync(dir, { recursive: true }); } catch {}
+    const path = `${dir}/fletcher-heap-${timestamp}.heapsnapshot`;
     const snapshot = Bun.generateHeapSnapshot();
     Bun.write(path, JSON.stringify(snapshot));
     logger.info({ path, reason }, 'Heap snapshot written');

@@ -32,6 +32,8 @@ services:
       dockerfile: apps/voice-agent/Dockerfile
     network_mode: host
     env_file: .env
+    volumes:
+      - ./heap-snapshots:/tmp/heap-snapshots
     environment:
       LIVEKIT_URL: ws://localhost:7880
       OPENCLAW_GATEWAY_URL: http://localhost:18789
