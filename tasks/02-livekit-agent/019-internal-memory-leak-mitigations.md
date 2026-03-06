@@ -102,10 +102,11 @@ Add a 2 GB memory limit to the voice-agent container as a safety net:
 
 ## Acceptance Criteria
 
-- [ ] `knownStreamIds.delete()` added to `TranscriptManager.finalizeStream()`
-- [ ] Transcript-manager tests updated and passing
-- [ ] `bun patch @livekit/agents` applied with span cleanup in TTS + LLM abort handlers
-- [ ] Docker memory limit added to `docker-compose.yml`
+- [x] `knownStreamIds` cleanup added — via `onPondering(null)` when segment is gone (preserves BUG-011 zombie protection)
+- [x] Transcript-manager tests updated and passing (20/20)
+- [x] `bun patch @livekit/agents` applied with span cleanup in TTS + LLM abort handlers
+- [x] Docker memory limit (4G) added to `docker-compose.yml`
+- [x] Heap snapshot mechanism added (SIGUSR1 + periodic RSS monitoring)
 - [ ] `docker compose build voice-agent` succeeds
 - [ ] 1-hour voice session: worker RSS stays under 1 GB (excluding inference child process)
 
@@ -116,9 +117,15 @@ Add a 2 GB memory limit to the voice-agent container as a safety net:
 - `docker-compose.yml`
 - `patches/@livekit+agents@1.0.48.patch` (or wherever bun places patches)
 
+## Implementation Notes
+
+- **knownStreamIds cleanup:** Placed in `onPondering(null)` rather than `finalizeStream()` to preserve BUG-011 zombie protection. Interrupted streams stay in `knownStreamIds` until their HTTP finally block fires; naturally completed streams are cleaned immediately.
+- **Docker memory limit:** Set to 4G (not 2G) to allow heap snapshot capture before OOM. Can reduce after upstream fix lands.
+- **Heap snapshot:** Added `apps/voice-agent/src/heap-snapshot.ts` — SIGUSR1 for manual snapshots, periodic RSS monitoring (30s), auto-capture at 1GB threshold. Wired into `agent.ts` entry function.
+
 ## Status
 
 - **Date:** 2026-03-05
 - **Priority:** HIGH
-- **Status:** READY TO IMPLEMENT
+- **Status:** ✅ IMPLEMENTED (pending field verification)
 - **Parent RCA:** [017-voice-agent-memory-leak.md](./017-voice-agent-memory-leak.md)

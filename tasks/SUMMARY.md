@@ -36,7 +36,7 @@ The voice agent audio pipeline — STT, TTS, voice detection, and agent dispatch
 - [ ] 016: Buffer Catch-Up Optimization 📋 — Research accelerated PCM playout and transcript-only catch-up to sync conversation after blackouts
 - [ ] 017: Voice Agent Memory Leak (RCA) 📋 — root-cause analysis for 7.4 GB leak; see 018 and 019 for implementation ([BUG-004](../docs/field-tests/20260305-buglog.md))
 - [ ] 018: Upstream `_AudioOut.audio` Memory Leak 📋 — file issue + PR on `livekit/agents-js`: `out.audio.push(frame)` in `generation.ts` accumulates all TTS frames, never cleared
-- [ ] 019: Internal Memory Leak Mitigations 📋 — `TranscriptManager.knownStreamIds` cleanup, OTel span leak patch (`bun patch`), Docker memory limit
+- [~] 019: Internal Memory Leak Mitigations 🔄 — `knownStreamIds` cleanup, OTel span leak patch, Docker 4G limit, heap snapshot mechanism; pending field verification
 - [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 complete: fixed endpointing delay units bug (0.8→800ms), increased `minInterruptionDuration` to 800ms, added `minInterruptionWords: 1` to reduce false interruptions; Phase 2-3 (ack sound edge cases, soft TTS fade) deferred pending field testing
 - [x] 014: TTS Error Graceful Degradation ✅ — `maxUnrecoverableErrors: Infinity` prevents session death; `ttsConnOptions: { maxRetry: 0 }` eliminates 429 retry storms; debounced "Voice Unavailable" artifact sent to client ([BUG-024](../docs/field-tests/20260304-buglog.md))
 
