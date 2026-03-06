@@ -81,6 +81,8 @@ If `LIVEKIT_URL_TAILSCALE` is set, always use it. Tailscale routes LAN traffic e
 - [x] Remove `hasTailscaleInterface()` (broken on Android 11+)
 - [x] Update task 008 to note the Android limitation
 - [x] Update `docs/architecture/network-connectivity.md`
+- [x] Implement Option A: race both URLs (replaces Option C)
+- [ ] Field test: verify LAN-only connectivity (Tailscale off)
 - [ ] Field test: verify cellular connectivity with Tailscale active
 - [ ] Rebuild and deploy Flutter app to device
 
@@ -89,7 +91,8 @@ If `LIVEKIT_URL_TAILSCALE` is set, always use it. Tailscale routes LAN traffic e
 - **Task 008:** Original Tailscale URL resolution implementation (code complete, detection broken)
 - **BUG-031:** Field test discovery — [20260304-buglog.md](../../docs/field-tests/20260304-buglog.md)
 - **BUG-028:** Session instability on cellular (compounded by this bug)
+- **BUG-004 (2026-03-06):** Option C broke LAN-only — [20260306-buglog.md](../../docs/field-tests/20260306-buglog.md)
 
 ## Status
-- **Date:** 2026-03-04
+- **Date:** 2026-03-06
 - **Priority:** High — blocks all cellular use
