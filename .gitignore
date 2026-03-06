@@ -15,6 +15,7 @@ build/
 *.g.dart
 *.freezed.dart
 pubspec.lock
+**/android/local.properties
 
 # IDEs
 .vscode/
@@ -36,8 +37,7 @@ Thumbs.db
 # git-crypt symmetric key (do NOT commit)
 git-crypt-key
 
-# Piper voice models (large binaries)
-models/
+# Piper voice models — .onnx tracked via git-lfs (see .gitattributes)
 
 # Docker build staleness markers
 .docker-build-hash

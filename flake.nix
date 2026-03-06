@@ -44,6 +44,7 @@
             androidSdk
             nil # Nix language server for editor support
             git-crypt
+            git-lfs
             git-filter-repo
           ] ++ pkgs.lib.optionals isLinux [
             android-studio
