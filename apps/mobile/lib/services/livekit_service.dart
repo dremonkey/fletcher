@@ -293,6 +293,10 @@ class LiveKitService extends ChangeNotifier {
     // before firing RoomDisconnectedEvent. Show feedback during that window.
     _listener?.on<RoomReconnectingEvent>((_) {
       debugPrint('[Fletcher] SDK reconnecting...');
+      // Start the budget clock NOW — not when the SDK gives up. The server's
+      // departure_timeout counts from the first disconnect, so the app's
+      // budget must too. begin() is idempotent (won't reset if already started).
+      _reconnectScheduler.begin();
       _updateState(status: ConversationStatus.reconnecting);
       healthService.updateRoomReconnecting();
       // Buffer mic audio during reconnection (BUG-027)
@@ -302,6 +306,12 @@ class LiveKitService extends ChangeNotifier {
     });
 
     _listener?.on<RoomAttemptReconnectEvent>((event) {
+      // Start the budget clock on the FIRST SDK reconnect attempt — not when
+      // the SDK gives up. The server's departure_timeout counts from the first
+      // disconnect, so the app's budget must too. begin() is idempotent (won't
+      // reset if already started). We use this event rather than
+      // RoomReconnectingEvent because the SDK doesn't always fire that event.
+      _reconnectScheduler.begin();
       debugPrint(
         '[Fletcher] SDK reconnect attempt ${event.attempt}/${event.maxAttemptsRetry} '
         '(next retry in ${event.nextRetryDelaysInMs}ms)',

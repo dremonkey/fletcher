@@ -14,12 +14,19 @@ This test exercises the fix for BUG-005 (agent not dispatched after worker resta
 
 ## Steps
 
-### Step 1: Force-stop the app and clear logcat
+### Step 1: Force-stop the app, grant permissions, and clear logcat
 
-Clear the logcat buffer before launching so log captures in later steps aren't polluted by logs from a previous run.
+Force-stop the app, pre-grant runtime permissions so no dialogs block the test, and clear the logcat buffer before launching so log captures in later steps aren't polluted by logs from a previous run.
 
 ```sh
 adb -s ${DEVICE_ID:-emulator-5554} shell am force-stop com.fletcher.fletcher
+```
+
+```sh
+adb -s ${DEVICE_ID:-emulator-5554} shell pm grant com.fletcher.fletcher android.permission.RECORD_AUDIO
+adb -s ${DEVICE_ID:-emulator-5554} shell pm grant com.fletcher.fletcher android.permission.BLUETOOTH_CONNECT
+adb -s ${DEVICE_ID:-emulator-5554} shell pm grant com.fletcher.fletcher android.permission.POST_NOTIFICATIONS
+adb -s ${DEVICE_ID:-emulator-5554} shell pm grant com.fletcher.fletcher android.permission.NEARBY_WIFI_DEVICES
 ```
 
 ```sh

@@ -10,10 +10,17 @@ The ReconnectScheduler has a 130s budget. For temporary disconnects within the s
 
 ## Steps
 
-### Step 1: Force-stop and relaunch the app
+### Step 1: Force-stop, grant permissions, and relaunch the app
 
 ```sh
 adb -s ${DEVICE_ID:-emulator-5554} shell am force-stop com.fletcher.fletcher
+```
+
+```sh
+adb -s ${DEVICE_ID:-emulator-5554} shell pm grant com.fletcher.fletcher android.permission.RECORD_AUDIO
+adb -s ${DEVICE_ID:-emulator-5554} shell pm grant com.fletcher.fletcher android.permission.BLUETOOTH_CONNECT
+adb -s ${DEVICE_ID:-emulator-5554} shell pm grant com.fletcher.fletcher android.permission.POST_NOTIFICATIONS
+adb -s ${DEVICE_ID:-emulator-5554} shell pm grant com.fletcher.fletcher android.permission.NEARBY_WIFI_DEVICES
 ```
 
 Wait 2 seconds.
