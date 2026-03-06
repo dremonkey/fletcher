@@ -19,7 +19,7 @@
 
         androidComposition = pkgs.androidenv.composeAndroidPackages {
           buildToolsVersions = [ "34.0.0" "35.0.0" "36.0.0" ];
-          platformVersions = [ "34" "36" ];
+          platformVersions = [ "33" "34" "36" ];
           abiVersions = [ "x86_64" "arm64-v8a" ];
           includeNDK = true;
           ndkVersion = "28.2.13676358";
