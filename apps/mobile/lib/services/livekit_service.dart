@@ -46,7 +46,9 @@ class LiveKitService extends ChangeNotifier {
   String? _token;
   String? _tailscaleUrl;
 
-  // Dynamic room config (set by connectWithDynamicRoom)
+  // Dynamic room config — overwritten by connectWithDynamicRoom() from env.
+  // Defaults here are fallbacks only; real values come from DEPARTURE_TIMEOUT_S
+  // and TOKEN_SERVER_PORT in .env (which must match server-side config).
   int _tokenServerPort = 7882;
   int _departureTimeoutS = 120;
   String? _currentRoomName;

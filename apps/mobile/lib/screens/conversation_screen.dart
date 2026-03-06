@@ -21,8 +21,8 @@ class ConversationScreen extends StatefulWidget {
     super.key,
     required this.livekitUrl,
     this.livekitUrlTailscale,
-    this.tokenServerPort = 7882,
-    this.departureTimeoutS = 120,
+    required this.tokenServerPort,
+    required this.departureTimeoutS,
   });
 
   @override

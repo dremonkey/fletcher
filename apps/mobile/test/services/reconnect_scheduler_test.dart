@@ -333,4 +333,112 @@ void main() {
       expect(totalDelay, const Duration(seconds: 31));
     });
   });
+
+  group('fromDepartureTimeout factory', () {
+    test('budget is departure_timeout + 10s margin', () {
+      final s = ReconnectScheduler.fromDepartureTimeout(120);
+      expect(s.budget, const Duration(seconds: 130));
+    });
+
+    test('works with non-default departure timeout', () {
+      final s = ReconnectScheduler.fromDepartureTimeout(60);
+      expect(s.budget, const Duration(seconds: 70));
+    });
+
+    test('preserves default fast retry count and slow poll interval', () {
+      final s = ReconnectScheduler.fromDepartureTimeout(120);
+      expect(s.fastRetryCount, 5);
+      expect(s.slowPollInterval, const Duration(seconds: 10));
+    });
+
+    test('exhausts at correct time with custom departure timeout', () {
+      var now = DateTime(2026, 3, 6, 12, 0, 0);
+      // Can't use factory + clock, so use constructor directly
+      final s = ReconnectScheduler(
+        budget: const Duration(seconds: 70), // 60 + 10
+        clock: () => now,
+      );
+      s.begin();
+
+      // Still within budget at 70s
+      now = DateTime(2026, 3, 6, 12, 1, 10); // 70s
+      for (var i = 0; i < 5; i++) {
+        s.nextAttempt(); // exhaust fast phase
+      }
+      final slow = s.nextAttempt();
+      expect(slow.phase, ReconnectPhase.slow);
+
+      // Past budget at 71s
+      now = DateTime(2026, 3, 6, 12, 1, 11); // 71s
+      final exhausted = s.nextAttempt();
+      expect(exhausted.phase, ReconnectPhase.exhausted);
+    });
+  });
+
+  group('budget-exhausted triggers new room (integration scenario)', () {
+    test('full reconnect cycle ends with exhausted after budget', () {
+      // Simulates the complete reconnect lifecycle that triggers
+      // _connectToNewRoom in livekit_service.dart
+      var now = DateTime(2026, 3, 6, 12, 0, 0);
+      final s = ReconnectScheduler.fromDepartureTimeout(120);
+      // Inject clock by creating equivalent manually
+      final scheduler = ReconnectScheduler(
+        budget: s.budget, // 130s
+        clock: () => now,
+      );
+      scheduler.begin();
+
+      // Fast phase: 5 attempts
+      final fastActions = <ReconnectAction>[];
+      for (var i = 0; i < 5; i++) {
+        now = now.add(const Duration(seconds: 1)); // small time advance
+        fastActions.add(scheduler.nextAttempt());
+      }
+      expect(fastActions.every((a) => a.phase == ReconnectPhase.fast), isTrue);
+
+      // Slow phase: poll until near budget
+      now = DateTime(2026, 3, 6, 12, 2, 0); // 120s
+      final slowAction = scheduler.nextAttempt();
+      expect(slowAction.phase, ReconnectPhase.slow);
+
+      // Budget exhausted: > 130s
+      now = DateTime(2026, 3, 6, 12, 2, 11); // 131s
+      final exhaustedAction = scheduler.nextAttempt();
+      expect(exhaustedAction.phase, ReconnectPhase.exhausted);
+      expect(exhaustedAction.elapsed.inSeconds, 131);
+
+      // After reset + begin, a fresh cycle starts
+      scheduler.reset();
+      now = DateTime(2026, 3, 6, 12, 3, 0);
+      scheduler.begin();
+      final freshAction = scheduler.nextAttempt();
+      expect(freshAction.phase, ReconnectPhase.fast);
+      expect(freshAction.attempt, 1);
+    });
+
+    test('reset after exhaustion allows a fresh reconnect cycle', () {
+      var now = DateTime(2026, 3, 6, 12, 0, 0);
+      final s = ReconnectScheduler(
+        budget: const Duration(seconds: 10),
+        clock: () => now,
+      );
+      s.begin();
+
+      // Exhaust immediately
+      now = now.add(const Duration(seconds: 11));
+      expect(s.nextAttempt().phase, ReconnectPhase.exhausted);
+
+      // Reset (simulates what livekit_service does before _connectToNewRoom)
+      s.reset();
+      expect(s.isActive, isFalse);
+      expect(s.attempt, 0);
+
+      // Start fresh cycle (new room connection)
+      s.begin();
+      now = now.add(const Duration(seconds: 1));
+      final action = s.nextAttempt();
+      expect(action.phase, ReconnectPhase.fast);
+      expect(action.delay, const Duration(seconds: 1));
+    });
+  });
 }

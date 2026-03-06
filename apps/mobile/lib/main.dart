@@ -28,8 +28,12 @@ class FletcherApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final livekitUrl = dotenv.env['LIVEKIT_URL'] ?? '';
     final livekitUrlTailscale = dotenv.env['LIVEKIT_URL_TAILSCALE'];
+    // TOKEN_SERVER_PORT: must match TOKEN_SERVER_PORT in docker-compose.yml
     final tokenServerPort =
         int.tryParse(dotenv.env['TOKEN_SERVER_PORT'] ?? '') ?? 7882;
+    // DEPARTURE_TIMEOUT_S: must match room.departure_timeout in livekit.yaml
+    // The client uses this to decide when a saved room is stale (session gone)
+    // and to size the reconnect budget (departure_timeout + 10s margin).
     final departureTimeoutS =
         int.tryParse(dotenv.env['DEPARTURE_TIMEOUT_S'] ?? '') ?? 120;
 
