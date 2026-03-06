@@ -197,12 +197,12 @@ This gives the user visibility into the timeout if they pull down the notificati
 
 ## Acceptance Criteria
 
-- [ ] Locking the screen does **not** start any disconnect timer
-- [ ] Switching to another app starts a 10-minute countdown
-- [ ] Returning to the app before 10 minutes cancels the countdown
-- [ ] After 10 minutes backgrounded, the session disconnects and foreground service stops
-- [ ] Swiping the app from recents immediately stops the foreground service
-- [ ] The notification text updates to show countdown status
+- [x] Locking the screen does **not** start any disconnect timer
+- [x] Switching to another app starts a 10-minute countdown
+- [x] Returning to the app before 10 minutes cancels the countdown
+- [x] After 10 minutes backgrounded, the session disconnects and foreground service stops
+- [x] Swiping the app from recents immediately stops the foreground service
+- [x] The notification text updates to show countdown status
 - [ ] Battery usage is measurably reduced when app is left backgrounded
 - [ ] Field test: lock screen while talking → session stays alive indefinitely
 - [ ] Field test: switch to Chrome for 5 minutes → session still alive
@@ -224,4 +224,4 @@ This gives the user visibility into the timeout if they pull down the notificati
 ## Status
 - **Date:** 2026-03-05
 - **Priority:** Medium (battery/UX improvement, not a crash bug)
-- **Status:** Not started
+- **Status:** Implemented, pending field verification

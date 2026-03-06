@@ -34,6 +34,12 @@ class LiveKitService extends ChangeNotifier {
   Timer? _userSubtitleClearTimer;
   Timer? _agentSubtitleClearTimer;
 
+  // Background session timeout (task 019)
+  static const _backgroundTimeout = Duration(minutes: 10);
+  Timer? _backgroundTimeoutTimer;
+  Timer? _backgroundCountdownTimer;
+  int _backgroundMinutesRemaining = 0;
+
   // Credential cache for reconnects
   String? _url;
   String? _token;
@@ -919,6 +925,70 @@ class LiveKitService extends ChangeNotifier {
     await _reconnectRoom();
   }
 
+  // ---------------------------------------------------------------------------
+  // Background session timeout (task 019)
+  // ---------------------------------------------------------------------------
+
+  /// Called when the app is backgrounded (AppLifecycleState.paused).
+  /// If the screen is not locked, starts a 10-minute countdown that
+  /// disconnects the session on expiry. Screen-locked means the user may
+  /// be talking via earbuds, so we skip the timeout.
+  void onAppBackgrounded({required bool isScreenLocked}) {
+    if (_room == null) return;
+    if (isScreenLocked) {
+      debugPrint('[Fletcher] Screen locked — skipping background timeout');
+      return;
+    }
+
+    debugPrint('[Fletcher] App backgrounded — starting ${_backgroundTimeout.inMinutes}min timeout');
+    _backgroundMinutesRemaining = _backgroundTimeout.inMinutes;
+
+    _updateBackgroundNotification();
+
+    _backgroundCountdownTimer?.cancel();
+    _backgroundCountdownTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      _backgroundMinutesRemaining--;
+      if (_backgroundMinutesRemaining > 0) {
+        _updateBackgroundNotification();
+      }
+    });
+
+    _backgroundTimeoutTimer?.cancel();
+    _backgroundTimeoutTimer = Timer(_backgroundTimeout, () {
+      debugPrint('[Fletcher] Background timeout expired — disconnecting');
+      _backgroundCountdownTimer?.cancel();
+      _backgroundCountdownTimer = null;
+      disconnect();
+    });
+  }
+
+  /// Called when the app is resumed (AppLifecycleState.resumed).
+  /// Cancels any active background timeout and resets the notification.
+  void onAppResumed() {
+    if (_backgroundTimeoutTimer == null) return;
+
+    debugPrint('[Fletcher] App resumed — cancelling background timeout');
+    _backgroundTimeoutTimer?.cancel();
+    _backgroundTimeoutTimer = null;
+    _backgroundCountdownTimer?.cancel();
+    _backgroundCountdownTimer = null;
+
+    // Reset notification text
+    if (_room != null) {
+      FlutterForegroundTask.updateService(
+        notificationTitle: 'Fletcher',
+        notificationText: 'Voice session active',
+      );
+    }
+  }
+
+  void _updateBackgroundNotification() {
+    FlutterForegroundTask.updateService(
+      notificationTitle: 'Fletcher',
+      notificationText: 'Disconnecting in $_backgroundMinutesRemaining min',
+    );
+  }
+
   Future<void> disconnect({bool preserveTranscripts = false}) async {
     debugPrint('[Fletcher] Disconnecting (preserveTranscripts=$preserveTranscripts)');
     await _stopForegroundService();
@@ -928,6 +998,10 @@ class LiveKitService extends ChangeNotifier {
     _statusClearTimer?.cancel();
     _userSubtitleClearTimer?.cancel();
     _agentSubtitleClearTimer?.cancel();
+    _backgroundTimeoutTimer?.cancel();
+    _backgroundTimeoutTimer = null;
+    _backgroundCountdownTimer?.cancel();
+    _backgroundCountdownTimer = null;
     _deviceChangeDebounce?.cancel();
     _deviceChangeSub?.cancel();
     _deviceChangeSub = null;

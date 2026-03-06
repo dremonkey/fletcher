@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/conversation_state.dart';
 import '../services/livekit_service.dart';
+import '../services/screen_state_service.dart';
 import '../widgets/amber_orb.dart';
 import '../widgets/artifact_viewer.dart';
 import '../widgets/audio_waveform.dart';
@@ -53,9 +54,21 @@ class _ConversationScreenState extends State<ConversationScreen>
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _liveKitService.tryReconnect();
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    switch (state) {
+      case AppLifecycleState.paused:
+        final locked = await ScreenStateService.isScreenLocked();
+        _liveKitService.onAppBackgrounded(isScreenLocked: locked);
+        break;
+      case AppLifecycleState.resumed:
+        _liveKitService.onAppResumed();
+        _liveKitService.tryReconnect();
+        break;
+      case AppLifecycleState.detached:
+        _liveKitService.disconnect();
+        break;
+      default:
+        break;
     }
   }
 
