@@ -6,7 +6,7 @@ set -uo pipefail
 # Three stages, each idempotent:
 #   1. LiveKit       — verify server is running, start via docker compose if needed
 #   2. Agent         — verify voice-agent is running, start via docker compose if needed
-#   3. Token + Env   — verify token-server is running, mobile .env has emulator URL
+#   3. Token + Env   — verify token-server is running, mobile .env has required keys
 #
 # Structured output on stdout (PASS / FIX / FAIL), progress on stderr.
 #
@@ -24,8 +24,6 @@ LIVEKIT_STARTUP_TIMEOUT="${LIVEKIT_STARTUP_TIMEOUT:-15}"
 AGENT_STARTUP_WAIT="${AGENT_STARTUP_WAIT:-5}"
 TOKEN_SERVER_PORT="${TOKEN_SERVER_PORT:-7882}"
 
-# Expected URL for the Android emulator (10.0.2.2 maps to host localhost)
-EMULATOR_LIVEKIT_URL="ws://10.0.2.2:${LIVEKIT_PORT}"
 
 FAILED=0
 ENV_CHANGED=false
@@ -124,25 +122,11 @@ else
   fi
 fi
 
-# 3b. Ensure mobile .env has emulator-reachable LIVEKIT_URL and token config
+# 3b. Ensure mobile .env has required keys (additive only — never overwrites URLs)
 if [ ! -f "$MOBILE_ENV" ]; then
-  progress "Mobile .env not found, creating..."
-  cat > "$MOBILE_ENV" <<EOF
-LIVEKIT_URL=${EMULATOR_LIVEKIT_URL}
-TOKEN_SERVER_PORT=${TOKEN_SERVER_PORT}
-DEPARTURE_TIMEOUT_S=120
-EOF
-  echo "FIX  env: created mobile .env for emulator"
-  ENV_CHANGED=true
+  echo "FAIL env: mobile .env not found — copy apps/mobile/.env.example and configure URLs"
+  FAILED=1
 else
-  current_url=$(grep '^LIVEKIT_URL=' "$MOBILE_ENV" 2>/dev/null | head -1 | cut -d= -f2-)
-  if [ "$current_url" != "$EMULATOR_LIVEKIT_URL" ]; then
-    progress "Fixing LIVEKIT_URL: '$current_url' → '$EMULATOR_LIVEKIT_URL'"
-    sed -i "s|^LIVEKIT_URL=.*|LIVEKIT_URL=${EMULATOR_LIVEKIT_URL}|" "$MOBILE_ENV"
-    echo "FIX  env: updated LIVEKIT_URL to ${EMULATOR_LIVEKIT_URL}"
-    ENV_CHANGED=true
-  fi
-
   # Remove stale LIVEKIT_TOKEN if present (dynamic rooms use token endpoint now)
   if grep -q '^LIVEKIT_TOKEN=' "$MOBILE_ENV" 2>/dev/null; then
     progress "Removing stale LIVEKIT_TOKEN from mobile .env (dynamic rooms use token endpoint)"
