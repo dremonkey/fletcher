@@ -10,7 +10,7 @@
 import { existsSync } from 'node:fs';
 import type { AudioFrame } from '@livekit/rtc-node';
 import type { Logger } from 'pino';
-import { createAckToneSource } from './ack-tone';
+import { createAckToneSingleShotSource } from './ack-tone';
 
 /** Audio source types accepted by BackgroundAudioPlayer. */
 type AudioSourceType = string | AsyncIterable<AudioFrame>;
@@ -35,7 +35,7 @@ export function resolveAckSound(
 
   // Default: use built-in synthesized tone
   if (!value || value === 'builtin' || value === 'default') {
-    return createAckToneSource();
+    return createAckToneSingleShotSource();
   }
 
   // Custom file path (use original case from env, not lowercased)
@@ -45,7 +45,7 @@ export function resolveAckSound(
       { path: filePath },
       'FLETCHER_ACK_SOUND file not found, falling back to built-in tone',
     );
-    return createAckToneSource();
+    return createAckToneSingleShotSource();
   }
 
   return filePath;

@@ -21,6 +21,7 @@ class AmberOrb extends StatefulWidget {
 class _AmberOrbState extends State<AmberOrb> with TickerProviderStateMixin {
   late AnimationController _breathingController;
   late AnimationController _pulseController;
+  late AnimationController _spinController;
   late Animation<double> _breathingAnimation;
   late Animation<double> _pulseAnimation;
 
@@ -58,6 +59,12 @@ class _AmberOrbState extends State<AmberOrb> with TickerProviderStateMixin {
       parent: _pulseController,
       curve: Curves.easeOut,
     ));
+
+    // Spin animation (processing/thinking state)
+    _spinController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
   }
 
   @override
@@ -68,6 +75,18 @@ class _AmberOrbState extends State<AmberOrb> with TickerProviderStateMixin {
     if (widget.status == ConversationStatus.userSpeaking &&
         widget.userAudioLevel > 0.1) {
       _addRipple();
+    }
+
+    // Control spin for processing state
+    if (widget.status == ConversationStatus.processing) {
+      if (!_spinController.isAnimating) {
+        _spinController.repeat();
+      }
+    } else {
+      if (_spinController.isAnimating) {
+        _spinController.stop();
+        _spinController.reset();
+      }
     }
 
     // Control pulse for AI speaking
@@ -111,6 +130,7 @@ class _AmberOrbState extends State<AmberOrb> with TickerProviderStateMixin {
   void dispose() {
     _breathingController.dispose();
     _pulseController.dispose();
+    _spinController.dispose();
     for (final ripple in _ripples) {
       ripple.controller.dispose();
     }
@@ -123,6 +143,7 @@ class _AmberOrbState extends State<AmberOrb> with TickerProviderStateMixin {
       animation: Listenable.merge([
         _breathingAnimation,
         _pulseAnimation,
+        _spinController,
         ..._ripples.map((r) => r.animation),
       ]),
       builder: (context, child) {
@@ -249,11 +270,12 @@ class _AmberOrbState extends State<AmberOrb> with TickerProviderStateMixin {
           gradient: SweepGradient(
             colors: [
               color.withOpacity(0.0),
-              color.withOpacity(0.3),
+              color.withOpacity(0.35),
               color.withOpacity(0.0),
             ],
+            stops: const [0.0, 0.25, 0.5],
             transform: GradientRotation(
-              _breathingController.value * 2 * math.pi,
+              _spinController.value * 2 * math.pi,
             ),
           ),
         ),

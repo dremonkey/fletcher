@@ -147,3 +147,31 @@ export function createAckToneSource(): AsyncIterable<AudioFrame> {
     [Symbol.asyncIterator]: () => ackToneFrames(),
   };
 }
+
+/**
+ * Yield the acknowledgment tone exactly once (no loop, no silence gap).
+ *
+ * Use this for a single-shot "heard you" chime that plays once and stops,
+ * letting a visual spinner handle the remainder of the wait.
+ */
+export async function* ackToneSingleShot(): AsyncGenerator<AudioFrame> {
+  const pcm = synthesizeAckTone();
+  let offset = 0;
+  while (offset < pcm.length) {
+    const remaining = pcm.length - offset;
+    const chunkSize = Math.min(CHUNK_SAMPLES, remaining);
+    const chunkData = pcm.slice(offset, offset + chunkSize);
+    yield new AudioFrame(chunkData, SAMPLE_RATE, NUM_CHANNELS, chunkSize);
+    offset += chunkSize;
+  }
+}
+
+/**
+ * Create an AsyncIterable<AudioFrame> that plays the ack tone once.
+ * Each call to [Symbol.asyncIterator]() returns a fresh generator.
+ */
+export function createAckToneSingleShotSource(): AsyncIterable<AudioFrame> {
+  return {
+    [Symbol.asyncIterator]: () => ackToneSingleShot(),
+  };
+}
