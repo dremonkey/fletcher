@@ -292,40 +292,20 @@ showModalBottomSheet(
 
 ## 12. Error State Patterns
 
-Display errors consistently across the app. Follow the existing conversation screen pattern:
+Error presentation is evolving — **do not hardcode a specific error UI pattern** without checking with the user first. The principles below apply regardless of presentation choice (modal/overlay, inline, snackbar, etc.).
 
-| Error Type | Pattern | Example |
-|------------|---------|---------|
-| Transient (network blip, retry-able) | **Snackbar** | "Connection lost. Retrying..." |
-| Blocking (can't proceed) | **Inline error box** | Red-tinted container in the main layout (existing pattern) |
-| Validation (user input) | **Inline below field** | Red text below the input with error message |
-| Fatal (app crash, unrecoverable) | **Full-screen error** | Centered message + retry button |
+**Principles:**
+- **Every error needs an escape hatch.** Always provide an action — retry, dismiss, navigate away. Never show an error with no way out.
+- **One pattern per error class.** Pick a single presentation for each severity level and use it everywhere. Don't mix inline errors and modals for the same class of problem.
+- **Use semantic colors.** Error text/icons use `Theme.of(context).colorScheme.error` and `errorContainer` / `onErrorContainer` for backgrounds. Don't hardcode red hex values.
+- **Be human.** Include enough context for the user to understand what went wrong, but don't dump stack traces or internal error codes. Voice-first users may have just heard a failure — the visual should reassure, not alarm.
+- **Handle all three async states.** Any widget consuming async data must handle loading, error, and empty/data states explicitly. Never let an unhandled error silently render nothing.
 
-**Rules:**
-- Use the existing error box pattern from `conversation_screen.dart` for connection/agent errors.
-- Snackbars for transient feedback: `ScaffoldMessenger.of(context).showSnackBar(...)`.
-- Always provide an action (retry, dismiss, navigate away) — never show an error with no way out.
-- Error text uses `Theme.of(context).colorScheme.error` — currently maps to a red from the amber seed.
-- Include enough context for the user to understand what happened, but don't dump stack traces.
-
-```dart
-// Inline error box — matches existing pattern
-if (state.hasError)
-  Container(
-    margin: const EdgeInsets.symmetric(horizontal: 16),
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.errorContainer,
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: Text(
-      state.errorMessage,
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-        color: Theme.of(context).colorScheme.onErrorContainer,
-      ),
-    ),
-  ),
-```
+**When adding error UI to a screen, ask the user** which presentation they prefer:
+- Modal/overlay (centered, blocks interaction until dismissed)
+- Inline (embedded in the layout flow)
+- Snackbar/toast (transient, auto-dismissing)
+- Status bar integration (subtle, non-blocking)
 
 ---
 
