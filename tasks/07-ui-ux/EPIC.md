@@ -39,6 +39,10 @@ Fletcher's UI takes inspiration from **terminal user interfaces**, **8-bit hardw
 - [ ] 021: Thinking Spinner in Chat Transcript — thematic arrow/fletching ASCII spinner inline in chat while agent is composing
 - [ ] 022: Macro Shortcut System (Quick Actions) — scrollable row of F-key style buttons for dev tasks (/pulse, /bug, /snapshot)
 
+### Bug Fixes
+- [ ] 023: Artifact–Message Association — artifacts pool together instead of anchoring inline to their originating message (BUG-012)
+- [ ] 024: Diagnostics Live Pipeline Values — hardcoded STT/TTS names and unpopulated RT/SESSION/AGENT/UPTIME fields (BUG-013)
+
 ### Retained Tasks
 - [~] 015: Single Audio Ack + Visual Spinner — Phases 1-2 complete; spinner behavior migrates to mic button in task 017
 
