@@ -8,7 +8,7 @@
 - **Created:** 2026-03-07
 
 ## Context
-The new UI includes a diagnostics status bar below the waveform showing real-time voice pipeline metrics. This replaces the existing `StatusBar` widget (which shows agent actions like "reading", "searching") with a more data-rich, TUI-styled diagnostics display.
+The new UI includes a diagnostics status bar below the waveform showing real-time voice pipeline metrics. This replaces the existing `StatusBar` widget (which shows agent actions like "reading", "searching") and the `_buildStatusIndicator` pill (which shows connection state text) with a single, data-rich, TUI-styled diagnostics row.
 
 ## Reference
 - **Mockup:** [`mockups/chat-main-view.png`](./mockups/chat-main-view.png) (status bar visible below waveform)
@@ -19,49 +19,80 @@ The new UI includes a diagnostics status bar below the waveform showing real-tim
 [●] SYS: OK | VAD: 0.82 | RT: 12ms          [ ARTIFACTS: 2 ]
 ```
 
-### Left Side: Diagnostics Summary
-- **Health orb** `[●]`: Small glowing dot indicator
-  - Green: all systems nominal
-  - Yellow: degraded (high latency, reconnecting, partial failure)
-  - Red: error state (agent disconnected, STT/TTS failure)
-- **SYS:** Overall system status (`OK`, `DEGRADED`, `ERROR`)
-- **VAD:** Voice Activity Detection confidence (0.00-1.00), real-time from STT/VAD events
-- **RT:** Round-trip latency in ms, from `TurnMetricsCollector` (see Epic 10)
-- Cyan monospace text on dark background
-- Pipe `|` separators between metrics
+The entire status bar row should be **48dp height** minimum — this ensures both the left diagnostics area and the right artifacts button meet touch target requirements.
+
+### Left Side: Diagnostics Summary (tappable)
+The entire left area is a single `InkWell` / `GestureDetector` with `HitTestBehavior.opaque` — not just the tiny health orb.
+
+- **Health orb** `[●]`: Small glowing dot (12dp visual), but the tappable zone is the full 48dp row height.
+  - Green (`AppColors.healthGreen`): all systems nominal
+  - Yellow (`AppColors.healthYellow`): degraded (high latency, reconnecting, partial failure)
+  - Red (`AppColors.healthRed`): error state (agent disconnected, STT/TTS failure)
+  - Glow effect: `Container` with `BoxShadow(blurRadius: 8, color: healthColor.withOpacity(0.6))`. Wrap in `RepaintBoundary` since glow color changes on state transitions.
+- **SYS:** Overall system status (`OK`, `DEGRADED`, `ERROR`, `RECONNECTING`)
+- **VAD:** Voice Activity Detection confidence (0.00-1.00)
+- **RT:** Round-trip latency in ms
+- All text: **12sp monospace**, `AppColors.cyan`, `FontWeight.w500`
+- Pipe `|` separators in `AppColors.textSecondary`
+- Spacing: `AppSpacing.xs` (4dp) between orb and text, `AppSpacing.sm` (8dp) around pipes
 
 ### Right Side: Artifacts Counter
-- `[ ARTIFACTS: N ]` button (see task 018)
-- Amber border, monospace text
+- `[ ARTIFACTS: N ]` — `TuiButton` (see task 018, component 4)
+- Separate touch target from the left diagnostics area, spaced >= 8dp apart
 
-### Tappable: Expanded Diagnostics View
-- Tapping the left-side diagnostics area opens an expanded diagnostics view
-- Shows more detailed metrics:
-  - STT provider + status
-  - TTS provider + status
-  - LLM backend + TTFT
-  - Connection state (connected/reconnecting/disconnected)
-  - Session ID
-  - Agent participant identity
-- Can be a bottom sheet or overlay in TUI style
+### Tappable: Expanded Diagnostics View (Bottom Sheet)
+Tapping the left diagnostics area opens an expanded diagnostics view using `showModalBottomSheet`:
+
+- `TuiModal` styling: amber border, dark background, sharp corners
+- `TuiHeader`: `┌─ DIAGNOSTICS ─┐`
+- Content — monospace key-value pairs, 12sp, `AppColors.cyan` labels with white values:
+
+```
+STT:         Deepgram ......... ACTIVE
+TTS:         Google ........... ACTIVE
+LLM:         OpenClaw ......... TTFT: 1.2s
+CONNECTION:  Connected ........ Room: fletcher-1709
+SESSION:     sk_owner_abc123
+AGENT:       agent-worker-1
+VAD:         0.82
+RT:          12ms
+UPTIME:      00:14:32
+```
+
+- Each row: minimum 32dp height (not interactive — display only, so 48dp not required)
+- Close by dragging down or tapping outside
+- `HapticFeedback.lightImpact()` on open
 
 ## Data Sources
-- **VAD confidence:** From `Participant.audioLevel` or STT interim events
-- **RT (round-trip):** From `TurnMetricsCollector` per-turn summaries (Epic 10)
-- **SYS status:** Derived from connection state, agent presence, error events
-- **Health orb color:** Computed from SYS status + RT thresholds (e.g., RT > 2000ms → yellow, agent missing → red)
+- **VAD confidence:** From `Participant.audioLevel` (existing 100ms polling) or STT interim events
+- **RT (round-trip):** From `TurnMetricsCollector` per-turn summaries (Epic 10). Show last completed turn's RT. Display `--` before first turn completes.
+- **SYS status:** Computed from:
+  - `ConversationStatus.connecting` / `reconnecting` → `RECONNECTING` (yellow)
+  - `ConversationStatus.error` → `ERROR` (red)
+  - Agent participant missing from room → `DEGRADED` (yellow)
+  - RT > 2000ms → `DEGRADED` (yellow)
+  - Otherwise → `OK` (green)
+- **Health orb color:** Mirrors SYS status (green/yellow/red)
+- **Expanded view data:** From `LiveKitService` state + `HealthService` state (both already available)
 
 ## Implementation Notes
-- Replaces the existing `StatusBar` widget (which shows agent action text like "Searching...")
-- Agent action events (`status` type from ganglia-events) can be shown in the expanded diagnostics view
-- Metrics update frequency: VAD/RT update per-turn, SYS status updates on state change
-- Health orb uses `Container` with `BoxShadow` for glow effect
+- **Replaces** both the existing `StatusBar` widget (agent action text) and `_buildStatusIndicator` (connection state pill) in `conversation_screen.dart`
+- Agent action events (`status` type from ganglia-events) move to the expanded diagnostics view — no longer shown inline
+- Create a new `DiagnosticsBar` widget in `lib/widgets/diagnostics_bar.dart`
+- Metrics update frequency: VAD updates at 100ms polling rate (existing), RT updates per-turn, SYS status updates on state change. Use `ChangeNotifier` listener pattern.
+- Graceful fallback: show `--` for unavailable metrics (before first data arrives or on error)
 
 ## Acceptance Criteria
-- [ ] Status bar displays real-time VAD confidence and round-trip latency
-- [ ] Health orb glows green/yellow/red based on system state
+- [ ] Status bar row is >= 48dp height
+- [ ] Left side displays real-time VAD confidence and round-trip latency in 12sp cyan monospace
+- [ ] Health orb glows green/yellow/red based on computed system state
 - [ ] SYS status reflects actual connection and pipeline health
-- [ ] Tapping opens an expanded diagnostics view with detailed metrics
-- [ ] Cyan monospace text styling consistent with TUI theme
-- [ ] Metrics update in real-time (not stale)
-- [ ] Graceful fallback when metrics are unavailable (show `--` or `N/A`)
+- [ ] Left side is tappable (full row height hit zone) — opens expanded diagnostics bottom sheet
+- [ ] Expanded view shows all pipeline details (STT, TTS, LLM, connection, session, agent, VAD, RT)
+- [ ] Expanded view uses TUI styling (amber border, monospace, sharp corners)
+- [ ] Right side shows `[ ARTIFACTS: N ]` button (implemented in task 018)
+- [ ] Haptic feedback on tap to expand
+- [ ] Health orb glow wrapped in `RepaintBoundary`
+- [ ] Metrics show `--` / `N/A` before data is available (no blank or stale values)
+- [ ] All text >= 12sp, all spacing on 4dp grid, all colors from `AppColors`
+- [ ] Replaces existing `StatusBar` widget and `_buildStatusIndicator`

@@ -8,7 +8,7 @@
 - **Created:** 2026-03-07
 
 ## Context
-The current `ArtifactViewer` displays artifacts in a dedicated view. The new design integrates artifacts more tightly into the chat flow with three interaction layers:
+The current `ArtifactViewer` displays artifacts in a dedicated drawer. The new design integrates artifacts more tightly into the chat flow with three interaction layers:
 
 1. **Inline buttons** in chat messages that reference artifacts
 2. **Bottom sheet drawer** for viewing a single artifact
@@ -20,59 +20,104 @@ The current `ArtifactViewer` displays artifacts in a dedicated view. The new des
 
 ## Components
 
-### 1. Inline Artifact Buttons
-- Rendered within agent chat messages where artifacts are referenced
-- Style: amber-bordered rectangle with monospace text: `[ARTIFACT: NAME]`
+### 1. Inline Artifact Buttons (in chat messages)
+- Rendered within agent `TuiCard` messages where artifacts are referenced
+- Style: `TuiButton` (from task 016) — amber-bordered rectangle, monospace text: `[ARTIFACT: NAME]`
+- **Touch target: minimum 48dp height** even though the visual button may appear compact. Use internal padding to reach 48dp.
+- Horizontal padding: `AppSpacing.md` (12dp) inside the button
+- Spacing between multiple artifact buttons: `AppSpacing.sm` (8dp)
 - Tapping opens the artifact drawer (bottom sheet) for that artifact
-- Artifacts are detected from ganglia `artifact` events and matched to messages
+- `HapticFeedback.lightImpact()` on tap
+- Artifacts are detected from ganglia `artifact` events and associated with the most recent agent message
 
 ### 2. Artifact Drawer (Bottom Sheet)
-- Slides up from the bottom, covering ~60-70% of the screen
-- Chat remains partially visible above (dimmed/pushed up)
-- **Header:** `┌─ ARTIFACT_NAME ─┐` on left, type badge `[CODE]` / `[LOG]` / `[DIFF]` / `[TEXT]` on right
-- **Content area:**
-  - Code: line numbers + syntax highlighting (monospace, colored tokens)
-  - Logs: monospace plain text
-  - Diffs: red/green line coloring
-  - Markdown: rendered with TUI styling
-- **Amber top border** accent line
-- Drag down to dismiss, or tap outside
+- Use `showModalBottomSheet` with `isScrollControlled: true` for height control
+- Covers **~60-70% of screen height** (`initialChildSize: 0.65`, `maxChildSize: 0.85` if using `DraggableScrollableSheet`)
+- Chat remains partially visible above (natural `showModalBottomSheet` behavior — dims background)
+- Sharp corners: `shape: RoundedRectangleBorder(borderRadius: BorderRadius.zero)`
+- **Amber top border:** 2dp solid amber line at the top of the sheet
+- Background: `AppColors.surface`
+
+**Header layout:**
+```
+┌─ ARTIFACT_NAME ─┐                    [CODE]
+```
+- Left: `TuiHeader` with artifact name
+- Right: type badge — `TuiButton`-styled chip showing `[CODE]`, `[LOG]`, `[DIFF]`, `[TEXT]`, `[SEARCH]`, `[ERROR]`
+- Header height: 48dp minimum (tappable badge)
+- Padding: `AppSpacing.base` (16dp) horizontal
+
+**Content area:**
+- **Code:** Line numbers (amber `textSecondary`, right-aligned) + syntax-highlighted content (monospace 13sp). Use existing code rendering from `ArtifactViewer`, restyled. Wrap in `SingleChildScrollView` with both horizontal and vertical scroll.
+- **Logs:** Monospace plain text, no line numbers
+- **Diffs:** `+` lines in green, `-` lines in red, context lines in `textSecondary`
+- **Markdown:** Rendered with TUI styling (monospace, amber links, no images)
+- **Search results:** File path + line number + matching content per result
+- **Errors:** Error message in `healthRed`, stack trace in `textSecondary`
+- Content padding: `AppSpacing.base` (16dp)
+
+**Dismiss:** Drag down or tap outside (standard `showModalBottomSheet` behavior). Support system back button via `PopScope` if needed.
+
+**Async states:**
+- **Loading:** Show `TuiHeader` + centered monospace "Loading..." text (if artifact content arrives asynchronously)
+- **Empty:** "No content" in `textSecondary`
+- **Error:** Error message in `healthRed` with "Dismiss" `TuiButton`
 
 ### 3. Artifacts List Modal
-- Triggered by tapping `[ ARTIFACTS: N ]` button in the status bar
-- Near-fullscreen overlay with amber border all around
-- **Header:** `┌─ ARTIFACTS (N)` with `X` close button (top right)
-- **Content:** Vertical list of artifact cards, each showing:
-  - Artifact name (bold, monospace)
-  - Preview snippet (2-3 lines of content, truncated)
-  - Active/selected artifact highlighted with amber border
-- Tapping a card opens the artifact drawer for that artifact
-- Empty state: "No artifacts in this session"
+- Use `showGeneralDialog` with `TuiModal` (from task 016) for full-screen TUI-styled overlay
+- Amber border around entire modal, dark background
+- **Header:** `TuiHeader` showing `┌─ ARTIFACTS (N)` on left, `IconButton` close (`Icons.close`) on right
+- Close button: **48x48dp minimum** touch target (use `IconButton` which enforces this)
+- `HapticFeedback.lightImpact()` on close
+
+**Artifact list:**
+- Use `ListView.builder` for the artifact list (could grow with long sessions)
+- Each artifact card: `TuiCard` with:
+  - **Title:** Artifact name in monospace bold, 14sp
+  - **Preview:** 2-3 lines of content, truncated with ellipsis, in `textSecondary`, 12sp
+  - **Card height:** minimum 72dp (two-line list item guideline)
+- Spacing between cards: `AppSpacing.sm` (8dp)
+- **Active/latest artifact:** Highlighted with amber border (others have `textSecondary` border or no border)
+- Tapping a card: `HapticFeedback.lightImpact()`, dismiss modal, open artifact drawer for that artifact
+- **Empty state:** Centered monospace text "No artifacts in this session" in `textSecondary`
+- Padding: `AppSpacing.base` (16dp) around the list
+
+**Transition:** Use `PageRouteBuilder` with a fade or slide-up transition (250-350ms, `Curves.easeOut`).
 
 ### 4. Artifacts Counter Button (Status Bar)
-- Positioned in the diagnostics status bar (right side)
+- Positioned in the diagnostics status bar right side (task 019)
 - Shows `[ ARTIFACTS: N ]` where N is the count of artifacts in the current session
-- Amber border, monospace text
+- Style: `TuiButton` — amber border, monospace text, 12sp
+- **Touch target:** Full button area >= 48dp height (the status bar row should be at least 48dp)
 - Tapping opens the Artifacts List Modal
+- `HapticFeedback.lightImpact()` on tap
 - Updates in real-time as new artifacts arrive via data channel
+- Hidden or shows `[ ARTIFACTS: 0 ]` when no artifacts exist
 
 ## Data Flow
-- Artifacts arrive via `ganglia-events` data channel (existing `artifact` event type)
-- Store artifacts in a session-scoped list (artifact name, type, content, timestamp)
-- Match artifacts to chat messages for inline button rendering
-- The artifacts counter in the status bar reflects the current count
+- Artifacts arrive via `ganglia-events` data channel (existing `artifact` event type in `ArtifactEvent`)
+- Store artifacts in the existing `ConversationState.artifacts` list (already there)
+- Associate artifacts with chat messages by timestamp proximity (artifact arrives during or shortly after an agent message)
+- The artifacts counter in the status bar reads from `state.artifacts.length`
 
 ## Migration Notes
 - The existing `ArtifactViewer` widget is refactored into the new bottom sheet drawer pattern
-- Existing artifact rendering logic (code blocks, diffs, markdown) is preserved but restyled
-- The `StatusBar` widget's artifact display is replaced by the new counter button
+- Existing artifact rendering logic (code blocks, diffs, markdown) is preserved but restyled with TUI theme
+- The `ArtifactChip` in the current chip row is replaced by the status bar counter button
+- The existing `showArtifactDrawer()` function is replaced by the new `showModalBottomSheet` implementation
 
 ## Acceptance Criteria
-- [ ] Inline `[ARTIFACT: NAME]` buttons render in agent chat messages
+- [ ] Inline `[ARTIFACT: NAME]` buttons render in agent chat messages with >= 48dp touch target
 - [ ] Tapping an inline button opens the bottom sheet drawer with that artifact
-- [ ] Bottom sheet shows artifact with appropriate formatting (code, log, diff, text)
-- [ ] `[ ARTIFACTS: N ]` button in status bar shows current count
+- [ ] Bottom sheet has sharp corners, amber top border, TUI header with type badge
+- [ ] Bottom sheet shows artifact with appropriate formatting (code, log, diff, text, search, error)
+- [ ] Bottom sheet handles loading, empty, and error states
+- [ ] `[ ARTIFACTS: N ]` button in status bar shows current count with >= 48dp touch target
 - [ ] Tapping artifacts button opens the full-screen list modal
-- [ ] Artifacts list shows all session artifacts with name + preview
+- [ ] List modal has amber border, TUI header, 48dp close button
+- [ ] Artifacts list uses `ListView.builder`, shows name + preview per card (min 72dp height)
+- [ ] Empty state: "No artifacts in this session"
 - [ ] Tapping a list item opens the bottom sheet for that artifact
-- [ ] All components use TUI brutalist styling (monospace, corner brackets, amber borders)
+- [ ] All components use TUI brutalist styling (monospace, corner brackets, amber borders, sharp corners)
+- [ ] Haptic feedback on all tappable elements (light impact)
+- [ ] All spacing on 4dp grid, all colors from `AppColors`
