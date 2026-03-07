@@ -201,14 +201,17 @@ OpenTelemetry-compatible instrumentation for the voice pipeline. Measure STT, EO
 - `TurnMetricsCollector` correlating EOU + LLM + TTS by `speechId` into per-turn summaries
 - 5 unit tests for metrics collector
 
-### 11. [UI Redesign — TUI Brutalist](./07-ui-ux) 📋
+### 11. [UI Redesign — TUI Brutalist](./07-ui-ux) 🔄
 Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layout with inline artifacts and live diagnostics.
 
 **Tasks (New Direction):**
-- [ ] 016: TUI Brutalist Design System — foundational theme tokens, monospace typography, amber/cyan palette, corner-bracket decorators
-- [ ] 017: Chat-First Main View — chat transcript as primary content, compact 8-bit waveform top, mic button bottom with orb states
-- [ ] 018: Artifact System Redesign — inline artifact buttons in chat, bottom sheet drawer, artifacts list modal, counter button
-- [ ] 019: Live Diagnostics Status Bar — real-time VAD/RT/SYS metrics, tri-color health orb, tappable expanded diagnostics view
+- [x] 016: TUI Brutalist Design System ✅ — AppColors, AppTypography, AppSpacing, TuiHeader/TuiCard/TuiButton/TuiModal
+- [x] 017: Chat-First Main View ✅ — Column layout replacing Stack+Positioned; CompactWaveform, ChatTranscript (ListView.builder), MicButton with all states
+- [x] 018: Artifact System Redesign ✅ — inline artifact buttons in chat, bottom sheet drawer, artifacts list modal, counter button
+- [x] 019: Live Diagnostics Status Bar ✅ — DiagnosticsBar with health orb, SYS/VAD/RT metrics, expandable TuiModal diagnostics view
+- [x] 020: Inline Connection & Room Events ✅ — SystemEvent model + SystemEventCard widget; NETWORK/ROOM/AGENT lifecycle events emitted from LiveKitService; interleaved in chat transcript by timestamp
+- [ ] 021: Thinking Spinner in Chat Transcript 📋 — thematic arrow/fletching ASCII spinner inline in chat while agent is composing
+- [ ] 022: Macro Shortcut System 📋 — horizontally scrollable row of "F-key" style quick-action buttons for common dev tasks (/pulse, /bug, /snapshot)
 
 **Retained:**
 - [~] 015: Single Audio Ack + Visual Spinner 🔄 — Phases 1-2 complete; spinner behavior migrates to mic button in 017

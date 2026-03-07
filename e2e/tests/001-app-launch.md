@@ -29,9 +29,11 @@ e2e/helpers/emu-capture.sh 001-step2-launch
 ```
 
 **Expect:**
-- The app is visible on screen (dark background with amber orb in center)
-- A status badge near the top shows "Connecting..." (gray text)
-- The orb appears at roughly 50% opacity (connecting state)
+- The app is visible on screen (dark background)
+- Compact waveform (48dp) at the top showing initial zero state (dim amber/cyan bars)
+- Diagnostics bar below waveform showing `SYS: -- | VAD: 0.00 | RT: --` in cyan monospace
+- Chat area below diagnostics bar showing system event cards (e.g., "NETWORK resolving...")
+- Mic button at bottom center (56dp square, dimmed amber border) in connecting state
 
 ### Step 3: Wait for idle state
 
@@ -42,8 +44,8 @@ e2e/helpers/emu-capture.sh 001-step3-idle
 ```
 
 **Expect:**
-- The status badge now shows "Listening" (amber text)
-- The orb is fully visible with a breathing animation glow
-- No error message is displayed below the orb
-- The mute toggle button is visible at the bottom center (gray circle with mic icon)
-- The "Diagnostics" chip is visible in a centered row above the mute toggle
+- Compact waveform at top displays dual-color histogram (amber for user, cyan for agent)
+- Diagnostics bar shows `SYS: OK | VAD: 0.00 | RT: --` with green health orb (12dp square) next to SYS text
+- Chat area displays system event cards showing final states: NETWORK connected, ROOM joined, AGENT ready (all in green)
+- Mic button at bottom center (56dp square, bright amber border, mic icon, breathing glow animation) in idle state
+- No error messages displayed

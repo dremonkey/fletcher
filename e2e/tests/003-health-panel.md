@@ -1,6 +1,6 @@
 # Health Panel
 
-Verify the Diagnostics chip opens the health panel and displays check rows.
+Verify the diagnostics bar opens the health modal and displays system status.
 
 ## Preconditions
 - Emulator is running (`adb devices` shows the device)
@@ -8,22 +8,23 @@ Verify the Diagnostics chip opens the health panel and displays check rows.
 
 ## Steps
 
-### Step 1: Capture initial state and locate Diagnostics chip
+### Step 1: Capture initial state and verify diagnostics bar
 
 ```sh
 e2e/helpers/emu-capture.sh 003-step1-initial
 ```
 
 **Expect:**
-- The "Diagnostics" chip is visible in a centered row above the mute toggle
-- The chip has a small colored dot (green = healthy, amber = degraded, red = unhealthy) next to the "Diagnostics" label
+- The diagnostics bar is visible below the compact waveform
+- The bar displays a green health orb (12dp square) followed by cyan monospace text: `SYS: OK | VAD: 0.00 | RT: --`
+- The entire bar is tappable (full width)
 
-### Step 2: Tap the Diagnostics chip
+### Step 2: Tap the diagnostics bar to open modal
 
-Identify the Diagnostics chip coordinates from the screenshot (centered row, ~105px from bottom). Tap it.
+Tap the diagnostics bar area. On Pixel 9 emulator (1080x2424, 420dpi), tap approximately x=250, y=300.
 
 ```sh
-adb -s ${DEVICE_ID:-emulator-5554} shell input tap <X> <Y>
+adb -s ${DEVICE_ID:-emulator-5554} shell input tap 250 300
 ```
 
 Wait 1 second, then capture.
@@ -33,18 +34,19 @@ e2e/helpers/emu-capture.sh 003-step2-panel-open
 ```
 
 **Expect:**
-- A bottom sheet panel is visible, taking roughly the lower 55% of the screen
-- The panel header shows "Diagnostics" as the title
-- A close button (X) is visible in the panel header
-- One or more health check rows are listed, each with an icon, label, and status indicator
-- Check rows show either green checkmarks (passing) or amber/red indicators (issues)
+- A bottom sheet modal is visible with a 2dp amber top border
+- Modal background is dark (#1A1A1A)
+- TuiHeader at the top displays `┌─ DIAGNOSTICS ─┐` in amber monospace
+- Key-value rows are visible in 12sp monospace font with cyan labels and white values
+- Rows shown: SYS: OK, CONNECTION: CONNECTED, STT: deepgram, TTS: cartesia, LLM: openclaw, VAD: 0.00, RT: --, SESSION: --, AGENT: --, UPTIME: --
+- No close button (X) — modal dismisses via dark scrim or swipe down
 
-### Step 3: Dismiss the health panel
+### Step 3: Dismiss the modal
 
-Tap the close button (X) in the panel header, or tap outside the panel.
+Tap outside the bottom sheet on the dark scrim area, approximately x=540, y=400.
 
 ```sh
-adb -s ${DEVICE_ID:-emulator-5554} shell input tap <X> <Y>
+adb -s ${DEVICE_ID:-emulator-5554} shell input tap 540 400
 ```
 
 Wait 1 second, then capture.
@@ -54,7 +56,7 @@ e2e/helpers/emu-capture.sh 003-step3-dismissed
 ```
 
 **Expect:**
-- The health panel is no longer visible
+- The health modal is no longer visible
 - The main conversation screen is fully visible again
-- The Diagnostics chip is still visible at its original position
+- The diagnostics bar is still visible at its original position below the waveform
 - The app remains in its previous state (e.g., "Listening")

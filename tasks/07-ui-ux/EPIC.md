@@ -29,10 +29,15 @@ Fletcher's UI takes inspiration from **terminal user interfaces**, **8-bit hardw
 ## Tasks
 
 ### New Direction (TUI Redesign)
-- [ ] 016: TUI Brutalist Design System — foundational theme tokens, typography, border decorators, color palette
-- [ ] 017: Chat-First Main View — chat transcript as primary content, compact waveform top, mic button bottom with orb states
-- [ ] 018: Artifact System Redesign — inline artifact buttons, bottom sheet drawer, artifacts list modal, counter button
-- [ ] 019: Live Diagnostics Status Bar — real-time VAD/RT/SYS metrics, tri-color health orb, tappable expanded view
+- [x] 016: TUI Brutalist Design System — foundational theme tokens, typography, border decorators, color palette
+- [x] 017: Chat-First Main View — chat transcript as primary content, compact waveform top, mic button bottom with orb states
+- [x] 018: Artifact System Redesign — inline artifact buttons, bottom sheet drawer, artifacts list modal, counter button
+- [x] 019: Live Diagnostics Status Bar — real-time VAD/RT/SYS metrics, tri-color health orb, tappable expanded view
+
+### Session Awareness
+- [x] 020: Inline Connection & Room Events — boot sequence + runtime network/room/agent events as inline cards in chat stream
+- [ ] 021: Thinking Spinner in Chat Transcript — thematic arrow/fletching ASCII spinner inline in chat while agent is composing
+- [ ] 022: Macro Shortcut System (Quick Actions) — scrollable row of F-key style buttons for dev tasks (/pulse, /bug, /snapshot)
 
 ### Retained Tasks
 - [~] 015: Single Audio Ack + Visual Spinner — Phases 1-2 complete; spinner behavior migrates to mic button in task 017

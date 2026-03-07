@@ -1,11 +1,12 @@
 # TASK-017: Chat-First Main View Redesign
 
 ## Status
-- **Status:** Not started
+- **Status:** Complete
 - **Priority:** High
 - **Depends on:** 016 (TUI Design System)
-- **Owner:** TBD
+- **Owner:** Claude
 - **Created:** 2026-03-07
+- **Completed:** 2026-03-07
 
 ## Context
 The current Fletcher UI centers on the Amber Orb visualizer with a pull-up transcript drawer. The new direction puts the chat transcript front and center as the primary content area, with a compact waveform at the top and a mic button at the bottom.
@@ -126,18 +127,18 @@ The current `Positioned` error overlay (lines 218-249 of `conversation_screen.da
 7. Remove `AmberOrb` from center, `TranscriptSubtitle` (replaced by inline chat), status indicator pill (replaced by status bar)
 
 ## Acceptance Criteria
-- [ ] Chat transcript is the primary content area (visible without pulling up a drawer)
-- [ ] Layout uses `Column` structure, not `Stack` + `Positioned`
-- [ ] Transcript uses `ListView.builder` (not `Column` with `map`)
-- [ ] Compact 8-bit waveform bar at top reflects real audio levels (dual-color amber/cyan)
-- [ ] Waveform wrapped in `RepaintBoundary`
-- [ ] Mic button at bottom: 56dp, shows all conversation states (idle, listening, thinking, speaking, muted, error)
-- [ ] Spinner overlay on mic button during thinking state
-- [ ] Mic button tap fires haptic feedback before toggling mute
-- [ ] Mic button has Semantics label for accessibility
-- [ ] Messages use TUI-style card format with `TuiHeader` corner bracket headers
-- [ ] Auto-scroll to latest message; pauses when user scrolls up
-- [ ] Error/reconnecting states shown in status bar + inline banner (no floating overlay)
-- [ ] Amber Orb removed from center of screen
-- [ ] All spacing on 4dp grid, all colors from `AppColors`, all text from `AppTypography`
-- [ ] No font size below 12sp (except 11sp `labelSmall` for timestamps)
+- [x] Chat transcript is the primary content area (visible without pulling up a drawer)
+- [x] Layout uses `Column` structure, not `Stack` + `Positioned`
+- [x] Transcript uses `ListView.builder` (not `Column` with `map`)
+- [x] Compact 8-bit waveform bar at top reflects real audio levels (dual-color amber/cyan)
+- [x] Waveform wrapped in `RepaintBoundary`
+- [x] Mic button at bottom: 56dp, shows all conversation states (idle, listening, thinking, speaking, muted, error)
+- [x] Spinner overlay on mic button during thinking state
+- [x] Mic button tap fires haptic feedback before toggling mute
+- [x] Mic button has Semantics label for accessibility
+- [x] Messages use TUI-style card format with `TuiHeader` corner bracket headers
+- [x] Auto-scroll to latest message; pauses when user scrolls up
+- [x] Error/reconnecting states shown in status bar + inline banner (no floating overlay)
+- [x] Amber Orb removed from center of screen
+- [x] All spacing on 4dp grid, all colors from `AppColors`, all text from `AppTypography`
+- [x] No font size below 12sp (except 11sp `labelSmall` for timestamps)

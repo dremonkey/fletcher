@@ -107,6 +107,15 @@ This is a **public repository**. Never commit PII in plaintext.
 - **Conversation transcripts**: Never paste full transcripts into public-facing files. Summarize or anonymize.
 - **Secrets**: Never commit API keys, tokens, or credentials. Use `.env` files (gitignored).
 
+## Process Cleanup (IMPORTANT)
+**Always clean up processes you start.** Before finishing a session or handing back to the user, shut down anything you launched:
+- **Android emulator** — `kill $(pgrep -f "emulator|qemu-system")` or `adb emu kill`
+- **Flutter run / build** — kill any lingering `flutter`, `gradle`, or `dart` processes
+- **Background tasks** — stop any background shells or agents you started
+- **App on device** — `adb shell am force-stop com.fletcher.fletcher`
+
+Do NOT leave orphaned emulators, build daemons, or long-running processes behind. Check with `pgrep -fa "emulator|qemu|flutter|gradle|dart"` before wrapping up.
+
 ## Commit Discipline (IMPORTANT)
 Commit early and often. Do NOT batch up large amounts of work into a single mega-commit at the end.
 
