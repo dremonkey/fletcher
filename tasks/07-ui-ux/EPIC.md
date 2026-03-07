@@ -34,6 +34,9 @@ Fletcher's UI takes inspiration from **terminal user interfaces**, **8-bit hardw
 - [x] 018: Artifact System Redesign — inline artifact buttons, bottom sheet drawer, artifacts list modal, counter button
 - [x] 019: Live Diagnostics Status Bar — real-time VAD/RT/SYS metrics, tri-color health orb, tappable expanded view
 
+### Session Awareness
+- [ ] 020: Inline Connection & Room Events — boot sequence + runtime network/room/agent events as inline cards in chat stream
+
 ### Retained Tasks
 - [~] 015: Single Audio Ack + Visual Spinner — Phases 1-2 complete; spinner behavior migrates to mic button in task 017
 
