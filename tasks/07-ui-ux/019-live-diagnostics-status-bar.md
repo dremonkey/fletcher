@@ -1,11 +1,12 @@
 # TASK-019: Live Diagnostics Status Bar
 
 ## Status
-- **Status:** Not started
+- **Status:** Complete
 - **Priority:** Medium
 - **Depends on:** 016 (TUI Design System)
-- **Owner:** TBD
+- **Owner:** Claude
 - **Created:** 2026-03-07
+- **Completed:** 2026-03-07
 
 ## Context
 The new UI includes a diagnostics status bar below the waveform showing real-time voice pipeline metrics. This replaces the existing `StatusBar` widget (which shows agent actions like "reading", "searching") and the `_buildStatusIndicator` pill (which shows connection state text) with a single, data-rich, TUI-styled diagnostics row.
@@ -83,16 +84,16 @@ UPTIME:      00:14:32
 - Graceful fallback: show `--` for unavailable metrics (before first data arrives or on error)
 
 ## Acceptance Criteria
-- [ ] Status bar row is >= 48dp height
-- [ ] Left side displays real-time VAD confidence and round-trip latency in 12sp cyan monospace
-- [ ] Health orb glows green/yellow/red based on computed system state
-- [ ] SYS status reflects actual connection and pipeline health
-- [ ] Left side is tappable (full row height hit zone) — opens expanded diagnostics bottom sheet
-- [ ] Expanded view shows all pipeline details (STT, TTS, LLM, connection, session, agent, VAD, RT)
-- [ ] Expanded view uses TUI styling (amber border, monospace, sharp corners)
-- [ ] Right side shows `[ ARTIFACTS: N ]` button (implemented in task 018)
-- [ ] Haptic feedback on tap to expand
-- [ ] Health orb glow wrapped in `RepaintBoundary`
-- [ ] Metrics show `--` / `N/A` before data is available (no blank or stale values)
-- [ ] All text >= 12sp, all spacing on 4dp grid, all colors from `AppColors`
-- [ ] Replaces existing `StatusBar` widget and `_buildStatusIndicator`
+- [x] Status bar row is >= 48dp height
+- [x] Left side displays real-time VAD confidence and round-trip latency in 12sp cyan monospace
+- [x] Health orb glows green/yellow/red based on computed system state
+- [x] SYS status reflects actual connection and pipeline health
+- [x] Left side is tappable (full row height hit zone) — opens expanded diagnostics bottom sheet
+- [x] Expanded view shows all pipeline details (STT, TTS, LLM, connection, session, agent, VAD, RT)
+- [x] Expanded view uses TUI styling (amber border, monospace, sharp corners)
+- [x] Right side shows `[ ARTIFACTS: N ]` button (implemented in task 018)
+- [x] Haptic feedback on tap to expand
+- [x] Health orb glow wrapped in `RepaintBoundary`
+- [x] Metrics show `--` / `N/A` before data is available (no blank or stale values)
+- [x] All text >= 12sp, all spacing on 4dp grid, all colors from `AppColors`
+- [x] Replaces existing `StatusBar` widget and `_buildStatusIndicator`
