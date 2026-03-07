@@ -8,3 +8,4 @@ The current UI provides basic visualization (Amber Heartbeat) and a simple trans
 ## Tasks
 - [ ] 008: Collaborative Waveform (8-bit histogram/audio graph with dual-color blending and front-and-center transcript)
 - [ ] 009: Persistent History Discovery (fetch recent history from OpenClaw on rejoin, add Session List UI)
+- [ ] 015: Single Audio Ack + Visual Spinner (play ack chime once, then show visual waiting indicator instead of looping audio)

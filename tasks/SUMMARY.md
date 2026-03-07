@@ -79,7 +79,7 @@ A unified LLM plugin (`@knittt/livekit-agent-ganglia`) that bridges LiveKit agen
 - [ ] 003: OpenResponses API Backend — backlog; item-based alternative to Chat Completions with granular SSE, ephemeral files, client-side tools
 - [x] 004: Session Key Routing (spec 08) ✅ — identity-based session routing replaces room-scoped IDs; owner/guest/room routing for both OpenClaw and Nanoclaw; 35 new tests
 - [ ] 005: End-to-End OpenClaw Integration — validate full voice pipeline against real Gateway; session continuity, guest isolation, tool calling
-- [ ] 006: Migrate TTS to ElevenLabs — replace Cartesia for better vocal character; trade minor latency for "Glitch" personality
+- [x] 006: Standardize on Google TTS ✅ — Replaced ElevenLabs/Cartesia; using Google TTS for "Clutch" personality character delivery.
 - [ ] 007: Handle "Queue is closed" Gracefully 📋 — catch queue-closed error during user interruption instead of propagating as fatal llm_error ([BUG-019](../docs/field-tests/20260302-buglog.md))
 - [ ] 008: Fix Zombie Agent on Disconnect 📋 — ensure agent disconnects from room when AgentSession dies or user leaves ([BUG-020](../docs/field-tests/20260302-buglog.md))
 - [ ] 016: Explicit Turn Cancellation & Lane Management 📋 — use AbortController to unlock OpenClaw session lanes after network drops
@@ -208,6 +208,7 @@ High-fidelity UI enhancements for the Fletcher Flutter app.
 - [ ] 008: Collaborative Waveform — 8-bit histogram/audio graph with dual-color blending and front-and-center transcript
 - [ ] 009: Persistent History Discovery — fetch recent history from OpenClaw on rejoin, add Session List UI
 - [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 done: tuned interruption sensitivity (units bug fix, minInterruptionDuration 800ms, minInterruptionWords 1); Phase 3 (soft TTS fade) needs SDK support
+- [ ] 015: Single Audio Ack + Visual Spinner 📋 — play ack chime once on EOU, then show visual waiting indicator for remainder of thinking state
 
 ### 12. [Speaker Isolation (Voice Lock)](./11-speaker-isolation) 🔄
 Lock onto the primary speaker's voice in a 1-on-1 conversation — reject background speech, ambient noise, and echo so only the intended user is transcribed.
