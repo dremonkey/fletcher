@@ -258,8 +258,6 @@ This app is animation-heavy (breathing orb, pulsing, waveforms). Follow these ru
 
 ## 11. Navigation Patterns
 
-The app's navigation approach is evolving. **Do not assume a specific navigation pattern** — ask the user before introducing new navigation flows.
-
 **Principles:**
 - **Match complexity to need.** Don't add a routing package for a 2-screen app. Don't hand-roll navigation for a 10-screen app. Pick the simplest tool that works.
 - **Be consistent.** If the app uses bottom sheets for secondary content, don't introduce a new full-screen push for the same type of content without discussion.
@@ -276,8 +274,6 @@ The app's navigation approach is evolving. **Do not assume a specific navigation
 | `go_router` / `auto_route` | Deep linking, 5+ routes, complex nested navigation |
 | `PageRouteBuilder` | Custom transition animations |
 
-**When adding navigation to a new feature, ask the user** which pattern fits their design intent.
-
 ---
 
 ## 12. Error State Patterns
@@ -291,17 +287,11 @@ Error presentation is evolving — **do not hardcode a specific error UI pattern
 - **Be human.** Include enough context for the user to understand what went wrong, but don't dump stack traces or internal error codes. Voice-first users may have just heard a failure — the visual should reassure, not alarm.
 - **Handle all three async states.** Any widget consuming async data must handle loading, error, and empty/data states explicitly. Never let an unhandled error silently render nothing.
 
-**When adding error UI to a screen, ask the user** which presentation they prefer:
-- Modal/overlay (centered, blocks interaction until dismissed)
-- Inline (embedded in the layout flow)
-- Snackbar/toast (transient, auto-dismissing)
-- Status bar integration (subtle, non-blocking)
-
 ---
 
 ## 13. Haptic Feedback
 
-For a voice-first mobile app, tactile feedback reinforces user actions. The specific mapping of interactions to haptic types is a design decision — **ask the user** before adding haptics to new features.
+For a voice-first mobile app, tactile feedback reinforces user actions. 
 
 **Principles:**
 - **Less is more.** Not every tap needs a buzz. Reserve haptics for meaningful state changes the user needs to feel (e.g., toggling a mode, connection events), not routine button presses.
