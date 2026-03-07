@@ -72,8 +72,9 @@ class DiagnosticsBar extends StatelessWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      backgroundColor: AppColors.surface,
+      barrierColor: Colors.black54,
+      shape: const Border(top: BorderSide(color: AppColors.amber, width: 2)),
       builder: (context) => _DiagnosticsModal(
         overallHealth: overallHealth,
         status: status,
@@ -92,16 +93,16 @@ class DiagnosticsBar extends StatelessWidget {
       color: AppColors.cyan,
     );
 
-    return Container(
-      constraints: const BoxConstraints(minHeight: 48),
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.base),
-      child: Row(
-        children: [
-          // Left side: tappable diagnostics summary
-          Expanded(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _showDiagnosticsModal(context),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _showDiagnosticsModal(context),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 48),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.base),
+        child: Row(
+          children: [
+            // Left side: diagnostics summary
+            Expanded(
               child: Row(
                 children: [
                   // Health orb with glow
@@ -148,13 +149,13 @@ class DiagnosticsBar extends StatelessWidget {
                 ],
               ),
             ),
-          ),
-          // Right side: trailing widget (e.g. artifacts button)
-          if (trailing != null) ...[
-            const SizedBox(width: AppSpacing.sm),
-            trailing!,
+            // Right side: trailing widget (e.g. artifacts button)
+            if (trailing != null) ...[
+              const SizedBox(width: AppSpacing.sm),
+              trailing!,
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -183,11 +184,14 @@ class _DiagnosticsModal extends StatelessWidget {
       color: AppColors.textPrimary,
     );
 
-    return TuiModal(
-      title: 'DIAGNOSTICS',
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.base),
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          TuiHeader(label: 'DIAGNOSTICS', color: AppColors.amber),
+          const SizedBox(height: AppSpacing.md),
           _DiagRow(label: 'SYS', value: _sysValue, labelStyle: labelStyle, valueStyle: valueStyle),
           _DiagRow(label: 'CONNECTION', value: _connectionValue, labelStyle: labelStyle, valueStyle: valueStyle),
           _DiagRow(label: 'STT', value: 'deepgram', labelStyle: labelStyle, valueStyle: valueStyle),
@@ -200,6 +204,7 @@ class _DiagnosticsModal extends StatelessWidget {
           _DiagRow(label: 'UPTIME', value: '--', labelStyle: labelStyle, valueStyle: valueStyle),
           if (errorMessage != null)
             _DiagRow(label: 'ERROR', value: errorMessage!, labelStyle: labelStyle, valueStyle: valueStyle.copyWith(color: AppColors.healthRed)),
+          const SizedBox(height: AppSpacing.sm),
         ],
       ),
     );
