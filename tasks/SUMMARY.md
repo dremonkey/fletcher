@@ -215,8 +215,7 @@ Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layou
 - [x] 019: Live Diagnostics Status Bar ✅ — DiagnosticsBar with health orb, SYS/VAD/RT metrics, expandable TuiModal diagnostics view
 - [x] 020: Inline Connection & Room Events ✅ — SystemEvent model + SystemEventCard widget; NETWORK/ROOM/AGENT lifecycle events emitted from LiveKitService; interleaved in chat transcript by timestamp
 - [ ] 021: Thinking Spinner in Chat Transcript 📋 — thematic arrow/fletching ASCII spinner inline in chat while agent is composing
-- [ ] 022: Macro Shortcut System 📋 — horizontally scrollable row of "F-key" style quick-action buttons for common dev tasks (/pulse, /bug, /snapshot)
-
+- [x] 023: Artifact–Message Association ✅ — artifacts render inline below their originating agent message instead of pooling together (BUG-012)
 **Retained:**
 - [~] 015: Single Audio Ack + Visual Spinner 🔄 — Phases 1-2 complete; spinner behavior migrates to mic button in 017
 - [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 done; Phase 3 (soft TTS fade) needs SDK support
@@ -264,6 +263,12 @@ Move sensing capabilities (Wake Word, VAD, STT) to the edge device to improve pr
 - [ ] 005: Offline Mode 📋 — Cache interactions when offline
 
 **Spec:** [docs/specs/wake-word-integration.md](../docs/specs/wake-word-integration.md)
+
+### 15. [Macro Shortcuts](./15-macro-shortcuts) 📋
+Customizable quick-action buttons for triggering skill-driven commands without voice input. 3×3 grid optimized for thumb-zone ergonomics.
+
+**Tasks:**
+- [ ] 022: Macro Shortcut System 📋 — model, registry, TuiMacroCluster widget, action dispatcher, initial 9-macro dev set
 
 ## Development Path
 

@@ -37,6 +37,11 @@ class LiveKitService extends ChangeNotifier {
   Timer? _userSubtitleClearTimer;
   Timer? _agentSubtitleClearTimer;
 
+  /// Tracks the most recent agent transcript segment ID so that artifacts
+  /// arriving via the data channel can be associated with the agent message
+  /// that produced them (BUG-012 / TASK-023).
+  String? _lastAgentSegmentId;
+
   // Background session timeout (task 019)
   static const _backgroundTimeout = Duration(minutes: 10);
   Timer? _backgroundTimeoutTimer;
@@ -74,6 +79,10 @@ class LiveKitService extends ChangeNotifier {
 
   // Connectivity-driven reconnect: waits for network restore when offline
   StreamSubscription<bool>? _networkRestoreSub;
+
+  // Diagnostics: round-trip latency measurement
+  // Tracks when user stopped speaking so we can measure RT when agent starts
+  DateTime? _userSpeechEndTime;
 
   // Buffer for reassembling chunked messages
   final Map<String, List<String?>> _chunks = {};
@@ -339,6 +348,18 @@ class LiveKitService extends ChangeNotifier {
       debugPrint('[Fletcher] Room joined: participants=${_room!.remoteParticipants.length} agent=$hasAgent');
       healthService.updateAgentPresent(present: hasAgent);
 
+      // Populate diagnostics with session info
+      final agentId = hasAgent
+          ? _room!.remoteParticipants.values.first.identity
+          : null;
+      _updateState(
+        diagnostics: _state.diagnostics.copyWith(
+          connectedAt: DateTime.now(),
+          sessionName: _currentRoomName,
+          agentIdentity: agentId,
+        ),
+      );
+
       // Enable microphone — respect mute state across reconnects
       await _localParticipant!.setMicrophoneEnabled(!_isMuted);
       debugPrint('[Fletcher] Audio config: AEC=on NS=on AGC=on voiceIsolation=on highPass=on bitrate=speech(24k) dtx=on');
@@ -485,6 +506,12 @@ class LiveKitService extends ChangeNotifier {
     _listener?.on<ParticipantConnectedEvent>((event) {
       debugPrint('[Fletcher] Remote participant connected: ${event.participant.identity}');
       healthService.updateAgentPresent(present: true);
+      // Update diagnostics with agent identity
+      _updateState(
+        diagnostics: _state.diagnostics.copyWith(
+          agentIdentity: event.participant.identity,
+        ),
+      );
       // Emit/update agent connected system event (task 020)
       _emitSystemEvent(SystemEvent(
         id: 'agent-boot',
@@ -500,6 +527,12 @@ class LiveKitService extends ChangeNotifier {
       final remaining = _room?.remoteParticipants.length ?? 0;
       debugPrint('[Fletcher] Remote participant disconnected: ${event.participant.identity} (remaining=$remaining)');
       healthService.updateAgentPresent(present: remaining > 0);
+      // Clear agent identity if no agents remain
+      if (remaining == 0) {
+        _updateState(
+          diagnostics: _state.diagnostics.copyWith(clearAgentIdentity: true),
+        );
+      }
       // Emit agent disconnected system event (task 020)
       _emitSystemEvent(SystemEvent(
         id: 'agent-disconnect-${DateTime.now().millisecondsSinceEpoch}',
@@ -720,13 +753,19 @@ class LiveKitService extends ChangeNotifier {
       });
     } else if (eventType == 'artifact') {
       final artifactEvent = ArtifactEvent.fromJson(json);
-      final newArtifacts = [..._state.artifacts, artifactEvent];
+      // Associate artifact with the most recent agent message (TASK-023).
+      // If no agent message exists yet, messageId stays null and the
+      // ChatTranscript will use the fallback (nearest prior agent message).
+      final stamped = _lastAgentSegmentId != null
+          ? artifactEvent.withMessageId(_lastAgentSegmentId)
+          : artifactEvent;
+      final newArtifacts = [..._state.artifacts, stamped];
       // Keep only last 10 artifacts
       if (newArtifacts.length > 10) {
         newArtifacts.removeAt(0);
       }
       _updateState(artifacts: newArtifacts);
-      debugPrint('[Ganglia] Artifact: ${artifactEvent.displayTitle}');
+      debugPrint('[Ganglia] Artifact: ${stamped.displayTitle} (msg=${stamped.messageId})');
     } else if (eventType == 'agent_transcript') {
       // Agent transcript forwarded directly from Ganglia LLM content stream.
       // Bypasses the SDK's lk.transcription pipeline which breaks when the
@@ -735,6 +774,9 @@ class LiveKitService extends ChangeNotifier {
       final text = json['text'] as String? ?? '';
       final isFinal = json['final'] == true;
       if (text.isNotEmpty) {
+        // Track the latest agent segment ID for artifact association (TASK-023)
+        _lastAgentSegmentId = segmentId;
+
         // Stop thinking spinner once agent text starts streaming
         if (_state.isAgentThinking) {
           _updateState(isAgentThinking: false);
@@ -762,6 +804,16 @@ class LiveKitService extends ChangeNotifier {
           isFinal: isFinal,
         );
       }
+    } else if (eventType == 'pipeline_info') {
+      // Pipeline provider info sent by the voice agent (BUG-013).
+      // Expected shape: { type: "pipeline_info", stt: "deepgram", tts: "google", llm: "openclaw" }
+      _updateState(
+        diagnostics: _state.diagnostics.copyWith(
+          sttProvider: json['stt'] as String?,
+          ttsProvider: json['tts'] as String?,
+          llmProvider: json['llm'] as String?,
+        ),
+      );
     }
   }
 
@@ -947,14 +999,28 @@ class LiveKitService extends ChangeNotifier {
       if (_state.isAgentThinking) {
         _updateState(isAgentThinking: false);
       }
+      // Measure round-trip latency: user speech end → agent speech start
+      if (_state.status != ConversationStatus.aiSpeaking &&
+          _userSpeechEndTime != null) {
+        final rtMs = DateTime.now()
+            .difference(_userSpeechEndTime!)
+            .inMilliseconds;
+        _userSpeechEndTime = null;
+        _updateState(
+          diagnostics: _state.diagnostics.copyWith(roundTripMs: rtMs),
+        );
+      }
     } else if (userLevel > 0.05) {
       newStatus = ConversationStatus.userSpeaking;
+      // Clear previous speech end time while user is still speaking
+      _userSpeechEndTime = null;
     } else if (_state.status == ConversationStatus.userSpeaking ||
         _state.status == ConversationStatus.aiSpeaking) {
       // Brief processing state after speaking stops
       newStatus = ConversationStatus.processing;
-      // Start thinking spinner when user finishes speaking
+      // Record when user stopped speaking for RT measurement
       if (_state.status == ConversationStatus.userSpeaking) {
+        _userSpeechEndTime = DateTime.now();
         _updateState(isAgentThinking: true);
       }
       // Return to idle after short delay
@@ -1008,6 +1074,7 @@ class LiveKitService extends ChangeNotifier {
     bool clearCurrentAgentTranscript = false,
     List<SystemEvent>? systemEvents,
     bool? isAgentThinking,
+    DiagnosticsInfo? diagnostics,
   }) {
     _state = _state.copyWith(
       status: status,
@@ -1026,6 +1093,7 @@ class LiveKitService extends ChangeNotifier {
       clearCurrentAgentTranscript: clearCurrentAgentTranscript,
       systemEvents: systemEvents,
       isAgentThinking: isAgentThinking,
+      diagnostics: diagnostics,
     );
     notifyListeners();
   }
@@ -1319,6 +1387,9 @@ class LiveKitService extends ChangeNotifier {
     // Clear waveform buffers — old audio levels are meaningless
     _userWaveformBuffer.clear();
     _aiWaveformBuffer.clear();
+
+    // Clear RT measurement state
+    _userSpeechEndTime = null;
 
     if (!preserveTranscripts) {
       _url = null;

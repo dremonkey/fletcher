@@ -167,6 +167,10 @@ class ArtifactEvent {
   // Raw JSON for unknown types
   final Map<String, dynamic>? rawJson;
 
+  /// The ID of the agent transcript message this artifact is associated with.
+  /// Used to render the artifact inline below its originating message.
+  final String? messageId;
+
   const ArtifactEvent({
     required this.artifactType,
     this.title,
@@ -181,6 +185,7 @@ class ArtifactEvent {
     this.message,
     this.stack,
     this.rawJson,
+    this.messageId,
   });
 
   factory ArtifactEvent.fromJson(Map<String, dynamic> json) {
@@ -230,6 +235,26 @@ class ArtifactEvent {
     }
   }
 
+  /// Returns a copy of this artifact with the given [messageId].
+  ArtifactEvent withMessageId(String? messageId) {
+    return ArtifactEvent(
+      artifactType: artifactType,
+      title: title,
+      file: file,
+      diff: diff,
+      language: language,
+      content: content,
+      startLine: startLine,
+      path: path,
+      query: query,
+      results: results,
+      message: message,
+      stack: stack,
+      rawJson: rawJson,
+      messageId: messageId,
+    );
+  }
+
   String get displayTitle {
     if (title != null) return title!;
     switch (artifactType) {
@@ -248,6 +273,77 @@ class ArtifactEvent {
       case ArtifactType.unknown:
         return 'Unknown Artifact';
     }
+  }
+}
+
+/// Diagnostics data for the diagnostics panel.
+///
+/// Holds live pipeline values such as round-trip latency, session/room name,
+/// agent identity, connection time, and pipeline provider names (when available
+/// from agent metadata).
+class DiagnosticsInfo {
+  /// Measured round-trip latency in milliseconds (user speech end → agent speech start).
+  final int? roundTripMs;
+
+  /// Current room/session name.
+  final String? sessionName;
+
+  /// Agent participant identity (from LiveKit room).
+  final String? agentIdentity;
+
+  /// Timestamp when the room connection was established.
+  final DateTime? connectedAt;
+
+  /// Pipeline provider names — populated from agent metadata if available.
+  final String? sttProvider;
+  final String? ttsProvider;
+  final String? llmProvider;
+
+  const DiagnosticsInfo({
+    this.roundTripMs,
+    this.sessionName,
+    this.agentIdentity,
+    this.connectedAt,
+    this.sttProvider,
+    this.ttsProvider,
+    this.llmProvider,
+  });
+
+  DiagnosticsInfo copyWith({
+    int? roundTripMs,
+    bool clearRoundTripMs = false,
+    String? sessionName,
+    String? agentIdentity,
+    bool clearAgentIdentity = false,
+    DateTime? connectedAt,
+    bool clearConnectedAt = false,
+    String? sttProvider,
+    String? ttsProvider,
+    String? llmProvider,
+  }) {
+    return DiagnosticsInfo(
+      roundTripMs: clearRoundTripMs ? null : (roundTripMs ?? this.roundTripMs),
+      sessionName: sessionName ?? this.sessionName,
+      agentIdentity: clearAgentIdentity ? null : (agentIdentity ?? this.agentIdentity),
+      connectedAt: clearConnectedAt ? null : (connectedAt ?? this.connectedAt),
+      sttProvider: sttProvider ?? this.sttProvider,
+      ttsProvider: ttsProvider ?? this.ttsProvider,
+      llmProvider: llmProvider ?? this.llmProvider,
+    );
+  }
+
+  /// Format uptime duration as HH:MM:SS or MM:SS.
+  static String formatUptime(Duration duration) {
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:'
+          '${minutes.toString().padLeft(2, '0')}:'
+          '${seconds.toString().padLeft(2, '0')}';
+    }
+    return '${minutes.toString().padLeft(2, '0')}:'
+        '${seconds.toString().padLeft(2, '0')}';
   }
 }
 
@@ -279,6 +375,9 @@ class ConversationState {
   /// and first agent transcript text arriving).
   final bool isAgentThinking;
 
+  /// Live diagnostics info (round-trip latency, session, agent, uptime, providers).
+  final DiagnosticsInfo diagnostics;
+
   const ConversationState({
     this.status = ConversationStatus.connecting,
     this.userAudioLevel = 0.0,
@@ -293,6 +392,7 @@ class ConversationState {
     this.currentAgentTranscript,
     this.systemEvents = const [],
     this.isAgentThinking = false,
+    this.diagnostics = const DiagnosticsInfo(),
   });
 
   ConversationState copyWith({
@@ -312,6 +412,7 @@ class ConversationState {
     bool clearCurrentAgentTranscript = false,
     List<SystemEvent>? systemEvents,
     bool? isAgentThinking,
+    DiagnosticsInfo? diagnostics,
   }) {
     return ConversationState(
       status: status ?? this.status,
@@ -331,6 +432,7 @@ class ConversationState {
           : (currentAgentTranscript ?? this.currentAgentTranscript),
       systemEvents: systemEvents ?? this.systemEvents,
       isAgentThinking: isAgentThinking ?? this.isAgentThinking,
+      diagnostics: diagnostics ?? this.diagnostics,
     );
   }
 }

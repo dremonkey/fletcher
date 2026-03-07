@@ -1,11 +1,12 @@
 # TASK-023: Artifact–Message Association (Inline Chronological Anchoring)
 
 ## Status
-- **Status:** Open
+- **Status:** Complete
 - **Priority:** Medium
 - **Depends on:** 018 (Artifact System Redesign)
 - **Owner:** Unassigned
 - **Created:** 2026-03-07
+- **Completed:** 2026-03-07
 
 ## Bug Reference
 - **BUG-012** in [`docs/field-tests/20260307-buglog.md`](../../docs/field-tests/20260307-buglog.md)
@@ -30,9 +31,9 @@ Artifacts are stored in a flat `ConversationState.artifacts` list and rendered i
 3. **Fallback:** If an artifact arrives without a clear message association (e.g., before any agent message), render it at the current scroll position in the transcript.
 
 ## Acceptance Criteria
-- [ ] Each artifact is associated with a specific agent message (by ID or timestamp proximity)
-- [ ] Artifact cards render inline below their associated message in the chat transcript
-- [ ] Artifacts maintain correct chronological ordering when scrolling through the transcript
-- [ ] Artifact counter in status bar (`[ ARTIFACTS: N ]`) still shows the total count
-- [ ] Tapping an inline artifact still opens the bottom sheet drawer
-- [ ] Artifacts list modal still shows all artifacts across the session
+- [x] Each artifact is associated with a specific agent message (by ID or timestamp proximity)
+- [x] Artifact cards render inline below their associated message in the chat transcript
+- [x] Artifacts maintain correct chronological ordering when scrolling through the transcript
+- [x] Artifact counter in status bar (`[ ARTIFACTS: N ]`) still shows the total count
+- [x] Tapping an inline artifact still opens the bottom sheet drawer
+- [x] Artifacts list modal still shows all artifacts across the session

@@ -91,12 +91,39 @@ class _ChatTranscriptState extends State<ChatTranscript> {
     }
   }
 
-  /// Find the index of the last agent message in the transcript.
-  int _lastAgentIndex(List<TranscriptEntry> transcript) {
+  /// Group artifacts by their associated message ID.
+  ///
+  /// Artifacts with a [ArtifactEvent.messageId] are grouped under that ID.
+  /// Artifacts without a messageId are assigned to the last agent message
+  /// in the transcript as a fallback.
+  Map<String, List<ArtifactEvent>> _groupArtifactsByMessage(
+    List<ArtifactEvent> artifacts,
+    List<TranscriptEntry> transcript,
+  ) {
+    final groups = <String, List<ArtifactEvent>>{};
+    if (artifacts.isEmpty) return groups;
+
+    // Find the last agent message ID for fallback
+    String? lastAgentId;
     for (int i = transcript.length - 1; i >= 0; i--) {
-      if (transcript[i].role == TranscriptRole.agent) return i;
+      if (transcript[i].role == TranscriptRole.agent) {
+        lastAgentId = transcript[i].id;
+        break;
+      }
     }
-    return -1;
+
+    for (final artifact in artifacts) {
+      final targetId = artifact.messageId ?? lastAgentId;
+      if (targetId != null) {
+        groups.putIfAbsent(targetId, () => []);
+        groups[targetId]!.add(artifact);
+      }
+      // If targetId is still null (no agent messages at all), the artifact
+      // won't be shown inline. The artifacts list modal and counter still
+      // display it via state.artifacts.
+    }
+
+    return groups;
   }
 
   @override
@@ -106,21 +133,20 @@ class _ChatTranscriptState extends State<ChatTranscript> {
     final artifacts = state.artifacts;
     final systemEvents = state.systemEvents;
 
-    // Determine which transcript index gets the artifacts
-    final lastAgentIdx = _lastAgentIndex(transcript);
+    // Group artifacts by their associated agent message ID (TASK-023)
+    final artifactsByMessage = _groupArtifactsByMessage(artifacts, transcript);
 
     // Build timestamped items from transcript entries
     final timestampedItems = <_TimestampedItem>[];
 
     for (int i = 0; i < transcript.length; i++) {
       final entry = transcript[i];
-      final showArtifacts =
-          i == lastAgentIdx && artifacts.isNotEmpty;
+      final messageArtifacts = artifactsByMessage[entry.id] ?? const [];
       timestampedItems.add(_TimestampedItem(
         timestamp: entry.timestamp,
         item: _ChatItem.message(
           entry,
-          artifacts: showArtifacts ? artifacts : const [],
+          artifacts: messageArtifacts,
         ),
       ));
     }
