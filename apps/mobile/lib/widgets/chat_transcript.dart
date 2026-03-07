@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/conversation_state.dart';
 import '../services/livekit_service.dart';
@@ -6,6 +7,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/tui_widgets.dart';
+import 'artifact_viewer.dart';
 
 /// Primary chat transcript area displaying conversation messages.
 ///
@@ -82,10 +84,22 @@ class _ChatTranscriptState extends State<ChatTranscript> {
     }
   }
 
+  /// Find the index of the last agent message in the transcript.
+  int _lastAgentIndex(List<TranscriptEntry> transcript) {
+    for (int i = transcript.length - 1; i >= 0; i--) {
+      if (transcript[i].role == TranscriptRole.agent) return i;
+    }
+    return -1;
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = widget.service.state;
     final transcript = state.transcript;
+    final artifacts = state.artifacts;
+
+    // Determine which transcript index gets the artifacts
+    final lastAgentIdx = _lastAgentIndex(transcript);
 
     // Build the list of items: finalized transcript + live interim entries
     final items = <_ChatItem>[];
@@ -99,7 +113,13 @@ class _ChatTranscriptState extends State<ChatTranscript> {
         items.add(const _ChatItem.divider());
       }
 
-      items.add(_ChatItem.message(entry));
+      // Attach artifacts to the last agent message
+      final showArtifacts =
+          i == lastAgentIdx && artifacts.isNotEmpty;
+      items.add(_ChatItem.message(
+        entry,
+        artifacts: showArtifacts ? artifacts : const [],
+      ));
     }
 
     // Add live interim transcripts if they are not already in the list
@@ -149,7 +169,10 @@ class _ChatTranscriptState extends State<ChatTranscript> {
         }
         return Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-          child: _TranscriptMessage(entry: item.entry!),
+          child: _TranscriptMessage(
+            entry: item.entry!,
+            artifacts: item.artifacts,
+          ),
         );
       },
     );
@@ -160,16 +183,25 @@ class _ChatTranscriptState extends State<ChatTranscript> {
 class _ChatItem {
   final TranscriptEntry? entry;
   final bool isDivider;
+  final List<ArtifactEvent> artifacts;
 
-  const _ChatItem.message(this.entry) : isDivider = false;
-  const _ChatItem.divider() : entry = null, isDivider = true;
+  const _ChatItem.message(this.entry, {this.artifacts = const []})
+      : isDivider = false;
+  const _ChatItem.divider()
+      : entry = null,
+        isDivider = true,
+        artifacts = const [];
 }
 
 /// A single transcript message rendered as a TuiCard.
 class _TranscriptMessage extends StatelessWidget {
   final TranscriptEntry entry;
+  final List<ArtifactEvent> artifacts;
 
-  const _TranscriptMessage({required this.entry});
+  const _TranscriptMessage({
+    required this.entry,
+    this.artifacts = const [],
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -200,6 +232,23 @@ class _TranscriptMessage extends StatelessWidget {
             _formatTimestamp(entry.timestamp),
             style: AppTypography.overline,
           ),
+          // Inline artifact buttons
+          if (artifacts.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: artifacts
+                  .map((a) => ArtifactInlineButton(
+                        artifact: a,
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          showSingleArtifactDrawer(context, artifact: a);
+                        },
+                      ))
+                  .toList(),
+            ),
+          ],
         ],
       ),
     );

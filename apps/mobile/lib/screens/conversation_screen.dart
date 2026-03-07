@@ -107,10 +107,9 @@ class _ConversationScreenState extends State<ConversationScreen>
               trailing: state.artifacts.isNotEmpty
                   ? TuiButton(
                       label: 'ARTIFACTS: ${state.artifacts.length}',
-                      onPressed: () => showArtifactDrawer(
+                      onPressed: () => showArtifactsListModal(
                         context,
                         artifacts: state.artifacts,
-                        onClear: _liveKitService.clearArtifacts,
                       ),
                     )
                   : null,

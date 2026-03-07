@@ -1,283 +1,388 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../models/conversation_state.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
+import '../theme/app_typography.dart';
+import '../theme/tui_widgets.dart';
 
-/// A chip that indicates artifacts are available.
-/// Tap to open the artifact drawer.
-class ArtifactChip extends StatelessWidget {
-  final int count;
-  final VoidCallback onTap;
+// ---------------------------------------------------------------------------
+// Type badge helpers
+// ---------------------------------------------------------------------------
 
-  const ArtifactChip({
-    super.key,
-    required this.count,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (count == 0) return const SizedBox.shrink();
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1F1F1F),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: const Color(0xFF3B82F6).withOpacity(0.4),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.code_rounded,
-              size: 16,
-              color: Color(0xFF3B82F6),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              '$count artifact${count > 1 ? 's' : ''}',
-              style: const TextStyle(
-                color: Color(0xFF3B82F6),
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(width: 4),
-            const Icon(
-              Icons.keyboard_arrow_up_rounded,
-              size: 16,
-              color: Color(0xFF3B82F6),
-            ),
-          ],
-        ),
-      ),
-    );
+/// Returns a short uppercase badge string for an artifact type.
+String _typeBadge(ArtifactType type) {
+  switch (type) {
+    case ArtifactType.diff:
+      return 'DIFF';
+    case ArtifactType.code:
+      return 'CODE';
+    case ArtifactType.markdown:
+      return 'TEXT';
+    case ArtifactType.file:
+      return 'FILE';
+    case ArtifactType.searchResults:
+      return 'SEARCH';
+    case ArtifactType.error:
+      return 'ERROR';
+    case ArtifactType.unknown:
+      return 'JSON';
   }
 }
 
-/// Shows the artifact drawer as a bottom sheet.
+/// Returns preview text for an artifact (first 2-3 lines of content).
+String _artifactPreview(ArtifactEvent artifact) {
+  switch (artifact.artifactType) {
+    case ArtifactType.diff:
+      return artifact.diff ?? '';
+    case ArtifactType.code:
+    case ArtifactType.file:
+    case ArtifactType.markdown:
+      return artifact.content ?? '';
+    case ArtifactType.searchResults:
+      final results = artifact.results;
+      if (results != null && results.isNotEmpty) {
+        return results.map((r) => '${r.file}:${r.line}').take(3).join('\n');
+      }
+      return 'No results';
+    case ArtifactType.error:
+      return artifact.message ?? 'An error occurred';
+    case ArtifactType.unknown:
+      return artifact.rawJson != null
+          ? const JsonEncoder.withIndent('  ').convert(artifact.rawJson)
+          : '{}';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Public API: show a single artifact in a bottom sheet drawer
+// ---------------------------------------------------------------------------
+
+/// Opens a bottom sheet displaying a single artifact.
+void showSingleArtifactDrawer(BuildContext context,
+    {required ArtifactEvent artifact}) {
+  HapticFeedback.lightImpact();
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+    builder: (context) => _SingleArtifactDrawer(artifact: artifact),
+  );
+}
+
+/// Opens a bottom sheet showing the legacy multi-artifact tabbed view.
+///
+/// Kept for backwards-compatibility with existing callers. New code should
+/// prefer [showArtifactsListModal] + [showSingleArtifactDrawer].
 void showArtifactDrawer(
   BuildContext context, {
   required List<ArtifactEvent> artifacts,
   required VoidCallback onClear,
 }) {
-  showModalBottomSheet(
+  if (artifacts.isEmpty) return;
+  if (artifacts.length == 1) {
+    showSingleArtifactDrawer(context, artifact: artifacts.first);
+    return;
+  }
+  showArtifactsListModal(context, artifacts: artifacts);
+}
+
+// ---------------------------------------------------------------------------
+// Public API: artifacts list modal (full-screen overlay)
+// ---------------------------------------------------------------------------
+
+/// Opens a full-screen modal listing all artifacts.
+///
+/// Tapping an artifact dismisses the modal and opens the single-artifact
+/// drawer for that item.
+void showArtifactsListModal(
+  BuildContext context, {
+  required List<ArtifactEvent> artifacts,
+}) {
+  HapticFeedback.lightImpact();
+  showGeneralDialog(
     context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (context) => ArtifactDrawer(
-      artifacts: artifacts,
-      onClear: onClear,
-    ),
+    barrierDismissible: true,
+    barrierLabel: 'Artifacts list',
+    barrierColor: Colors.black87,
+    transitionDuration: const Duration(milliseconds: 200),
+    pageBuilder: (context, animation, secondaryAnimation) {
+      return _ArtifactsListModal(artifacts: artifacts);
+    },
+    transitionBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(opacity: animation, child: child);
+    },
   );
 }
 
-/// The artifact drawer that shows all artifacts.
-class ArtifactDrawer extends StatefulWidget {
+// ---------------------------------------------------------------------------
+// Artifacts list modal widget
+// ---------------------------------------------------------------------------
+
+class _ArtifactsListModal extends StatelessWidget {
   final List<ArtifactEvent> artifacts;
-  final VoidCallback onClear;
 
-  const ArtifactDrawer({
-    super.key,
-    required this.artifacts,
-    required this.onClear,
-  });
-
-  @override
-  State<ArtifactDrawer> createState() => _ArtifactDrawerState();
-}
-
-class _ArtifactDrawerState extends State<ArtifactDrawer> {
-  int _selectedIndex = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    // Default to latest artifact
-    if (widget.artifacts.isNotEmpty) {
-      _selectedIndex = widget.artifacts.length - 1;
-    }
-  }
+  const _ArtifactsListModal({required this.artifacts});
 
   @override
   Widget build(BuildContext context) {
-    final height = MediaQuery.of(context).size.height * 0.7;
+    return SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.base),
+          child: TuiModal(
+            title: 'ARTIFACTS (${artifacts.length})',
+            child: Flexible(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Close button row
+                  Align(
+                    alignment: Alignment.topRight,
+                    child: SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: IconButton(
+                        icon: Text(
+                          '[X]',
+                          style: AppTypography.label
+                              .copyWith(color: AppColors.textSecondary),
+                        ),
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.of(context).pop();
+                        },
+                      ),
+                    ),
+                  ),
+
+                  // List or empty state
+                  Flexible(
+                    child: artifacts.isEmpty
+                        ? Padding(
+                            padding:
+                                const EdgeInsets.all(AppSpacing.base),
+                            child: Text(
+                              'No artifacts in this session',
+                              style: AppTypography.body
+                                  .copyWith(color: AppColors.textSecondary),
+                            ),
+                          )
+                        : ListView.builder(
+                            shrinkWrap: true,
+                            padding: const EdgeInsets.only(
+                              top: AppSpacing.sm,
+                              bottom: AppSpacing.base,
+                            ),
+                            itemCount: artifacts.length,
+                            itemBuilder: (context, index) {
+                              final artifact = artifacts[index];
+                              final isLatest =
+                                  index == artifacts.length - 1;
+                              return Padding(
+                                padding: const EdgeInsets.only(
+                                    bottom: AppSpacing.sm),
+                                child: _ArtifactListCard(
+                                  artifact: artifact,
+                                  isActive: isLatest,
+                                  onTap: () {
+                                    HapticFeedback.lightImpact();
+                                    Navigator.of(context).pop();
+                                    showSingleArtifactDrawer(context,
+                                        artifact: artifact);
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ArtifactListCard extends StatelessWidget {
+  final ArtifactEvent artifact;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _ArtifactListCard({
+    required this.artifact,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final preview = _artifactPreview(artifact);
+    final previewLines = preview.split('\n').take(3).join('\n');
+
+    return GestureDetector(
+      onTap: onTap,
+      child: TuiCard(
+        borderColor: isActive ? AppColors.amber : AppColors.textSecondary,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 72),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      artifact.displayTitle,
+                      style: AppTypography.body
+                          .copyWith(fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    '[${_typeBadge(artifact.artifactType)}]',
+                    style: AppTypography.artifactBadge
+                        .copyWith(color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                previewLines,
+                style: AppTypography.overline
+                    .copyWith(color: AppColors.textSecondary),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Single artifact drawer (bottom sheet)
+// ---------------------------------------------------------------------------
+
+class _SingleArtifactDrawer extends StatelessWidget {
+  final ArtifactEvent artifact;
+
+  const _SingleArtifactDrawer({required this.artifact});
+
+  @override
+  Widget build(BuildContext context) {
+    final height = MediaQuery.of(context).size.height * 0.65;
 
     return Container(
       height: height,
       decoration: const BoxDecoration(
-        color: Color(0xFF0D0D0D),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.zero,
         border: Border(
-          top: BorderSide(color: Color(0xFF2D2D2D)),
-          left: BorderSide(color: Color(0xFF2D2D2D)),
-          right: BorderSide(color: Color(0xFF2D2D2D)),
+          top: BorderSide(color: AppColors.amber, width: 2),
         ),
       ),
       child: Column(
         children: [
-          // Handle bar
-          Container(
-            margin: const EdgeInsets.only(top: 12),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: const Color(0xFF4B5563),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-
-          // Header
+          // Header row
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.base,
+              vertical: AppSpacing.md,
+            ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Artifacts',
-                  style: TextStyle(
-                    color: Color(0xFFE5E7EB),
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
+                Expanded(
+                  child: TuiHeader(
+                    label: artifact.displayTitle,
+                    color: AppColors.amber,
                   ),
                 ),
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.delete_outline_rounded,
-                        color: Color(0xFF6B7280),
-                        size: 20,
-                      ),
-                      onPressed: () {
-                        widget.onClear();
-                        Navigator.pop(context);
-                      },
-                      tooltip: 'Clear all',
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.close_rounded,
-                        color: Color(0xFF6B7280),
-                        size: 20,
-                      ),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  '[${_typeBadge(artifact.artifactType)}]',
+                  style: AppTypography.artifactBadge
+                      .copyWith(color: AppColors.textSecondary),
                 ),
               ],
             ),
           ),
 
-          // Tabs (if multiple artifacts)
-          if (widget.artifacts.length > 1)
-            SizedBox(
-              height: 40,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: widget.artifacts.length,
-                itemBuilder: (context, index) {
-                  final artifact = widget.artifacts[index];
-                  final isSelected = index == _selectedIndex;
-
-                  return GestureDetector(
-                    onTap: () => setState(() => _selectedIndex = index),
-                    child: Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? const Color(0xFF3B82F6).withOpacity(0.2)
-                            : const Color(0xFF1F1F1F),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: isSelected
-                              ? const Color(0xFF3B82F6)
-                              : const Color(0xFF2D2D2D),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            _getArtifactIcon(artifact.artifactType),
-                            size: 14,
-                            color: isSelected
-                                ? const Color(0xFF3B82F6)
-                                : const Color(0xFF6B7280),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            _shortenTitle(artifact.displayTitle),
-                            style: TextStyle(
-                              color: isSelected
-                                  ? const Color(0xFF3B82F6)
-                                  : const Color(0xFF9CA3AF),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-
-          const SizedBox(height: 8),
-
-          // Content
+          // Content area
           Expanded(
-            child: widget.artifacts.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No artifacts',
-                      style: TextStyle(color: Color(0xFF6B7280)),
-                    ),
-                  )
-                : _ArtifactContent(artifact: widget.artifacts[_selectedIndex]),
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: AppSpacing.base),
+              child: _ArtifactContent(artifact: artifact),
+            ),
           ),
         ],
       ),
     );
   }
+}
 
-  IconData _getArtifactIcon(ArtifactType type) {
-    switch (type) {
-      case ArtifactType.diff:
-        return Icons.difference_rounded;
-      case ArtifactType.code:
-        return Icons.code_rounded;
-      case ArtifactType.markdown:
-        return Icons.description_rounded;
-      case ArtifactType.file:
-        return Icons.description_outlined;
-      case ArtifactType.searchResults:
-        return Icons.search_rounded;
-      case ArtifactType.error:
-        return Icons.error_outline_rounded;
-      case ArtifactType.unknown:
-        return Icons.data_object_rounded;
-    }
+// ---------------------------------------------------------------------------
+// Inline artifact button (for embedding in chat messages)
+// ---------------------------------------------------------------------------
+
+/// A TuiButton-style inline button for opening a single artifact.
+///
+/// Renders as `[ARTIFACT: NAME]` with amber border and monospace text.
+class ArtifactInlineButton extends StatelessWidget {
+  final ArtifactEvent artifact;
+  final VoidCallback onTap;
+
+  const ArtifactInlineButton({
+    super.key,
+    required this.artifact,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 48),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.base,
+          vertical: AppSpacing.sm,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.zero,
+          border: Border.all(color: AppColors.amber, width: 1),
+        ),
+        child: Text(
+          '[ARTIFACT: ${_shortenTitle(artifact.displayTitle)}]',
+          style: AppTypography.artifactBadge.copyWith(color: AppColors.amber),
+        ),
+      ),
+    );
   }
 
-  String _shortenTitle(String title) {
-    if (title.length > 20) {
-      return '${title.substring(0, 17)}...';
+  static String _shortenTitle(String title) {
+    if (title.length > 24) {
+      return '${title.substring(0, 21)}...';
     }
     return title;
   }
 }
 
-/// Renders the content of an artifact.
+// ---------------------------------------------------------------------------
+// Content renderer (dispatches by type)
+// ---------------------------------------------------------------------------
+
+/// Renders the content of an artifact based on its type.
 class _ArtifactContent extends StatelessWidget {
   final ArtifactEvent artifact;
 
@@ -303,6 +408,10 @@ class _ArtifactContent extends StatelessWidget {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Type-specific viewers (all restyled with design system tokens)
+// ---------------------------------------------------------------------------
+
 /// Displays a code diff with added/removed line highlighting.
 class _DiffViewer extends StatelessWidget {
   final ArtifactEvent artifact;
@@ -320,22 +429,22 @@ class _DiffViewer extends StatelessWidget {
         if (artifact.file != null)
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: const Color(0xFF1F1F1F),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.base,
+              vertical: AppSpacing.sm,
+            ),
+            color: AppColors.background,
             child: Text(
               artifact.file!,
-              style: const TextStyle(
-                color: Color(0xFF9CA3AF),
-                fontSize: 12,
-                fontFamily: 'monospace',
-              ),
+              style: AppTypography.overline
+                  .copyWith(color: AppColors.textSecondary),
             ),
           ),
 
         // Diff content
         Expanded(
           child: ListView.builder(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(AppSpacing.base),
             itemCount: lines.length,
             itemBuilder: (context, index) {
               final line = lines[index];
@@ -359,29 +468,30 @@ class _DiffLine extends StatelessWidget {
     Color textColor;
 
     if (line.startsWith('+') && !line.startsWith('+++')) {
-      bgColor = const Color(0xFF10B981).withOpacity(0.15);
-      textColor = const Color(0xFF34D399);
+      bgColor = AppColors.healthGreen.withAlpha(38); // ~15% opacity
+      textColor = AppColors.healthGreen;
     } else if (line.startsWith('-') && !line.startsWith('---')) {
-      bgColor = const Color(0xFFEF4444).withOpacity(0.15);
-      textColor = const Color(0xFFF87171);
+      bgColor = AppColors.healthRed.withAlpha(38);
+      textColor = AppColors.healthRed;
     } else if (line.startsWith('@@')) {
-      bgColor = const Color(0xFF3B82F6).withOpacity(0.15);
-      textColor = const Color(0xFF60A5FA);
+      bgColor = AppColors.cyan.withAlpha(38);
+      textColor = AppColors.cyan;
     } else {
       bgColor = Colors.transparent;
-      textColor = const Color(0xFF9CA3AF);
+      textColor = AppColors.textSecondary;
     }
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 2,
+      ),
       color: bgColor,
       child: Text(
         line,
-        style: TextStyle(
+        style: AppTypography.artifactContent.copyWith(
           color: textColor,
-          fontSize: 12,
-          fontFamily: 'monospace',
           height: 1.5,
         ),
       ),
@@ -389,7 +499,7 @@ class _DiffLine extends StatelessWidget {
   }
 }
 
-/// Displays code or file content.
+/// Displays code or file content with line numbers.
 class _CodeViewer extends StatelessWidget {
   final ArtifactEvent artifact;
 
@@ -408,35 +518,38 @@ class _CodeViewer extends StatelessWidget {
         if (artifact.file != null || artifact.path != null)
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: const Color(0xFF1F1F1F),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.base,
+              vertical: AppSpacing.sm,
+            ),
+            color: AppColors.background,
             child: Row(
               children: [
-                Text(
-                  artifact.file ?? artifact.path ?? '',
-                  style: const TextStyle(
-                    color: Color(0xFF9CA3AF),
-                    fontSize: 12,
-                    fontFamily: 'monospace',
+                Expanded(
+                  child: Text(
+                    artifact.file ?? artifact.path ?? '',
+                    style: AppTypography.overline
+                        .copyWith(color: AppColors.textSecondary),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 if (artifact.language != null) ...[
-                  const Spacer(),
+                  const SizedBox(width: AppSpacing.sm),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
+                      horizontal: AppSpacing.sm,
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF3B82F6).withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: BorderRadius.zero,
+                      border: Border.all(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                     child: Text(
                       artifact.language!,
-                      style: const TextStyle(
-                        color: Color(0xFF60A5FA),
-                        fontSize: 10,
-                      ),
+                      style: AppTypography.overline
+                          .copyWith(color: AppColors.textSecondary),
                     ),
                   ),
                 ],
@@ -447,7 +560,7 @@ class _CodeViewer extends StatelessWidget {
         // Code content with line numbers
         Expanded(
           child: ListView.builder(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(AppSpacing.base),
             itemCount: lines.length,
             itemBuilder: (context, index) {
               final lineNum = startLine + index;
@@ -458,23 +571,18 @@ class _CodeViewer extends StatelessWidget {
                     width: 40,
                     child: Text(
                       '$lineNum',
-                      style: const TextStyle(
-                        color: Color(0xFF4B5563),
-                        fontSize: 12,
-                        fontFamily: 'monospace',
+                      style: AppTypography.artifactContent.copyWith(
+                        color: AppColors.textSecondary,
                         height: 1.5,
                       ),
                       textAlign: TextAlign.right,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: Text(
                       lines[index],
-                      style: const TextStyle(
-                        color: Color(0xFFE5E7EB),
-                        fontSize: 12,
-                        fontFamily: 'monospace',
+                      style: AppTypography.artifactContent.copyWith(
                         height: 1.5,
                       ),
                     ),
@@ -489,7 +597,7 @@ class _CodeViewer extends StatelessWidget {
   }
 }
 
-/// Displays markdown content rendered properly.
+/// Displays markdown content rendered with TUI-appropriate styling.
 class _MarkdownViewer extends StatelessWidget {
   final ArtifactEvent artifact;
 
@@ -506,25 +614,15 @@ class _MarkdownViewer extends StatelessWidget {
         if (artifact.path != null || artifact.title != null)
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: const Color(0xFF1F1F1F),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.description_rounded,
-                  size: 14,
-                  color: Color(0xFF6B7280),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  artifact.path ?? artifact.title ?? 'Markdown',
-                  style: const TextStyle(
-                    color: Color(0xFF9CA3AF),
-                    fontSize: 12,
-                    fontFamily: 'monospace',
-                  ),
-                ),
-              ],
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.base,
+              vertical: AppSpacing.sm,
+            ),
+            color: AppColors.background,
+            child: Text(
+              artifact.path ?? artifact.title ?? 'Markdown',
+              style: AppTypography.overline
+                  .copyWith(color: AppColors.textSecondary),
             ),
           ),
 
@@ -533,51 +631,48 @@ class _MarkdownViewer extends StatelessWidget {
           child: Markdown(
             data: content,
             selectable: true,
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpacing.base),
             styleSheet: MarkdownStyleSheet(
-              p: const TextStyle(
-                color: Color(0xFFE5E7EB),
-                fontSize: 14,
-                height: 1.6,
-              ),
-              h1: const TextStyle(
-                color: Color(0xFFE5E7EB),
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-              h2: const TextStyle(
-                color: Color(0xFFE5E7EB),
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-              h3: const TextStyle(
-                color: Color(0xFFE5E7EB),
+              p: AppTypography.artifactContent,
+              h1: AppTypography.body.copyWith(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
-              code: const TextStyle(
-                color: Color(0xFFE5E7EB),
-                backgroundColor: Color(0xFF1F1F1F),
-                fontFamily: 'monospace',
-                fontSize: 13,
+              h2: AppTypography.body.copyWith(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
               ),
-              codeblockDecoration: BoxDecoration(
-                color: const Color(0xFF1F1F1F),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFF2D2D2D)),
+              h3: AppTypography.body.copyWith(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
               ),
-              blockquote: const TextStyle(
-                color: Color(0xFF9CA3AF),
-                fontStyle: FontStyle.italic,
+              code: AppTypography.artifactContent.copyWith(
+                backgroundColor: AppColors.background,
               ),
-              blockquoteDecoration: BoxDecoration(
-                color: const Color(0xFF1F1F1F),
-                borderRadius: BorderRadius.circular(4),
-                border: const Border(
-                  left: BorderSide(color: Color(0xFF3B82F6), width: 4),
+              codeblockDecoration: const BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.zero,
+                border: Border.fromBorderSide(
+                  BorderSide(color: AppColors.textSecondary),
                 ),
               ),
-              listBullet: const TextStyle(color: Color(0xFFE5E7EB)),
+              blockquote: AppTypography.artifactContent.copyWith(
+                color: AppColors.textSecondary,
+                fontStyle: FontStyle.italic,
+              ),
+              blockquoteDecoration: const BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.zero,
+                border: Border(
+                  left: BorderSide(color: AppColors.amber, width: 2),
+                ),
+              ),
+              a: AppTypography.artifactContent.copyWith(
+                color: AppColors.amber,
+                decoration: TextDecoration.underline,
+                decorationColor: AppColors.amber,
+              ),
+              listBullet: AppTypography.artifactContent,
             ),
           ),
         ),
@@ -603,30 +698,25 @@ class _SearchResultsViewer extends StatelessWidget {
         if (artifact.query != null)
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: const Color(0xFF1F1F1F),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.base,
+              vertical: AppSpacing.sm,
+            ),
+            color: AppColors.background,
             child: Row(
               children: [
-                const Icon(
-                  Icons.search_rounded,
-                  size: 14,
-                  color: Color(0xFF6B7280),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  artifact.query!,
-                  style: const TextStyle(
-                    color: Color(0xFF9CA3AF),
-                    fontSize: 12,
+                Expanded(
+                  child: Text(
+                    artifact.query!,
+                    style: AppTypography.overline
+                        .copyWith(color: AppColors.textSecondary),
                   ),
                 ),
-                const Spacer(),
+                const SizedBox(width: AppSpacing.sm),
                 Text(
                   '${results.length} result${results.length != 1 ? 's' : ''}',
-                  style: const TextStyle(
-                    color: Color(0xFF6B7280),
-                    fontSize: 11,
-                  ),
+                  style: AppTypography.overline
+                      .copyWith(color: AppColors.textSecondary),
                 ),
               ],
             ),
@@ -635,64 +725,50 @@ class _SearchResultsViewer extends StatelessWidget {
         // Results list
         Expanded(
           child: results.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text(
                     'No results found',
-                    style: TextStyle(color: Color(0xFF6B7280)),
+                    style: AppTypography.body
+                        .copyWith(color: AppColors.textSecondary),
                   ),
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(AppSpacing.base),
                   itemCount: results.length,
                   itemBuilder: (context, index) {
                     final result = results[index];
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1F1F1F),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFF2D2D2D)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  result.file,
-                                  style: const TextStyle(
-                                    color: Color(0xFF60A5FA),
-                                    fontSize: 12,
-                                    fontFamily: 'monospace',
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: TuiCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    result.file,
+                                    style: AppTypography.artifactContent
+                                        .copyWith(color: AppColors.cyan),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  overflow: TextOverflow.ellipsis,
                                 ),
-                              ),
-                              Text(
-                                ':${result.line}',
-                                style: const TextStyle(
-                                  color: Color(0xFF6B7280),
-                                  fontSize: 12,
-                                  fontFamily: 'monospace',
+                                Text(
+                                  ':${result.line}',
+                                  style: AppTypography.overline
+                                      .copyWith(color: AppColors.textSecondary),
                                 ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            result.content,
-                            style: const TextStyle(
-                              color: Color(0xFFE5E7EB),
-                              fontSize: 12,
-                              fontFamily: 'monospace',
-                              height: 1.4,
+                              ],
                             ),
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              result.content,
+                              style: AppTypography.artifactContent,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },
@@ -703,7 +779,7 @@ class _SearchResultsViewer extends StatelessWidget {
   }
 }
 
-/// Displays an error message.
+/// Displays an error message and optional stack trace.
 class _ErrorViewer extends StatelessWidget {
   final ArtifactEvent artifact;
 
@@ -712,67 +788,48 @@ class _ErrorViewer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.base),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Error message
           Container(
-            padding: const EdgeInsets.all(16),
+            width: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.base),
             decoration: BoxDecoration(
-              color: const Color(0xFFEF4444).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: const Color(0xFFEF4444).withOpacity(0.3),
-              ),
+              color: AppColors.healthRed.withAlpha(25),
+              borderRadius: BorderRadius.zero,
+              border: Border.all(color: AppColors.healthRed),
             ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.error_outline_rounded,
-                  color: Color(0xFFF87171),
-                  size: 20,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    artifact.message ?? 'An error occurred',
-                    style: const TextStyle(
-                      color: Color(0xFFF87171),
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-              ],
+            child: Text(
+              artifact.message ?? 'An error occurred',
+              style:
+                  AppTypography.body.copyWith(color: AppColors.healthRed),
             ),
           ),
+
+          // Stack trace
           if (artifact.stack != null) ...[
-            const SizedBox(height: 16),
-            const Text(
-              'Stack trace',
-              style: TextStyle(
-                color: Color(0xFF6B7280),
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
+            const SizedBox(height: AppSpacing.base),
+            Text(
+              'STACK TRACE',
+              style:
+                  AppTypography.label.copyWith(color: AppColors.textSecondary),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             Expanded(
               child: SingleChildScrollView(
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1F1F1F),
-                    borderRadius: BorderRadius.circular(8),
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: const BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.zero,
                   ),
                   child: Text(
                     artifact.stack!,
-                    style: const TextStyle(
-                      color: Color(0xFF9CA3AF),
-                      fontSize: 11,
-                      fontFamily: 'monospace',
-                      height: 1.4,
-                    ),
+                    style: AppTypography.overline
+                        .copyWith(color: AppColors.textSecondary, height: 1.4),
                   ),
                 ),
               ),
@@ -802,41 +859,25 @@ class _RawJsonViewer extends StatelessWidget {
         // Header with warning
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          color: const Color(0xFF1F1F1F),
-          child: Row(
-            children: [
-              Icon(
-                Icons.warning_amber_rounded,
-                size: 16,
-                color: const Color(0xFFFBBF24).withOpacity(0.8),
-              ),
-              const SizedBox(width: 8),
-              const Expanded(
-                child: Text(
-                  'Unknown artifact type - showing raw JSON',
-                  style: TextStyle(
-                    color: Color(0xFF9CA3AF),
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ],
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.base,
+            vertical: AppSpacing.sm,
+          ),
+          color: AppColors.background,
+          child: Text(
+            'Unknown artifact type -- showing raw JSON',
+            style:
+                AppTypography.overline.copyWith(color: AppColors.textSecondary),
           ),
         ),
 
         // JSON content
         Expanded(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(AppSpacing.base),
             child: SelectableText(
               jsonString,
-              style: const TextStyle(
-                color: Color(0xFFE5E7EB),
-                fontSize: 12,
-                fontFamily: 'monospace',
-                height: 1.5,
-              ),
+              style: AppTypography.artifactContent.copyWith(height: 1.5),
             ),
           ),
         ),
