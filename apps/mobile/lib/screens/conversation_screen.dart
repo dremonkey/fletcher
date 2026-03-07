@@ -104,6 +104,7 @@ class _ConversationScreenState extends State<ConversationScreen>
               status: state.status,
               vadConfidence: state.userAudioLevel,
               errorMessage: state.errorMessage,
+              diagnostics: state.diagnostics,
               trailing: state.artifacts.isNotEmpty
                   ? TuiButton(
                       label: 'ARTIFACTS: ${state.artifacts.length}',

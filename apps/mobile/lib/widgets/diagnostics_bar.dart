@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -18,6 +20,9 @@ class DiagnosticsBar extends StatelessWidget {
   final double vadConfidence;
   final String? errorMessage;
 
+  /// Live diagnostics data (RT, session, agent, uptime, providers).
+  final DiagnosticsInfo diagnostics;
+
   /// Optional widget displayed on the right side (e.g. artifacts button).
   final Widget? trailing;
 
@@ -30,6 +35,7 @@ class DiagnosticsBar extends StatelessWidget {
     required this.status,
     required this.vadConfidence,
     this.errorMessage,
+    this.diagnostics = const DiagnosticsInfo(),
     this.trailing,
     this.onTapDiagnostics,
   });
@@ -63,6 +69,12 @@ class DiagnosticsBar extends StatelessWidget {
     }
   }
 
+  String get _rtText {
+    final rt = diagnostics.roundTripMs;
+    if (rt == null) return '--';
+    return '${rt}ms';
+  }
+
   void _showDiagnosticsModal(BuildContext context) {
     HapticFeedback.lightImpact();
     if (onTapDiagnostics != null) {
@@ -80,6 +92,7 @@ class DiagnosticsBar extends StatelessWidget {
         status: status,
         vadConfidence: vadConfidence,
         errorMessage: errorMessage,
+        diagnostics: diagnostics,
       ),
     );
   }
@@ -139,7 +152,7 @@ class DiagnosticsBar extends StatelessWidget {
                           ),
                           TextSpan(text: ' | ', style: pipeStyle),
                           TextSpan(text: 'RT: ', style: metricStyle),
-                          TextSpan(text: '--', style: metricStyle),
+                          TextSpan(text: _rtText, style: metricStyle),
                         ],
                       ),
                       overflow: TextOverflow.ellipsis,
@@ -162,18 +175,47 @@ class DiagnosticsBar extends StatelessWidget {
 }
 
 /// Expanded diagnostics modal shown on tap.
-class _DiagnosticsModal extends StatelessWidget {
+///
+/// Stateful to support a periodic Timer that updates the UPTIME field
+/// every second while the modal is open.
+class _DiagnosticsModal extends StatefulWidget {
   final OverallHealth overallHealth;
   final ConversationStatus status;
   final double vadConfidence;
   final String? errorMessage;
+  final DiagnosticsInfo diagnostics;
 
   const _DiagnosticsModal({
     required this.overallHealth,
     required this.status,
     required this.vadConfidence,
     this.errorMessage,
+    required this.diagnostics,
   });
+
+  @override
+  State<_DiagnosticsModal> createState() => _DiagnosticsModalState();
+}
+
+class _DiagnosticsModalState extends State<_DiagnosticsModal> {
+  Timer? _uptimeTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Tick every second to update uptime display
+    if (widget.diagnostics.connectedAt != null) {
+      _uptimeTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _uptimeTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -183,6 +225,7 @@ class _DiagnosticsModal extends StatelessWidget {
     final valueStyle = AppTypography.statusMetric.copyWith(
       color: AppColors.textPrimary,
     );
+    final diag = widget.diagnostics;
 
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.base),
@@ -194,16 +237,16 @@ class _DiagnosticsModal extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           _DiagRow(label: 'SYS', value: _sysValue, labelStyle: labelStyle, valueStyle: valueStyle),
           _DiagRow(label: 'CONNECTION', value: _connectionValue, labelStyle: labelStyle, valueStyle: valueStyle),
-          _DiagRow(label: 'STT', value: 'deepgram', labelStyle: labelStyle, valueStyle: valueStyle),
-          _DiagRow(label: 'TTS', value: 'cartesia', labelStyle: labelStyle, valueStyle: valueStyle),
-          _DiagRow(label: 'LLM', value: 'openclaw', labelStyle: labelStyle, valueStyle: valueStyle),
-          _DiagRow(label: 'VAD', value: vadConfidence.toStringAsFixed(2), labelStyle: labelStyle, valueStyle: valueStyle),
-          _DiagRow(label: 'RT', value: '--', labelStyle: labelStyle, valueStyle: valueStyle),
-          _DiagRow(label: 'SESSION', value: '--', labelStyle: labelStyle, valueStyle: valueStyle),
-          _DiagRow(label: 'AGENT', value: '--', labelStyle: labelStyle, valueStyle: valueStyle),
-          _DiagRow(label: 'UPTIME', value: '--', labelStyle: labelStyle, valueStyle: valueStyle),
-          if (errorMessage != null)
-            _DiagRow(label: 'ERROR', value: errorMessage!, labelStyle: labelStyle, valueStyle: valueStyle.copyWith(color: AppColors.healthRed)),
+          _DiagRow(label: 'STT', value: diag.sttProvider ?? '--', labelStyle: labelStyle, valueStyle: valueStyle),
+          _DiagRow(label: 'TTS', value: diag.ttsProvider ?? '--', labelStyle: labelStyle, valueStyle: valueStyle),
+          _DiagRow(label: 'LLM', value: diag.llmProvider ?? '--', labelStyle: labelStyle, valueStyle: valueStyle),
+          _DiagRow(label: 'VAD', value: widget.vadConfidence.toStringAsFixed(2), labelStyle: labelStyle, valueStyle: valueStyle),
+          _DiagRow(label: 'RT', value: _rtValue, labelStyle: labelStyle, valueStyle: valueStyle),
+          _DiagRow(label: 'SESSION', value: diag.sessionName ?? '--', labelStyle: labelStyle, valueStyle: valueStyle),
+          _DiagRow(label: 'AGENT', value: diag.agentIdentity ?? '--', labelStyle: labelStyle, valueStyle: valueStyle),
+          _DiagRow(label: 'UPTIME', value: _uptimeValue, labelStyle: labelStyle, valueStyle: valueStyle),
+          if (widget.errorMessage != null)
+            _DiagRow(label: 'ERROR', value: widget.errorMessage!, labelStyle: labelStyle, valueStyle: valueStyle.copyWith(color: AppColors.healthRed)),
           const SizedBox(height: AppSpacing.sm),
         ],
       ),
@@ -211,7 +254,7 @@ class _DiagnosticsModal extends StatelessWidget {
   }
 
   String get _sysValue {
-    switch (overallHealth) {
+    switch (widget.overallHealth) {
       case OverallHealth.healthy:
         return 'OK';
       case OverallHealth.degraded:
@@ -222,7 +265,7 @@ class _DiagnosticsModal extends StatelessWidget {
   }
 
   String get _connectionValue {
-    switch (status) {
+    switch (widget.status) {
       case ConversationStatus.connecting:
         return 'CONNECTING';
       case ConversationStatus.reconnecting:
@@ -232,6 +275,19 @@ class _DiagnosticsModal extends StatelessWidget {
       default:
         return 'CONNECTED';
     }
+  }
+
+  String get _rtValue {
+    final rt = widget.diagnostics.roundTripMs;
+    if (rt == null) return '--';
+    return '${rt}ms';
+  }
+
+  String get _uptimeValue {
+    final connectedAt = widget.diagnostics.connectedAt;
+    if (connectedAt == null) return '--';
+    final duration = DateTime.now().difference(connectedAt);
+    return DiagnosticsInfo.formatUptime(duration);
   }
 }
 
