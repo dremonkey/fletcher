@@ -13,9 +13,10 @@ App Store users start with a "blank slate" Fletcher app. They need a secure way 
 
 ## Tasks
 
-### Phase 1: Vessel Key Specification
+### Phase 1: Vessel Key & Bridge Skill
 - [ ] 001: Define Vessel Key JSON Payload (Gateway URL, Auth Token, Tailscale Config, Identity).
-- [ ] 002: Implement Hub-side Vessel Key Generation (CLI command to display QR/Code).
+- [ ] 002: "Fletcher Bridge" OpenClaw Skill — Server-side skill to generate Vessel Keys and provide the Bootstrap Bundle (project list, memory paths, agent registry).
+- [ ] 003: Implement Hub-side Vessel Key Generation (CLI/Skill command to display QR/Code).
 
 ### Phase 2: Mobile Handshake (Fletcher)
 - [ ] 003: "Blank Slate" UI State (The Bootloader view).

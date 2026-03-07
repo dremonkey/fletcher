@@ -141,6 +141,7 @@ Secure handshake between Fletcher and Heirloom Hub (OpenClaw).
 - [x] 002: Implement Token Endpoint (`/fletcher/token`) ✅
 - [x] 003: Integrate with LiveKit Channel Plugin ✅
 - [ ] 004: Vessel Key Specification 📋 — JSON payload for full Hub config (Tailscale, Gateway, Identity)
+- [ ] 007: "Fletcher Bridge" OpenClaw Skill 📋 — Server-side skill for Vessel Key generation and context bootstrapping
 - [ ] 005: "Blank Slate" Bootloader UI 📋 — First-run experience for App Store users
 - [ ] 006: Camera-based Handshake 📋 — QR/OCR pairing from Hub terminal
 
