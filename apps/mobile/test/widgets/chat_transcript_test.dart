@@ -1,24 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:fletcher/models/conversation_state.dart';
 import 'package:fletcher/theme/app_colors.dart';
 import 'package:fletcher/theme/tui_widgets.dart';
-import 'package:fletcher/widgets/chat_transcript.dart';
-
-// A minimal stub of LiveKitService for testing ChatTranscript.
-// We only need the ChangeNotifier + state getter + healthService.
-// This avoids pulling in the real LiveKitService which depends on
-// livekit_client, permission_handler, etc.
-class _FakeLiveKitService extends ChangeNotifier {
-  ConversationState _state = const ConversationState();
-  ConversationState get state => _state;
-
-  void setState(ConversationState newState) {
-    _state = newState;
-    notifyListeners();
-  }
-}
 
 Widget _wrap(Widget child) {
   return MaterialApp(
