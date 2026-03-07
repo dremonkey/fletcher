@@ -6,8 +6,8 @@
 // Usage: bun run skills:install
 
 import * as p from "@clack/prompts";
-import { existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, unlinkSync } from "fs";
-import { join, relative } from "path";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, symlinkSync, unlinkSync } from "fs";
+import { join, relative, resolve } from "path";
 
 const ROOT = join(import.meta.dirname, "..", "..", "..");
 const SKILLS_DIR = join(ROOT, "skills");
@@ -83,6 +83,30 @@ export function discoverSkills(): Skill[] {
   return skills.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** Check which skills are already installed (have symlinks in .claude/commands/) */
+export function getInstalledSkills(skills: Skill[]): Set<string> {
+  const installed = new Set<string>();
+  if (!existsSync(COMMANDS_DIR)) return installed;
+
+  for (const skill of skills) {
+    const linkPath = join(COMMANDS_DIR, `${skill.name}.md`);
+    try {
+      if (!existsSync(linkPath)) continue;
+      const stat = lstatSync(linkPath);
+      if (!stat.isSymbolicLink()) continue;
+      // Resolve the symlink target and compare to the skill's actual path
+      const target = resolve(COMMANDS_DIR, readlinkSync(linkPath));
+      if (target === skill.path) {
+        installed.add(skill.dir);
+      }
+    } catch {
+      // Skip unreadable entries
+    }
+  }
+
+  return installed;
+}
+
 export function installSkills(selectedDirs: string[], skills: Skill[]): string[] {
   mkdirSync(COMMANDS_DIR, { recursive: true });
 
@@ -125,13 +149,23 @@ if (import.meta.main) {
     process.exit(0);
   }
 
+  const alreadyInstalled = getInstalledSkills(skills);
+  const allInstalled = skills.every((s) => alreadyInstalled.has(s.dir));
+
+  if (allInstalled) {
+    p.log.success(`All ${skills.length} skills are already installed.`);
+    p.outro("Nothing to do.");
+    process.exit(0);
+  }
+
   const selected = await p.multiselect({
     message: "Which skills would you like to install?",
     options: skills.map((s) => ({
       value: s.dir,
-      label: `/${s.name}`,
+      label: alreadyInstalled.has(s.dir) ? `/${s.name} (installed)` : `/${s.name}`,
       hint: s.description,
     })),
+    initialValues: [...alreadyInstalled],
     required: false,
   });
 
