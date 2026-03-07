@@ -207,7 +207,7 @@ Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layou
 **Tasks (New Direction):**
 - [x] 016: TUI Brutalist Design System ✅ — AppColors, AppTypography, AppSpacing, TuiHeader/TuiCard/TuiButton/TuiModal
 - [x] 017: Chat-First Main View ✅ — Column layout replacing Stack+Positioned; CompactWaveform, ChatTranscript (ListView.builder), MicButton with all states
-- [ ] 018: Artifact System Redesign — inline artifact buttons in chat, bottom sheet drawer, artifacts list modal, counter button
+- [x] 018: Artifact System Redesign ✅ — inline artifact buttons in chat, bottom sheet drawer, artifacts list modal, counter button
 - [x] 019: Live Diagnostics Status Bar ✅ — DiagnosticsBar with health orb, SYS/VAD/RT metrics, expandable TuiModal diagnostics view
 
 **Retained:**

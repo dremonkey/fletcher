@@ -1,10 +1,11 @@
 # TASK-016: TUI Brutalist Design System
 
 ## Status
-- **Status:** Not started
+- **Status:** Complete
 - **Priority:** High (foundational — other UI tasks depend on this)
-- **Owner:** TBD
+- **Owner:** Claude
 - **Created:** 2026-03-07
+- **Completed:** 2026-03-07
 
 ## Context
 Fletcher is adopting a new visual direction: a TUI-inspired, 8-bit, brutalist design language. This task establishes the foundational design system that all other UI tasks build on.
@@ -98,12 +99,12 @@ Update `main.dart` to:
 - Ensure `useMaterial3: true` is retained
 
 ## Acceptance Criteria
-- [ ] Color constants defined in `lib/theme/app_colors.dart` — no more inline hex values in widgets
-- [ ] Typography styles defined in `lib/theme/app_typography.dart` — all use monospace, no size < 12sp except `labelSmall` (11sp, metadata only)
-- [ ] Spacing constants defined in `lib/theme/app_spacing.dart` — all on 4dp grid
-- [ ] `TuiHeader`, `TuiCard`, `TuiButton` widgets implemented with `const` constructors
-- [ ] `ThemeData` in `main.dart` updated to use new tokens
-- [ ] All touch targets on reusable button/card widgets enforce >= 48dp height
-- [ ] No rounded corners (`BorderRadius.zero`) on any component
-- [ ] WCAG AA contrast ratios verified for amber and cyan on background
-- [ ] Existing widgets still compile (no breaking changes — migration is incremental)
+- [x] Color constants defined in `lib/theme/app_colors.dart` — no more inline hex values in widgets
+- [x] Typography styles defined in `lib/theme/app_typography.dart` — all use monospace, no size < 12sp except `labelSmall` (11sp, metadata only)
+- [x] Spacing constants defined in `lib/theme/app_spacing.dart` — all on 4dp grid
+- [x] `TuiHeader`, `TuiCard`, `TuiButton` widgets implemented with `const` constructors
+- [x] `ThemeData` in `main.dart` updated to use new tokens
+- [x] All touch targets on reusable button/card widgets enforce >= 48dp height
+- [x] No rounded corners (`BorderRadius.zero`) on any component
+- [x] WCAG AA contrast ratios verified for amber and cyan on background
+- [x] Existing widgets still compile (no breaking changes — migration is incremental)
