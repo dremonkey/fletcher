@@ -10,8 +10,9 @@
 ## Context
 The new UI includes a diagnostics status bar below the waveform showing real-time voice pipeline metrics. This replaces the existing `StatusBar` widget (which shows agent actions like "reading", "searching") with a more data-rich, TUI-styled diagnostics display.
 
-## Reference Mockup
-- `Screenshot From 2026-03-06 23-47-03.png` — Status bar: `SYS: OK | VAD: 0.82 | RT: 12ms`
+## Reference
+- **Mockup:** [`mockups/chat-main-view.png`](./mockups/chat-main-view.png) (status bar visible below waveform)
+- **Design philosophy:** See [EPIC.md — Design Philosophy](./EPIC.md#design-philosophy)
 
 ## Layout
 ```

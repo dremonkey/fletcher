@@ -9,6 +9,10 @@
 ## Context
 Fletcher is adopting a new visual direction: a TUI-inspired, 8-bit, brutalist design language. This task establishes the foundational design system that all other UI tasks build on.
 
+## Reference
+- **Mockups:** All three in [`mockups/`](./mockups/) — these are the canonical visual reference
+- **Design philosophy:** See [EPIC.md — Design Philosophy](./EPIC.md#design-philosophy)
+
 ## Design Tokens
 
 ### Colors

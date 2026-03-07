@@ -14,10 +14,9 @@ The current `ArtifactViewer` displays artifacts in a dedicated view. The new des
 2. **Bottom sheet drawer** for viewing a single artifact
 3. **Full-screen list modal** for browsing all session artifacts
 
-## Reference Mockups
-- `Screenshot From 2026-03-06 23-47-03.png` — Inline artifact buttons in chat
-- `Screenshot From 2026-03-06 23-52-38.png` — Artifact drawer (bottom sheet)
-- `Screenshot From 2026-03-06 23-51-44.png` — Artifacts list modal
+## Reference
+- **Mockups:** [`chat-main-view.png`](./mockups/chat-main-view.png) (inline buttons), [`artifact-drawer.png`](./mockups/artifact-drawer.png) (bottom sheet), [`artifacts-list.png`](./mockups/artifacts-list.png) (list modal)
+- **Design philosophy:** See [EPIC.md — Design Philosophy](./EPIC.md#design-philosophy)
 
 ## Components
 

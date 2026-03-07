@@ -12,8 +12,9 @@ The current Fletcher UI centers on the Amber Orb visualizer with a pull-up trans
 
 This is the core layout change — it restructures the entire main screen.
 
-## Reference Mockups
-- `Screenshots/Screenshot From 2026-03-06 23-47-03.png` — Main chat view
+## Reference
+- **Mockup:** [`mockups/chat-main-view.png`](./mockups/chat-main-view.png)
+- **Design philosophy:** See [EPIC.md — Design Philosophy](./EPIC.md#design-philosophy)
 
 ## Layout (top to bottom)
 
