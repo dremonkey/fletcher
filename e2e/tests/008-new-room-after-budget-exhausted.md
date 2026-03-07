@@ -23,10 +23,7 @@ adb -s ${DEVICE_ID:-emulator-5554} shell am force-stop com.fletcher.fletcher
 ```
 
 ```sh
-adb -s ${DEVICE_ID:-emulator-5554} shell pm grant com.fletcher.fletcher android.permission.RECORD_AUDIO
-adb -s ${DEVICE_ID:-emulator-5554} shell pm grant com.fletcher.fletcher android.permission.BLUETOOTH_CONNECT
-adb -s ${DEVICE_ID:-emulator-5554} shell pm grant com.fletcher.fletcher android.permission.POST_NOTIFICATIONS
-adb -s ${DEVICE_ID:-emulator-5554} shell pm grant com.fletcher.fletcher android.permission.NEARBY_WIFI_DEVICES
+e2e/helpers/grant-permissions.sh
 ```
 
 ```sh
