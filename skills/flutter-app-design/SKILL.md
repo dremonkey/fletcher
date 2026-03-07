@@ -258,35 +258,25 @@ This app is animation-heavy (breathing orb, pulsing, waveforms). Follow these ru
 
 ## 11. Navigation Patterns
 
-This app is currently single-screen. When adding new screens, follow these rules:
+The app's navigation approach is evolving. **Do not assume a specific navigation pattern** — ask the user before introducing new navigation flows.
 
-- **Simple flows (1-3 screens):** Use `Navigator.push` / `Navigator.pop` directly. No routing package needed.
-- **Modal content (drawers, panels, pickers):** Use `showModalBottomSheet` — this is the established pattern (transcript drawer, artifact drawer, health panel).
-- **Full-screen detail views:** Use `MaterialPageRoute` with a back button. Keep it simple.
-- **Do NOT add `go_router` or `auto_route`** unless the app grows beyond 5+ distinct routes. The overhead isn't justified for a voice-first app.
+**Principles:**
+- **Match complexity to need.** Don't add a routing package for a 2-screen app. Don't hand-roll navigation for a 10-screen app. Pick the simplest tool that works.
+- **Be consistent.** If the app uses bottom sheets for secondary content, don't introduce a new full-screen push for the same type of content without discussion.
+- **Respect the back stack.** Every navigation action should have a clear way back. Test that the system back button/gesture does the right thing.
+- **Transitions should feel native.** Use platform-default transitions unless the design explicitly calls for something custom. Keep custom transition durations in the 250-350ms range.
 
-```dart
-// Simple navigation — preferred for this project
-Navigator.of(context).push(
-  MaterialPageRoute(builder: (_) => const SettingsScreen()),
-);
+**Available Flutter navigation tools** (know when to reach for each):
 
-// Modal content — established pattern
-showModalBottomSheet(
-  context: context,
-  isScrollControlled: true,
-  backgroundColor: const Color(0xFF1F1F1F),
-  shape: const RoundedRectangleBorder(
-    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-  ),
-  builder: (_) => const TranscriptDrawer(),
-);
-```
+| Tool | When to use |
+|------|-------------|
+| `Navigator.push` / `pop` | Simple imperative flows, 1-3 screens |
+| `showModalBottomSheet` | Secondary content, drawers, pickers |
+| `showDialog` / `showGeneralDialog` | Confirmations, alerts, modal overlays |
+| `go_router` / `auto_route` | Deep linking, 5+ routes, complex nested navigation |
+| `PageRouteBuilder` | Custom transition animations |
 
-**Screen transitions:**
-- Use default `MaterialPageRoute` transitions (platform-appropriate slide).
-- For custom transitions, use `PageRouteBuilder` — don't fight platform conventions unless the design demands it.
-- Keep transition durations at 250-350ms (Material 3 default).
+**When adding navigation to a new feature, ask the user** which pattern fits their design intent.
 
 ---
 
@@ -311,36 +301,28 @@ Error presentation is evolving — **do not hardcode a specific error UI pattern
 
 ## 13. Haptic Feedback
 
-For a voice-first mobile app, tactile feedback reinforces user actions. Use haptics deliberately:
+For a voice-first mobile app, tactile feedback reinforces user actions. The specific mapping of interactions to haptic types is a design decision — **ask the user** before adding haptics to new features.
 
-| Interaction | Haptic | Method |
-|-------------|--------|--------|
-| Mute/unmute toggle | Medium impact | `HapticFeedback.mediumImpact()` |
-| Connection established | Success (light) | `HapticFeedback.lightImpact()` |
-| Connection lost / error | Heavy impact | `HapticFeedback.heavyImpact()` |
-| Drawer open/close | Selection click | `HapticFeedback.selectionClick()` |
-| Long press actions | Light impact | `HapticFeedback.lightImpact()` |
-| Button taps (standard) | None | Rely on visual/audio feedback |
+**Principles:**
+- **Less is more.** Not every tap needs a buzz. Reserve haptics for meaningful state changes the user needs to feel (e.g., toggling a mode, connection events), not routine button presses.
+- **Fire before the async work.** Call the haptic method *before* the async operation, not in its callback — the feedback should be instant.
+- **Haptics are safe to call unconditionally.** They are no-ops on platforms that don't support them (web, desktop).
 
-**Rules:**
-- Import `import 'package:flutter/services.dart';` for `HapticFeedback`.
-- **Don't overuse haptics.** Not every tap needs a buzz. Reserve for state changes the user needs to feel.
-- Call haptics **before** the async operation, not after — the feedback should be instant.
-- Haptics are no-ops on platforms that don't support them (web, desktop) — safe to call unconditionally.
+**Available haptic types** (from `package:flutter/services.dart`):
+
+| Method | Feel | Typical use |
+|--------|------|-------------|
+| `HapticFeedback.lightImpact()` | Subtle tap | Confirmations, selections |
+| `HapticFeedback.mediumImpact()` | Firm tap | Toggles, mode switches |
+| `HapticFeedback.heavyImpact()` | Strong thud | Errors, destructive actions |
+| `HapticFeedback.selectionClick()` | Soft click | Scroll snapping, picker changes |
+| `HapticFeedback.vibrate()` | Long buzz | Avoid — too aggressive for most UX |
 
 ```dart
-// Mute toggle with haptic
-void _onMuteToggle() {
+// Pattern: haptic fires immediately, then the action
+void _onToggle() {
   HapticFeedback.mediumImpact();
-  _service.toggleMute();
-}
-
-// Connection event in service listener
-void _onStateChanged() {
-  if (_service.state.status == ConversationStatus.connected) {
-    HapticFeedback.lightImpact();
-  }
-  if (mounted) setState(() {});
+  _service.toggle();
 }
 ```
 
@@ -348,37 +330,33 @@ void _onStateChanged() {
 
 ## 14. Platform-Adaptive Patterns
 
-Flutter runs on iOS and Android — respect platform conventions where they diverge:
+Flutter runs on iOS and Android — respect platform conventions where they diverge, but don't over-engineer platform branching.
 
-- **Back navigation:** Android has a system back gesture/button. Use `WillPopScope` (or `PopScope` on Flutter 3.16+) to intercept if needed (e.g., confirm before disconnecting a call). iOS uses swipe-to-go-back on `MaterialPageRoute` by default.
-- **Status bar style:** Set via `SystemChrome.setSystemUIOverlayStyle()` in `main.dart` or per-screen. This app uses dark backgrounds, so use light status bar icons.
-- **Scroll physics:** `MaterialPageRoute` and `ListView` automatically use platform-appropriate physics (bouncing on iOS, clamping on Android). Don't override unless necessary.
-- **Fonts:** Flutter uses Roboto on Android and SF Pro on iOS by default via the Material theme. Don't hardcode font families unless using a custom brand font.
+**Principles:**
+- **Let Flutter handle it.** Most Material widgets already adapt per-platform (scroll physics, back gestures, text selection). Don't override unless you have a specific reason.
+- **Don't fight the system.** Don't hardcode font families (Flutter picks Roboto/SF Pro automatically). Don't override scroll physics. Don't suppress system back gestures unless you need a confirmation dialog.
+- **Branch on platform sparingly.** Only use platform checks for genuinely different UX (share sheets, permission flows), not for styling differences.
+- **Prefer `Theme.of(context).platform`** over `dart:io`'s `Platform.isIOS` — it works on web too.
+
+**Tools to know:**
+
+| Tool | Purpose |
+|------|---------|
+| `PopScope` (Flutter 3.16+) | Intercept back navigation (e.g., confirm before leaving a call) |
+| `SystemChrome.setSystemUIOverlayStyle()` | Control status bar icon brightness per-screen |
+| `Theme.of(context).platform` | Platform detection that works on web |
+| `defaultTargetPlatform` | Platform detection for non-widget code |
 
 ```dart
-// Platform-aware back handling (Flutter 3.16+)
+// Intercepting back navigation when needed
 PopScope(
   canPop: !isInCall,
   onPopInvokedWithResult: (didPop, _) {
-    if (!didPop) {
-      // Show "are you sure?" dialog
-      _showDisconnectConfirmation(context);
-    }
+    if (!didPop) _showConfirmation(context);
   },
   child: Scaffold(...),
 )
-
-// Status bar styling for dark backgrounds
-SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-  statusBarColor: Colors.transparent,
-  statusBarIconBrightness: Brightness.light, // Android
-  statusBarBrightness: Brightness.dark,      // iOS
-));
 ```
-
-**Platform checks** — use sparingly:
-- Prefer `Theme.of(context).platform` over `dart:io`'s `Platform.isIOS` when possible (works on web too).
-- Only branch on platform for genuinely different UX (e.g., share sheet, permissions dialogs), not for styling.
 
 ---
 
