@@ -210,6 +210,8 @@ Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layou
 - [x] 018: Artifact System Redesign ✅ — inline artifact buttons in chat, bottom sheet drawer, artifacts list modal, counter button
 - [x] 019: Live Diagnostics Status Bar ✅ — DiagnosticsBar with health orb, SYS/VAD/RT metrics, expandable TuiModal diagnostics view
 - [x] 020: Inline Connection & Room Events ✅ — SystemEvent model + SystemEventCard widget; NETWORK/ROOM/AGENT lifecycle events emitted from LiveKitService; interleaved in chat transcript by timestamp
+- [ ] 021: Thinking Spinner in Chat Transcript 📋 — thematic arrow/fletching ASCII spinner inline in chat while agent is composing
+- [ ] 022: Macro Shortcut System 📋 — horizontally scrollable row of "F-key" style quick-action buttons for common dev tasks (/pulse, /bug, /snapshot)
 
 **Retained:**
 - [~] 015: Single Audio Ack + Visual Spinner 🔄 — Phases 1-2 complete; spinner behavior migrates to mic button in 017

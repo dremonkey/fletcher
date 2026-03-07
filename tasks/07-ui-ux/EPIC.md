@@ -35,7 +35,9 @@ Fletcher's UI takes inspiration from **terminal user interfaces**, **8-bit hardw
 - [x] 019: Live Diagnostics Status Bar — real-time VAD/RT/SYS metrics, tri-color health orb, tappable expanded view
 
 ### Session Awareness
-- [ ] 020: Inline Connection & Room Events — boot sequence + runtime network/room/agent events as inline cards in chat stream
+- [x] 020: Inline Connection & Room Events — boot sequence + runtime network/room/agent events as inline cards in chat stream
+- [ ] 021: Thinking Spinner in Chat Transcript — thematic arrow/fletching ASCII spinner inline in chat while agent is composing
+- [ ] 022: Macro Shortcut System (Quick Actions) — scrollable row of F-key style buttons for dev tasks (/pulse, /bug, /snapshot)
 
 ### Retained Tasks
 - [~] 015: Single Audio Ack + Visual Spinner — Phases 1-2 complete; spinner behavior migrates to mic button in task 017
