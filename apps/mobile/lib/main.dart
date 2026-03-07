@@ -19,6 +19,12 @@ Future<void> main() async {
     ),
   );
 
+  // Lock app to portrait orientation (Brutalist UI designed for portrait only)
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
   runApp(const FletcherApp());
 }
 
