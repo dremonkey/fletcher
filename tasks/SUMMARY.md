@@ -208,9 +208,18 @@ High-fidelity UI enhancements for the Fletcher Flutter app.
 - [ ] 008: Collaborative Waveform — 8-bit histogram/audio graph with dual-color blending and front-and-center transcript
 - [ ] 009: Persistent History Discovery — fetch recent history from OpenClaw on rejoin, add Session List UI
 - [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 done: tuned interruption sensitivity (units bug fix, minInterruptionDuration 800ms, minInterruptionWords 1); Phase 3 (soft TTS fade) needs SDK support
-- [ ] 015: Single Audio Ack + Visual Spinner 📋 — play ack chime once on EOU, then show visual waiting indicator for remainder of thinking state
+- [~] 015: Single Audio Ack + Visual Spinner 🔄 — Phases 1-2 complete: single-shot ack tone generator + spinning arc overlay on orb during processing; Phase 3 (polish & field test) pending
 
-### 12. [Speaker Isolation (Voice Lock)](./11-speaker-isolation) 🔄
+### 12. [Audio-First System Prompts](./14-system-prompts) 📋
+Implementing best practices for TTS optimization, audio summaries, and visual-audio coordination.
+
+**Tasks:**
+- [ ] 016: Core TTS Rule Enforcement 📋 — strictly no markdown, phonetic spelling, punctuation for prosody
+- [ ] 017: Visual-Audio Artifact Coordination 📋 — auto-push detailed artifacts for complex data; verbal anchors
+- [ ] 018: Contextual Noise & Ambiguity Guard 📋 — harden agent against STT errors and hallucinations
+- [ ] 019: Session Initiation & Warm Start 📋 — silent background pre-loading of memory and project context
+
+### 13. [Speaker Isolation (Voice Lock)](./11-speaker-isolation) 🔄
 Lock onto the primary speaker's voice in a 1-on-1 conversation — reject background speech, ambient noise, and echo so only the intended user is transcribed.
 
 **Tasks (4 tiers, low→high effort):**
