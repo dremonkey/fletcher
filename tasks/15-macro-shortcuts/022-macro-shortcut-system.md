@@ -53,5 +53,6 @@ Developing on the go with a voice interface can be high-friction for repetitive 
 - [ ] Handedness preference allows comfortable one-handed use for both left and right-handed users.
 
 ## References
-- [Epic 11: UI Redesign — TUI Brutalist](./EPIC.md)
+- [Epic 15: Macro Shortcuts](./EPIC.md)
+- [Epic 11: UI Redesign — TUI Brutalist](../07-ui-ux/EPIC.md) (inherits design system)
 - BUG-010, BUG-011 (Orientation and state fixes for the new UI)
