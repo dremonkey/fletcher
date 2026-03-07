@@ -133,13 +133,16 @@ Local-first voice identification and context injection.
 
 **Spec:** [docs/specs/06-voice-fingerprinting/spec.md](../docs/specs/06-voice-fingerprinting/spec.md)
 
-### 7. [Sovereign Pairing](./07-sovereign-pairing) ✅
-Signature-based authentication protocol (Ed25519) for edge devices.
+### 7. [Sovereign Pairing](./07-sovereign-pairing) 🔄
+Secure handshake between Fletcher and Heirloom Hub (OpenClaw).
 
 **Tasks:**
-- [x] 001: Create Protocol Specification
-- [x] 002: Implement Token Endpoint (`/fletcher/token`)
-- [x] 003: Integrate with LiveKit Channel Plugin
+- [x] 001: Create Protocol Specification ✅
+- [x] 002: Implement Token Endpoint (`/fletcher/token`) ✅
+- [x] 003: Integrate with LiveKit Channel Plugin ✅
+- [ ] 004: Vessel Key Specification 📋 — JSON payload for full Hub config (Tailscale, Gateway, Identity)
+- [ ] 005: "Blank Slate" Bootloader UI 📋 — First-run experience for App Store users
+- [ ] 006: Camera-based Handshake 📋 — QR/OCR pairing from Hub terminal
 
 **Spec:** [docs/specs/07-sovereign-pairing.md](../docs/specs/07-sovereign-pairing.md)
 
