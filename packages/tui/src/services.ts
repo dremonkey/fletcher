@@ -54,14 +54,16 @@ export async function runStep(
   const s = p.spinner();
   s.start(label);
 
-  const proc = spawn(cmd, { cwd: opts?.cwd ?? ROOT, stdout: "pipe", stderr: "pipe" });
+  const proc = spawn(cmd, { cwd: opts?.cwd ?? ROOT, stdout: "ignore", stderr: "pipe" });
   children.push(proc);
 
+  // Start draining stderr before awaiting exit to prevent pipe-buffer deadlock
+  const stderrPromise = new Response(proc.stderr).text();
   const exitCode = await proc.exited;
   children.splice(children.indexOf(proc), 1);
 
   if (exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text();
+    const stderr = await stderrPromise;
     s.stop(`${label} — failed (exit ${exitCode})`);
     if (stderr.trim()) p.log.error(stderr.trim());
     if (opts?.fatal === false) return false;
@@ -82,7 +84,7 @@ async function waitForAgentRegistration(timeoutMs: number = 30_000): Promise<boo
   while (Date.now() < deadline) {
     const proc = spawn(
       ["docker", "compose", "logs", "--tail", "50", "voice-agent"],
-      { cwd: ROOT, stdout: "pipe", stderr: "pipe" },
+      { cwd: ROOT, stdout: "pipe", stderr: "ignore" },
     );
     const output = await new Response(proc.stdout).text();
     await proc.exited;
