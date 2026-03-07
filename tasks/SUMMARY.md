@@ -211,7 +211,6 @@ Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layou
 - [ ] 019: Live Diagnostics Status Bar — real-time VAD/RT/SYS metrics, tri-color health orb, tappable expanded diagnostics view
 
 **Retained:**
-- [ ] 009: Persistent History Discovery — fetch recent history from OpenClaw on rejoin, add Session List UI
 - [~] 015: Single Audio Ack + Visual Spinner 🔄 — Phases 1-2 complete; spinner behavior migrates to mic button in 017
 - [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 done; Phase 3 (soft TTS fade) needs SDK support
 

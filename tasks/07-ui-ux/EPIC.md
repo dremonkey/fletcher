@@ -35,7 +35,6 @@ Fletcher's UI takes inspiration from **terminal user interfaces**, **8-bit hardw
 - [ ] 019: Live Diagnostics Status Bar — real-time VAD/RT/SYS metrics, tri-color health orb, tappable expanded view
 
 ### Retained Tasks
-- [ ] 009: Persistent History Discovery — fetch recent history from OpenClaw on rejoin, add Session List UI
 - [~] 015: Single Audio Ack + Visual Spinner — Phases 1-2 complete; spinner behavior migrates to mic button in task 017
 
 ### Superseded
