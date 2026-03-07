@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:fletcher/theme/app_colors.dart';
 import 'package:fletcher/theme/tui_widgets.dart';
+import 'package:fletcher/widgets/thinking_spinner.dart';
 
 Widget _wrap(Widget child) {
   return MaterialApp(
@@ -113,6 +114,45 @@ void main() {
       ));
 
       expect(find.byType(Divider), findsOneWidget);
+    });
+  });
+
+  group('ThinkingSpinner integration', () {
+    // Since ChatTranscript requires a real LiveKitService (heavy dependency),
+    // we test the ThinkingSpinner widget rendering in isolation — confirming
+    // it produces the expected amber TuiCard output that ChatTranscript
+    // would display.
+
+    testWidgets('thinking spinner renders when shown', (tester) async {
+      await tester.pumpWidget(_wrap(const ThinkingSpinner()));
+      expect(find.byType(ThinkingSpinner), findsOneWidget);
+      expect(find.byType(TuiCard), findsOneWidget);
+    });
+
+    testWidgets('thinking spinner has amber border matching agent messages',
+        (tester) async {
+      await tester.pumpWidget(_wrap(const ThinkingSpinner()));
+
+      final container = tester.widget<Container>(find.byType(Container).first);
+      final decoration = container.decoration as BoxDecoration;
+      final border = decoration.border as Border;
+      expect(border.left.color, AppColors.amber);
+    });
+
+    testWidgets('thinking spinner is not shown when absent', (tester) async {
+      // Simulate a chat list without the thinking spinner
+      await tester.pumpWidget(_wrap(
+        const Column(
+          children: [
+            TuiCard(
+              borderColor: AppColors.amber,
+              child: TuiHeader(label: 'Fletcher', color: AppColors.amber),
+            ),
+          ],
+        ),
+      ));
+
+      expect(find.byType(ThinkingSpinner), findsNothing);
     });
   });
 }

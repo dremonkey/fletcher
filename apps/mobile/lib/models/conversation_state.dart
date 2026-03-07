@@ -275,6 +275,10 @@ class ConversationState {
   /// Inline system events (connection lifecycle) shown in chat transcript
   final List<SystemEvent> systemEvents;
 
+  /// Whether the agent is currently thinking (between user finishing speaking
+  /// and first agent transcript text arriving).
+  final bool isAgentThinking;
+
   const ConversationState({
     this.status = ConversationStatus.connecting,
     this.userAudioLevel = 0.0,
@@ -288,6 +292,7 @@ class ConversationState {
     this.currentUserTranscript,
     this.currentAgentTranscript,
     this.systemEvents = const [],
+    this.isAgentThinking = false,
   });
 
   ConversationState copyWith({
@@ -306,6 +311,7 @@ class ConversationState {
     TranscriptEntry? currentAgentTranscript,
     bool clearCurrentAgentTranscript = false,
     List<SystemEvent>? systemEvents,
+    bool? isAgentThinking,
   }) {
     return ConversationState(
       status: status ?? this.status,
@@ -324,6 +330,7 @@ class ConversationState {
           ? null
           : (currentAgentTranscript ?? this.currentAgentTranscript),
       systemEvents: systemEvents ?? this.systemEvents,
+      isAgentThinking: isAgentThinking ?? this.isAgentThinking,
     );
   }
 }

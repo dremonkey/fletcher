@@ -10,6 +10,7 @@ import '../theme/app_typography.dart';
 import '../theme/tui_widgets.dart';
 import 'artifact_viewer.dart';
 import 'system_event_card.dart';
+import 'thinking_spinner.dart';
 
 /// Primary chat transcript area displaying conversation messages.
 ///
@@ -63,7 +64,9 @@ class _ChatTranscriptState extends State<ChatTranscript> {
   void _onServiceChanged() {
     if (!mounted) return;
     final state = widget.service.state;
-    final newCount = state.transcript.length + state.systemEvents.length;
+    final thinkingCount = state.isAgentThinking ? 1 : 0;
+    final newCount =
+        state.transcript.length + state.systemEvents.length + thinkingCount;
     final hasNewItems = newCount > _lastItemCount;
     _lastItemCount = newCount;
     setState(() {});
@@ -169,6 +172,11 @@ class _ChatTranscriptState extends State<ChatTranscript> {
       }
     }
 
+    // Append thinking spinner as last item when agent is thinking
+    if (state.isAgentThinking) {
+      items.add(const _ChatItem.thinking());
+    }
+
     if (items.isEmpty) {
       return Center(
         child: Text(
@@ -202,6 +210,12 @@ class _ChatTranscriptState extends State<ChatTranscript> {
             child: SystemEventCard(event: item.systemEvent!),
           );
         }
+        if (item.isThinking) {
+          return const Padding(
+            padding: EdgeInsets.only(bottom: AppSpacing.sm),
+            child: ThinkingSpinner(),
+          );
+        }
         return Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
           child: _TranscriptMessage(
@@ -222,24 +236,35 @@ class _TimestampedItem {
   const _TimestampedItem({required this.timestamp, required this.item});
 }
 
-/// Represents a message, system event, or divider in the chat list.
+/// Represents a message, system event, divider, or thinking spinner in the
+/// chat list.
 class _ChatItem {
   final TranscriptEntry? entry;
   final SystemEvent? systemEvent;
   final bool isDivider;
+  final bool isThinking;
   final List<ArtifactEvent> artifacts;
 
   const _ChatItem.message(this.entry, {this.artifacts = const []})
       : isDivider = false,
+        isThinking = false,
         systemEvent = null;
   const _ChatItem.divider()
       : entry = null,
         isDivider = true,
+        isThinking = false,
         systemEvent = null,
         artifacts = const [];
   const _ChatItem.systemEvent(this.systemEvent)
       : entry = null,
         isDivider = false,
+        isThinking = false,
+        artifacts = const [];
+  const _ChatItem.thinking()
+      : entry = null,
+        isDivider = false,
+        isThinking = true,
+        systemEvent = null,
         artifacts = const [];
 
   bool get isMessage => entry != null;

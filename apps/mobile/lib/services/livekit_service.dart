@@ -735,6 +735,10 @@ class LiveKitService extends ChangeNotifier {
       final text = json['text'] as String? ?? '';
       final isFinal = json['final'] == true;
       if (text.isNotEmpty) {
+        // Stop thinking spinner once agent text starts streaming
+        if (_state.isAgentThinking) {
+          _updateState(isAgentThinking: false);
+        }
         _upsertTranscript(
           segmentId: segmentId,
           role: TranscriptRole.agent,
@@ -939,16 +943,27 @@ class LiveKitService extends ChangeNotifier {
       // Keep error/reconnecting state
     } else if (aiLevel > 0.05) {
       newStatus = ConversationStatus.aiSpeaking;
+      // Agent is speaking — stop thinking spinner
+      if (_state.isAgentThinking) {
+        _updateState(isAgentThinking: false);
+      }
     } else if (userLevel > 0.05) {
       newStatus = ConversationStatus.userSpeaking;
     } else if (_state.status == ConversationStatus.userSpeaking ||
         _state.status == ConversationStatus.aiSpeaking) {
       // Brief processing state after speaking stops
       newStatus = ConversationStatus.processing;
+      // Start thinking spinner when user finishes speaking
+      if (_state.status == ConversationStatus.userSpeaking) {
+        _updateState(isAgentThinking: true);
+      }
       // Return to idle after short delay
       Future.delayed(const Duration(milliseconds: 500), () {
         if (_state.status == ConversationStatus.processing) {
-          _updateState(status: ConversationStatus.idle);
+          _updateState(
+            status: ConversationStatus.idle,
+            isAgentThinking: false,
+          );
         }
       });
     } else if (_state.status != ConversationStatus.processing) {
@@ -992,6 +1007,7 @@ class LiveKitService extends ChangeNotifier {
     TranscriptEntry? currentAgentTranscript,
     bool clearCurrentAgentTranscript = false,
     List<SystemEvent>? systemEvents,
+    bool? isAgentThinking,
   }) {
     _state = _state.copyWith(
       status: status,
@@ -1009,6 +1025,7 @@ class LiveKitService extends ChangeNotifier {
       currentAgentTranscript: currentAgentTranscript,
       clearCurrentAgentTranscript: clearCurrentAgentTranscript,
       systemEvents: systemEvents,
+      isAgentThinking: isAgentThinking,
     );
     notifyListeners();
   }
