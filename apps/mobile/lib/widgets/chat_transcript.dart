@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/conversation_state.dart';
+import '../models/system_event.dart';
 import '../services/livekit_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/tui_widgets.dart';
 import 'artifact_viewer.dart';
+import 'system_event_card.dart';
 
 /// Primary chat transcript area displaying conversation messages.
 ///
@@ -27,7 +29,7 @@ class ChatTranscript extends StatefulWidget {
 
 class _ChatTranscriptState extends State<ChatTranscript> {
   final ScrollController _scrollController = ScrollController();
-  int _lastTranscriptLength = 0;
+  int _lastItemCount = 0;
   bool _userHasScrolledUp = false;
 
   @override
@@ -35,7 +37,8 @@ class _ChatTranscriptState extends State<ChatTranscript> {
     super.initState();
     widget.service.addListener(_onServiceChanged);
     _scrollController.addListener(_onScroll);
-    _lastTranscriptLength = widget.service.state.transcript.length;
+    _lastItemCount = widget.service.state.transcript.length +
+        widget.service.state.systemEvents.length;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
     });
@@ -59,11 +62,12 @@ class _ChatTranscriptState extends State<ChatTranscript> {
 
   void _onServiceChanged() {
     if (!mounted) return;
-    final newLength = widget.service.state.transcript.length;
-    final hasNewMessages = newLength > _lastTranscriptLength;
-    _lastTranscriptLength = newLength;
+    final state = widget.service.state;
+    final newCount = state.transcript.length + state.systemEvents.length;
+    final hasNewItems = newCount > _lastItemCount;
+    _lastItemCount = newCount;
     setState(() {});
-    if (hasNewMessages && !_userHasScrolledUp) {
+    if (hasNewItems && !_userHasScrolledUp) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToBottom(animate: true);
       });
@@ -97,29 +101,54 @@ class _ChatTranscriptState extends State<ChatTranscript> {
     final state = widget.service.state;
     final transcript = state.transcript;
     final artifacts = state.artifacts;
+    final systemEvents = state.systemEvents;
 
     // Determine which transcript index gets the artifacts
     final lastAgentIdx = _lastAgentIndex(transcript);
 
-    // Build the list of items: finalized transcript + live interim entries
-    final items = <_ChatItem>[];
+    // Build timestamped items from transcript entries
+    final timestampedItems = <_TimestampedItem>[];
 
     for (int i = 0; i < transcript.length; i++) {
       final entry = transcript[i];
-
-      // Add divider between exchange pairs (user->agent or agent->user)
-      if (i > 0 && transcript[i - 1].role != entry.role &&
-          transcript[i - 1].role == TranscriptRole.agent) {
-        items.add(const _ChatItem.divider());
-      }
-
-      // Attach artifacts to the last agent message
       final showArtifacts =
           i == lastAgentIdx && artifacts.isNotEmpty;
-      items.add(_ChatItem.message(
-        entry,
-        artifacts: showArtifacts ? artifacts : const [],
+      timestampedItems.add(_TimestampedItem(
+        timestamp: entry.timestamp,
+        item: _ChatItem.message(
+          entry,
+          artifacts: showArtifacts ? artifacts : const [],
+        ),
       ));
+    }
+
+    // Add system events
+    for (final event in systemEvents) {
+      timestampedItems.add(_TimestampedItem(
+        timestamp: event.timestamp,
+        item: _ChatItem.systemEvent(event),
+      ));
+    }
+
+    // Sort by timestamp
+    timestampedItems.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+    // Build final items list with dividers between exchange pairs
+    final items = <_ChatItem>[];
+    TranscriptRole? lastMessageRole;
+
+    for (final ti in timestampedItems) {
+      final item = ti.item;
+      if (item.isMessage) {
+        // Add divider between exchange pairs (after agent, before user)
+        if (lastMessageRole != null &&
+            lastMessageRole != item.entry!.role &&
+            lastMessageRole == TranscriptRole.agent) {
+          items.add(const _ChatItem.divider());
+        }
+        lastMessageRole = item.entry!.role;
+      }
+      items.add(item);
     }
 
     // Add live interim transcripts if they are not already in the list
@@ -167,6 +196,12 @@ class _ChatTranscriptState extends State<ChatTranscript> {
             ),
           );
         }
+        if (item.isSystemEvent) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: SystemEventCard(event: item.systemEvent!),
+          );
+        }
         return Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
           child: _TranscriptMessage(
@@ -179,18 +214,36 @@ class _ChatTranscriptState extends State<ChatTranscript> {
   }
 }
 
-/// Represents either a message or a divider in the chat list.
+/// Helper for sorting items by timestamp before building the list.
+class _TimestampedItem {
+  final DateTime timestamp;
+  final _ChatItem item;
+
+  const _TimestampedItem({required this.timestamp, required this.item});
+}
+
+/// Represents a message, system event, or divider in the chat list.
 class _ChatItem {
   final TranscriptEntry? entry;
+  final SystemEvent? systemEvent;
   final bool isDivider;
   final List<ArtifactEvent> artifacts;
 
   const _ChatItem.message(this.entry, {this.artifacts = const []})
-      : isDivider = false;
+      : isDivider = false,
+        systemEvent = null;
   const _ChatItem.divider()
       : entry = null,
         isDivider = true,
+        systemEvent = null,
         artifacts = const [];
+  const _ChatItem.systemEvent(this.systemEvent)
+      : entry = null,
+        isDivider = false,
+        artifacts = const [];
+
+  bool get isMessage => entry != null;
+  bool get isSystemEvent => systemEvent != null;
 }
 
 /// A single transcript message rendered as a TuiCard.
