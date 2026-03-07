@@ -201,14 +201,21 @@ OpenTelemetry-compatible instrumentation for the voice pipeline. Measure STT, EO
 - `TurnMetricsCollector` correlating EOU + LLM + TTS by `speechId` into per-turn summaries
 - 5 unit tests for metrics collector
 
-### 11. [UI Improvements](./07-ui-ux) 📋
-High-fidelity UI enhancements for the Fletcher Flutter app.
+### 11. [UI Redesign — TUI Brutalist](./07-ui-ux) 📋
+Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layout with inline artifacts and live diagnostics.
 
-**Tasks:**
-- [ ] 008: Collaborative Waveform — 8-bit histogram/audio graph with dual-color blending and front-and-center transcript
+**Tasks (New Direction):**
+- [ ] 016: TUI Brutalist Design System — foundational theme tokens, monospace typography, amber/cyan palette, corner-bracket decorators
+- [ ] 017: Chat-First Main View — chat transcript as primary content, compact 8-bit waveform top, mic button bottom with orb states
+- [ ] 018: Artifact System Redesign — inline artifact buttons in chat, bottom sheet drawer, artifacts list modal, counter button
+- [ ] 019: Live Diagnostics Status Bar — real-time VAD/RT/SYS metrics, tri-color health orb, tappable expanded diagnostics view
+
+**Retained:**
 - [ ] 009: Persistent History Discovery — fetch recent history from OpenClaw on rejoin, add Session List UI
-- [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 done: tuned interruption sensitivity (units bug fix, minInterruptionDuration 800ms, minInterruptionWords 1); Phase 3 (soft TTS fade) needs SDK support
-- [~] 015: Single Audio Ack + Visual Spinner 🔄 — Phases 1-2 complete: single-shot ack tone generator + spinning arc overlay on orb during processing; Phase 3 (polish & field test) pending
+- [~] 015: Single Audio Ack + Visual Spinner 🔄 — Phases 1-2 complete; spinner behavior migrates to mic button in 017
+- [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 done; Phase 3 (soft TTS fade) needs SDK support
+
+**Superseded:** ~~008: Collaborative Waveform~~ (absorbed into 017)
 
 ### 12. [Audio-First System Prompts](./14-system-prompts) 📋
 Implementing best practices for TTS optimization, audio summaries, and visual-audio coordination.
