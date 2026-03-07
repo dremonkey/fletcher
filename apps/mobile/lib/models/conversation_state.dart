@@ -1,3 +1,5 @@
+import 'system_event.dart';
+
 enum ConversationStatus {
   connecting,
   reconnecting,
@@ -270,6 +272,9 @@ class ConversationState {
   final TranscriptEntry? currentUserTranscript;
   final TranscriptEntry? currentAgentTranscript;
 
+  /// Inline system events (connection lifecycle) shown in chat transcript
+  final List<SystemEvent> systemEvents;
+
   const ConversationState({
     this.status = ConversationStatus.connecting,
     this.userAudioLevel = 0.0,
@@ -282,6 +287,7 @@ class ConversationState {
     this.aiWaveform = const [],
     this.currentUserTranscript,
     this.currentAgentTranscript,
+    this.systemEvents = const [],
   });
 
   ConversationState copyWith({
@@ -299,6 +305,7 @@ class ConversationState {
     bool clearCurrentUserTranscript = false,
     TranscriptEntry? currentAgentTranscript,
     bool clearCurrentAgentTranscript = false,
+    List<SystemEvent>? systemEvents,
   }) {
     return ConversationState(
       status: status ?? this.status,
@@ -316,6 +323,7 @@ class ConversationState {
       currentAgentTranscript: clearCurrentAgentTranscript
           ? null
           : (currentAgentTranscript ?? this.currentAgentTranscript),
+      systemEvents: systemEvents ?? this.systemEvents,
     );
   }
 }
