@@ -82,6 +82,7 @@ export class OpenClawLLM extends LLMBase implements GangliaLLM {
   private client: OpenClawClient;
   private _model: string;
   private _sessionKey?: SessionKey;
+  private _historyMode: 'full' | 'latest';
   private _onPondering?: (phrase: string | null, streamId: string) => void;
   private _onContent?: (delta: string, fullText: string, streamId: string) => void;
   private _nextStreamSeq = 0;
@@ -90,6 +91,7 @@ export class OpenClawLLM extends LLMBase implements GangliaLLM {
     super();
     this.client = new OpenClawClient(config);
     this._model = config.model || 'openclaw-gateway';
+    this._historyMode = config.historyMode ?? 'latest';
     this._onPondering = config.onPondering;
     this._onContent = config.onContent;
 
@@ -169,6 +171,7 @@ export class OpenClawLLM extends LLMBase implements GangliaLLM {
       toolCtx,
       connOptions: connOptions || { maxRetry: 3, retryIntervalMs: 2000, timeoutMs: 10000 },
       sessionKey: this._sessionKey,
+      historyMode: this._historyMode,
       onPondering: this._onPondering,
       onContent: this._onContent,
       streamId,
@@ -182,6 +185,7 @@ const PONDERING_INTERVAL_MS = 3000;
 class OpenClawChatStream extends LLMStream {
   private openclawClient: OpenClawClient;
   private _sessionKey?: SessionKey;
+  private _historyMode: 'full' | 'latest';
   private _onPondering?: (phrase: string | null, streamId: string) => void;
   private _onContent?: (delta: string, fullText: string, streamId: string) => void;
   private _streamId: string;
@@ -194,6 +198,7 @@ class OpenClawChatStream extends LLMStream {
       toolCtx,
       connOptions,
       sessionKey,
+      historyMode,
       onPondering,
       onContent,
       streamId,
@@ -202,6 +207,7 @@ class OpenClawChatStream extends LLMStream {
       toolCtx?: ToolContext;
       connOptions: APIConnectOptions;
       sessionKey?: SessionKey;
+      historyMode: 'full' | 'latest';
       onPondering?: (phrase: string | null, streamId: string) => void;
       onContent?: (delta: string, fullText: string, streamId: string) => void;
       streamId: string;
@@ -210,6 +216,7 @@ class OpenClawChatStream extends LLMStream {
     super(llmInstance, { chatCtx, toolCtx, connOptions });
     this.openclawClient = client;
     this._sessionKey = sessionKey;
+    this._historyMode = historyMode;
     this._onPondering = onPondering;
     this._onContent = onContent;
     this._streamId = streamId;
@@ -222,8 +229,28 @@ class OpenClawChatStream extends LLMStream {
     const toolCtx = this.toolCtx;
     const connOptions = this.connOptions;
 
-    dbg.openclawStream('chatCtx.items count: %d', chatCtx.items?.length ?? 0);
-    for (const item of chatCtx.items) {
+    let itemsToProcess = chatCtx.items;
+
+    if (this._historyMode === 'latest') {
+      // Find the last user message and only send from there onwards.
+      // This preserves tool-call re-entries (user → assistant tool_call → tool result).
+      let lastUserIdx = -1;
+      for (let i = itemsToProcess.length - 1; i >= 0; i--) {
+        if (itemsToProcess[i] instanceof ChatMessageClass &&
+            (itemsToProcess[i] as any).role === 'user') {
+          lastUserIdx = i;
+          break;
+        }
+      }
+      if (lastUserIdx >= 0) {
+        itemsToProcess = itemsToProcess.slice(lastUserIdx);
+      }
+      dbg.openclawStream('historyMode=latest: %d/%d items (lastUserIdx=%d)',
+        itemsToProcess.length, chatCtx.items.length, lastUserIdx);
+    }
+
+    dbg.openclawStream('chatCtx.items count: %d', itemsToProcess.length);
+    for (const item of itemsToProcess) {
       dbg.openclawStream('item type=%s instanceof ChatMessage=%s FunctionCall=%s',
         item?.constructor?.name, item instanceof ChatMessageClass, item instanceof FunctionCallClass);
       if (item instanceof ChatMessageClass) {

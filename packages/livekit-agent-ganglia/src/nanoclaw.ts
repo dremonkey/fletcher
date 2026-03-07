@@ -85,11 +85,13 @@ export class NanoclawLLM extends LLMBase implements GangliaLLM {
   private client: NanoclawClient;
   private _model: string;
   private _sessionKey?: SessionKey;
+  private _historyMode: 'full' | 'latest';
 
   constructor(config: NanoclawConfig) {
     super();
     this.client = new NanoclawClient(config);
     this._model = 'nanoclaw';
+    this._historyMode = config.historyMode ?? 'full';
 
     if (!(this instanceof LLMBase)) {
       const msg = [
@@ -163,6 +165,7 @@ export class NanoclawLLM extends LLMBase implements GangliaLLM {
       toolCtx,
       connOptions: connOptions || { maxRetry: 3, retryIntervalMs: 2000, timeoutMs: 10000 },
       sessionKey: this._sessionKey,
+      historyMode: this._historyMode,
     });
   }
 }
@@ -170,6 +173,7 @@ export class NanoclawLLM extends LLMBase implements GangliaLLM {
 class NanoclawChatStream extends LLMStream {
   private nanoclawClient: NanoclawClient;
   private _sessionKey?: SessionKey;
+  private _historyMode: 'full' | 'latest';
 
   constructor(
     llmInstance: NanoclawLLM,
@@ -179,16 +183,19 @@ class NanoclawChatStream extends LLMStream {
       toolCtx,
       connOptions,
       sessionKey,
+      historyMode,
     }: {
       chatCtx: ChatContext;
       toolCtx?: ToolContext;
       connOptions: APIConnectOptions;
       sessionKey?: SessionKey;
+      historyMode: 'full' | 'latest';
     },
   ) {
     super(llmInstance, { chatCtx, toolCtx, connOptions });
     this.nanoclawClient = client;
     this._sessionKey = sessionKey;
+    this._historyMode = historyMode;
   }
 
   protected async run(): Promise<void> {
@@ -198,8 +205,26 @@ class NanoclawChatStream extends LLMStream {
     const toolCtx = this.toolCtx;
     const connOptions = this.connOptions;
 
-    dbg.nanoclawStream('chatCtx.items count: %d', chatCtx.items?.length ?? 0);
-    for (const item of chatCtx.items) {
+    let itemsToProcess = chatCtx.items;
+
+    if (this._historyMode === 'latest') {
+      let lastUserIdx = -1;
+      for (let i = itemsToProcess.length - 1; i >= 0; i--) {
+        if (itemsToProcess[i] instanceof ChatMessageClass &&
+            (itemsToProcess[i] as any).role === 'user') {
+          lastUserIdx = i;
+          break;
+        }
+      }
+      if (lastUserIdx >= 0) {
+        itemsToProcess = itemsToProcess.slice(lastUserIdx);
+      }
+      dbg.nanoclawStream('historyMode=latest: %d/%d items (lastUserIdx=%d)',
+        itemsToProcess.length, chatCtx.items.length, lastUserIdx);
+    }
+
+    dbg.nanoclawStream('chatCtx.items count: %d', itemsToProcess.length);
+    for (const item of itemsToProcess) {
       dbg.nanoclawStream('item type=%s instanceof ChatMessage=%s FunctionCall=%s',
         item?.constructor?.name, item instanceof ChatMessageClass, item instanceof FunctionCallClass);
       if (item instanceof ChatMessageClass) {

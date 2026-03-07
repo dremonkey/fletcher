@@ -56,12 +56,14 @@ New backends can be added without modifying factory code.
 | `OPENCLAW_API_KEY` | OpenClaw | (required) |
 | `NANOCLAW_URL` | Nanoclaw | `http://localhost:18789` |
 | `NANOCLAW_CHANNEL_PREFIX` | Nanoclaw | `lk` |
+| `GANGLIA_HISTORY_MODE` | Both | `latest` (openclaw), `full` (nanoclaw) |
 
-**Optional callbacks:**
+**Optional callbacks and options:**
 
 ```typescript
 const llm = await createGangliaFromEnv({
   logger,                                    // pino-compatible logger
+  historyMode: 'latest',                     // 'full' sends entire history, 'latest' sends only new messages
   onPondering: (phrase) => { ... },          // Rotating phrases while waiting for first content token; null when cleared
   onContent: (delta, fullText) => { ... },   // Called for each content-bearing LLM chunk
 });
@@ -95,6 +97,8 @@ Extends `LLMBase` from `@livekit/agents`. On each `chat()` call, it creates an `
 5. Parses response chunks into LiveKit `ChatChunk` events
 6. On first content chunk: clears pondering and proceeds with normal streaming
 7. On each content chunk: fires `onContent(delta, fullText)` with the text delta and accumulated response
+
+When `historyMode` is `'latest'` (the default for OpenClaw), only the most recent user message and any subsequent tool-call/result items are sent. OpenClaw maintains server-side conversation history, so sending the full context is redundant and wastes tokens.
 
 ### OpenClawClient
 
@@ -143,7 +147,10 @@ Nanoclaw is the single-user development backend. It runs on localhost without au
 | Authentication | API key required | None |
 | Session model | Multi-user with routing | Single-user |
 | Channel ID | Session headers | JID (Jabber ID) format |
+| History mode | `latest` (backend manages state) | `full` (no server-side history) |
 | Extended events | No | Status + Artifact events |
+
+Nanoclaw defaults to `historyMode: 'full'` since it does not maintain server-side conversation history.
 
 ### Channel Identification
 

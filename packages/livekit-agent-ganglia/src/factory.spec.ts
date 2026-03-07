@@ -77,6 +77,81 @@ describe('isGangliaAvailable', () => {
   });
 });
 
+describe('createGangliaFromEnv historyMode defaults', () => {
+  it('openclaw defaults to historyMode "latest"', async () => {
+    await import('./llm.js');
+    // Ensure GANGLIA_TYPE is openclaw
+    const origType = process.env.GANGLIA_TYPE;
+    const origHistoryMode = process.env.GANGLIA_HISTORY_MODE;
+    process.env.GANGLIA_TYPE = 'openclaw';
+    delete process.env.GANGLIA_HISTORY_MODE;
+
+    const { createGangliaFromEnv } = await import('./factory.js');
+    const llm = await createGangliaFromEnv();
+
+    // Access the private _historyMode field
+    expect((llm as any)._historyMode).toBe('latest');
+
+    // Restore env
+    if (origType !== undefined) process.env.GANGLIA_TYPE = origType;
+    else delete process.env.GANGLIA_TYPE;
+    if (origHistoryMode !== undefined) process.env.GANGLIA_HISTORY_MODE = origHistoryMode;
+  });
+
+  it('nanoclaw defaults to historyMode "full"', async () => {
+    await import('./nanoclaw.js');
+    const origType = process.env.GANGLIA_TYPE;
+    const origHistoryMode = process.env.GANGLIA_HISTORY_MODE;
+    process.env.GANGLIA_TYPE = 'nanoclaw';
+    delete process.env.GANGLIA_HISTORY_MODE;
+
+    const { createGangliaFromEnv } = await import('./factory.js');
+    const llm = await createGangliaFromEnv();
+
+    expect((llm as any)._historyMode).toBe('full');
+
+    // Restore env
+    if (origType !== undefined) process.env.GANGLIA_TYPE = origType;
+    else delete process.env.GANGLIA_TYPE;
+    if (origHistoryMode !== undefined) process.env.GANGLIA_HISTORY_MODE = origHistoryMode;
+  });
+
+  it('opts.historyMode overrides default', async () => {
+    await import('./llm.js');
+    const origType = process.env.GANGLIA_TYPE;
+    const origHistoryMode = process.env.GANGLIA_HISTORY_MODE;
+    process.env.GANGLIA_TYPE = 'openclaw';
+    delete process.env.GANGLIA_HISTORY_MODE;
+
+    const { createGangliaFromEnv } = await import('./factory.js');
+    const llm = await createGangliaFromEnv({ historyMode: 'full' });
+
+    expect((llm as any)._historyMode).toBe('full');
+
+    if (origType !== undefined) process.env.GANGLIA_TYPE = origType;
+    else delete process.env.GANGLIA_TYPE;
+    if (origHistoryMode !== undefined) process.env.GANGLIA_HISTORY_MODE = origHistoryMode;
+  });
+
+  it('GANGLIA_HISTORY_MODE env var overrides backend default', async () => {
+    await import('./llm.js');
+    const origType = process.env.GANGLIA_TYPE;
+    const origHistoryMode = process.env.GANGLIA_HISTORY_MODE;
+    process.env.GANGLIA_TYPE = 'openclaw';
+    process.env.GANGLIA_HISTORY_MODE = 'full';
+
+    const { createGangliaFromEnv } = await import('./factory.js');
+    const llm = await createGangliaFromEnv();
+
+    expect((llm as any)._historyMode).toBe('full');
+
+    if (origType !== undefined) process.env.GANGLIA_TYPE = origType;
+    else delete process.env.GANGLIA_TYPE;
+    if (origHistoryMode !== undefined) process.env.GANGLIA_HISTORY_MODE = origHistoryMode;
+    else delete process.env.GANGLIA_HISTORY_MODE;
+  });
+});
+
 describe('Backend Registration', () => {
   it('openclaw backend is registered after import', async () => {
     // Import the llm module to trigger registration

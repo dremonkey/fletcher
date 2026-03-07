@@ -108,6 +108,8 @@ export function isGangliaAvailable(type: string): boolean {
  */
 export async function createGangliaFromEnv(opts?: {
   logger?: Logger;
+  /** Controls how much conversation history to send per request. Default: 'latest' (openclaw), 'full' (nanoclaw). */
+  historyMode?: 'full' | 'latest';
   /** Callback for pondering status phrases while waiting for LLM first token. */
   onPondering?: (phrase: string | null, streamId: string) => void;
   /** Callback for each content chunk from the LLM stream. */
@@ -119,9 +121,12 @@ export async function createGangliaFromEnv(opts?: {
     process.env.GANGLIA_TYPE, process.env.BRAIN_TYPE, type);
   dbg.factory('registered types: %s', Array.from(registry.keys()).join(', ') || 'none');
 
+  const envHistoryMode = process.env.GANGLIA_HISTORY_MODE as 'full' | 'latest' | undefined;
+
   if (type === 'openclaw') {
     const baseUrl = process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:8080';
-    dbg.factory('creating openclaw: baseUrl=%s hasApiKey=%s', baseUrl, !!process.env.OPENCLAW_API_KEY);
+    const historyMode = opts?.historyMode ?? envHistoryMode ?? 'latest';
+    dbg.factory('creating openclaw: baseUrl=%s hasApiKey=%s historyMode=%s', baseUrl, !!process.env.OPENCLAW_API_KEY, historyMode);
     logger.info(`Creating ganglia backend: openclaw (${baseUrl})`);
     return createGanglia({
       type: 'openclaw',
@@ -131,6 +136,7 @@ export async function createGangliaFromEnv(opts?: {
         logger,
         onPondering: opts?.onPondering,
         onContent: opts?.onContent,
+        historyMode,
       },
     });
   }
@@ -138,7 +144,8 @@ export async function createGangliaFromEnv(opts?: {
   if (type === 'nanoclaw') {
     const url = process.env.NANOCLAW_URL || 'http://localhost:18789';
     const prefix = process.env.NANOCLAW_CHANNEL_PREFIX || 'lk';
-    dbg.factory('creating nanoclaw: url=%s channelPrefix=%s', url, prefix);
+    const historyMode = opts?.historyMode ?? envHistoryMode ?? 'full';
+    dbg.factory('creating nanoclaw: url=%s channelPrefix=%s historyMode=%s', url, prefix, historyMode);
     logger.info(`Creating ganglia backend: nanoclaw (${url})`);
     return createGanglia({
       type: 'nanoclaw',
@@ -146,6 +153,7 @@ export async function createGangliaFromEnv(opts?: {
         url,
         channelPrefix: prefix,
         logger,
+        historyMode,
       },
     });
   }

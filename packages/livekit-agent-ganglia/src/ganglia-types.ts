@@ -37,6 +37,8 @@ export interface OpenClawConfig {
   onPondering?: (phrase: string | null, streamId: string) => void;
   /** Callback for each content chunk from the LLM stream. */
   onContent?: (delta: string, fullText: string, streamId: string) => void;
+  /** Controls how much conversation history to send. Default: 'latest' */
+  historyMode?: 'full' | 'latest';
 }
 
 /**
@@ -49,6 +51,8 @@ export interface NanoclawConfig {
   channelPrefix?: string;
   /** Optional logger for production-level logging (defaults to silent) */
   logger?: import('./logger.js').Logger;
+  /** Controls how much conversation history to send. Default: 'full' */
+  historyMode?: 'full' | 'latest';
 }
 
 /**

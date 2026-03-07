@@ -216,6 +216,118 @@ describe('extractSessionFromContext', () => {
 });
 
 // ---------------------------------------------------------------------------
+// historyMode filtering
+// ---------------------------------------------------------------------------
+
+describe('historyMode', () => {
+  /** Helper: create an LLM + stream with a mock client that captures sent messages. */
+  function createCaptureStream(historyMode?: 'full' | 'latest') {
+    const llm = new OpenClawLLM({ historyMode });
+    const client = llm.getClient();
+    let capturedMessages: any[] = [];
+
+    async function* gen() {
+      yield {
+        id: 'chatcmpl-test',
+        choices: [{ delta: { role: 'assistant', content: 'ok' } }],
+      };
+    }
+
+    (client as any).chat = (opts: any) => {
+      capturedMessages = opts.messages;
+      return gen();
+    };
+
+    return { llm, getCaptured: () => capturedMessages };
+  }
+
+  it('historyMode: "full" sends all messages', async () => {
+    const { llm, getCaptured } = createCaptureStream('full');
+    const chatCtx = new (agents as any).ChatContext();
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'system', text: 'You are helpful' }));
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'user', text: 'Hello' }));
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'assistant', text: 'Hi there' }));
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'user', text: 'How are you?' }));
+
+    const stream = llm.chat({ chatCtx });
+    await (stream as any).run();
+
+    expect(getCaptured().length).toBe(4);
+    expect(getCaptured()[0].role).toBe('system');
+    expect(getCaptured()[3].role).toBe('user');
+  });
+
+  it('historyMode: "latest" sends only from last user message', async () => {
+    const { llm, getCaptured } = createCaptureStream('latest');
+    const chatCtx = new (agents as any).ChatContext();
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'system', text: 'You are helpful' }));
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'user', text: 'Hello' }));
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'assistant', text: 'Hi there' }));
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'user', text: 'How are you?' }));
+
+    const stream = llm.chat({ chatCtx });
+    await (stream as any).run();
+
+    expect(getCaptured().length).toBe(1);
+    expect(getCaptured()[0].role).toBe('user');
+    expect(getCaptured()[0].content).toContain('How are you?');
+  });
+
+  it('historyMode: "latest" with tool calls sends user + tool_call + tool_result', async () => {
+    const { llm, getCaptured } = createCaptureStream('latest');
+    const chatCtx = new (agents as any).ChatContext();
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'system', text: 'System prompt' }));
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'user', text: 'Old question' }));
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'assistant', text: 'Old answer' }));
+    // Latest turn: user asks something that triggers a tool call
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'user', text: 'What time is it?' }));
+    // Assistant responds with a tool call
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'assistant', text: '' }));
+    chatCtx.items.push(new (agents as any).FunctionCall({
+      callId: 'call_123',
+      name: 'get_time',
+      args: '{}',
+    }));
+    // Tool result
+    chatCtx.items.push({
+      type: 'function_call_output',
+      callId: 'call_123',
+      name: 'get_time',
+      output: '3:00 PM',
+    });
+
+    const stream = llm.chat({ chatCtx });
+    await (stream as any).run();
+
+    // Should have: user message, assistant (with tool_calls), tool result = 3 messages
+    const msgs = getCaptured();
+    expect(msgs.length).toBe(3);
+    expect(msgs[0].role).toBe('user');
+    expect(msgs[0].content).toContain('What time is it?');
+    expect(msgs[1].role).toBe('assistant');
+    expect(msgs[1].tool_calls).toBeDefined();
+    expect(msgs[1].tool_calls[0].function.name).toBe('get_time');
+    expect(msgs[2].role).toBe('tool');
+    expect(msgs[2].content).toBe('3:00 PM');
+  });
+
+  it('default historyMode for OpenClaw is "latest"', async () => {
+    const { llm, getCaptured } = createCaptureStream(); // no explicit historyMode
+    const chatCtx = new (agents as any).ChatContext();
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'user', text: 'First' }));
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'assistant', text: 'Reply' }));
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'user', text: 'Second' }));
+
+    const stream = llm.chat({ chatCtx });
+    await (stream as any).run();
+
+    // Default is 'latest', so only the last user message should be sent
+    expect(getCaptured().length).toBe(1);
+    expect(getCaptured()[0].content).toContain('Second');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // OpenClawChatStream interrupt handling (BUG-019)
 //
 // These tests call run() directly on the stream to verify the three fixes:

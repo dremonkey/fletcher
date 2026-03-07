@@ -25,6 +25,8 @@ export interface OpenClawConfig {
    * @param streamId - Unique identifier for the LLM stream instance
    */
   onContent?: (delta: string, fullText: string, streamId: string) => void;
+  /** Controls how much conversation history to send. Default: 'latest' */
+  historyMode?: 'full' | 'latest';
 }
 
 /**

@@ -142,6 +142,57 @@ describe('extractNanoclawSession', () => {
   });
 });
 
+describe('historyMode', () => {
+  function createCaptureStream(historyMode?: 'full' | 'latest') {
+    const llm = new NanoclawLLM({ url: 'http://localhost:18789', historyMode });
+    const client = llm.getClient();
+    let capturedMessages: any[] = [];
+
+    async function* gen() {
+      yield {
+        id: 'chatcmpl-test',
+        choices: [{ delta: { role: 'assistant', content: 'ok' } }],
+      };
+    }
+
+    (client as any).chat = (opts: any) => {
+      capturedMessages = opts.messages;
+      return gen();
+    };
+
+    return { llm, getCaptured: () => capturedMessages };
+  }
+
+  it('default historyMode for Nanoclaw is "full"', async () => {
+    const { llm, getCaptured } = createCaptureStream(); // no explicit historyMode
+    const chatCtx = new (agents as any).ChatContext();
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'user', text: 'First' }));
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'assistant', text: 'Reply' }));
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'user', text: 'Second' }));
+
+    const stream = llm.chat({ chatCtx });
+    await (stream as any).run();
+
+    // Default is 'full' for nanoclaw, so all messages should be sent
+    expect(getCaptured().length).toBe(3);
+  });
+
+  it('historyMode: "latest" sends only from last user message', async () => {
+    const { llm, getCaptured } = createCaptureStream('latest');
+    const chatCtx = new (agents as any).ChatContext();
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'user', text: 'First' }));
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'assistant', text: 'Reply' }));
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'user', text: 'Second' }));
+
+    const stream = llm.chat({ chatCtx });
+    await (stream as any).run();
+
+    expect(getCaptured().length).toBe(1);
+    expect(getCaptured()[0].role).toBe('user');
+    expect(getCaptured()[0].content).toBe('Second');
+  });
+});
+
 describe('Message Mapping', () => {
   it('should create a chat stream from ChatContext', () => {
     const llm = new NanoclawLLM({ url: 'http://localhost:18789' });

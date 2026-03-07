@@ -199,6 +199,7 @@ See [Network Connectivity](network-connectivity.md) for the full URL resolution 
 | `OPENCLAW_API_KEY` | If OpenClaw | — | Gateway authentication token |
 | `NANOCLAW_URL` | No | `http://localhost:18789` | Nanoclaw HTTP endpoint |
 | `NANOCLAW_CHANNEL_PREFIX` | No | `lk` | JID channel prefix |
+| `GANGLIA_HISTORY_MODE` | No | per-backend | History sending: `full` or `latest` |
 
 ### Voice Providers
 
