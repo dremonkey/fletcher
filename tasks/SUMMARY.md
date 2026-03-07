@@ -181,7 +181,7 @@ Bulletproof connection handling: survive network switches, Bluetooth changes, ai
 - [~] 019: Background Session Timeout & App-Close Disconnect 🔄 — implemented: `stopWithTask="true"` for swipe-away disconnect, screen lock detection via method channel, 10-min background timeout with notification countdown; pending field verification
 - [ ] 020: Agent Reconnect After Worker Restart 📋 — LiveKit doesn't re-dispatch agent jobs after worker restart; orphaned rooms with users but no agent ([BUG-005](../docs/field-tests/20260306-buglog.md))
 - [x] 021: Dynamic Room Names ✅ — dynamic `fletcher-<timestamp>` room names with token endpoint; client creates new room on budget exhaustion for seamless agent restart recovery; e2e tests 006-008 passing ([BUG-005](../docs/field-tests/20260306-buglog.md))
-- [ ] 022: E2E Test Room Convention 📋 — server-side room name convention (`e2e-*`) to reduce token consumption during automated tests without prompt injection risk
+- [~] 022: E2E Test Room Convention 🔄 — `e2e-fletcher-` prefix when `E2E_TEST_MODE=true`; agent detects `e2e-*` rooms and uses minimal prompt; pending field verification
 
 **Depends on:** Epic 3 (Flutter App)
 

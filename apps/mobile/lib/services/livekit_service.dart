@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -159,8 +160,13 @@ class LiveKitService extends ChangeNotifier {
   }
 
   /// Generate a unique room name: fletcher-<unix-millis>.
+  /// When E2E_TEST_MODE=true in .env, uses e2e-fletcher- prefix so the voice
+  /// agent detects automated tests and uses a minimal system prompt,
+  /// reducing token consumption. (TASK-022)
   String _generateRoomName() {
-    return 'fletcher-${DateTime.now().millisecondsSinceEpoch}';
+    final isE2e = dotenv.env['E2E_TEST_MODE']?.toLowerCase() == 'true';
+    final prefix = isE2e ? 'e2e-fletcher' : 'fletcher';
+    return '$prefix-${DateTime.now().millisecondsSinceEpoch}';
   }
 
   /// Create a new room and connect to it (used for recovery after budget exhaustion).

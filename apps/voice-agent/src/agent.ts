@@ -213,8 +213,21 @@ export default defineAgent({
         ttsConnOptions: { maxRetry: 0 },
       },
     });
+
+    // E2E test mode: rooms named e2e-* get a minimal system prompt to keep
+    // LLM responses short and reduce token consumption during automated
+    // testing.  The trust boundary stays server-side — the client cannot
+    // influence the prompt, only the room name convention. (TASK-022)
+    const isE2eRoom = ctx.room.name?.startsWith('e2e-') ?? false;
+    const instructions = isE2eRoom
+      ? 'You are in an automated test. Respond with short acknowledgments only.'
+      : '';
+    if (isE2eRoom) {
+      logger.info({ room: ctx.room.name }, 'E2E test room detected — using minimal system prompt');
+    }
+
     await session.start({
-      agent: new voice.Agent({ instructions: '' }),
+      agent: new voice.Agent({ instructions }),
       room: ctx.room,
       // Disable SDK transcription — we publish agent text ourselves via
       // the onContent callback → ganglia-events data channel.  This avoids

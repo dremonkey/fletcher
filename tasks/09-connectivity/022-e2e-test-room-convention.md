@@ -17,10 +17,11 @@ Use a **room name convention** to signal test mode on the server side:
 4. The trust boundary stays server-side — the client cannot influence the system prompt
 
 ## Implementation Checklist
-- [ ] Define the e2e room name prefix convention (e.g., `e2e-fletcher-`)
-- [ ] Update the mobile app to use the e2e prefix when a flag/env var is set (e.g., `E2E_TEST_MODE=true`)
-- [ ] Update the voice agent to detect e2e room names and swap the system prompt
-- [ ] Update the token server to accept e2e-prefixed room names
+- [x] Define the e2e room name prefix convention — `e2e-fletcher-<timestamp>`
+- [x] Update the mobile app to use the e2e prefix when `E2E_TEST_MODE=true` in `.env`
+- [x] Update the voice agent to detect `e2e-` room names and use minimal system prompt
+- [x] Update the token server to accept e2e-prefixed room names — already accepts any format, no changes needed
+- [x] E2e skill swaps `.env.e2e` → `.env` before build, restores after
 - [ ] Verify token consumption reduction in a test run
 
 ## Security Notes
