@@ -45,9 +45,10 @@ e2e/helpers/emu-capture.sh 008-step2-launch
 ```
 
 **Expect:**
-- The app is visible on screen (dark background with amber orb in center)
-- A status badge near the top shows "Connecting..." (gray text)
-- The orb appears at roughly 50% opacity (connecting state)
+- Dark background with compact waveform at top
+- Diagnostics bar below waveform (showing initial connection state)
+- Chat area in center with system event cards beginning to appear
+- 56dp square mic button at bottom in connecting state (disabled/grayed appearance)
 
 ### Step 3: Wait for idle state
 
@@ -58,11 +59,11 @@ e2e/helpers/emu-capture.sh 008-step3-idle
 ```
 
 **Expect:**
-- The status badge shows "Listening" (amber text)
-- The orb is fully visible with a breathing animation glow
-- No error message is displayed below the orb
-- The "Diagnostics" chip is visible above the mute toggle
-- The Diagnostics chip dot is green (all health checks passing)
+- Diagnostics bar shows `SYS: OK` with green health orb
+- Compact waveform at top is stable
+- Chat area displays system event cards showing successful boot and connection
+- 56dp square mic button at bottom with breathing glow (active/ready state)
+- No error indicators in diagnostics bar or chat
 
 ### Step 4: Record the initial room name from logcat
 
@@ -97,8 +98,11 @@ e2e/helpers/emu-capture.sh 008-step5-airplane-on
 ```
 
 **Expect:**
-- The status badge shows "Reconnecting..." or "Waiting for network..." (not "Listening")
-- The orb may pulse at a dimmer level or show a connectivity-lost animation
+- Diagnostics bar shows `SYS: RECONNECTING` or `SYS: ERROR` (not `SYS: OK`)
+- Health orb in diagnostics bar is red or amber (indicating network issue)
+- Chat area shows system event card indicating network loss/disconnection
+- Compact waveform may be static or frozen
+- 56dp mic button is disabled (grayed appearance)
 - The airplane mode icon is visible in the Android status bar at the top of the screen
 - No permanent error message or error state is shown (the app is still trying)
 
@@ -113,7 +117,9 @@ e2e/helpers/emu-capture.sh 008-step6-budget-elapsed
 ```
 
 **Expect:**
-- The status badge still shows "Reconnecting..." or "Waiting for network..." — the app is still retrying, NOT in a hard error state
+- Diagnostics bar still shows `SYS: RECONNECTING` or `SYS: ERROR` — the app is still retrying, NOT in a hard error state
+- Health orb remains red or amber
+- Chat area continues to show network loss system event cards
 - The airplane mode icon remains visible in the status bar
 - No dialog, toast, or persistent error banner saying "Session expired" or "Failed to reconnect" — the app is designed to recover silently via a new room
 
@@ -133,8 +139,9 @@ e2e/helpers/emu-capture.sh 008-step7-network-restored
 
 **Expect:**
 - The airplane mode icon has disappeared from the Android status bar
-- The status badge transitions away from "Waiting for network..." — the app detected connectivity
-- The app is actively working (badge shows "Connecting..." or "Reconnecting...") — NOT stuck in "Waiting for network..."
+- Diagnostics bar transitions out of `SYS: ERROR` state — the app detected connectivity
+- The app is actively working (diagnostics bar shows `SYS: RECONNECTING` or transitioning to `SYS: OK`) — NOT stuck in error state
+- Chat area shows system event card indicating recovery progress (e.g., "Reconnecting...", "Generating new room...")
 
 ### Step 8: Wait for full recovery with new room
 
@@ -147,10 +154,12 @@ e2e/helpers/emu-capture.sh 008-step8-recovery
 ```
 
 **Expect:**
-- The status badge shows "Listening" (amber text) — full recovery achieved
-- The orb has returned to its fully illuminated, gently breathing state
-- No error message or error banner is visible anywhere on screen
-- The Diagnostics chip is visible; its dot color is green or amber (not red)
+- Diagnostics bar shows `SYS: OK` — full recovery achieved
+- Health orb in diagnostics bar is green
+- Compact waveform is actively moving/breathing (indicating active connection)
+- Chat area displays system event cards showing new room connection and fresh agent dispatch
+- 56dp square mic button at bottom has breathing glow (active/ready)
+- No error indicators visible anywhere on screen
 
 ### Step 9: Verify recovery logs — budget exhaustion and new room creation
 
@@ -200,10 +209,10 @@ e2e/helpers/emu-capture.sh 008-step10-room-name-diff
 
 Open the Diagnostics panel to confirm all health checks have recovered and the session is considered healthy.
 
-Tap the "Diagnostics" chip (centered row above the mute toggle, approximately 105px from the bottom of the screen).
+Tap the diagnostics bar (tappable row showing system status, approximately at x=250, y=300).
 
 ```sh
-adb -s ${DEVICE_ID:-emulator-5554} shell input tap <X> <Y>
+adb -s ${DEVICE_ID:-emulator-5554} shell input tap 250 300
 ```
 
 Wait 1 second, then capture.
@@ -213,9 +222,9 @@ e2e/helpers/emu-capture.sh 008-step11-health-panel
 ```
 
 **Expect:**
-- The Diagnostics bottom sheet opens
-- The panel header shows "Diagnostics"
-- All health check rows show green checkmarks or passing indicators
-- Specifically, the "Agent" or "Room" health check row (if present) shows green — confirming an agent is present in the new room
-- No rows show red indicators
-- The chip's status dot (visible behind the panel or on re-close) is green
+- The Diagnostics TUI bottom sheet opens with amber top border
+- The header shows `┌─ DIAGNOSTICS ─┐` or similar TUI-style formatting
+- All key-value health check rows are visible (e.g., "WebSocket: connected", "Agent: healthy", "Room: active")
+- All rows show passing values (no red/error indicators)
+- The health orb or status indicator within the panel shows green
+- The panel can be dismissed by tapping outside or pressing back
