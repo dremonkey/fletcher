@@ -350,11 +350,30 @@ export default defineAgent({
           : 'Pipeline');
       logger.error({ source, message, recoverable: err.recoverable }, 'Pipeline error');
 
+      const isTts = err.type === 'tts_error' || message.includes('TTS');
+
+      // When using FallbackAdapter and the fallback TTS is still available,
+      // suppress "Voice Unavailable" artifacts — the voice is degraded, not
+      // unavailable.  The tts-fallback-monitor handles "Voice Degraded" /
+      // "Voice Restored" artifacts separately.
+      //
+      // Without this check, the FallbackAdapter's background recovery probes
+      // (every 1s against the dead primary) forward errors through
+      // setupEventForwarding(), producing a misleading "Voice Unavailable"
+      // artifact every 60s even though Piper is serving audio fine.
+      if (isTts && ttsInstance instanceof tts.FallbackAdapter) {
+        const anyFallbackAvailable = ttsInstance.status.some((s, i) => i > 0 && s.available);
+        if (anyFallbackAvailable) {
+          logger.debug({ source, message }, 'TTS error suppressed — fallback still available');
+          stopAck();
+          return;
+        }
+      }
+
       // Debounce all error artifacts — at most 1 per minute
       const now = Date.now();
       if (now - lastErrorArtifact > ERROR_ARTIFACT_DEBOUNCE_MS) {
         lastErrorArtifact = now;
-        const isTts = err.type === 'tts_error' || message.includes('TTS');
         publishEvent({
           type: 'artifact',
           artifact_type: 'error',
