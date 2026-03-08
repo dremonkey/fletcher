@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -9,6 +11,35 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SessionStorage {
   static const _keyRoomName = 'fletcher_last_room';
   static const _keyConnectedAt = 'fletcher_last_connected_at';
+
+  /// Cached device ID — the hardware ID never changes at runtime.
+  static String? _cachedDeviceId;
+
+  /// Returns a stable participant identity derived from the hardware device ID.
+  ///
+  /// - Android: `Settings.Secure.ANDROID_ID` (persists across reinstalls)
+  /// - iOS: `identifierForVendor` (persists while any vendor app is installed)
+  /// - Fallback: timestamp-based ID (should never happen on mobile)
+  static Future<String> getDeviceId() async {
+    if (_cachedDeviceId != null) return _cachedDeviceId!;
+
+    final deviceInfo = DeviceInfoPlugin();
+    String platformId;
+
+    if (Platform.isAndroid) {
+      final android = await deviceInfo.androidInfo;
+      platformId = android.id;
+    } else if (Platform.isIOS) {
+      final ios = await deviceInfo.iosInfo;
+      platformId = ios.identifierForVendor ?? 'unknown-ios';
+    } else {
+      platformId = 'unknown-${DateTime.now().millisecondsSinceEpoch}';
+    }
+
+    _cachedDeviceId = 'device-$platformId';
+    debugPrint('[SessionStorage] Device ID: $_cachedDeviceId');
+    return _cachedDeviceId!;
+  }
 
   /// Save the current room name and timestamp.
   static Future<void> saveSession(String roomName) async {

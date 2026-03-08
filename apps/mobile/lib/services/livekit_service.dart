@@ -162,7 +162,7 @@ class LiveKitService extends ChangeNotifier {
       final tokenHost = resolvedUri.host;
 
       // Fetch token from endpoint
-      final identity = 'user-${DateTime.now().millisecondsSinceEpoch}';
+      final identity = await SessionStorage.getDeviceId();
       final result = await fetchToken(
         host: tokenHost,
         port: tokenServerPort,
@@ -241,7 +241,7 @@ class LiveKitService extends ChangeNotifier {
       final resolvedUri = Uri.parse(resolved.url);
       final tokenHost = resolvedUri.host;
 
-      final identity = 'user-${DateTime.now().millisecondsSinceEpoch}';
+      final identity = await SessionStorage.getDeviceId();
       final result = await fetchToken(
         host: tokenHost,
         port: _tokenServerPort,

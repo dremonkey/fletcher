@@ -107,11 +107,19 @@ Races TCP connections to LAN and Tailscale URLs, using whichever responds first.
 
 Fetches LiveKit JWTs from the token endpoint (`scripts/token-server.ts`). Called by `LiveKitService.connectWithDynamicRoom()` before every fresh connection. The token endpoint host is derived from the URL resolver winner (same host, port from `TOKEN_SERVER_PORT` env var).
 
+**Participant identity** is a stable hardware device ID (via `device_info_plus`) rather than an ephemeral timestamp. This means the same physical device always connects with the same identity, allowing the voice agent to recognize a returning participant after a disconnect/rejoin cycle. See `SessionStorage.getDeviceId()`.
+
 ### SessionStorage
 
 Persists room name and connection timestamp via SharedPreferences. Used to decide whether to rejoin an existing room or create a new one:
 - **Recent session** (< `DEPARTURE_TIMEOUT_S`): reuse room name
 - **Stale/absent**: generate new `fletcher-<timestamp>` room name
+
+Also provides `getDeviceId()` — a stable participant identity derived from the hardware device ID:
+- **Android:** `Settings.Secure.ANDROID_ID` (persists across reinstalls, resets on factory reset)
+- **iOS:** `identifierForVendor` (persists while any app from the same vendor is installed)
+- Prefixed as `device-<platformId>` for readability in logs
+- Cached in-memory after first call (the hardware ID never changes at runtime)
 
 Updated on every successful connect and reconnect.
 
@@ -173,7 +181,9 @@ sequenceDiagram
     UR->>UR: Race TCP to LAN vs Tailscale
     UR-->>LK: Winner URL + host
 
-    LK->>TS: GET /token?room=fletcher-xxx&identity=user-xxx
+    LK->>SES: getDeviceId()
+    SES-->>LK: "device-<hardwareId>"
+    LK->>TS: GET /token?room=fletcher-xxx&identity=device-xxx
     TS-->>LK: { token, url }
 
     LK->>Room: connect(resolvedUrl, token)
@@ -318,6 +328,7 @@ Circular button with microphone icon. Amber border when muted.
 | `flutter_dotenv` | 5.2.1 | Environment variable loading |
 | `flutter_markdown` | 0.7.6 | Markdown rendering in artifacts |
 | `connectivity_plus` | 6.1.4 | Network state monitoring |
+| `device_info_plus` | 11.3.0 | Stable hardware device ID for participant identity |
 | `permission_handler` | 11.3.0 | Microphone permission management |
 | `shared_preferences` | 2.3.0 | Session persistence (room name + timestamp) |
 
