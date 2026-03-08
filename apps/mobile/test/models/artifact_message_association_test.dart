@@ -5,12 +5,12 @@ import 'package:fletcher/models/conversation_state.dart';
 void main() {
   group('ArtifactEvent.messageId', () {
     test('defaults to null', () {
-      const artifact = ArtifactEvent(artifactType: ArtifactType.code);
+      final artifact = ArtifactEvent(artifactType: ArtifactType.code);
       expect(artifact.messageId, isNull);
     });
 
     test('can be set via constructor', () {
-      const artifact = ArtifactEvent(
+      final artifact = ArtifactEvent(
         artifactType: ArtifactType.code,
         messageId: 'seg-001',
       );
@@ -18,7 +18,7 @@ void main() {
     });
 
     test('withMessageId returns copy with new messageId', () {
-      const artifact = ArtifactEvent(
+      final artifact = ArtifactEvent(
         artifactType: ArtifactType.diff,
         title: 'changes.dart',
         file: 'lib/main.dart',
@@ -33,7 +33,7 @@ void main() {
     });
 
     test('withMessageId(null) clears the messageId', () {
-      const artifact = ArtifactEvent(
+      final artifact = ArtifactEvent(
         artifactType: ArtifactType.code,
         messageId: 'seg-001',
       );
@@ -78,6 +78,7 @@ void main() {
       expect(stamped.message, 'error msg');
       expect(stamped.stack, 'stack trace');
       expect(stamped.rawJson, {'key': 'value'});
+      expect(stamped.createdAt, artifact.createdAt);
     });
 
     test('fromJson does not set messageId (server does not send it)', () {
@@ -162,17 +163,17 @@ void main() {
       ];
 
       final artifacts = [
-        const ArtifactEvent(
+        ArtifactEvent(
           artifactType: ArtifactType.diff,
           title: 'change-1',
           messageId: 'seg-1',
         ),
-        const ArtifactEvent(
+        ArtifactEvent(
           artifactType: ArtifactType.code,
           title: 'code-1',
           messageId: 'seg-1',
         ),
-        const ArtifactEvent(
+        ArtifactEvent(
           artifactType: ArtifactType.diff,
           title: 'change-2',
           messageId: 'seg-3',
@@ -207,7 +208,7 @@ void main() {
         ),
       ];
 
-      const artifacts = [
+      final artifacts = [
         ArtifactEvent(
           artifactType: ArtifactType.code,
           title: 'orphan-artifact',
@@ -240,7 +241,7 @@ void main() {
         ),
       ];
 
-      const artifacts = [
+      final artifacts = [
         ArtifactEvent(
           artifactType: ArtifactType.diff,
           title: 'stamped',
@@ -271,7 +272,7 @@ void main() {
         ),
       ];
 
-      const artifacts = [
+      final artifacts = [
         ArtifactEvent(
           artifactType: ArtifactType.code,
           title: 'orphan',
@@ -294,7 +295,7 @@ void main() {
         ),
       ];
 
-      const artifacts = [
+      final artifacts = [
         ArtifactEvent(
           artifactType: ArtifactType.diff,
           title: 'first',
@@ -336,7 +337,7 @@ void main() {
         ),
       ];
 
-      const artifacts = [
+      final artifacts = [
         ArtifactEvent(
           artifactType: ArtifactType.diff,
           title: 'a1',

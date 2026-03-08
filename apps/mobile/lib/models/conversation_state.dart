@@ -171,7 +171,10 @@ class ArtifactEvent {
   /// Used to render the artifact inline below its originating message.
   final String? messageId;
 
-  const ArtifactEvent({
+  /// When this artifact was created (received by the client).
+  final DateTime createdAt;
+
+  ArtifactEvent({
     required this.artifactType,
     this.title,
     this.file,
@@ -186,7 +189,8 @@ class ArtifactEvent {
     this.stack,
     this.rawJson,
     this.messageId,
-  });
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
 
   factory ArtifactEvent.fromJson(Map<String, dynamic> json) {
     final typeStr = json['artifact_type'] as String? ?? 'unknown';
@@ -252,6 +256,7 @@ class ArtifactEvent {
       stack: stack,
       rawJson: rawJson,
       messageId: messageId,
+      createdAt: createdAt,
     );
   }
 

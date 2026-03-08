@@ -224,6 +224,9 @@ class _ArtifactListCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final preview = _artifactPreview(artifact);
     final previewLines = preview.split('\n').take(3).join('\n');
+    final ts = artifact.createdAt;
+    final timeStr =
+        '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}';
 
     return GestureDetector(
       onTap: onTap,
@@ -244,6 +247,12 @@ class _ArtifactListCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
                     ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    timeStr,
+                    style: AppTypography.overline
+                        .copyWith(color: AppColors.textSecondary),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Text(
