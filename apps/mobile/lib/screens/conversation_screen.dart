@@ -55,9 +55,11 @@ class _ConversationScreenState extends State<ConversationScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
+    debugPrint('[Fletcher] didChangeAppLifecycleState: $state');
     switch (state) {
       case AppLifecycleState.paused:
         final locked = await ScreenStateService.isScreenLocked();
+        debugPrint('[Fletcher] Screen locked check returned: $locked');
         _liveKitService.onAppBackgrounded(isScreenLocked: locked);
         break;
       case AppLifecycleState.resumed:

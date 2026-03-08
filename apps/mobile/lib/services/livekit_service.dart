@@ -1287,6 +1287,7 @@ class LiveKitService extends ChangeNotifier {
   /// disconnects the session on expiry. Screen-locked means the user may
   /// be talking via earbuds, so we skip the timeout.
   void onAppBackgrounded({required bool isScreenLocked}) {
+    debugPrint('[Fletcher] onAppBackgrounded called — room=${_room != null ? 'connected' : 'NULL'}, isScreenLocked=$isScreenLocked');
     if (_room == null) return;
     if (isScreenLocked) {
       debugPrint('[Fletcher] Screen locked — skipping background timeout');
