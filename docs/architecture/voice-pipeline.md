@@ -156,6 +156,17 @@ createTTS(provider, logger)
 - `maxRetryPerTTS: 0` — any error immediately falls through to the next TTS (no retries within a single provider)
 - The adapter runs background recovery tasks: after falling back to Piper, it periodically tests the primary provider and restores it when healthy
 
+**UX feedback artifacts** (`tts-fallback-monitor.ts`):
+The voice agent listens for `tts_availability_changed` events from the FallbackAdapter and publishes error artifacts to the client via the `ganglia-events` data channel:
+
+| Artifact Title | When | Meaning |
+|----------------|------|---------|
+| "Voice Degraded" | Primary TTS becomes unavailable | Fallback (Piper) is serving audio at lower quality |
+| "Voice Restored" | Primary TTS recovers | High-fidelity voice is back |
+| "Voice Unavailable" | All TTS instances fail (pipeline error) | No audio at all; text-only mode |
+
+Artifacts are debounced (at most one per 60 seconds) to avoid spamming the client during burst failures.
+
 ## Latency Budget
 
 Target: **sub-1.5 second** voice-to-voice round trip.
