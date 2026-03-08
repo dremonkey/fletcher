@@ -26,10 +26,10 @@ class ThinkingSpinner extends StatefulWidget {
 }
 
 /// The arrow glyph used during Notch and Streak phases.
-const String _arrowGlyph = '███▶';
+const String _arrowGlyph = '▪▪▪▶';
 
 /// Characters used for impact/explosion particles.
-const List<String> _particleChars = ['░', '▒', '▓', '█', '·'];
+const List<String> _particleChars = ['▪', '·', '∙', '°', '▫'];
 
 /// Animation phase enum for the shooting arrow.
 enum ArrowPhase {
