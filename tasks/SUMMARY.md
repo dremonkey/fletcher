@@ -56,7 +56,6 @@ The mobile client for real-time voice interaction and visualization.
 - [x] 001: Initialize Flutter app ✅
 - [x] 002: Implement Amber Heartbeat visualizer ✅
 - [~] 003: Voice activity indicator & real-time STT display — audio waveform + STT subtitle + transcript drawer implemented; e2e UI tests passing; [BUG-013] Transcript UI stale when panel open; [BUG-014] Premature EOU detection
-- [ ] 004: Fix `addTransceiver: track is null` During Reconnect 📋 — null track reference during `rePublishAllTracks` after rapid reconnect cycles ([BUG-025](../docs/field-tests/20260303-buglog.md))
 - [ ] 005: SQLite Local Persistence for Chat Transcript 📋 — messages/artifacts cleared on app restart; need local SQLite storage ([BUG-016](../docs/field-tests/20260307-buglog.md))
 
 **Implemented:**
@@ -113,7 +112,6 @@ Pipeline optimizations to reduce voice-to-voice latency from ~1.4s to <0.8s.
 
 **Tasks:**
 - [ ] 001: Enable preemptive generation & tune endpointing (Phase 1)
-- [x] 002: Add latency instrumentation & metrics — moved to [Epic 10: Metrics](./10-metrics)
 - [ ] 003: Streaming interim transcripts to LLM (Phase 2)
 - [ ] 004: TTS pre-warming validation (Phase 3)
 - [~] 005: Investigate & reduce OpenClaw TTFT 🔄 — Phase 1 complete: pondering status phrases + looping chime fill silence during thinking; Phase 2 (vocalized inner monologue) deferred ([BUG-006](../docs/field-tests/20260301-buglog.md))
@@ -278,6 +276,14 @@ Customizable quick-action buttons for triggering skill-driven commands without v
 
 **Tasks:**
 - [ ] 022: Macro Shortcut System 📋 — model, registry, TuiMacroCluster widget, action dispatcher, initial 9-macro dev set
+
+### 16. [LiveKit Flutter SDK Issues](./livekit-flutter-sdk) 📋
+Upstream bugs and limitations in the `livekit_client` Flutter/Dart SDK that affect Fletcher's mobile client.
+
+**Tasks:**
+- [ ] 004: Fix `addTransceiver: track is null` During Reconnect 📋 — null track reference during `rePublishAllTracks` after rapid reconnect cycles ([BUG-025](../docs/field-tests/20260303-buglog.md))
+
+**Related closed tasks** (resolved with workarounds in Epic 9): 007 (ICE renegotiation), 009 (BT audio recovery), 011 (audio track timeout).
 
 ## Development Path
 
