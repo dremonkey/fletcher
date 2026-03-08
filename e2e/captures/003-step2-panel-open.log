@@ -1,127 +1,134 @@
 --------- beginning of main
-03-07 18:40:14.455  3635  3635 I etcher.fletcher: Late-enabling -Xcheck:jni
-03-07 18:40:14.481  3635  3635 I etcher.fletcher: Using CollectorTypeCMC GC.
-03-07 18:40:14.481  3635  3635 W etcher.fletcher: Unexpected CPU variant for x86: x86_64.
-03-07 18:40:14.481  3635  3635 W etcher.fletcher: Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, goldmont-without-sha-xsaves, tremont, kabylake, alderlake, default
-03-07 18:40:14.525  3635  3635 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
-03-07 18:40:14.643  3635  3635 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.extensions.jar
-03-07 18:40:14.643  3635  3635 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.sidecar.jar
-03-07 18:40:14.770  3635  3635 D nativeloader: Configuring clns-9 for other apk /data/app/~~ye3mMYLfwJrllt4wZa8VDQ==/com.fletcher.fletcher-FKiiopamGWuekQ4l3kd3Vw==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~ye3mMYLfwJrllt4wZa8VDQ==/com.fletcher.fletcher-FKiiopamGWuekQ4l3kd3Vw==/lib/x86_64:/data/app/~~ye3mMYLfwJrllt4wZa8VDQ==/com.fletcher.fletcher-FKiiopamGWuekQ4l3kd3Vw==/base.apk!/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.fletcher.fletcher
-03-07 18:40:14.772  3635  3635 I etcher.fletcher: AssetManager2(0x7c866f473b38) locale list changing from [] to [en-US]
-03-07 18:40:14.776  3635  3635 V GraphicsEnvironment: Currently set values for:
-03-07 18:40:14.776  3635  3635 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
-03-07 18:40:14.776  3635  3635 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
-03-07 18:40:14.776  3635  3635 V GraphicsEnvironment: com.fletcher.fletcher is not listed in per-application setting
-03-07 18:40:14.776  3635  3635 V GraphicsEnvironment: ANGLE allowlist from config: com.dreamgames.royalmatch com.dts.freefiremax com.dxx.firenow com.gramgames.mergedragons com.ludo.king com.mojang.minecraftpe com.my.defense com.nintendo.zaka com.os.airforce com.playrix.fishdomdd.gplay io.teslatech.callbreak jp.konami.prospia net.peakgames.toonblast
-03-07 18:40:14.776  3635  3635 V GraphicsEnvironment: com.fletcher.fletcher is not listed in ANGLE allowlist or settings, returning default
-03-07 18:40:14.776  3635  3635 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+03-07 20:14:09.321  3543  3543 I etcher.fletcher: Late-enabling -Xcheck:jni
+03-07 20:14:09.354  3543  3543 I etcher.fletcher: Using CollectorTypeCMC GC.
+03-07 20:14:09.355  3543  3543 W etcher.fletcher: Unexpected CPU variant for x86: x86_64.
+03-07 20:14:09.355  3543  3543 W etcher.fletcher: Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, goldmont-without-sha-xsaves, tremont, kabylake, alderlake, default
+03-07 20:14:09.454  3543  3543 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+03-07 20:14:09.579  3543  3543 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.extensions.jar
+03-07 20:14:09.579  3543  3543 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.sidecar.jar
+03-07 20:14:09.690  3543  3543 D nativeloader: Configuring clns-9 for other apk /data/app/~~7ZZCEgwSi_0GFJzZHI4E4Q==/com.fletcher.fletcher-JwSZPEDx3RjxcrR4sfp_8Q==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~7ZZCEgwSi_0GFJzZHI4E4Q==/com.fletcher.fletcher-JwSZPEDx3RjxcrR4sfp_8Q==/lib/x86_64:/data/app/~~7ZZCEgwSi_0GFJzZHI4E4Q==/com.fletcher.fletcher-JwSZPEDx3RjxcrR4sfp_8Q==/base.apk!/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.fletcher.fletcher
+03-07 20:14:09.693  3543  3543 I etcher.fletcher: AssetManager2(0x77bb02462f78) locale list changing from [] to [en-US]
+03-07 20:14:09.695  3543  3543 V GraphicsEnvironment: Currently set values for:
+03-07 20:14:09.695  3543  3543 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+03-07 20:14:09.695  3543  3543 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+03-07 20:14:09.695  3543  3543 V GraphicsEnvironment: com.fletcher.fletcher is not listed in per-application setting
+03-07 20:14:09.695  3543  3543 V GraphicsEnvironment: ANGLE allowlist from config: com.dreamgames.royalmatch com.dts.freefiremax com.dxx.firenow com.gramgames.mergedragons com.ludo.king com.mojang.minecraftpe com.my.defense com.nintendo.zaka com.os.airforce com.playrix.fishdomdd.gplay io.teslatech.callbreak jp.konami.prospia net.peakgames.toonblast
+03-07 20:14:09.695  3543  3543 V GraphicsEnvironment: com.fletcher.fletcher is not listed in ANGLE allowlist or settings, returning default
+03-07 20:14:09.695  3543  3543 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
 --------- beginning of system
-03-07 18:40:14.791  3635  3677 I DisplayManager: Choreographer implicitly registered for the refresh rate.
-03-07 18:40:14.791  3635  3635 I etcher.fletcher: AssetManager2(0x7c866f474498) locale list changing from [] to [en-US]
-03-07 18:40:14.796  3635  3635 E ashmem  : Pinning is deprecated since Android Q. Please use trim or other methods.
-03-07 18:40:14.801  3635  3680 I ResourceExtractor: Found extracted resources res_timestamp-1-1772937300347
-03-07 18:40:14.801  3635  3680 I ResourceExtractor: Resource version mismatch res_timestamp-1-1772937614374
-03-07 18:40:14.801  3635  3679 D FlutterJNI: Beginning load of flutter...
-03-07 18:40:14.823  3635  3679 D nativeloader: Load /data/app/~~ye3mMYLfwJrllt4wZa8VDQ==/com.fletcher.fletcher-FKiiopamGWuekQ4l3kd3Vw==/base.apk!/lib/x86_64/libflutter.so using class loader ns clns-9 (caller=/data/app/~~ye3mMYLfwJrllt4wZa8VDQ==/com.fletcher.fletcher-FKiiopamGWuekQ4l3kd3Vw==/base.apk): ok
-03-07 18:40:14.823  3635  3679 D FlutterJNI: flutter (null) was loaded normally!
-03-07 18:40:14.825  3635  3677 I EGL_emulation: Opening libGLESv1_CM_emulation.so
-03-07 18:40:14.825  3635  3677 I EGL_emulation: Opening libGLESv2_emulation.so
-03-07 18:40:14.838  3635  3677 W HWUI    : Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
-03-07 18:40:14.838  3635  3677 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
-03-07 18:40:15.203  3635  3680 I ResourceExtractor: Extracted baseline resource assets/flutter_assets/kernel_blob.bin
-03-07 18:40:15.203  3635  3680 I ResourceExtractor: Extracted baseline resource assets/flutter_assets/vm_snapshot_data
-03-07 18:40:15.246  3635  3680 I ResourceExtractor: Extracted baseline resource assets/flutter_assets/isolate_snapshot_data
-03-07 18:40:15.264  3635  3635 I etcher.fletcher: AssetManager2(0x7c866f47a898) locale list changing from [] to [en-US]
-03-07 18:40:15.268  3635  3635 W etcher.fletcher: type=1400 audit(0.0:22): avc:  denied  { read } for  name="max_map_count" dev="proc" ino=18059 scontext=u:r:untrusted_app:s0:c224,c256,c512,c768 tcontext=u:object_r:proc_max_map_count:s0 tclass=file permissive=0 app=com.fletcher.fletcher
-03-07 18:40:15.283  3635  3635 D DesktopModeFlags: Toggle override initialized to: OVERRIDE_UNSET
-03-07 18:40:15.332  3635  3700 I flutter : [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(104)] Using the Impeller rendering backend (OpenGLES).
-03-07 18:40:15.497  3635  3710 I flutter : The Dart VM service is listening on http://127.0.0.1:36323/GE5BDOjc5z8=/
-03-07 18:40:15.637  3635  3635 I etcher.fletcher: hiddenapi: Accessing hidden method Landroid/view/accessibility/AccessibilityNodeInfo;->getSourceNodeId()J (runtime_flags=0, domain=platform, api=unsupported,test-api) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app) using reflection: allowed
-03-07 18:40:15.638  3635  3635 I etcher.fletcher: hiddenapi: Accessing hidden method Landroid/view/accessibility/AccessibilityRecord;->getSourceNodeId()J (runtime_flags=0, domain=platform, api=unsupported) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app) using reflection: allowed
-03-07 18:40:15.638  3635  3635 I etcher.fletcher: hiddenapi: Accessing hidden field Landroid/view/accessibility/AccessibilityNodeInfo;->mChildNodeIds:Landroid/util/LongArray; (runtime_flags=0, domain=platform, api=unsupported) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app) using reflection: allowed
-03-07 18:40:15.638  3635  3635 I etcher.fletcher: hiddenapi: Accessing hidden method Landroid/util/LongArray;->get(I)J (runtime_flags=0, domain=platform, api=unsupported) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app) using reflection: allowed
-03-07 18:40:15.651  3635  3635 D CompatChangeReporter: Compat change id reported: 377864165; UID 10224; state: ENABLED
-03-07 18:40:15.671  3635  3635 W HWUI    : Unknown dataspace 0
-03-07 18:40:15.868  3635  3635 D AudioSystem: onNewService: media.audio_policy service obtained 0x7c85bf518d70
-03-07 18:40:15.872  3635  3635 D AudioSystem: getService: checking for service media.audio_policy: 0x7c85bf518d70
-03-07 18:40:15.920  3635  3635 I Choreographer: Skipped 67 frames!  The application may be doing too much work on its main thread.
-03-07 18:40:15.925  3635  3635 I WindowExtensionsImpl: Initializing Window Extensions, vendor API level=9, activity embedding enabled=true
-03-07 18:40:15.936  3635  3652 I etcher.fletcher: Compiler allocated 5042KB to compile void android.view.ViewRootImpl.performTraversals()
-03-07 18:40:16.154  3635  3635 W FlutterWebRTCPlugin: audioFocusChangeListener [Speakerphone(name=Speakerphone)] Speakerphone(name=Speakerphone)
-03-07 18:40:16.492  3635  3635 I flutter : [SessionStorage] Stale session: room=e2e-fletcher-1772937302294 age=312s > threshold=120s
-03-07 18:40:16.493  3635  3635 I flutter : [Fletcher] Room: e2e-fletcher-1772937616493 (new)
-03-07 18:40:16.493  3635  3635 I flutter : [UrlResolver] Racing 3 URLs: ws://192.168.87.59:7880, ws://100.87.219.109:7880, ws://10.0.2.2:7880
-03-07 18:40:16.518  3635  3635 I flutter : [UrlResolver] Winner: ws://192.168.87.59:7880
-03-07 18:40:16.520  3635  3635 I Choreographer: Skipped 33 frames!  The application may be doing too much work on its main thread.
-03-07 18:40:16.544  3635  3635 D WindowLayoutComponentImpl: Register WindowLayoutInfoListener on Context=com.fletcher.fletcher.MainActivity@e630e78, of which baseContext=android.app.ContextImpl@4407866
-03-07 18:40:16.574  3635  3635 I flutter : [SessionStorage] Device ID: device-BE2A.250530.026.D1
-03-07 18:40:16.576  3635  3635 I flutter : [TokenService] Fetching token from http://192.168.87.59:7882/token?room=e2e-fletcher-1772937616493&identity=device-BE2A.250530.026.D1
-03-07 18:40:16.614  3635  3635 I flutter : [TokenService] Token acquired for room=e2e-fletcher-1772937616493
-03-07 18:40:16.644  3635  3635 D InsetsController: hide(ime(), fromIme=false)
-03-07 18:40:16.644  3635  3635 I ImeTracker: com.fletcher.fletcher:368c91be: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
-03-07 18:40:16.649  3635  3635 I flutter : [Fletcher] Permissions: mic=granted bt=granted notif=granted
-03-07 18:40:16.665  3635  3635 I flutter : [Fletcher] Connecting to ws://192.168.87.59:7880
-03-07 18:40:16.679  3635  3635 I org.webrtc.Logging: NativeLibrary: Loading native library: jingle_peerconnection_so
-03-07 18:40:16.679  3635  3635 I org.webrtc.Logging: NativeLibrary: Loading library: jingle_peerconnection_so
-03-07 18:40:16.683  3635  3635 D nativeloader: Load /data/app/~~ye3mMYLfwJrllt4wZa8VDQ==/com.fletcher.fletcher-FKiiopamGWuekQ4l3kd3Vw==/base.apk!/lib/x86_64/libjingle_peerconnection_so.so using class loader ns clns-9 (caller=/data/app/~~ye3mMYLfwJrllt4wZa8VDQ==/com.fletcher.fletcher-FKiiopamGWuekQ4l3kd3Vw==/base.apk!classes17.dex): ok
-03-07 18:40:16.688  3635  3635 D AudioSystem: onNewServiceWithAdapter: media.audio_flinger service obtained 0x7c84cf50ff70
-03-07 18:40:16.689  3635  3635 D AudioSystem: getService: checking for service media.audio_flinger: 0x7c85bf4cd7d0
-03-07 18:40:16.830  3635  3736 D FlutterWebRTCPlugin: onIceGatheringChangeGATHERING
-03-07 18:40:16.838  3635  3736 D FlutterWebRTCPlugin: onIceCandidate
-03-07 18:40:16.840  3635  3736 D FlutterWebRTCPlugin: onIceCandidate
-03-07 18:40:16.841  3635  3736 D FlutterWebRTCPlugin: onIceCandidate
-03-07 18:40:16.843  3635  3736 D FlutterWebRTCPlugin: onIceCandidate
-03-07 18:40:16.843  3635  3736 D FlutterWebRTCPlugin: onIceCandidate
-03-07 18:40:16.843  3635  3736 D FlutterWebRTCPlugin: onIceCandidate
-03-07 18:40:16.854  3635  3736 D FlutterWebRTCPlugin: onConnectionChangeCONNECTING
-03-07 18:40:16.916  3635  3635 D MediaConstraintsUtils: mandatory constraints are not a map
-03-07 18:40:16.916  3635  3635 D MediaConstraintsUtils: optional constraints are not an array
-03-07 18:40:16.922  3635  3736 D FlutterWebRTCPlugin: onIceCandidate
-03-07 18:40:16.922  3635  3736 D FlutterWebRTCPlugin: onIceCandidate
-03-07 18:40:16.947  3635  3736 D FlutterWebRTCPlugin: onIceCandidate
-03-07 18:40:16.947  3635  3736 D FlutterWebRTCPlugin: onIceCandidate
-03-07 18:40:16.947  3635  3736 D FlutterWebRTCPlugin: onIceGatheringChangeGATHERING
-03-07 18:40:16.947  3635  3736 D FlutterWebRTCPlugin: onIceCandidate
-03-07 18:40:16.948  3635  3736 D FlutterWebRTCPlugin: onIceCandidate
-03-07 18:40:16.948  3635  3736 D FlutterWebRTCPlugin: onIceCandidate
-03-07 18:40:16.948  3635  3736 D FlutterWebRTCPlugin: onIceCandidate
-03-07 18:40:16.950  3635  3736 D FlutterWebRTCPlugin: onIceCandidate
-03-07 18:40:16.950  3635  3736 D FlutterWebRTCPlugin: onIceCandidate
-03-07 18:40:16.959  3635  3736 D FlutterWebRTCPlugin: onConnectionChangeCONNECTING
-03-07 18:40:16.976  3635  3736 D FlutterWebRTCPlugin: onIceCandidate
-03-07 18:40:16.977  3635  3736 D FlutterWebRTCPlugin: onIceCandidate
-03-07 18:40:17.048  3635  3736 D FlutterWebRTCPlugin: onIceCandidate
-03-07 18:40:17.050  3635  3736 D FlutterWebRTCPlugin: onIceCandidate
-03-07 18:40:17.290  3635  3736 D FlutterWebRTCPlugin: onSelectedCandidatePairChanged
-03-07 18:40:17.291  3635  3736 D FlutterWebRTCPlugin: onIceGatheringChangeCOMPLETE
-03-07 18:40:17.392  3635  3736 D FlutterWebRTCPlugin: onSelectedCandidatePairChanged
-03-07 18:40:17.392  3635  3736 D FlutterWebRTCPlugin: onIceGatheringChangeCOMPLETE
-03-07 18:40:17.393  3635  3736 D FlutterWebRTCPlugin: onConnectionChangeCONNECTED
-03-07 18:40:17.528  3635  3635 I flutter : [Fletcher] Remote participant connected: agent-AJ_B5cq5MFJ2Nup
-03-07 18:40:17.874  3635  3736 D FlutterWebRTCPlugin: onConnectionChangeCONNECTED
-03-07 18:40:17.881  3635  3635 I flutter : [Fletcher] Connected to room
-03-07 18:40:17.883  3635  3635 I flutter : [Fletcher] Room joined: participants=1 agent=true
-03-07 18:40:17.917  3635  3635 D MediaConstraintsUtils: mandatory constraints are not a map
-03-07 18:40:17.917  3635  3635 I FlutterWebRTCPlugin: getUserMedia(audio): mandatory: [], optional: [echoCancellation: true, noiseSuppression: true, autoGainControl: true, voiceIsolation: true, googDAEchoCancellation: true, googEchoCancellation: true, googEchoCancellation2: true, googNoiseSuppression: true, googNoiseSuppression2: true, googAutoGainControl: true, googHighpassFilter: true, googTypingNoiseDetection: true]
-03-07 18:40:17.918  3635  3635 D FlutterWebRTCPlugin: MediaStream id: e957c85d-b571-44f8-9b5c-c58c74ef21a1
-03-07 18:40:17.937  3635  3736 D FlutterWebRTCPlugin: onAddTrack
-03-07 18:40:17.938  3635  3736 D FlutterWebRTCPlugin: onAddTrack
-03-07 18:40:17.948  3635  3635 I flutter : [Fletcher] Track subscribed: TrackType.AUDIO from agent-AJ_B5cq5MFJ2Nup
-03-07 18:40:17.955  3635  3635 I flutter : [Fletcher] Track subscribed: TrackType.AUDIO from agent-AJ_B5cq5MFJ2Nup
-03-07 18:40:18.267  3635  3635 I flutter : [Fletcher] Audio config: AEC=on NS=on AGC=on voiceIsolation=on highPass=on bitrate=speech(24k) dtx=on
-03-07 18:40:18.268  3635  3635 I flutter : [Fletcher] Network status: online=true
-03-07 18:40:18.280  3635  3635 D MediaConstraintsUtils: mandatory constraints are not a map
-03-07 18:40:18.280  3635  3635 D MediaConstraintsUtils: optional constraints are not an array
-03-07 18:40:18.335  3635  3635 I flutter : [Fletcher] Foreground service started
-03-07 18:40:18.339  3635  3635 W FlutterWebRTCPlugin: audioFocusChangeListener [Speakerphone(name=Speakerphone)] Speakerphone(name=Speakerphone)
-03-07 18:40:18.344  3635  3635 I flutter : [Fletcher] Device change detected — debouncing (2s)
-03-07 18:40:18.349  3635  3892 I flutter : [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(104)] Using the Impeller rendering backend (OpenGLES).
-03-07 18:40:18.379  3635  3635 I flutter : [SessionStorage] Saved session: room=e2e-fletcher-1772937616493
-03-07 18:40:20.350  3635  3635 I flutter : [Fletcher] Audio device changed — refreshing audio track
-03-07 18:40:21.390  3635  3635 D FlutterWebRTCPlugin: trackDispose() track is null
-03-07 18:40:21.392  3635  3635 D MediaConstraintsUtils: mandatory constraints are not a map
-03-07 18:40:21.393  3635  3635 I FlutterWebRTCPlugin: getUserMedia(audio): mandatory: [], optional: [echoCancellation: true, noiseSuppression: true, autoGainControl: true, voiceIsolation: true, googDAEchoCancellation: true, googEchoCancellation: true, googEchoCancellation2: true, googNoiseSuppression: true, googNoiseSuppression2: true, googAutoGainControl: true, googHighpassFilter: true, googTypingNoiseDetection: true]
-03-07 18:40:21.397  3635  3635 D FlutterWebRTCPlugin: MediaStream id: 8e8539d0-8ef9-44fb-bf24-1213d4184ff6
-03-07 18:40:21.423  3635  3635 I flutter : [Fletcher] Audio track restarted successfully
-03-07 18:40:21.423  3635  3635 I AudioManager: dispatching onAudioFocusChange(-1) to android.media.AudioManager@a6c61b5com.cloudwebrtc.webrtc.audio.AudioSwitchManager$$ExternalSyntheticLambda4@ce8f04a
-03-07 18:40:21.873  3635  3903 D ProfileInstaller: Installing profile for com.fletcher.fletcher
+03-07 20:14:09.707  3543  3590 I DisplayManager: Choreographer implicitly registered for the refresh rate.
+03-07 20:14:09.710  3543  3543 I etcher.fletcher: AssetManager2(0x77bb024680b8) locale list changing from [] to [en-US]
+03-07 20:14:09.714  3543  3543 E ashmem  : Pinning is deprecated since Android Q. Please use trim or other methods.
+03-07 20:14:09.721  3543  3592 D FlutterJNI: Beginning load of flutter...
+03-07 20:14:09.729  3543  3593 I ResourceExtractor: Found extracted resources res_timestamp-1-1772937614374
+03-07 20:14:09.729  3543  3593 I ResourceExtractor: Resource version mismatch res_timestamp-1-1772943249143
+03-07 20:14:09.730  3543  3590 I EGL_emulation: Opening libGLESv1_CM_emulation.so
+03-07 20:14:09.730  3543  3590 I EGL_emulation: Opening libGLESv2_emulation.so
+03-07 20:14:09.750  3543  3592 D nativeloader: Load /data/app/~~7ZZCEgwSi_0GFJzZHI4E4Q==/com.fletcher.fletcher-JwSZPEDx3RjxcrR4sfp_8Q==/base.apk!/lib/x86_64/libflutter.so using class loader ns clns-9 (caller=/data/app/~~7ZZCEgwSi_0GFJzZHI4E4Q==/com.fletcher.fletcher-JwSZPEDx3RjxcrR4sfp_8Q==/base.apk): ok
+03-07 20:14:09.751  3543  3592 D FlutterJNI: flutter (null) was loaded normally!
+03-07 20:14:09.757  3543  3590 W HWUI    : Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+03-07 20:14:09.757  3543  3590 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+03-07 20:14:10.071  3543  3593 I ResourceExtractor: Extracted baseline resource assets/flutter_assets/kernel_blob.bin
+03-07 20:14:10.071  3543  3593 I ResourceExtractor: Extracted baseline resource assets/flutter_assets/vm_snapshot_data
+03-07 20:14:10.114  3543  3593 I ResourceExtractor: Extracted baseline resource assets/flutter_assets/isolate_snapshot_data
+03-07 20:14:10.124  3543  3543 I etcher.fletcher: AssetManager2(0x77bb0246ced8) locale list changing from [] to [en-US]
+03-07 20:14:10.128  3543  3543 W etcher.fletcher: type=1400 audit(0.0:22): avc:  denied  { read } for  name="max_map_count" dev="proc" ino=21507 scontext=u:r:untrusted_app:s0:c224,c256,c512,c768 tcontext=u:object_r:proc_max_map_count:s0 tclass=file permissive=0 app=com.fletcher.fletcher
+03-07 20:14:10.150  3543  3543 D DesktopModeFlags: Toggle override initialized to: OVERRIDE_UNSET
+03-07 20:14:10.158  3543  3623 I flutter : [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(104)] Using the Impeller rendering backend (OpenGLES).
+03-07 20:14:10.200  3543  3630 I flutter : The Dart VM service is listening on http://127.0.0.1:34471/xwBizhSwMnA=/
+03-07 20:14:10.360  3543  3543 I etcher.fletcher: hiddenapi: Accessing hidden method Landroid/view/accessibility/AccessibilityNodeInfo;->getSourceNodeId()J (runtime_flags=0, domain=platform, api=unsupported,test-api) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app) using reflection: allowed
+03-07 20:14:10.360  3543  3543 I etcher.fletcher: hiddenapi: Accessing hidden method Landroid/view/accessibility/AccessibilityRecord;->getSourceNodeId()J (runtime_flags=0, domain=platform, api=unsupported) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app) using reflection: allowed
+03-07 20:14:10.360  3543  3543 I etcher.fletcher: hiddenapi: Accessing hidden field Landroid/view/accessibility/AccessibilityNodeInfo;->mChildNodeIds:Landroid/util/LongArray; (runtime_flags=0, domain=platform, api=unsupported) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app) using reflection: allowed
+03-07 20:14:10.360  3543  3543 I etcher.fletcher: hiddenapi: Accessing hidden method Landroid/util/LongArray;->get(I)J (runtime_flags=0, domain=platform, api=unsupported) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app) using reflection: allowed
+03-07 20:14:10.375  3543  3543 D CompatChangeReporter: Compat change id reported: 377864165; UID 10224; state: ENABLED
+03-07 20:14:10.391  3543  3543 W HWUI    : Unknown dataspace 0
+03-07 20:14:10.470  3543  3543 D AudioSystem: onNewService: media.audio_policy service obtained 0x77bad250b240
+03-07 20:14:10.474  3543  3543 D AudioSystem: getService: checking for service media.audio_policy: 0x77bad250b240
+03-07 20:14:10.505  3543  3543 I Choreographer: Skipped 47 frames!  The application may be doing too much work on its main thread.
+03-07 20:14:10.515  3543  3543 I WindowExtensionsImpl: Initializing Window Extensions, vendor API level=9, activity embedding enabled=true
+03-07 20:14:10.526  3543  3559 I etcher.fletcher: Compiler allocated 5042KB to compile void android.view.ViewRootImpl.performTraversals()
+03-07 20:14:10.691  3543  3543 W FlutterWebRTCPlugin: audioFocusChangeListener [Speakerphone(name=Speakerphone)] Speakerphone(name=Speakerphone)
+03-07 20:14:11.042  3543  3543 I flutter : [SessionStorage] Stale session: room=e2e-fletcher-1772937616493 age=5632s > threshold=120s
+03-07 20:14:11.043  3543  3543 I flutter : [Fletcher] Room: e2e-fletcher-1772943251043 (new)
+03-07 20:14:11.043  3543  3543 I flutter : [UrlResolver] Racing 3 URLs: ws://192.168.87.59:7880, ws://100.87.219.109:7880, ws://10.0.2.2:7880
+03-07 20:14:11.065  3543  3543 I flutter : [UrlResolver] Winner: ws://192.168.87.59:7880
+03-07 20:14:11.067  3543  3543 I Choreographer: Skipped 31 frames!  The application may be doing too much work on its main thread.
+03-07 20:14:11.124  3543  3543 D WindowLayoutComponentImpl: Register WindowLayoutInfoListener on Context=com.fletcher.fletcher.MainActivity@c1ca502, of which baseContext=android.app.ContextImpl@a4d1580
+03-07 20:14:11.147  3543  3543 I flutter : [SessionStorage] Device ID: device-BE2A.250530.026.D1
+03-07 20:14:11.149  3543  3543 I flutter : [TokenService] Fetching token from http://192.168.87.59:7882/token?room=e2e-fletcher-1772943251043&identity=device-BE2A.250530.026.D1
+03-07 20:14:11.175  3543  3543 I flutter : [TokenService] Token acquired for room=e2e-fletcher-1772943251043
+03-07 20:14:11.209  3543  3543 D InsetsController: hide(ime(), fromIme=false)
+03-07 20:14:11.209  3543  3543 I ImeTracker: com.fletcher.fletcher:6d04b7a1: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+03-07 20:14:11.212  3543  3543 I flutter : [Fletcher] Permissions: mic=granted bt=granted notif=granted
+03-07 20:14:11.221  3543  3543 I flutter : [Fletcher] Connecting to ws://192.168.87.59:7880
+03-07 20:14:11.228  3543  3543 I org.webrtc.Logging: NativeLibrary: Loading native library: jingle_peerconnection_so
+03-07 20:14:11.228  3543  3543 I org.webrtc.Logging: NativeLibrary: Loading library: jingle_peerconnection_so
+03-07 20:14:11.230  3543  3543 D nativeloader: Load /data/app/~~7ZZCEgwSi_0GFJzZHI4E4Q==/com.fletcher.fletcher-JwSZPEDx3RjxcrR4sfp_8Q==/base.apk!/lib/x86_64/libjingle_peerconnection_so.so using class loader ns clns-9 (caller=/data/app/~~7ZZCEgwSi_0GFJzZHI4E4Q==/com.fletcher.fletcher-JwSZPEDx3RjxcrR4sfp_8Q==/base.apk!classes17.dex): ok
+03-07 20:14:11.236  3543  3543 D AudioSystem: onNewServiceWithAdapter: media.audio_flinger service obtained 0x77ba824faa00
+03-07 20:14:11.248  3543  3543 D AudioSystem: getService: checking for service media.audio_flinger: 0x77bad24ccfe0
+03-07 20:14:11.398  3543  3645 D FlutterWebRTCPlugin: onIceGatheringChangeGATHERING
+03-07 20:14:11.402  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.402  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.402  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.404  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.422  3543  3645 D FlutterWebRTCPlugin: onConnectionChangeCONNECTING
+03-07 20:14:11.422  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.423  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.449  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.450  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.473  3543  3543 D MediaConstraintsUtils: mandatory constraints are not a map
+03-07 20:14:11.473  3543  3543 D MediaConstraintsUtils: optional constraints are not an array
+03-07 20:14:11.501  3543  3645 D FlutterWebRTCPlugin: onIceGatheringChangeGATHERING
+03-07 20:14:11.504  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.507  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.507  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.507  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.507  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.511  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.511  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.513  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.526  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.531  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.531  3543  3645 D FlutterWebRTCPlugin: onConnectionChangeCONNECTING
+03-07 20:14:11.531  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.531  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.602  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.604  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.610  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.614  3543  3645 D FlutterWebRTCPlugin: onIceCandidate
+03-07 20:14:11.860  3543  3645 D FlutterWebRTCPlugin: onSelectedCandidatePairChanged
+03-07 20:14:11.860  3543  3645 D FlutterWebRTCPlugin: onIceGatheringChangeCOMPLETE
+03-07 20:14:11.969  3543  3645 D FlutterWebRTCPlugin: onSelectedCandidatePairChanged
+03-07 20:14:11.970  3543  3645 D FlutterWebRTCPlugin: onIceGatheringChangeCOMPLETE
+03-07 20:14:11.972  3543  3645 D FlutterWebRTCPlugin: onConnectionChangeCONNECTED
+03-07 20:14:12.020  3543  3543 I flutter : [Fletcher] Remote participant connected: agent-AJ_Xdf566zA3cCx
+03-07 20:14:12.447  3543  3645 D FlutterWebRTCPlugin: onConnectionChangeCONNECTED
+03-07 20:14:12.487  3543  3543 I flutter : [Fletcher] Connected to room
+03-07 20:14:12.491  3543  3543 I flutter : [Fletcher] Room joined: participants=1 agent=true
+03-07 20:14:12.539  3543  3543 D MediaConstraintsUtils: mandatory constraints are not a map
+03-07 20:14:12.539  3543  3543 I FlutterWebRTCPlugin: getUserMedia(audio): mandatory: [], optional: [echoCancellation: true, noiseSuppression: true, autoGainControl: true, voiceIsolation: true, googDAEchoCancellation: true, googEchoCancellation: true, googEchoCancellation2: true, googNoiseSuppression: true, googNoiseSuppression2: true, googAutoGainControl: true, googHighpassFilter: true, googTypingNoiseDetection: true]
+03-07 20:14:12.541  3543  3543 D FlutterWebRTCPlugin: MediaStream id: 4695a6c7-0066-443f-a59f-2d682de99f4c
+03-07 20:14:12.569  3543  3645 D FlutterWebRTCPlugin: onAddTrack
+03-07 20:14:12.570  3543  3645 D FlutterWebRTCPlugin: onAddTrack
+03-07 20:14:12.590  3543  3543 I flutter : [Fletcher] Track subscribed: TrackType.AUDIO from agent-AJ_Xdf566zA3cCx
+03-07 20:14:12.594  3543  3543 I flutter : [Fletcher] Track subscribed: TrackType.AUDIO from agent-AJ_Xdf566zA3cCx
+03-07 20:14:12.888  3543  3543 I flutter : [Fletcher] Audio config: AEC=on NS=on AGC=on voiceIsolation=on highPass=on bitrate=speech(24k) dtx=on
+03-07 20:14:12.889  3543  3543 I flutter : [Fletcher] Network status: online=true
+03-07 20:14:12.905  3543  3543 D MediaConstraintsUtils: mandatory constraints are not a map
+03-07 20:14:12.905  3543  3543 D MediaConstraintsUtils: optional constraints are not an array
+03-07 20:14:12.961  3543  3543 I flutter : [Fletcher] Foreground service started
+03-07 20:14:12.968  3543  3543 W FlutterWebRTCPlugin: audioFocusChangeListener [Speakerphone(name=Speakerphone)] Speakerphone(name=Speakerphone)
+03-07 20:14:12.977  3543  3800 I flutter : [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(104)] Using the Impeller rendering backend (OpenGLES).
+03-07 20:14:12.985  3543  3543 I flutter : [Fletcher] Device change detected — debouncing (2s)
+03-07 20:14:13.016  3543  3543 I flutter : [SessionStorage] Saved session: room=e2e-fletcher-1772943251043
+03-07 20:14:14.986  3543  3543 I flutter : [Fletcher] Audio device changed — refreshing audio track
+03-07 20:14:15.992  3543  3543 D FlutterWebRTCPlugin: trackDispose() track is null
+03-07 20:14:16.000  3543  3543 D MediaConstraintsUtils: mandatory constraints are not a map
+03-07 20:14:16.000  3543  3543 I FlutterWebRTCPlugin: getUserMedia(audio): mandatory: [], optional: [echoCancellation: true, noiseSuppression: true, autoGainControl: true, voiceIsolation: true, googDAEchoCancellation: true, googEchoCancellation: true, googEchoCancellation2: true, googNoiseSuppression: true, googNoiseSuppression2: true, googAutoGainControl: true, googHighpassFilter: true, googTypingNoiseDetection: true]
+03-07 20:14:16.001  3543  3543 D FlutterWebRTCPlugin: MediaStream id: 54532c43-0b5e-4eae-b388-4eddfee0ad0d
+03-07 20:14:16.009  3543  3543 I flutter : [Fletcher] Audio track restarted successfully
+03-07 20:14:16.009  3543  3543 I AudioManager: dispatching onAudioFocusChange(-1) to android.media.AudioManager@5525757com.cloudwebrtc.webrtc.audio.AudioSwitchManager$$ExternalSyntheticLambda4@ef5e244
+03-07 20:14:16.010  3543  3814 D ProfileInstaller: Installing profile for com.fletcher.fletcher
+03-07 20:14:42.370  3543  3543 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=false callback=io.flutter.embedding.android.FlutterActivity$1@bc689c3
+03-07 20:14:43.485  3543  3543 I flutter : [Fletcher] Mute toggled: muted=true
+03-07 20:14:43.488  3543  3543 D FlutterWebRTCPlugin: trackDispose() track is null
