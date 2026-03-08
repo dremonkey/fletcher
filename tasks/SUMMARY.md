@@ -32,7 +32,7 @@ The voice agent audio pipeline — STT, TTS, voice detection, and agent dispatch
 - [ ] 011: Voice Selection Persistent Preferences 📋 — selection UI/API with persistent storage and env-var based config
 - [~] 012: Agent Self-Terminate on Session Error 🔄 — Priority: prevent zombie agents; disconnect from room when session dies
 - [ ] 013: Voice-Aware Metadata Tagging 📋 — inject `is_stt: true` into metadata sent to OpenClaw to enable higher verification thresholds for noisy inputs
-- [~] 015: Tiered Edge TTS Prototype 🔄 — PiperTTS plugin + FallbackAdapter wired; Piper sidecar in docker-compose; UX feedback artifact remaining
+- [x] 015: Tiered Edge TTS Prototype ✅ — PiperTTS plugin + FallbackAdapter wired; Piper sidecar in docker-compose; UX feedback artifacts (Voice Degraded/Restored/Unavailable)
 - [ ] 016: Buffer Catch-Up Optimization 📋 — Research accelerated PCM playout and transcript-only catch-up to sync conversation after blackouts
 - [ ] 017: Voice Agent Memory Leak (RCA) 📋 — root-cause analysis for 7.4 GB leak; see 018 and 019 for implementation ([BUG-004](../docs/field-tests/20260305-buglog.md))
 - [ ] 018: Upstream `_AudioOut.audio` Memory Leak 📋 — file issue + PR on `livekit/agents-js`: `out.audio.push(frame)` in `generation.ts` accumulates all TTS frames, never cleared

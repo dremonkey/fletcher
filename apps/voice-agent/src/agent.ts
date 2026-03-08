@@ -26,7 +26,7 @@
  *   PIPER_VOICE - Piper voice name (default: sidecar default)
  */
 
-import { defineAgent, cli, ServerOptions, type JobContext } from '@livekit/agents';
+import { defineAgent, cli, ServerOptions, tts, type JobContext } from '@livekit/agents';
 import { voice } from '@livekit/agents';
 import * as deepgram from '@livekit/agents-plugin-deepgram';
 import * as silero from '@livekit/agents-plugin-silero';
@@ -41,6 +41,7 @@ import { createTTS, type TTSProvider } from './tts-provider';
 import { TranscriptManager } from './transcript-manager';
 import { initHeapDiagnostics } from './heap-snapshot';
 import { buildBootstrapMessage } from './bootstrap';
+import { attachFallbackMonitor } from './tts-fallback-monitor';
 
 // ---------------------------------------------------------------------------
 // Logger setup — pretty-print when running locally, JSON in production
@@ -179,13 +180,27 @@ export default defineAgent({
     const turnDetection = new livekit.turnDetector.EnglishModel();
 
     const stt = new deepgram.STT({ apiKey: process.env.DEEPGRAM_API_KEY });
-    const tts = createTTS(ttsProvider, logger);
+    const ttsInstance = createTTS(ttsProvider, logger);
+
+    // -----------------------------------------------------------------------
+    // TTS fallback detection — when a FallbackAdapter is in use, listen for
+    // availability changes to notify the client of degraded/restored voice.
+    //
+    // "Voice Degraded" = primary TTS failed, fallback (Piper) is active.
+    // "Voice Restored" = primary TTS recovered after a previous degradation.
+    //
+    // Distinct from "Voice Unavailable" (below), which fires when ALL TTS
+    // instances fail entirely — no audio at all, text-only mode. (TASK-015)
+    // -----------------------------------------------------------------------
+    if (ttsInstance instanceof tts.FallbackAdapter) {
+      attachFallbackMonitor(ttsInstance, { publishEvent, logger });
+    }
 
     const session = new voice.AgentSession({
       vad,
       turnDetection,
       stt,
-      tts,
+      tts: ttsInstance,
       llm: gangliaLlm,
       voiceOptions: {
         // Give the turn detector more time to decide if the user is done.
@@ -342,7 +357,7 @@ export default defineAgent({
           artifact_type: 'error',
           title: isTts ? 'Voice Unavailable' : `${source} Error`,
           message: isTts
-            ? 'Text responses will continue to appear.'
+            ? 'All voice synthesis failed. Text responses will continue to appear.'
             : message,
         });
       }
