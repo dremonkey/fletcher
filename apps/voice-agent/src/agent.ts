@@ -203,6 +203,9 @@ export default defineAgent({
       tts: ttsInstance,
       llm: gangliaLlm,
       voiceOptions: {
+        // Start LLM inference on interim transcripts before EOU is confirmed,
+        // then discard if the user keeps talking. Saves ~200-400ms per turn.
+        preemptiveGeneration: true,
         // Give the turn detector more time to decide if the user is done.
         // Default 500ms was too aggressive for natural speech pauses (BUG-014).
         minEndpointingDelay: 800,

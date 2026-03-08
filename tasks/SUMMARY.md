@@ -111,7 +111,7 @@ A unified LLM plugin (`@knittt/livekit-agent-ganglia`) that bridges LiveKit agen
 Pipeline optimizations to reduce voice-to-voice latency from ~1.4s to <0.8s.
 
 **Tasks:**
-- [ ] 001: Enable preemptive generation & tune endpointing (Phase 1)
+- [x] 001: Enable preemptive generation & tune endpointing ✅ — `preemptiveGeneration: true`, endpointing delays tuned via BUG-014/TASK-014
 - [ ] 003: Streaming interim transcripts to LLM (Phase 2)
 - [ ] 004: TTS pre-warming validation (Phase 3)
 - [~] 005: Investigate & reduce OpenClaw TTFT 🔄 — Phase 1 complete: pondering status phrases + looping chime fill silence during thinking; Phase 2 (vocalized inner monologue) deferred ([BUG-006](../docs/field-tests/20260301-buglog.md))
