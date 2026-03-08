@@ -64,7 +64,7 @@ void main() {
 
       // During notch, text should contain the arrow glyph.
       final text = tester.widget<Text>(find.byType(Text).first);
-      expect(text.data, contains('▪▪▪▶'));
+      expect(text.data, contains('{▪▪▪▶'));
     });
 
     testWidgets('arrow moves during streak phase', (tester) async {
@@ -95,7 +95,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
 
       final text = tester.widget<Text>(find.byType(Text).first);
-      expect(text.data, contains('▪▪▪▶'));
+      expect(text.data, contains('{▪▪▪▶'));
     });
 
     testWidgets('impact phase shows particle characters', (tester) async {
