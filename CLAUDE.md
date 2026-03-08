@@ -73,18 +73,35 @@ The `tasks/` directory contains the project roadmap and must stay accurate.
 - `[~]` = Partially complete (add note explaining what's done/remaining)
 - Add ✅ to section headers when fully complete
 
+**Closing completed tasks:**
+When a task is fully complete (`[x]`), move its file into a `_closed/` subdirectory within the epic:
+```
+tasks/07-ui-ux/
+├── EPIC.md
+├── 023-open-task.md          # open tasks stay in epic root
+└── _closed/
+    ├── 016-completed-task.md  # completed tasks go here
+    └── 017-completed-task.md
+```
+- Only move tasks marked `[x]` or `Status: Complete` — NOT `[~]` (partially complete)
+- Use `git mv` so git tracks the rename
+- Do NOT move `EPIC.md`, `SUMMARY.md`, `mockups/`, or non-task files
+- The `_closed/` directory keeps completed tasks accessible but out of the way
+
 **Structure:**
 ```
 tasks/
 ├── SUMMARY.md                # Overview with epic status (keep in sync!)
 ├── 01-infrastructure/        # ✅ Complete
-├── 02-livekit-agent/         # Channel plugin tasks
+├── 02-livekit-agent/         # Voice agent pipeline tasks
 ├── 03-flutter-app/           # ✅ Complete
 ├── 04-livekit-agent-plugin/  # Brain plugin tasks
-└── 05-latency-optimization/  # Voice pipeline latency tasks
+├── 07-ui-ux/                 # TUI Brutalist UI redesign
+├── 09-connectivity/          # Connection resilience
+└── ...
 ```
 
-**Before finishing a session:** If you made implementation progress, update the corresponding task file in `tasks/`.
+**Before finishing a session:** If you made implementation progress, update the corresponding task file in `tasks/`. If you completed a task, move it to `_closed/`.
 
 **IMPORTANT — Keep SUMMARY.md in sync:** When updating any task file status (marking items `[x]`, `[~]`, or `[ ]`), also update `tasks/SUMMARY.md` to reflect the change. The SUMMARY is the single source of truth for project-wide progress and must match the individual task files.
 
