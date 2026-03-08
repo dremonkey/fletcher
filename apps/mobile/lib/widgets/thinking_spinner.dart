@@ -11,7 +11,7 @@ import '../theme/tui_widgets.dart';
 /// "thinking" (between user finishing speaking and first agent text arriving).
 ///
 /// Displays a multi-phase ASCII "shooting arrow" animation:
-/// 1. **Notch:** Arrow `>>--->` appears at the left margin.
+/// 1. **Notch:** Arrow `███▶` appears at the left margin.
 /// 2. **Streak:** Arrow travels character-by-character across the line.
 /// 3. **Impact:** Arrow shatters into ASCII particles at the right margin.
 /// 4. **Rebirth:** Particles dissipate, then the loop repeats.
@@ -26,10 +26,10 @@ class ThinkingSpinner extends StatefulWidget {
 }
 
 /// The arrow glyph used during Notch and Streak phases.
-const String _arrowGlyph = '>>--->';
+const String _arrowGlyph = '███▶';
 
 /// Characters used for impact/explosion particles.
-const List<String> _particleChars = ['*', '.', ':', "'", '+'];
+const List<String> _particleChars = ['░', '▒', '▓', '█', '·'];
 
 /// Animation phase enum for the shooting arrow.
 enum ArrowPhase {
@@ -191,11 +191,11 @@ class _ThinkingSpinnerState extends State<ThinkingSpinner>
 
   void _generateParticles() {
     // Spawn particles near the right margin where the arrow hit.
-    final count = 5 + _rng.nextInt(4); // 5-8 particles
+    final count = 8 + _rng.nextInt(5); // 8-12 particles
     final impactCol = _lineWidth > 0 ? _lineWidth - 1 : 0;
     _particles = List.generate(count, (_) {
       // Particles scatter left from the impact point.
-      final offset = _rng.nextInt(min(8, max(1, _lineWidth)));
+      final offset = _rng.nextInt(min(12, max(1, _lineWidth)));
       final col = max(0, impactCol - offset);
       final ch = _particleChars[_rng.nextInt(_particleChars.length)];
       return _Particle(column: col, char: ch);

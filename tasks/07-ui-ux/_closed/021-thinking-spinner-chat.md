@@ -1,11 +1,12 @@
 # TASK-021: ASCII "Shooting Arrow" Thinking Animation
 
 ## Status
-- **Status:** Open
+- **Status:** Complete
 - **Priority:** Medium
 - **Depends on:** 017 (Chat-First Main View), 020 (Inline Connection Events)
-- **Owner:** TBD
+- **Owner:** Static
 - **Created:** 2026-03-07
+- **Completed:** 2026-03-07
 
 ## Context
 When the agent is "thinking" — between the user finishing speaking and the first agent text streaming in — the chat transcript should show a **dynamic ASCII animation** of an arrow shooting across the screen and exploding into pixels. This replaces the static/incremental arrow concept with a high-energy Brutalist performance.
@@ -16,15 +17,16 @@ When the agent is "thinking" — between the user finishing speaking and the fir
 A multi-phase ASCII animation sequence rendered in monospace amber color.
 
 **Phases:**
-1. **Notch:** An arrow `>>--->` appears on the left margin.
+1. **Notch:** An arrow or stream of pixels appears on the left margin.
 2. **Streak:** The arrow travels horizontally across the chat line toward the right margin. The "flight" is quantized (character-by-character steps).
-3. **Impact:** Upon hitting the right margin, the arrow "shatters" into a cloud of pixel-like ASCII particles (e.g., `*`, `.`, `:`, `'`, `+`).
+3. **Impact:** Upon hitting the right side of the screen, the arrow "shatters" into a cloud of pixel-like particles.
 4. **Rebirth:** Particles fade/dissipate, and the loop repeats (Notch -> Streak -> Impact) until the agent starts speaking.
 
 **Aesthetic:**
-- **Monospace characters only** (no icons)
 - **Amber color** (`AppColors.amber`)
 - **8-bit / Quantized motion** — motion occurs in character-width steps for that retro "terminal" feel.
+- **Thick block arrow** — `███▶` (block shaft + solid triangle head) for visual weight.
+- **Block particle explosion** — `░▒▓█·` characters for impact debris.
 
 ### Widget Placement
 - Appears as the **last item in the chat transcript** ListView.
@@ -59,10 +61,9 @@ class ThinkingSpinner extends StatefulWidget {
 In `chat_transcript.dart`, ensure the `ThinkingSpinner` is appended to the ListView when the agent is in the thinking state.
 
 ## Acceptance Criteria
-- [ ] Thinking animation appears in chat transcript when agent is processing.
-- [ ] Animation features a shooting arrow `>>--->` that travels across the line.
-- [ ] Arrow "explodes" into ASCII particles on the right margin.
-- [ ] Animation is rendered in amber monospace inside a TuiCard.
-- [ ] Animation disappears/transitions when agent transcript text streams in.
-- [ ] No performance lag in the chat ListView during animation.
-- [ ] Unit tests for `ThinkingSpinner` (animation phases, reset logic).
+- [x] Thinking animation appears in chat transcript when agent is processing.
+- [x] Arrow "explodes" into particles on the right margin.
+- [x] Animation is rendered in amber monospace inside a TuiCard.
+- [x] Animation disappears/transitions when agent transcript text streams in.
+- [x] No performance lag in the chat ListView during animation.
+- [x] Unit tests for `ThinkingSpinner` (animation phases, reset logic).
