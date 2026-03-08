@@ -40,6 +40,7 @@ import { resolveAckSound } from './ack-sound-config';
 import { createTTS, type TTSProvider } from './tts-provider';
 import { TranscriptManager } from './transcript-manager';
 import { initHeapDiagnostics } from './heap-snapshot';
+import { buildBootstrapMessage } from './bootstrap';
 
 // ---------------------------------------------------------------------------
 // Logger setup — pretty-print when running locally, JSON in production
@@ -214,20 +215,8 @@ export default defineAgent({
       },
     });
 
-    // E2E test mode: rooms named e2e-* get a minimal system prompt to keep
-    // LLM responses short and reduce token consumption during automated
-    // testing.  The trust boundary stays server-side — the client cannot
-    // influence the prompt, only the room name convention. (TASK-022)
-    const isE2eRoom = ctx.room.name?.startsWith('e2e-') ?? false;
-    const instructions = isE2eRoom
-      ? 'You are in an automated test. Respond with short acknowledgments only.'
-      : '';
-    if (isE2eRoom) {
-      logger.info({ room: ctx.room.name }, 'E2E test room detected — using minimal system prompt');
-    }
-
     await session.start({
-      agent: new voice.Agent({ instructions }),
+      agent: new voice.Agent(),
       room: ctx.room,
       // Disable SDK transcription — we publish agent text ourselves via
       // the onContent callback → ganglia-events data channel.  This avoids
@@ -396,6 +385,21 @@ export default defineAgent({
       roomName: ctx.room.name,
       participantIdentity: participant.identity,
     });
+
+    // -----------------------------------------------------------------------
+    // Bootstrap message — inject a synthetic user message at session start.
+    // Fires after session routing is resolved so OpenClaw receives correct
+    // session headers.  Uses generateReply() to flow through the full voice
+    // pipeline (STT → LLM → TTS) rather than a system-level instruction
+    // that OpenClaw may ignore. (TASK-022)
+    // -----------------------------------------------------------------------
+    const bootstrapMsg = buildBootstrapMessage({
+      roomName: ctx.room.name ?? '',
+      participantIdentity: participant.identity,
+    });
+    const isE2e = (ctx.room.name ?? '').startsWith('e2e-');
+    logger.info({ room: ctx.room.name, e2e: isE2e }, 'Sending bootstrap message');
+    session.generateReply({ userInput: bootstrapMsg });
 
     // -----------------------------------------------------------------------
     // Participant lifecycle — log disconnect/reconnect for observability.
