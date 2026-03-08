@@ -57,6 +57,7 @@ The mobile client for real-time voice interaction and visualization.
 - [x] 002: Implement Amber Heartbeat visualizer ✅
 - [~] 003: Voice activity indicator & real-time STT display — audio waveform + STT subtitle + transcript drawer implemented; e2e UI tests passing; [BUG-013] Transcript UI stale when panel open; [BUG-014] Premature EOU detection
 - [ ] 004: Fix `addTransceiver: track is null` During Reconnect 📋 — null track reference during `rePublishAllTracks` after rapid reconnect cycles ([BUG-025](../docs/field-tests/20260303-buglog.md))
+- [ ] 005: SQLite Local Persistence for Chat Transcript 📋 — messages/artifacts cleared on app restart; need local SQLite storage ([BUG-016](../docs/field-tests/20260307-buglog.md))
 
 **Implemented:**
 - Full Flutter app with livekit_client integration
@@ -186,6 +187,7 @@ Bulletproof connection handling: survive network switches, Bluetooth changes, ai
 - [ ] 020: Agent Reconnect After Worker Restart 📋 — LiveKit doesn't re-dispatch agent jobs after worker restart; orphaned rooms with users but no agent ([BUG-005](../docs/field-tests/20260306-buglog.md))
 - [x] 021: Dynamic Room Names ✅ — dynamic `fletcher-<timestamp>` room names with token endpoint; client creates new room on budget exhaustion for seamless agent restart recovery; e2e tests 006-008 passing ([BUG-005](../docs/field-tests/20260306-buglog.md))
 - [~] 022: E2E Test Room Convention 🔄 — `e2e-fletcher-` prefix when `E2E_TEST_MODE=true`; agent detects `e2e-*` rooms and uses minimal prompt; pending field verification
+- [ ] 023: Background Auto-Close Timer Regression 📋 — 10-min background timeout not firing on app switch; regression of task 019 ([BUG-028](../docs/field-tests/20260307-buglog.md))
 
 **Depends on:** Epic 3 (Flutter App)
 
@@ -218,6 +220,11 @@ Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layou
 - [x] 023: Artifact–Message Association ✅ — artifacts render inline below their originating agent message instead of pooling together (BUG-012)
 - [x] 024: Diagnostics Panel — Live Pipeline Values ✅ — removed hardcoded provider names (BUG-013); wired RT latency, SESSION, AGENT, UPTIME; DiagnosticsInfo model + pipeline_info data channel support
 - [ ] 025: Fix UI State Desync — Agent Connection Status 📋 — diagnostics show `AGENT: --` despite active voice session; state update propagation + reconnection diagnostics refresh (BUG-010)
+- [ ] 026: Portrait Orientation Lock 📋 — lock app to portrait mode; landscape not designed for ([BUG-011](../docs/field-tests/20260307-buglog.md))
+- [ ] 027: Fix Arrow Loading Indicator Rendering 📋 — "box" artifact and missing chunky visual weight in ThinkingSpinner ([BUG-017](../docs/field-tests/20260307-buglog.md))
+- [ ] 028: App Rename — Two-Word Dash Branding 📋 — rename app for field testing (e.g., "Fletcher-Orphan-Jewel") ([BUG-018](../docs/field-tests/20260307-buglog.md))
+- [ ] 029: Random Two-Word-Dash Room Names 📋 — human-readable room names instead of timestamps ([BUG-019](../docs/field-tests/20260307-buglog.md))
+- [ ] 030: Speech Bubble Width 📋 — agent message bubbles too narrow in Brutalist UI ([20260307 buglog](../docs/field-tests/20260307-buglog.md))
 **Retained:**
 - [x] 015: Single Audio Ack + Visual Spinner ✅ — Single-shot ack tone + SweepGradient spin on AmberOrb during thinking state
 - [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 done; Phase 3 (soft TTS fade) needs SDK support
