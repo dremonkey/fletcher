@@ -217,6 +217,7 @@ Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layou
 - [x] 021: Thinking Spinner in Chat Transcript ✅ — block-character arrow `███▶` with `░▒▓█·` particle explosion; 12 unit tests passing
 - [x] 023: Artifact–Message Association ✅ — artifacts render inline below their originating agent message instead of pooling together (BUG-012)
 - [x] 024: Diagnostics Panel — Live Pipeline Values ✅ — removed hardcoded provider names (BUG-013); wired RT latency, SESSION, AGENT, UPTIME; DiagnosticsInfo model + pipeline_info data channel support
+- [ ] 025: Fix UI State Desync — Agent Connection Status 📋 — diagnostics show `AGENT: --` despite active voice session; state update propagation + reconnection diagnostics refresh (BUG-010)
 **Retained:**
 - [x] 015: Single Audio Ack + Visual Spinner ✅ — Single-shot ack tone + SweepGradient spin on AmberOrb during thinking state
 - [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 done; Phase 3 (soft TTS fade) needs SDK support

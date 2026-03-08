@@ -216,7 +216,7 @@ export default defineAgent({
     });
 
     await session.start({
-      agent: new voice.Agent(),
+      agent: new voice.Agent({ instructions: '' }),
       room: ctx.room,
       // Disable SDK transcription — we publish agent text ourselves via
       // the onContent callback → ganglia-events data channel.  This avoids
