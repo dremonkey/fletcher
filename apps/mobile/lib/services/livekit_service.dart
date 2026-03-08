@@ -32,6 +32,9 @@ class LiveKitService extends ChangeNotifier {
   bool _isMuted = false;
   bool get isMuted => _isMuted;
 
+  bool _textOnlyMode = false;
+  bool get textOnlyMode => _textOnlyMode;
+
   Timer? _audioLevelTimer;
   Timer? _statusClearTimer;
   Timer? _userSubtitleClearTimer;
@@ -120,6 +123,9 @@ class LiveKitService extends ChangeNotifier {
     _departureTimeoutS = departureTimeoutS;
     _allUrls = urls;
     _reconnectScheduler = ReconnectScheduler.fromDepartureTimeout(departureTimeoutS);
+
+    // Load persisted text-only mode preference (TASK-030)
+    _textOnlyMode = await SessionStorage.getTextOnlyMode();
 
     _updateState(status: ConversationStatus.connecting);
 
@@ -372,6 +378,11 @@ class LiveKitService extends ChangeNotifier {
       // the microphone when the app goes to background (BUG-022)
       await _startForegroundService();
 
+      // Send text-only mode state to agent on connect (TASK-030)
+      if (_textOnlyMode) {
+        await _sendTtsMode();
+      }
+
       _updateState(
         status: _isMuted ? ConversationStatus.muted : ConversationStatus.idle,
       );
@@ -443,6 +454,11 @@ class LiveKitService extends ChangeNotifier {
       _updateState(
         status: _isMuted ? ConversationStatus.muted : ConversationStatus.idle,
       );
+
+      // Resend text-only mode state after reconnect (TASK-030)
+      if (_textOnlyMode) {
+        await _sendTtsMode();
+      }
 
       // Flush buffered audio to agent(s) after reconnection (BUG-027)
       if (_reconnectBuffer != null) {
@@ -1055,6 +1071,35 @@ class LiveKitService extends ChangeNotifier {
     } else {
       _updateState(status: ConversationStatus.idle);
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Text-only mode — toggle TTS on/off via data channel (TASK-030)
+  // ---------------------------------------------------------------------------
+
+  /// Send a JSON event to the agent via the ganglia-events data channel.
+  Future<void> _sendEvent(Map<String, dynamic> event) async {
+    final participant = _localParticipant;
+    if (participant == null) return;
+    final data = utf8.encode(jsonEncode(event));
+    await participant.publishData(data, reliable: true, topic: 'ganglia-events');
+  }
+
+  /// Toggle text-only mode (TTS off). Persists preference and notifies agent.
+  Future<void> toggleTextOnlyMode() async {
+    _textOnlyMode = !_textOnlyMode;
+    debugPrint('[Fletcher] Text-only mode toggled: $_textOnlyMode');
+    await SessionStorage.saveTextOnlyMode(_textOnlyMode);
+    await _sendTtsMode();
+    notifyListeners();
+  }
+
+  /// Send current TTS mode state to the agent.
+  Future<void> _sendTtsMode() async {
+    await _sendEvent({
+      'type': 'tts-mode',
+      'value': _textOnlyMode ? 'off' : 'on',
+    });
   }
 
   void _updateState({

@@ -38,6 +38,9 @@ Fletcher's UI takes inspiration from **terminal user interfaces**, **8-bit hardw
 - [x] 020: Inline Connection & Room Events — boot sequence + runtime network/room/agent events as inline cards in chat stream
 - [ ] 021: Thinking Spinner in Chat Transcript — thematic arrow/fletching ASCII spinner inline in chat while agent is composing
 
+### User Controls
+- [x] 030: Text-Only Response Mode ✅ — `[TTS: ON/OFF]` toggle sends `tts-mode` event via data channel; agent uses `session.output.setAudioEnabled()` to skip TTS natively; persisted in SharedPreferences
+
 ### Bug Fixes
 - [ ] 023: Artifact–Message Association — artifacts pool together instead of anchoring inline to their originating message (BUG-012)
 - [ ] 024: Diagnostics Live Pipeline Values — hardcoded STT/TTS names and unpopulated RT/SESSION/AGENT/UPTIME fields (BUG-013)

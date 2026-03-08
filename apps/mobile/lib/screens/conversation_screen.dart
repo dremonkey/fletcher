@@ -150,14 +150,25 @@ class _ConversationScreenState extends State<ConversationScreen>
             ),
             const SizedBox(height: AppSpacing.sm),
 
-            // Mic button (56dp) centered
-            Center(
-              child: MicButton(
-                status: state.status,
-                aiAudioLevel: state.aiAudioLevel,
-                isMuted: _liveKitService.isMuted,
-                onToggleMute: _liveKitService.toggleMute,
-              ),
+            // Bottom row: TTS toggle + Mic button (TASK-030)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TuiButton(
+                  label: _liveKitService.textOnlyMode ? 'TTS: OFF' : 'TTS: ON',
+                  color: _liveKitService.textOnlyMode
+                      ? AppColors.textSecondary
+                      : AppColors.amber,
+                  onPressed: _liveKitService.toggleTextOnlyMode,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                MicButton(
+                  status: state.status,
+                  aiAudioLevel: state.aiAudioLevel,
+                  isMuted: _liveKitService.isMuted,
+                  onToggleMute: _liveKitService.toggleMute,
+                ),
+              ],
             ),
             const SizedBox(height: AppSpacing.base),
           ],

@@ -245,6 +245,27 @@ export default defineAgent({
     await ctx.connect();
     logger.info(`Connected to room: ${ctx.room.name}`);
 
+    // -----------------------------------------------------------------------
+    // Client data channel commands — listen for control events from the
+    // mobile app (e.g., tts-mode toggle).  Events arrive as JSON on the
+    // 'ganglia-events' topic. (TASK-030)
+    // -----------------------------------------------------------------------
+    let ttsEnabled = true;
+
+    ctx.room.on(RoomEvent.DataReceived, (payload: Uint8Array, participant: any, _kind: any, topic?: string) => {
+      if (topic !== 'ganglia-events') return;
+      try {
+        const event = JSON.parse(new TextDecoder().decode(payload));
+        if (event.type === 'tts-mode') {
+          ttsEnabled = event.value !== 'off';
+          session.output.setAudioEnabled(ttsEnabled);
+          logger.info({ ttsEnabled, participant: participant?.identity }, 'TTS mode changed');
+        }
+      } catch (e) {
+        logger.debug({ error: e }, 'Failed to parse incoming data channel event');
+      }
+    });
+
     // Initialize the background audio player without thinkingSound —
     // we control play/stop manually via the pondering lifecycle above.
     if (ackSound) {
@@ -280,8 +301,10 @@ export default defineAgent({
 
     session.on(voice.AgentSessionEventTypes.AgentStateChanged, (ev) => {
       logger.info({ from: ev.oldState, to: ev.newState }, 'Agent state changed');
-      // Start ack on EOU detection (thinking state)
-      if (ev.newState === 'thinking' && bgAudioPlayer && ackSound && !ackPlayHandle) {
+      // Start ack on EOU detection (thinking state) — skip when TTS is
+      // disabled since there's no point playing a chime if the user wants
+      // silence (TASK-030).
+      if (ev.newState === 'thinking' && bgAudioPlayer && ackSound && !ackPlayHandle && ttsEnabled) {
         ackPlayHandle = bgAudioPlayer.play({ source: ackSound, volume: 0.8 });
       }
     });

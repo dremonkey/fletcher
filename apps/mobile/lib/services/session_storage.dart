@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SessionStorage {
   static const _keyRoomName = 'fletcher_last_room';
   static const _keyConnectedAt = 'fletcher_last_connected_at';
+  static const _keyTextOnlyMode = 'fletcher_text_only_mode';
 
   /// Cached device ID — the hardware ID never changes at runtime.
   static String? _cachedDeviceId;
@@ -89,5 +90,18 @@ class SessionStorage {
     await prefs.remove(_keyRoomName);
     await prefs.remove(_keyConnectedAt);
     debugPrint('[SessionStorage] Cleared session');
+  }
+
+  /// Persist text-only mode preference (TASK-030).
+  static Future<void> saveTextOnlyMode(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyTextOnlyMode, value);
+    debugPrint('[SessionStorage] Text-only mode: $value');
+  }
+
+  /// Retrieve persisted text-only mode preference (default: false).
+  static Future<bool> getTextOnlyMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyTextOnlyMode) ?? false;
   }
 }

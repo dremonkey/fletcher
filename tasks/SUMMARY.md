@@ -220,6 +220,7 @@ Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layou
 - [ ] 026: Portrait Orientation Lock 📋 — lock app to portrait mode; landscape not designed for ([BUG-011](../docs/field-tests/20260307-buglog.md))
 - [ ] 027: Fix Arrow Loading Indicator Rendering 📋 — "box" artifact and missing chunky visual weight in ThinkingSpinner ([BUG-017](../docs/field-tests/20260307-buglog.md))
 - [ ] 029: Random Two-Word-Dash Room Names 📋 — human-readable room names instead of timestamps ([BUG-019](../docs/field-tests/20260307-buglog.md))
+- [x] 030: Text-Only Response Mode ✅ — `[TTS: ON/OFF]` toggle via data channel; agent skips TTS natively via `setAudioEnabled()`; persisted across restarts
 **Retained:**
 - [x] 015: Single Audio Ack + Visual Spinner ✅ — Single-shot ack tone + SweepGradient spin on AmberOrb during thinking state
 - [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 done; Phase 3 (soft TTS fade) needs SDK support

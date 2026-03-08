@@ -7,7 +7,7 @@ Beyond the audio pipeline, Fletcher sends structured metadata from the voice age
 | Channel | Transport | Direction | Content |
 |---------|-----------|-----------|---------|
 | `lk.transcription` | LiveKit Text Streams | Agent → Client | Real-time transcription of user and agent speech |
-| `ganglia-events` | LiveKit Data Channel | Agent → Client | Status events, artifacts, content events |
+| `ganglia-events` | LiveKit Data Channel | Bidirectional | Status events, artifacts, content events (Agent → Client); control commands (Client → Agent) |
 
 ## Transcription Streams
 
@@ -164,6 +164,25 @@ function isStatusEvent(event: GangliaEvent): event is StatusEvent;
 function isArtifactEvent(event: GangliaEvent): event is ArtifactEvent;
 function isContentEvent(event: GangliaEvent): event is ContentEvent;
 ```
+
+## Client → Agent Commands
+
+The mobile client can send control events to the voice agent on the same `ganglia-events` topic. These are JSON-encoded `publishData` calls with `reliable: true`.
+
+### TTS Mode Toggle (TASK-030)
+
+Disables or re-enables TTS synthesis on the agent. When TTS is off, the agent skips all TTS API calls and acknowledgment sounds — responses arrive as text only via the data channel transcript. STT remains active.
+
+```typescript
+interface TtsModeEvent {
+  type: 'tts-mode';
+  value: 'on' | 'off';
+}
+```
+
+The client sends the current `tts-mode` state on room connect and reconnect so the agent always has the correct preference. The preference is persisted in `SharedPreferences` across app restarts.
+
+On the agent side, `session.output.setAudioEnabled(enabled)` toggles TTS inference natively — when audio output is disabled, the SDK's `ttsTask` skips `performTTSInference` entirely.
 
 ## Chunking Protocol
 
