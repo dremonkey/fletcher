@@ -30,6 +30,7 @@ The voice agent audio pipeline — STT, TTS, voice detection, and agent dispatch
 - [ ] 009: TTS Empty Chunk Guard 📋 — buffer initial TTS input to avoid Cartesia rejecting punctuation-only chunks ([BUG-005](../docs/field-tests/20260301-buglog.md))
 - [ ] 010: Fix Agent Dispatch in `dev` Mode 📋 — worker registers but LiveKit never dispatches jobs; `connect --room` workaround ([BUG-007](../docs/field-tests/20260301-buglog.md))
 - [ ] 011: Voice Selection Persistent Preferences 📋 — selection UI/API with persistent storage and env-var based config
+- [ ] 020: Agent Dual-Channel Transcript Emission 📋 — emit `TranscriptEvent` on `ganglia-events` data channel (reliable); fixes BUG-030 (Unidirectional Blackout)
 - [~] 012: Agent Self-Terminate on Session Error 🔄 — Priority: prevent zombie agents; disconnect from room when session dies
 - [ ] 013: Voice-Aware Metadata Tagging 📋 — inject `is_stt: true` into metadata sent to OpenClaw to enable higher verification thresholds for noisy inputs
 - [x] 015: Tiered Edge TTS Prototype ✅ — PiperTTS plugin + FallbackAdapter wired; Piper sidecar in docker-compose; UX feedback artifacts (Voice Degraded/Restored/Unavailable)
@@ -57,6 +58,8 @@ The mobile client for real-time voice interaction and visualization.
 - [x] 002: Implement Amber Heartbeat visualizer ✅
 - [~] 003: Voice activity indicator & real-time STT display — audio waveform + STT subtitle + transcript drawer implemented; e2e UI tests passing; [BUG-013] Transcript UI stale when panel open; [BUG-014] Premature EOU detection
 - [ ] 005: SQLite Local Persistence for Chat Transcript 📋 — messages/artifacts cleared on app restart; need local SQLite storage ([BUG-016](../docs/field-tests/20260307-buglog.md))
+- [ ] 021: Data Channel Transcript Listener 📋 — receive `TranscriptEvent` from `ganglia-events`; update ConversationBloc; source of truth for persistent log (BUG-030)
+- [ ] 022: Persistent Conversation View 📋 — scrollable chat log UI bound to ConversationBloc; interim/final rendering; auto-scroll; replaces ephemeral subtitles (BUG-030)
 
 **Implemented:**
 - Full Flutter app with livekit_client integration
@@ -142,6 +145,12 @@ Secure handshake between Fletcher and Heirloom Hub (OpenClaw).
 - [ ] 007: "Fletcher Bridge" OpenClaw Skill 📋 — Server-side skill for Vessel Key generation and context bootstrapping
 - [ ] 005: "Blank Slate" Bootloader UI 📋 — First-run experience for App Store users
 - [ ] 006: Camera-based Handshake 📋 — QR/OCR pairing from Hub terminal
+- [ ] 008: QR Code Scanner for Vessel Key Pairing 📋 — blank slate detection, `mobile_scanner` QR scanning, Vessel Key JSON parsing/validation
+- [ ] 009: Ed25519 Keypair Generation & Device Registration 📋 — generate keypair, POST to Hub, store credentials in FlutterSecureStorage
+- [ ] 010: Hub-Side Device Registration Endpoint 📋 — `POST /fletcher/devices/register`; pairing token validation; single-use revocation
+- [ ] 011: Vessel Key Generation CLI Command 📋 — `openclaw vessel-key generate`; QR terminal rendering; 15-min token expiry
+- [ ] 012: Hub-Side Room Join Endpoint 📋 — `POST /fletcher/rooms/join`; Ed25519 signature verification; LiveKit token generation
+- [ ] 013: Mobile Managed Connection 📋 — `HubAuthService` with Ed25519 auth; network fallback (mDNS → Tailscale)
 
 **Spec:** [docs/specs/07-sovereign-pairing.md](../docs/specs/07-sovereign-pairing.md)
 
@@ -221,6 +230,12 @@ Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layou
 - [ ] 027: Fix Arrow Loading Indicator Rendering 📋 — "box" artifact and missing chunky visual weight in ThinkingSpinner ([BUG-017](../docs/field-tests/20260307-buglog.md))
 - [ ] 029: Random Two-Word-Dash Room Names 📋 — human-readable room names instead of timestamps ([BUG-019](../docs/field-tests/20260307-buglog.md))
 - [x] 030: Text-Only Response Mode ✅ — `[TTS: ON/OFF]` toggle via data channel; agent skips TTS natively via `setAudioEnabled()`; persisted across restarts
+- [ ] 030: Split Header into Two-Column Layout 📋 — brutalist UI: user histogram (left) + TTS toggle area (right)
+- [ ] 031: TTSToggle Component with Dual-State Rendering 📋 — "TTS OFF" text ↔ agent histogram; single-tap toggle; accessible button; localStorage persistence
+- [ ] 032: Wire TTS Toggle to Agent TTS Enable/Disable 📋 — `tts-mode` data channel event; agent `setAudioEnabled()` + ack chime gating
+- [ ] 033: SpeakingRing Component 📋 — animated ring around participant avatars; VAD-driven; amber (user) / blue (agent)
+- [ ] 034: Inline Participant Histogram 📋 — compact AudioVisualizer in each participant row; 30fps throttle for 3+ participants
+- [ ] 035: Per-Participant Audio Stream Wiring 📋 — AnalyserNode per participant; connect to SpeakingRing + inline histogram
 **Retained:**
 - [x] 015: Single Audio Ack + Visual Spinner ✅ — Single-shot ack tone + SweepGradient spin on AmberOrb during thinking state
 - [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 done; Phase 3 (soft TTS fade) needs SDK support
@@ -266,6 +281,7 @@ Move sensing capabilities (Wake Word, VAD, STT) to the edge device to improve pr
 - [~] 003: Integrated Wake Word 🔄 — Wired into Amber Orb state machine; debug trigger added
 - [ ] 004: Local VAD Evaluation 📋 — Benchmark Silero VAD on-device vs server-side
 - [ ] 005: Offline Mode 📋 — Cache interactions when offline
+- [ ] 031: Local PiperTTS on Android 📋 — Move PiperTTS fallback from server sidecar to on-device inference (sherpa-onnx / ONNX Runtime); enables offline TTS and zero-network-hop fallback
 
 **Spec:** [docs/specs/wake-word-integration.md](../docs/specs/wake-word-integration.md)
 

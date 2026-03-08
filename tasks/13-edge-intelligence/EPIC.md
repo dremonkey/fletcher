@@ -22,6 +22,10 @@ Fletcher currently relies entirely on cloud services for audio processing. This 
 - [ ] **004: Local VAD Evaluation** — Benchmark local Voice Activity Detection candidates (Silero VAD, WebRTC VAD) against server-side streaming for latency, bandwidth, and privacy gains.
 - [ ] **005: Offline Mode** — Enable basic offline functionality: local wake word detection, interaction caching with sqflite/hive, fallback responses, and automatic retry on network restoration.
 
+### Phase 4: Local TTS
+
+- [ ] **031: Local PiperTTS on Android** — Investigate moving PiperTTS fallback from server-side Docker sidecar to on-device inference (sherpa-onnx / ONNX Runtime); enables offline speech and zero-network-hop fallback.
+
 ## Status Summary
 
 | Phase | Description | Status |
