@@ -113,7 +113,6 @@ Pipeline optimizations to reduce voice-to-voice latency from ~1.4s to <0.8s.
 **Tasks:**
 - [x] 001: Enable preemptive generation & tune endpointing ✅ — `preemptiveGeneration: true`, endpointing delays tuned via BUG-014/TASK-014
 - [ ] 003: Streaming interim transcripts to LLM (Phase 2)
-- [ ] 004: TTS pre-warming validation (Phase 3)
 - [~] 005: Investigate & reduce OpenClaw TTFT 🔄 — Phase 1 complete: pondering status phrases + looping chime fill silence during thinking; Phase 2 (vocalized inner monologue) deferred ([BUG-006](../docs/field-tests/20260301-buglog.md))
 
 **Baseline measurement (2026-03-01 field test):** ~8-10s perceived latency. LLM TTFT is ~8s, pipeline overhead ~528ms.
@@ -173,7 +172,7 @@ Bulletproof connection handling: survive network switches, Bluetooth changes, ai
 - [x] 005: Preserve app state across reconnects — transcripts, artifacts, mute state survive reconnection
 - [x] 006: Tailscale ICE negotiation fix — pin server's Tailscale IP for stable 5G/Wi-Fi transitions ✅
 - [x] 007: WiFi → 5G ICE renegotiation failure — increased `departure_timeout` to 120s so room survives the 40-80s handoff (BUG-015) ✅
-- [~] 008: Tailscale-aware URL resolution — runtime detection of Tailscale VPN on phone, auto-selects correct URL; code complete, needs user testing
+- [x] 008: Tailscale-aware URL resolution ✅ — TCP race between LAN and Tailscale URLs; whichever connects first wins (replaced broken VPN detection)
 - [x] 009: Bluetooth audio route recovery — `restartTrack()` swaps audio source without unpublishing ✅ ([BUG-004](../docs/field-tests/20260301-buglog.md))
 - [ ] 010: Diagnostics Stale After Reconnect 📋 — HealthService doesn't re-enumerate participants after DUPLICATE_IDENTITY reconnect ([BUG-016](../docs/field-tests/20260302-buglog.md))
 - [ ] 011: Network Transition Audio Track Timeout 📋 — WiFi→cellular causes 55s audio track publish delay (Tailscale tunnel re-establishment) + BT audio route disruption ([BUG-021](../docs/field-tests/20260303-buglog.md))
@@ -183,7 +182,7 @@ Bulletproof connection handling: survive network switches, Bluetooth changes, ai
 - [~] 018: Fix URL Resolver VPN Detection 🔄 — TCP race between LAN and Tailscale URLs (Option A); replaces broken "always use Tailscale" approach; needs field test ([BUG-031](../docs/field-tests/20260304-buglog.md), [BUG-004](../docs/field-tests/20260306-buglog.md))
 - [~] 019: Background Session Timeout & App-Close Disconnect 🔄 — implemented: `stopWithTask="true"` for swipe-away disconnect, screen lock detection via method channel, 10-min background timeout with notification countdown; pending field verification
 - [ ] 020: Agent Reconnect After Worker Restart 📋 — LiveKit doesn't re-dispatch agent jobs after worker restart; orphaned rooms with users but no agent ([BUG-005](../docs/field-tests/20260306-buglog.md))
-- [x] 021: Dynamic Room Names ✅ — dynamic `fletcher-<timestamp>` room names with token endpoint; client creates new room on budget exhaustion for seamless agent restart recovery; e2e tests 006-008 passing ([BUG-005](../docs/field-tests/20260306-buglog.md))
+- [x] 021: Dynamic Room Names ✅ — dynamic `fletcher-<timestamp>` room names with token endpoint; client creates new room on budget exhaustion for seamless agent restart recovery; e2e tests 006-008 passing ([BUG-005](../docs/field-tests/20260306-buglog.md)) — **closed**
 - [~] 022: E2E Test Room Convention 🔄 — `e2e-fletcher-` prefix when `E2E_TEST_MODE=true`; agent detects `e2e-*` rooms and uses minimal prompt; pending field verification
 - [ ] 023: Background Auto-Close Timer Regression 📋 — 10-min background timeout not firing on app switch; regression of task 019 ([BUG-028](../docs/field-tests/20260307-buglog.md))
 
@@ -220,9 +219,7 @@ Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layou
 - [ ] 025: Fix UI State Desync — Agent Connection Status 📋 — diagnostics show `AGENT: --` despite active voice session; state update propagation + reconnection diagnostics refresh (BUG-010)
 - [ ] 026: Portrait Orientation Lock 📋 — lock app to portrait mode; landscape not designed for ([BUG-011](../docs/field-tests/20260307-buglog.md))
 - [ ] 027: Fix Arrow Loading Indicator Rendering 📋 — "box" artifact and missing chunky visual weight in ThinkingSpinner ([BUG-017](../docs/field-tests/20260307-buglog.md))
-- [ ] 028: App Rename — Two-Word Dash Branding 📋 — rename app for field testing (e.g., "Fletcher-Orphan-Jewel") ([BUG-018](../docs/field-tests/20260307-buglog.md))
 - [ ] 029: Random Two-Word-Dash Room Names 📋 — human-readable room names instead of timestamps ([BUG-019](../docs/field-tests/20260307-buglog.md))
-- [ ] 030: Speech Bubble Width 📋 — agent message bubbles too narrow in Brutalist UI ([20260307 buglog](../docs/field-tests/20260307-buglog.md))
 **Retained:**
 - [x] 015: Single Audio Ack + Visual Spinner ✅ — Single-shot ack tone + SweepGradient spin on AmberOrb during thinking state
 - [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 done; Phase 3 (soft TTS fade) needs SDK support

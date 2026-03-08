@@ -24,10 +24,6 @@ During a 2026-03-01 field test, a second bottleneck emerged: OpenClaw's backend 
 
 - [ ] **003: Streaming Interim Transcripts to LLM** — Feed interim transcripts to Ganglia speculatively; cancel and restart on each new interim. Requires `cancelPending()` on GangliaLLM, custom `SpeculativeAgent` node override, and AbortSignal plumbing. Highest complexity. (200–400ms savings)
 
-### Phase 3: TTS Validation
-
-- [ ] **004: TTS Pre-warming Validation** — Verify Cartesia WebSocket connection pooling and sentence-boundary streaming. Primarily a validation/documentation task. (50–100ms savings)
-
 ### Critical: Backend TTFT
 
 - [~] **005: Investigate & Reduce OpenClaw First-Token Latency** — Root cause identified: `<thinking>` tag suppression causes 8–17s TTFT. Phase 1 remediation complete (pondering status phrases + acknowledgment chime fill the silence). Phase 2 (vocalized inner monologue) deferred. Supporting changes (OpenClaw upgrade, delta throttle reduction, TCP Nagle fix) still pending.
@@ -39,7 +35,6 @@ During a 2026-03-01 field test, a second bottleneck emerged: OpenClaw's backend 
 | 1 | Tuned Endpointing + Preemptive Generation | Not started |
 | 1b | Latency Instrumentation | Moved to Epic 10 |
 | 2 | Speculative Inference | Not started |
-| 3 | TTS Pre-warming Validation | Not started |
 | Critical | OpenClaw TTFT Investigation | Phase 1 complete; supporting changes pending |
 
 ## Latency Budget
