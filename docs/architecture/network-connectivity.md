@@ -30,7 +30,7 @@ sequenceDiagram
     Resolver->>Resolver: Race TCP to LAN vs Tailscale
     Resolver-->>App: Winner URL
 
-    App->>TS: GET /token?room=fletcher-xxx&identity=user-xxx
+    App->>TS: GET /token?room=fletcher-xxx&identity=device-xxx
     TS-->>App: { token: "jwt...", url: "ws://..." }
 
     App->>LK: connect(resolvedUrl, token)

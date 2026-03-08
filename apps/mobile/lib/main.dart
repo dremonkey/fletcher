@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'screens/conversation_screen.dart';
+import 'theme/app_colors.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,6 +18,12 @@ Future<void> main() async {
       statusBarBrightness: Brightness.dark,
     ),
   );
+
+  // Lock app to portrait orientation (Brutalist UI designed for portrait only)
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
 
   runApp(const FletcherApp());
 }
@@ -47,11 +54,19 @@ class FletcherApp extends StatelessWidget {
       title: 'Fletcher',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFF59E0B),
+        fontFamily: 'monospace',
+        colorScheme: const ColorScheme(
           brightness: Brightness.dark,
+          primary: AppColors.amber,
+          onPrimary: AppColors.background,
+          secondary: AppColors.cyan,
+          onSecondary: AppColors.background,
+          error: AppColors.healthRed,
+          onError: AppColors.textPrimary,
+          surface: AppColors.surface,
+          onSurface: AppColors.textPrimary,
         ),
-        scaffoldBackgroundColor: const Color(0xFF0D0D0D),
+        scaffoldBackgroundColor: AppColors.background,
         useMaterial3: true,
       ),
       home: ConversationScreen(

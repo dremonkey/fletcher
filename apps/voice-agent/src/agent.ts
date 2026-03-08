@@ -26,7 +26,7 @@
  *   PIPER_VOICE - Piper voice name (default: sidecar default)
  */
 
-import { defineAgent, cli, ServerOptions, type JobContext } from '@livekit/agents';
+import { defineAgent, cli, ServerOptions, tts, type JobContext } from '@livekit/agents';
 import { voice } from '@livekit/agents';
 import * as deepgram from '@livekit/agents-plugin-deepgram';
 import * as silero from '@livekit/agents-plugin-silero';
@@ -40,6 +40,8 @@ import { resolveAckSound } from './ack-sound-config';
 import { createTTS, type TTSProvider } from './tts-provider';
 import { TranscriptManager } from './transcript-manager';
 import { initHeapDiagnostics } from './heap-snapshot';
+import { buildBootstrapMessage } from './bootstrap';
+import { attachFallbackMonitor } from './tts-fallback-monitor';
 
 // ---------------------------------------------------------------------------
 // Logger setup — pretty-print when running locally, JSON in production
@@ -178,15 +180,32 @@ export default defineAgent({
     const turnDetection = new livekit.turnDetector.EnglishModel();
 
     const stt = new deepgram.STT({ apiKey: process.env.DEEPGRAM_API_KEY });
-    const tts = createTTS(ttsProvider, logger);
+    const ttsInstance = createTTS(ttsProvider, logger);
+
+    // -----------------------------------------------------------------------
+    // TTS fallback detection — when a FallbackAdapter is in use, listen for
+    // availability changes to notify the client of degraded/restored voice.
+    //
+    // "Voice Degraded" = primary TTS failed, fallback (Piper) is active.
+    // "Voice Restored" = primary TTS recovered after a previous degradation.
+    //
+    // Distinct from "Voice Unavailable" (below), which fires when ALL TTS
+    // instances fail entirely — no audio at all, text-only mode. (TASK-015)
+    // -----------------------------------------------------------------------
+    if (ttsInstance instanceof tts.FallbackAdapter) {
+      attachFallbackMonitor(ttsInstance, { publishEvent, logger });
+    }
 
     const session = new voice.AgentSession({
       vad,
       turnDetection,
       stt,
-      tts,
+      tts: ttsInstance,
       llm: gangliaLlm,
       voiceOptions: {
+        // Start LLM inference on interim transcripts before EOU is confirmed,
+        // then discard if the user keeps talking. Saves ~200-400ms per turn.
+        preemptiveGeneration: true,
         // Give the turn detector more time to decide if the user is done.
         // Default 500ms was too aggressive for natural speech pauses (BUG-014).
         minEndpointingDelay: 800,
@@ -214,20 +233,8 @@ export default defineAgent({
       },
     });
 
-    // E2E test mode: rooms named e2e-* get a minimal system prompt to keep
-    // LLM responses short and reduce token consumption during automated
-    // testing.  The trust boundary stays server-side — the client cannot
-    // influence the prompt, only the room name convention. (TASK-022)
-    const isE2eRoom = ctx.room.name?.startsWith('e2e-') ?? false;
-    const instructions = isE2eRoom
-      ? 'You are in an automated test. Respond with short acknowledgments only.'
-      : '';
-    if (isE2eRoom) {
-      logger.info({ room: ctx.room.name }, 'E2E test room detected — using minimal system prompt');
-    }
-
     await session.start({
-      agent: new voice.Agent({ instructions }),
+      agent: new voice.Agent({ instructions: '' }),
       room: ctx.room,
       // Disable SDK transcription — we publish agent text ourselves via
       // the onContent callback → ganglia-events data channel.  This avoids
@@ -343,17 +350,36 @@ export default defineAgent({
           : 'Pipeline');
       logger.error({ source, message, recoverable: err.recoverable }, 'Pipeline error');
 
+      const isTts = err.type === 'tts_error' || message.includes('TTS');
+
+      // When using FallbackAdapter and the fallback TTS is still available,
+      // suppress "Voice Unavailable" artifacts — the voice is degraded, not
+      // unavailable.  The tts-fallback-monitor handles "Voice Degraded" /
+      // "Voice Restored" artifacts separately.
+      //
+      // Without this check, the FallbackAdapter's background recovery probes
+      // (every 1s against the dead primary) forward errors through
+      // setupEventForwarding(), producing a misleading "Voice Unavailable"
+      // artifact every 60s even though Piper is serving audio fine.
+      if (isTts && ttsInstance instanceof tts.FallbackAdapter) {
+        const anyFallbackAvailable = ttsInstance.status.some((s, i) => i > 0 && s.available);
+        if (anyFallbackAvailable) {
+          logger.debug({ source, message }, 'TTS error suppressed — fallback still available');
+          stopAck();
+          return;
+        }
+      }
+
       // Debounce all error artifacts — at most 1 per minute
       const now = Date.now();
       if (now - lastErrorArtifact > ERROR_ARTIFACT_DEBOUNCE_MS) {
         lastErrorArtifact = now;
-        const isTts = err.type === 'tts_error' || message.includes('TTS');
         publishEvent({
           type: 'artifact',
           artifact_type: 'error',
           title: isTts ? 'Voice Unavailable' : `${source} Error`,
           message: isTts
-            ? 'Text responses will continue to appear.'
+            ? 'All voice synthesis failed. Text responses will continue to appear.'
             : message,
         });
       }
@@ -396,6 +422,21 @@ export default defineAgent({
       roomName: ctx.room.name,
       participantIdentity: participant.identity,
     });
+
+    // -----------------------------------------------------------------------
+    // Bootstrap message — inject a synthetic user message at session start.
+    // Fires after session routing is resolved so OpenClaw receives correct
+    // session headers.  Uses generateReply() to flow through the full voice
+    // pipeline (STT → LLM → TTS) rather than a system-level instruction
+    // that OpenClaw may ignore. (TASK-022)
+    // -----------------------------------------------------------------------
+    const bootstrapMsg = buildBootstrapMessage({
+      roomName: ctx.room.name ?? '',
+      participantIdentity: participant.identity,
+    });
+    const isE2e = (ctx.room.name ?? '').startsWith('e2e-');
+    logger.info({ room: ctx.room.name, e2e: isE2e }, 'Sending bootstrap message');
+    session.generateReply({ userInput: bootstrapMsg });
 
     // -----------------------------------------------------------------------
     // Participant lifecycle — log disconnect/reconnect for observability.

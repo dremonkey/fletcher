@@ -1,11 +1,12 @@
 # TASK-018: Artifact System Redesign
 
 ## Status
-- **Status:** Not started
+- **Status:** Complete
 - **Priority:** Medium
 - **Depends on:** 016 (TUI Design System), 017 (Chat-First Main View)
-- **Owner:** TBD
+- **Owner:** Claude
 - **Created:** 2026-03-07
+- **Completed:** 2026-03-07
 
 ## Context
 The current `ArtifactViewer` displays artifacts in a dedicated drawer. The new design integrates artifacts more tightly into the chat flow with three interaction layers:
@@ -107,17 +108,17 @@ The current `ArtifactViewer` displays artifacts in a dedicated drawer. The new d
 - The existing `showArtifactDrawer()` function is replaced by the new `showModalBottomSheet` implementation
 
 ## Acceptance Criteria
-- [ ] Inline `[ARTIFACT: NAME]` buttons render in agent chat messages with >= 48dp touch target
-- [ ] Tapping an inline button opens the bottom sheet drawer with that artifact
-- [ ] Bottom sheet has sharp corners, amber top border, TUI header with type badge
-- [ ] Bottom sheet shows artifact with appropriate formatting (code, log, diff, text, search, error)
-- [ ] Bottom sheet handles loading, empty, and error states
-- [ ] `[ ARTIFACTS: N ]` button in status bar shows current count with >= 48dp touch target
-- [ ] Tapping artifacts button opens the full-screen list modal
-- [ ] List modal has amber border, TUI header, 48dp close button
-- [ ] Artifacts list uses `ListView.builder`, shows name + preview per card (min 72dp height)
-- [ ] Empty state: "No artifacts in this session"
-- [ ] Tapping a list item opens the bottom sheet for that artifact
-- [ ] All components use TUI brutalist styling (monospace, corner brackets, amber borders, sharp corners)
-- [ ] Haptic feedback on all tappable elements (light impact)
-- [ ] All spacing on 4dp grid, all colors from `AppColors`
+- [x] Inline `[ARTIFACT: NAME]` buttons render in agent chat messages with >= 48dp touch target
+- [x] Tapping an inline button opens the bottom sheet drawer with that artifact
+- [x] Bottom sheet has sharp corners, amber top border, TUI header with type badge
+- [x] Bottom sheet shows artifact with appropriate formatting (code, log, diff, text, search, error)
+- [x] Bottom sheet handles loading, empty, and error states
+- [x] `[ ARTIFACTS: N ]` button in status bar shows current count with >= 48dp touch target
+- [x] Tapping artifacts button opens the full-screen list modal
+- [x] List modal has amber border, TUI header, 48dp close button
+- [x] Artifacts list uses `ListView.builder`, shows name + preview per card (min 72dp height)
+- [x] Empty state: "No artifacts in this session"
+- [x] Tapping a list item opens the bottom sheet for that artifact
+- [x] All components use TUI brutalist styling (monospace, corner brackets, amber borders, sharp corners)
+- [x] Haptic feedback on all tappable elements (light impact)
+- [x] All spacing on 4dp grid, all colors from `AppColors`

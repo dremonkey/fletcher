@@ -73,18 +73,35 @@ The `tasks/` directory contains the project roadmap and must stay accurate.
 - `[~]` = Partially complete (add note explaining what's done/remaining)
 - Add ✅ to section headers when fully complete
 
+**Closing completed tasks:**
+When a task is fully complete (`[x]`), move its file into a `_closed/` subdirectory within the epic:
+```
+tasks/07-ui-ux/
+├── EPIC.md
+├── 023-open-task.md          # open tasks stay in epic root
+└── _closed/
+    ├── 016-completed-task.md  # completed tasks go here
+    └── 017-completed-task.md
+```
+- Only move tasks marked `[x]` or `Status: Complete` — NOT `[~]` (partially complete)
+- Use `git mv` so git tracks the rename
+- Do NOT move `EPIC.md`, `SUMMARY.md`, `mockups/`, or non-task files
+- The `_closed/` directory keeps completed tasks accessible but out of the way
+
 **Structure:**
 ```
 tasks/
 ├── SUMMARY.md                # Overview with epic status (keep in sync!)
 ├── 01-infrastructure/        # ✅ Complete
-├── 02-livekit-agent/         # Channel plugin tasks
+├── 02-livekit-agent/         # Voice agent pipeline tasks
 ├── 03-flutter-app/           # ✅ Complete
 ├── 04-livekit-agent-plugin/  # Brain plugin tasks
-└── 05-latency-optimization/  # Voice pipeline latency tasks
+├── 07-ui-ux/                 # TUI Brutalist UI redesign
+├── 09-connectivity/          # Connection resilience
+└── ...
 ```
 
-**Before finishing a session:** If you made implementation progress, update the corresponding task file in `tasks/`.
+**Before finishing a session:** If you made implementation progress, update the corresponding task file in `tasks/`. If you completed a task, move it to `_closed/`.
 
 **IMPORTANT — Keep SUMMARY.md in sync:** When updating any task file status (marking items `[x]`, `[~]`, or `[ ]`), also update `tasks/SUMMARY.md` to reflect the change. The SUMMARY is the single source of truth for project-wide progress and must match the individual task files.
 
@@ -106,6 +123,15 @@ This is a **public repository**. Never commit PII in plaintext.
 - **Buglogs** (`docs/field-tests/*-buglog.md`): Plaintext, publicly visible. **No real names** (use "tester" or initials), **no IP addresses**, **no device serials**. Sanitize log excerpts before pasting.
 - **Conversation transcripts**: Never paste full transcripts into public-facing files. Summarize or anonymize.
 - **Secrets**: Never commit API keys, tokens, or credentials. Use `.env` files (gitignored).
+
+## Process Cleanup (IMPORTANT)
+**Always clean up processes you start.** Before finishing a session or handing back to the user, shut down anything you launched:
+- **Android emulator** — `kill $(pgrep -f "emulator|qemu-system")` or `adb emu kill`
+- **Flutter run / build** — kill any lingering `flutter`, `gradle`, or `dart` processes
+- **Background tasks** — stop any background shells or agents you started
+- **App on device** — `adb shell am force-stop com.fletcher.fletcher`
+
+Do NOT leave orphaned emulators, build daemons, or long-running processes behind. Check with `pgrep -fa "emulator|qemu|flutter|gradle|dart"` before wrapping up.
 
 ## Commit Discipline (IMPORTANT)
 Commit early and often. Do NOT batch up large amounts of work into a single mega-commit at the end.

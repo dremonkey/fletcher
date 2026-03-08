@@ -24,7 +24,7 @@ The existing `createTTS()` factory in `tts-provider.ts` and the LiveKit `tts.TTS
 - [x] **Tier 2 (Local Fallback):** `PiperTTS` plugin (`piper-tts.ts`) posts text to Piper HTTP sidecar, receives WAV, strips header, yields AudioFrames. 11 unit tests.
 - [x] **Fallback TTS Wrapper:** Uses LiveKit SDK's built-in `tts.FallbackAdapter` instead of a custom wrapper — handles priority-based failover, background recovery, and audio resampling.
 - [x] **Switching Logic:** `FallbackAdapter` with `maxRetryPerTTS: 0` — any TTS error immediately falls through to Piper. FallbackAdapter handles background recovery to retry cloud provider on subsequent turns.
-- [ ] **UX Feedback:** Send a `ganglia-events` artifact to the client indicating degraded voice quality when fallback is active (mirrors existing "Voice Unavailable" pattern from BUG-024).
+- [x] **UX Feedback:** Send a `ganglia-events` artifact to the client indicating degraded voice quality when fallback is active (mirrors existing "Voice Unavailable" pattern from BUG-024). Three tiers: "Voice Degraded" (fallback active), "Voice Restored" (primary recovered), "Voice Unavailable" (all TTS failed).
 
 ## Technical Approach
 

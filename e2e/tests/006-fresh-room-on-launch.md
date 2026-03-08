@@ -35,9 +35,11 @@ e2e/helpers/emu-capture.sh 006-step2-launch
 ```
 
 **Expect:**
-- The app is visible on screen (dark background with amber orb in center)
-- A status badge near the top shows "Connecting..." (gray text)
-- The orb appears at reduced opacity (connecting state, not yet idle)
+- The app is visible on screen (dark background)
+- Compact waveform displayed at top
+- Diagnostics bar below waveform
+- Chat area in center with system event cards showing "NETWORK resolving..." and "ROOM resolving..." states
+- Mic button at bottom center in connecting state (dimmed, no glow)
 - No error message is displayed
 
 ### Step 3: Wait for idle state
@@ -49,10 +51,11 @@ e2e/helpers/emu-capture.sh 006-step3-idle
 ```
 
 **Expect:**
-- The status badge shows "Listening" (amber text)
-- The orb is fully visible with a breathing animation glow
-- No error message is displayed below the orb
-- The mute toggle button is visible at the bottom center
+- Diagnostics bar shows `SYS: OK` with green health orb
+- System event cards in chat show successful connection (NETWORK and ROOM resolved)
+- Mic button at bottom center displays amber border with breathing glow animation (idle state)
+- No error message is displayed
+- Chat area is ready for interaction
 
 ### Step 4: Verify a new room name was generated in logs
 
@@ -113,8 +116,9 @@ e2e/helpers/emu-capture.sh 006-step6-relaunch-idle
 ```
 
 **Expect:**
-- The app reconnects successfully and the status badge shows "Listening" (amber text)
-- The orb is fully visible with breathing animation
+- The app reconnects successfully; diagnostics bar shows `SYS: OK` with green health orb
+- System event cards show successful NETWORK and ROOM connection
+- Mic button displays amber border with breathing glow animation (idle state)
 - No error message is displayed
 
 ### Step 7: Verify a second new room name was generated (different from Step 4)

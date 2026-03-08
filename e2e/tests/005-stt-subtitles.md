@@ -1,6 +1,6 @@
 # STT Subtitles
 
-Verify that spoken audio is transcribed and displayed as subtitles in the UI. When the user speaks, the TranscriptSubtitle widget should show the transcription text with a "You" speaker label. The subtitle area sits between the waveform row and the chip row.
+Verify that spoken audio is transcribed and displayed in the chat transcript area. When the user speaks, the transcription appears as a TuiCard message with a "YOU" speaker label in the ChatTranscript, replacing the legacy subtitle overlay. Transcripts are rendered inline as card messages without a separate subtitle layer.
 
 ## Preconditions
 - Emulator is running (`adb devices` shows the device)
@@ -27,9 +27,11 @@ e2e/helpers/emu-capture.sh 005-step1-idle
 ```
 
 **Expect:**
-- The status badge shows "Listening" (amber text)
-- The orb is visible in the center
-- No subtitle text is visible between the waveform row and the chip row
+- The diagnostics bar shows `SYS: OK` (no status badge)
+- The amber orb is not visible (replaced by chat transcript area)
+- The chat area displays "Waiting for conversation..." or system event cards
+- A compact waveform is visible at the top
+- The mic button is at the bottom
 
 ### Step 2: Inject speech audio into the emulator mic
 
@@ -37,14 +39,17 @@ e2e/helpers/emu-capture.sh 005-step1-idle
 e2e/helpers/emu-speak.sh stt-hello
 ```
 
-Wait up to 15 seconds for a transcription subtitle to appear. Poll with captures every 3 seconds.
+Wait up to 15 seconds for a transcription message to appear in the chat area. Poll with captures every 3 seconds.
 
 ```sh
 e2e/helpers/emu-capture.sh 005-step2-subtitle
 ```
 
 **Expect:**
-- A subtitle overlay is visible between the waveform bars and the Diagnostics chip
-- The subtitle shows a speaker label "You" in amber/yellow text
-- The subtitle contains transcription text (words related to "hello" or "can you hear me")
-- The subtitle has a dark semi-transparent background with rounded corners
+- A TuiCard message appears in the chat transcript area
+- The card has a cyan TuiHeader with `┌─ YOU ─┐` label
+- The card displays transcribed text (words related to "hello" or similar)
+- Text may initially appear in italic (interim transcription) then become normal (final transcription)
+- The card has sharp corners (BorderRadius.zero) and a surface background (#1A1A1A)
+- No subtitle overlay — the text is integrated into the main chat scroll area
+- No TranscriptSubtitle widget is visible

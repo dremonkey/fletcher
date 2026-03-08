@@ -43,7 +43,7 @@ flowchart TD
 
 Owner detection has two planned layers (only the first is implemented):
 
-1. **Device identity (current):** The `FLETCHER_OWNER_IDENTITY` environment variable names the participant identity that maps to the owner. If `participantIdentity === FLETCHER_OWNER_IDENTITY`, the participant is the owner.
+1. **Device identity (current):** The `FLETCHER_OWNER_IDENTITY` environment variable names the participant identity that maps to the owner. If `participantIdentity === FLETCHER_OWNER_IDENTITY`, the participant is the owner. The mobile app uses a stable hardware device ID as its identity (e.g., `device-<ANDROID_ID>`), so this comparison is deterministic across reconnects and app restarts.
 
 2. **Voice fingerprinting (planned):** Speaker verification would analyze audio to confirm identity with confidence scoring. Not yet implemented — tracked in `tasks/06-voice-fingerprinting/`.
 
@@ -102,7 +102,7 @@ Nanoclaw uses a single `X-Nanoclaw-Channel` header. The SessionKey maps to chann
 | `guest` | `"guest:{identity}"` |
 | `room` | `"room:{roomName}"` |
 
-Without a SessionKey, the channel falls back to JID format: `{prefix}:{participantIdentity}` (e.g., `lk:user-12345`).
+Without a SessionKey, the channel falls back to JID format: `{prefix}:{participantIdentity}` (e.g., `lk:device-abc123`).
 
 ## Agent Wiring
 
@@ -141,7 +141,7 @@ When the mobile app disconnects (network change, app backgrounded) and reconnect
 3. Session routing runs again — but if the participant identity matches, it resolves to the **same SessionKey**
 4. The backend retrieves the same conversation history
 
-This is why the SessionKey is based on identity, not room — rooms are ephemeral, identities persist.
+This is why the SessionKey is based on identity, not room — rooms are ephemeral, but identities are stable (the mobile app uses a hardware device ID that persists across reconnects and app restarts).
 
 ## GangliaSessionInfo
 

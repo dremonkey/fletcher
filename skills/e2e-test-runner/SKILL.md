@@ -104,7 +104,21 @@ Result: ❌ FAIL (3/4 passed) — 001-app-launch
 - Result icons: `✅ PASS`, `❌ FAIL`, `⏭️ SKIP` (if a prior step failed)
 - `Notes` column: key evidence from screenshots or logs
 
-### 5. Multi-test summary
+### 5. Clean up
+
+After all tests are done (or if you stop early due to failure), shut down the emulator:
+
+```sh
+adb emu kill
+```
+
+Wait for the emulator process to exit, then verify nothing is left behind:
+
+```sh
+pgrep -fa "emulator|qemu-system" || echo "clean"
+```
+
+### 6. Multi-test summary
 
 When running multiple tests, print one table per test, then a combined summary:
 

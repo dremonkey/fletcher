@@ -32,7 +32,7 @@ The voice agent audio pipeline — STT, TTS, voice detection, and agent dispatch
 - [ ] 011: Voice Selection Persistent Preferences 📋 — selection UI/API with persistent storage and env-var based config
 - [~] 012: Agent Self-Terminate on Session Error 🔄 — Priority: prevent zombie agents; disconnect from room when session dies
 - [ ] 013: Voice-Aware Metadata Tagging 📋 — inject `is_stt: true` into metadata sent to OpenClaw to enable higher verification thresholds for noisy inputs
-- [~] 015: Tiered Edge TTS Prototype 🔄 — PiperTTS plugin + FallbackAdapter wired; Piper sidecar in docker-compose; UX feedback artifact remaining
+- [x] 015: Tiered Edge TTS Prototype ✅ — PiperTTS plugin + FallbackAdapter wired; Piper sidecar in docker-compose; UX feedback artifacts (Voice Degraded/Restored/Unavailable)
 - [ ] 016: Buffer Catch-Up Optimization 📋 — Research accelerated PCM playout and transcript-only catch-up to sync conversation after blackouts
 - [ ] 017: Voice Agent Memory Leak (RCA) 📋 — root-cause analysis for 7.4 GB leak; see 018 and 019 for implementation ([BUG-004](../docs/field-tests/20260305-buglog.md))
 - [ ] 018: Upstream `_AudioOut.audio` Memory Leak 📋 — file issue + PR on `livekit/agents-js`: `out.audio.push(frame)` in `generation.ts` accumulates all TTS frames, never cleared
@@ -56,7 +56,7 @@ The mobile client for real-time voice interaction and visualization.
 - [x] 001: Initialize Flutter app ✅
 - [x] 002: Implement Amber Heartbeat visualizer ✅
 - [~] 003: Voice activity indicator & real-time STT display — audio waveform + STT subtitle + transcript drawer implemented; e2e UI tests passing; [BUG-013] Transcript UI stale when panel open; [BUG-014] Premature EOU detection
-- [ ] 004: Fix `addTransceiver: track is null` During Reconnect 📋 — null track reference during `rePublishAllTracks` after rapid reconnect cycles ([BUG-025](../docs/field-tests/20260303-buglog.md))
+- [ ] 005: SQLite Local Persistence for Chat Transcript 📋 — messages/artifacts cleared on app restart; need local SQLite storage ([BUG-016](../docs/field-tests/20260307-buglog.md))
 
 **Implemented:**
 - Full Flutter app with livekit_client integration
@@ -78,7 +78,7 @@ A unified LLM plugin (`@knittt/livekit-agent-ganglia`) that bridges LiveKit agen
 - [~] 002: Nanoclaw Integration — Phase 1-3 complete, Phase 4 (integration tests) in progress
 - [ ] 003: OpenResponses API Backend — backlog; item-based alternative to Chat Completions with granular SSE, ephemeral files, client-side tools
 - [x] 004: Session Key Routing (spec 08) ✅ — identity-based session routing replaces room-scoped IDs; owner/guest/room routing for both OpenClaw and Nanoclaw; 35 new tests
-- [ ] 005: End-to-End OpenClaw Integration — validate full voice pipeline against real Gateway; session continuity, guest isolation, tool calling
+- [x] 005: End-to-End OpenClaw Integration ✅ — validated full voice pipeline against real Gateway across multiple field test sessions; session continuity and guest isolation confirmed
 - [x] 006: Standardize on Google TTS ✅ — Replaced ElevenLabs/Cartesia; using Google TTS for "Clutch" personality character delivery.
 - [ ] 007: Handle "Queue is closed" Gracefully 📋 — catch queue-closed error during user interruption instead of propagating as fatal llm_error ([BUG-019](../docs/field-tests/20260302-buglog.md))
 - [ ] 008: Fix Zombie Agent on Disconnect 📋 — ensure agent disconnects from room when AgentSession dies or user leaves ([BUG-020](../docs/field-tests/20260302-buglog.md))
@@ -111,10 +111,8 @@ A unified LLM plugin (`@knittt/livekit-agent-ganglia`) that bridges LiveKit agen
 Pipeline optimizations to reduce voice-to-voice latency from ~1.4s to <0.8s.
 
 **Tasks:**
-- [ ] 001: Enable preemptive generation & tune endpointing (Phase 1)
-- [x] 002: Add latency instrumentation & metrics — moved to [Epic 10: Metrics](./10-metrics)
+- [x] 001: Enable preemptive generation & tune endpointing ✅ — `preemptiveGeneration: true`, endpointing delays tuned via BUG-014/TASK-014
 - [ ] 003: Streaming interim transcripts to LLM (Phase 2)
-- [ ] 004: TTS pre-warming validation (Phase 3)
 - [~] 005: Investigate & reduce OpenClaw TTFT 🔄 — Phase 1 complete: pondering status phrases + looping chime fill silence during thinking; Phase 2 (vocalized inner monologue) deferred ([BUG-006](../docs/field-tests/20260301-buglog.md))
 
 **Baseline measurement (2026-03-01 field test):** ~8-10s perceived latency. LLM TTFT is ~8s, pipeline overhead ~528ms.
@@ -133,13 +131,17 @@ Local-first voice identification and context injection.
 
 **Spec:** [docs/specs/06-voice-fingerprinting/spec.md](../docs/specs/06-voice-fingerprinting/spec.md)
 
-### 7. [Sovereign Pairing](./07-sovereign-pairing) ✅
-Signature-based authentication protocol (Ed25519) for edge devices.
+### 7. [Sovereign Pairing](./07-sovereign-pairing) 🔄
+Secure handshake between Fletcher and Heirloom Hub (OpenClaw).
 
 **Tasks:**
-- [x] 001: Create Protocol Specification
-- [x] 002: Implement Token Endpoint (`/fletcher/token`)
-- [x] 003: Integrate with LiveKit Channel Plugin
+- [x] 001: Create Protocol Specification ✅
+- [x] 002: Implement Token Endpoint (`/fletcher/token`) ✅
+- [x] 003: Integrate with LiveKit Channel Plugin ✅
+- [ ] 004: Vessel Key Specification 📋 — JSON payload for full Hub config (Tailscale, Gateway, Identity)
+- [ ] 007: "Fletcher Bridge" OpenClaw Skill 📋 — Server-side skill for Vessel Key generation and context bootstrapping
+- [ ] 005: "Blank Slate" Bootloader UI 📋 — First-run experience for App Store users
+- [ ] 006: Camera-based Handshake 📋 — QR/OCR pairing from Hub terminal
 
 **Spec:** [docs/specs/07-sovereign-pairing.md](../docs/specs/07-sovereign-pairing.md)
 
@@ -170,7 +172,7 @@ Bulletproof connection handling: survive network switches, Bluetooth changes, ai
 - [x] 005: Preserve app state across reconnects — transcripts, artifacts, mute state survive reconnection
 - [x] 006: Tailscale ICE negotiation fix — pin server's Tailscale IP for stable 5G/Wi-Fi transitions ✅
 - [x] 007: WiFi → 5G ICE renegotiation failure — increased `departure_timeout` to 120s so room survives the 40-80s handoff (BUG-015) ✅
-- [~] 008: Tailscale-aware URL resolution — runtime detection of Tailscale VPN on phone, auto-selects correct URL; code complete, needs user testing
+- [x] 008: Tailscale-aware URL resolution ✅ — TCP race between LAN and Tailscale URLs; whichever connects first wins (replaced broken VPN detection)
 - [x] 009: Bluetooth audio route recovery — `restartTrack()` swaps audio source without unpublishing ✅ ([BUG-004](../docs/field-tests/20260301-buglog.md))
 - [ ] 010: Diagnostics Stale After Reconnect 📋 — HealthService doesn't re-enumerate participants after DUPLICATE_IDENTITY reconnect ([BUG-016](../docs/field-tests/20260302-buglog.md))
 - [ ] 011: Network Transition Audio Track Timeout 📋 — WiFi→cellular causes 55s audio track publish delay (Tailscale tunnel re-establishment) + BT audio route disruption ([BUG-021](../docs/field-tests/20260303-buglog.md))
@@ -180,8 +182,9 @@ Bulletproof connection handling: survive network switches, Bluetooth changes, ai
 - [~] 018: Fix URL Resolver VPN Detection 🔄 — TCP race between LAN and Tailscale URLs (Option A); replaces broken "always use Tailscale" approach; needs field test ([BUG-031](../docs/field-tests/20260304-buglog.md), [BUG-004](../docs/field-tests/20260306-buglog.md))
 - [~] 019: Background Session Timeout & App-Close Disconnect 🔄 — implemented: `stopWithTask="true"` for swipe-away disconnect, screen lock detection via method channel, 10-min background timeout with notification countdown; pending field verification
 - [ ] 020: Agent Reconnect After Worker Restart 📋 — LiveKit doesn't re-dispatch agent jobs after worker restart; orphaned rooms with users but no agent ([BUG-005](../docs/field-tests/20260306-buglog.md))
-- [x] 021: Dynamic Room Names ✅ — dynamic `fletcher-<timestamp>` room names with token endpoint; client creates new room on budget exhaustion for seamless agent restart recovery; e2e tests 006-008 passing ([BUG-005](../docs/field-tests/20260306-buglog.md))
+- [x] 021: Dynamic Room Names ✅ — dynamic `fletcher-<timestamp>` room names with token endpoint; client creates new room on budget exhaustion for seamless agent restart recovery; e2e tests 006-008 passing ([BUG-005](../docs/field-tests/20260306-buglog.md)) — **closed**
 - [~] 022: E2E Test Room Convention 🔄 — `e2e-fletcher-` prefix when `E2E_TEST_MODE=true`; agent detects `e2e-*` rooms and uses minimal prompt; pending field verification
+- [ ] 023: Background Auto-Close Timer Regression 📋 — 10-min background timeout not firing on app switch; regression of task 019 ([BUG-028](../docs/field-tests/20260307-buglog.md))
 
 **Depends on:** Epic 3 (Flutter App)
 
@@ -201,17 +204,24 @@ OpenTelemetry-compatible instrumentation for the voice pipeline. Measure STT, EO
 - `TurnMetricsCollector` correlating EOU + LLM + TTS by `speechId` into per-turn summaries
 - 5 unit tests for metrics collector
 
-### 11. [UI Redesign — TUI Brutalist](./07-ui-ux) 📋
+### 11. [UI Redesign — TUI Brutalist](./07-ui-ux) 🔄
 Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layout with inline artifacts and live diagnostics.
 
 **Tasks (New Direction):**
-- [ ] 016: TUI Brutalist Design System — foundational theme tokens, monospace typography, amber/cyan palette, corner-bracket decorators
-- [ ] 017: Chat-First Main View — chat transcript as primary content, compact 8-bit waveform top, mic button bottom with orb states
-- [ ] 018: Artifact System Redesign — inline artifact buttons in chat, bottom sheet drawer, artifacts list modal, counter button
-- [ ] 019: Live Diagnostics Status Bar — real-time VAD/RT/SYS metrics, tri-color health orb, tappable expanded diagnostics view
-
+- [x] 016: TUI Brutalist Design System ✅ — AppColors, AppTypography, AppSpacing, TuiHeader/TuiCard/TuiButton/TuiModal
+- [x] 017: Chat-First Main View ✅ — Column layout replacing Stack+Positioned; CompactWaveform, ChatTranscript (ListView.builder), MicButton with all states
+- [x] 018: Artifact System Redesign ✅ — inline artifact buttons in chat, bottom sheet drawer, artifacts list modal, counter button
+- [x] 019: Live Diagnostics Status Bar ✅ — DiagnosticsBar with health orb, SYS/VAD/RT metrics, expandable TuiModal diagnostics view
+- [x] 020: Inline Connection & Room Events ✅ — SystemEvent model + SystemEventCard widget; NETWORK/ROOM/AGENT lifecycle events emitted from LiveKitService; interleaved in chat transcript by timestamp
+- [x] 021: Thinking Spinner in Chat Transcript ✅ — block-character arrow `███▶` with `░▒▓█·` particle explosion; 12 unit tests passing
+- [x] 023: Artifact–Message Association ✅ — artifacts render inline below their originating agent message instead of pooling together (BUG-012)
+- [x] 024: Diagnostics Panel — Live Pipeline Values ✅ — removed hardcoded provider names (BUG-013); wired RT latency, SESSION, AGENT, UPTIME; DiagnosticsInfo model + pipeline_info data channel support
+- [ ] 025: Fix UI State Desync — Agent Connection Status 📋 — diagnostics show `AGENT: --` despite active voice session; state update propagation + reconnection diagnostics refresh (BUG-010)
+- [ ] 026: Portrait Orientation Lock 📋 — lock app to portrait mode; landscape not designed for ([BUG-011](../docs/field-tests/20260307-buglog.md))
+- [ ] 027: Fix Arrow Loading Indicator Rendering 📋 — "box" artifact and missing chunky visual weight in ThinkingSpinner ([BUG-017](../docs/field-tests/20260307-buglog.md))
+- [ ] 029: Random Two-Word-Dash Room Names 📋 — human-readable room names instead of timestamps ([BUG-019](../docs/field-tests/20260307-buglog.md))
 **Retained:**
-- [~] 015: Single Audio Ack + Visual Spinner 🔄 — Phases 1-2 complete; spinner behavior migrates to mic button in 017
+- [x] 015: Single Audio Ack + Visual Spinner ✅ — Single-shot ack tone + SweepGradient spin on AmberOrb during thinking state
 - [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 done; Phase 3 (soft TTS fade) needs SDK support
 
 **Superseded:** ~~008: Collaborative Waveform~~ (absorbed into 017)
@@ -257,6 +267,20 @@ Move sensing capabilities (Wake Word, VAD, STT) to the edge device to improve pr
 - [ ] 005: Offline Mode 📋 — Cache interactions when offline
 
 **Spec:** [docs/specs/wake-word-integration.md](../docs/specs/wake-word-integration.md)
+
+### 15. [Macro Shortcuts](./15-macro-shortcuts) 📋
+Customizable quick-action buttons for triggering skill-driven commands without voice input. 3×3 grid optimized for thumb-zone ergonomics.
+
+**Tasks:**
+- [ ] 022: Macro Shortcut System 📋 — model, registry, TuiMacroCluster widget, action dispatcher, initial 9-macro dev set
+
+### 16. [LiveKit Flutter SDK Issues](./livekit-flutter-sdk) 📋
+Upstream bugs and limitations in the `livekit_client` Flutter/Dart SDK that affect Fletcher's mobile client.
+
+**Tasks:**
+- [ ] 004: Fix `addTransceiver: track is null` During Reconnect 📋 — null track reference during `rePublishAllTracks` after rapid reconnect cycles ([BUG-025](../docs/field-tests/20260303-buglog.md))
+
+**Related closed tasks** (resolved with workarounds in Epic 9): 007 (ICE renegotiation), 009 (BT audio recovery), 011 (audio track timeout).
 
 ## Development Path
 

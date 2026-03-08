@@ -91,8 +91,16 @@ while (true) {
     await flutterProc.exited;
   } else {
     p.note("Services running via docker compose. Press Ctrl+C to stop.", "Fletcher is ready");
-    // Block until interrupted
-    await new Promise(() => {});
+    // Clack leaves stdin in raw mode with active listeners, which keeps
+    // Bun's event loop busy-polling.  Tear it down so the loop can sleep.
+    if (process.stdin.isTTY) process.stdin.setRawMode(false);
+    process.stdin.pause();
+    process.stdin.removeAllListeners();
+    process.stdin.unref();
+    // Sleep in long intervals until SIGINT (signal handler calls process.exit).
+    // A never-resolving Promise causes Bun's event loop to busy-spin;
+    // an explicit timer gives it something real to block on.
+    while (true) await Bun.sleep(2_147_483_647);
   }
   break;
 }

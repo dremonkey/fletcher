@@ -6,6 +6,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/conversation_state.dart';
+import '../models/system_event.dart';
 import 'connectivity_service.dart';
 import 'disconnect_reason.dart' as dr;
 import 'health_service.dart';
@@ -35,6 +36,11 @@ class LiveKitService extends ChangeNotifier {
   Timer? _statusClearTimer;
   Timer? _userSubtitleClearTimer;
   Timer? _agentSubtitleClearTimer;
+
+  /// Tracks the most recent agent transcript segment ID so that artifacts
+  /// arriving via the data channel can be associated with the agent message
+  /// that produced them (BUG-012 / TASK-023).
+  String? _lastAgentSegmentId;
 
   // Background session timeout (task 019)
   static const _backgroundTimeout = Duration(minutes: 10);
@@ -73,6 +79,10 @@ class LiveKitService extends ChangeNotifier {
 
   // Connectivity-driven reconnect: waits for network restore when offline
   StreamSubscription<bool>? _networkRestoreSub;
+
+  // Diagnostics: round-trip latency measurement
+  // Tracks when user stopped speaking so we can measure RT when agent starts
+  DateTime? _userSpeechEndTime;
 
   // Buffer for reassembling chunked messages
   final Map<String, List<String?>> _chunks = {};
@@ -113,6 +123,16 @@ class LiveKitService extends ChangeNotifier {
 
     _updateState(status: ConversationStatus.connecting);
 
+    // Emit boot sequence system events (task 020)
+    _emitSystemEvent(SystemEvent(
+      id: 'network-boot',
+      type: SystemEventType.network,
+      status: SystemEventStatus.pending,
+      message: 'resolving...',
+      timestamp: DateTime.now(),
+      prefix: '\u25B8',
+    ));
+
     try {
       // Determine room name: reuse recent session or generate new
       final stalenessThreshold = Duration(seconds: departureTimeoutS);
@@ -127,18 +147,38 @@ class LiveKitService extends ChangeNotifier {
       // Resolve URL (race all candidates)
       final resolved = await resolveLivekitUrl(urls: urls);
 
+      // Update network event to success
+      _emitSystemEvent(SystemEvent(
+        id: 'network-boot',
+        type: SystemEventType.network,
+        status: SystemEventStatus.success,
+        message: _describeTransport(resolved.url),
+        timestamp: DateTime.now(),
+        prefix: '\u25B8',
+      ));
+
       // Extract host from resolved URL for token endpoint
       final resolvedUri = Uri.parse(resolved.url);
       final tokenHost = resolvedUri.host;
 
       // Fetch token from endpoint
-      final identity = 'user-${DateTime.now().millisecondsSinceEpoch}';
+      final identity = await SessionStorage.getDeviceId();
       final result = await fetchToken(
         host: tokenHost,
         port: tokenServerPort,
         roomName: roomName,
         identity: identity,
       );
+
+      // Emit AGENT waiting event before connect (agent arrives after room join)
+      _emitSystemEvent(SystemEvent(
+        id: 'agent-boot',
+        type: SystemEventType.agent,
+        status: SystemEventStatus.pending,
+        message: 'waiting...',
+        timestamp: DateTime.now(),
+        prefix: '\u25B8',
+      ));
 
       // Connect using the low-level connect method
       await connect(
@@ -152,6 +192,14 @@ class LiveKitService extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('[Fletcher] Dynamic room connection failed: $e');
+      _emitSystemEvent(SystemEvent(
+        id: 'network-boot',
+        type: SystemEventType.network,
+        status: SystemEventStatus.error,
+        message: 'failed: $e',
+        timestamp: DateTime.now(),
+        prefix: '\u2715',
+      ));
       _updateState(
         status: ConversationStatus.error,
         errorMessage: 'Connection failed: $e',
@@ -176,6 +224,16 @@ class LiveKitService extends ChangeNotifier {
 
     debugPrint('[Fletcher] Creating new room for recovery: $roomName');
 
+    // Emit room recovery system event (task 020)
+    _emitSystemEvent(SystemEvent(
+      id: 'room-recovery-${DateTime.now().millisecondsSinceEpoch}',
+      type: SystemEventType.room,
+      status: SystemEventStatus.pending,
+      message: 'departed \u00B7 creating new room...',
+      timestamp: DateTime.now(),
+      prefix: '\u2715',
+    ));
+
     try {
       // Resolve URL
       final resolved = await resolveLivekitUrl(urls: _allUrls);
@@ -183,7 +241,7 @@ class LiveKitService extends ChangeNotifier {
       final resolvedUri = Uri.parse(resolved.url);
       final tokenHost = resolvedUri.host;
 
-      final identity = 'user-${DateTime.now().millisecondsSinceEpoch}';
+      final identity = await SessionStorage.getDeviceId();
       final result = await fetchToken(
         host: tokenHost,
         port: _tokenServerPort,
@@ -254,11 +312,32 @@ class LiveKitService extends ChangeNotifier {
       _listener = _room!.createListener();
       _setupRoomListeners();
 
+      // Emit pending ROOM event (task 020)
+      _emitSystemEvent(SystemEvent(
+        id: 'room-boot',
+        type: SystemEventType.room,
+        status: SystemEventStatus.pending,
+        message: 'connecting...',
+        timestamp: DateTime.now(),
+        prefix: '\u25B8',
+      ));
+
       debugPrint('[Fletcher] Connecting to $url');
       await _room!.connect(url, token);
 
       debugPrint('[Fletcher] Connected to room');
       _localParticipant = _room!.localParticipant;
+
+      // Update ROOM event to success with room name (task 020)
+      final roomDisplayName = _currentRoomName ?? 'room';
+      _emitSystemEvent(SystemEvent(
+        id: 'room-boot',
+        type: SystemEventType.room,
+        status: SystemEventStatus.success,
+        message: '$roomDisplayName \u00B7 joined',
+        timestamp: DateTime.now(),
+        prefix: '\u25B8',
+      ));
 
       _reconnectScheduler.reset();
       _reconnecting = false;
@@ -268,6 +347,18 @@ class LiveKitService extends ChangeNotifier {
       final hasAgent = _room!.remoteParticipants.isNotEmpty;
       debugPrint('[Fletcher] Room joined: participants=${_room!.remoteParticipants.length} agent=$hasAgent');
       healthService.updateAgentPresent(present: hasAgent);
+
+      // Populate diagnostics with session info
+      final agentId = hasAgent
+          ? _room!.remoteParticipants.values.first.identity
+          : null;
+      _updateState(
+        diagnostics: _state.diagnostics.copyWith(
+          connectedAt: DateTime.now(),
+          sessionName: _currentRoomName,
+          agentIdentity: agentId,
+        ),
+      );
 
       // Enable microphone — respect mute state across reconnects
       await _localParticipant!.setMicrophoneEnabled(!_isMuted);
@@ -305,6 +396,15 @@ class LiveKitService extends ChangeNotifier {
       _reconnectScheduler.begin();
       _updateState(status: ConversationStatus.reconnecting);
       healthService.updateRoomReconnecting();
+      // Emit room reconnecting system event (task 020)
+      _emitSystemEvent(SystemEvent(
+        id: 'room-reconnect-${DateTime.now().millisecondsSinceEpoch}',
+        type: SystemEventType.room,
+        status: SystemEventStatus.error,
+        message: 'disconnected \u00B7 reconnecting...',
+        timestamp: DateTime.now(),
+        prefix: '\u2715',
+      ));
       // Buffer mic audio during reconnection (BUG-027)
       _reconnectBuffer?.reset();
       _reconnectBuffer = PreConnectAudioBuffer(_room!);
@@ -329,6 +429,16 @@ class LiveKitService extends ChangeNotifier {
       _reconnectScheduler.reset();
       _reconnecting = false;
       healthService.updateRoomConnected(connected: true);
+      // Emit room reconnected system event (task 020)
+      final roomName = _currentRoomName ?? 'room';
+      _emitSystemEvent(SystemEvent(
+        id: 'room-reconnected-${DateTime.now().millisecondsSinceEpoch}',
+        type: SystemEventType.room,
+        status: SystemEventStatus.success,
+        message: '$roomName \u00B7 reconnected',
+        timestamp: DateTime.now(),
+        prefix: '\u25B8',
+      ));
       // Restore status: respect mute state, otherwise go idle
       _updateState(
         status: _isMuted ? ConversationStatus.muted : ConversationStatus.idle,
@@ -362,6 +472,15 @@ class LiveKitService extends ChangeNotifier {
       final reason = event.reason ?? DisconnectReason.unknown;
       debugPrint('[Fletcher] Disconnected: $reason');
       healthService.updateAgentPresent(present: false);
+      // Emit room disconnected system event (task 020)
+      _emitSystemEvent(SystemEvent(
+        id: 'room-disconnect-${DateTime.now().millisecondsSinceEpoch}',
+        type: SystemEventType.room,
+        status: SystemEventStatus.error,
+        message: 'disconnected \u00B7 $reason',
+        timestamp: DateTime.now(),
+        prefix: '\u2715',
+      ));
       // Clean up reconnect buffer — room is disconnecting, can't send via it
       await _reconnectBuffer?.reset();
       _reconnectBuffer = null;
@@ -387,12 +506,42 @@ class LiveKitService extends ChangeNotifier {
     _listener?.on<ParticipantConnectedEvent>((event) {
       debugPrint('[Fletcher] Remote participant connected: ${event.participant.identity}');
       healthService.updateAgentPresent(present: true);
+      // Update diagnostics with agent identity
+      _updateState(
+        diagnostics: _state.diagnostics.copyWith(
+          agentIdentity: event.participant.identity,
+        ),
+      );
+      // Emit/update agent connected system event (task 020)
+      _emitSystemEvent(SystemEvent(
+        id: 'agent-boot',
+        type: SystemEventType.agent,
+        status: SystemEventStatus.success,
+        message: 'connected \u00B7 ready',
+        timestamp: DateTime.now(),
+        prefix: '\u25B8',
+      ));
     });
 
     _listener?.on<ParticipantDisconnectedEvent>((event) {
       final remaining = _room?.remoteParticipants.length ?? 0;
       debugPrint('[Fletcher] Remote participant disconnected: ${event.participant.identity} (remaining=$remaining)');
       healthService.updateAgentPresent(present: remaining > 0);
+      // Clear agent identity if no agents remain
+      if (remaining == 0) {
+        _updateState(
+          diagnostics: _state.diagnostics.copyWith(clearAgentIdentity: true),
+        );
+      }
+      // Emit agent disconnected system event (task 020)
+      _emitSystemEvent(SystemEvent(
+        id: 'agent-disconnect-${DateTime.now().millisecondsSinceEpoch}',
+        type: SystemEventType.agent,
+        status: SystemEventStatus.error,
+        message: 'disconnected',
+        timestamp: DateTime.now(),
+        prefix: '\u2715',
+      ));
     });
 
     _listener?.on<TrackSubscribedEvent>((event) {
@@ -604,13 +753,19 @@ class LiveKitService extends ChangeNotifier {
       });
     } else if (eventType == 'artifact') {
       final artifactEvent = ArtifactEvent.fromJson(json);
-      final newArtifacts = [..._state.artifacts, artifactEvent];
+      // Associate artifact with the most recent agent message (TASK-023).
+      // If no agent message exists yet, messageId stays null and the
+      // ChatTranscript will use the fallback (nearest prior agent message).
+      final stamped = _lastAgentSegmentId != null
+          ? artifactEvent.withMessageId(_lastAgentSegmentId)
+          : artifactEvent;
+      final newArtifacts = [..._state.artifacts, stamped];
       // Keep only last 10 artifacts
       if (newArtifacts.length > 10) {
         newArtifacts.removeAt(0);
       }
       _updateState(artifacts: newArtifacts);
-      debugPrint('[Ganglia] Artifact: ${artifactEvent.displayTitle}');
+      debugPrint('[Ganglia] Artifact: ${stamped.displayTitle} (msg=${stamped.messageId})');
     } else if (eventType == 'agent_transcript') {
       // Agent transcript forwarded directly from Ganglia LLM content stream.
       // Bypasses the SDK's lk.transcription pipeline which breaks when the
@@ -619,6 +774,13 @@ class LiveKitService extends ChangeNotifier {
       final text = json['text'] as String? ?? '';
       final isFinal = json['final'] == true;
       if (text.isNotEmpty) {
+        // Track the latest agent segment ID for artifact association (TASK-023)
+        _lastAgentSegmentId = segmentId;
+
+        // Stop thinking spinner once agent text starts streaming
+        if (_state.isAgentThinking) {
+          _updateState(isAgentThinking: false);
+        }
         _upsertTranscript(
           segmentId: segmentId,
           role: TranscriptRole.agent,
@@ -642,6 +804,16 @@ class LiveKitService extends ChangeNotifier {
           isFinal: isFinal,
         );
       }
+    } else if (eventType == 'pipeline_info') {
+      // Pipeline provider info sent by the voice agent (BUG-013).
+      // Expected shape: { type: "pipeline_info", stt: "deepgram", tts: "google", llm: "openclaw" }
+      _updateState(
+        diagnostics: _state.diagnostics.copyWith(
+          sttProvider: json['stt'] as String?,
+          ttsProvider: json['tts'] as String?,
+          llmProvider: json['llm'] as String?,
+        ),
+      );
     }
   }
 
@@ -676,6 +848,27 @@ class LiveKitService extends ChangeNotifier {
         connectivityService.onConnectivityChanged.listen((online) {
       debugPrint('[Fletcher] Network changed: online=$online');
       healthService.updateNetworkStatus(online: online);
+      // Emit inline network status event (task 020)
+      final ts = DateTime.now().millisecondsSinceEpoch;
+      if (online) {
+        _emitSystemEvent(SystemEvent(
+          id: 'network-$ts',
+          type: SystemEventType.network,
+          status: SystemEventStatus.pending,
+          message: 'switching...',
+          timestamp: DateTime.now(),
+          prefix: '\u26A1',
+        ));
+      } else {
+        _emitSystemEvent(SystemEvent(
+          id: 'network-$ts',
+          type: SystemEventType.network,
+          status: SystemEventStatus.error,
+          message: 'offline',
+          timestamp: DateTime.now(),
+          prefix: '\u2715',
+        ));
+      }
     });
   }
 
@@ -802,16 +995,41 @@ class LiveKitService extends ChangeNotifier {
       // Keep error/reconnecting state
     } else if (aiLevel > 0.05) {
       newStatus = ConversationStatus.aiSpeaking;
+      // Agent is speaking — stop thinking spinner
+      if (_state.isAgentThinking) {
+        _updateState(isAgentThinking: false);
+      }
+      // Measure round-trip latency: user speech end → agent speech start
+      if (_state.status != ConversationStatus.aiSpeaking &&
+          _userSpeechEndTime != null) {
+        final rtMs = DateTime.now()
+            .difference(_userSpeechEndTime!)
+            .inMilliseconds;
+        _userSpeechEndTime = null;
+        _updateState(
+          diagnostics: _state.diagnostics.copyWith(roundTripMs: rtMs),
+        );
+      }
     } else if (userLevel > 0.05) {
       newStatus = ConversationStatus.userSpeaking;
+      // Clear previous speech end time while user is still speaking
+      _userSpeechEndTime = null;
     } else if (_state.status == ConversationStatus.userSpeaking ||
         _state.status == ConversationStatus.aiSpeaking) {
       // Brief processing state after speaking stops
       newStatus = ConversationStatus.processing;
+      // Record when user stopped speaking for RT measurement
+      if (_state.status == ConversationStatus.userSpeaking) {
+        _userSpeechEndTime = DateTime.now();
+        _updateState(isAgentThinking: true);
+      }
       // Return to idle after short delay
       Future.delayed(const Duration(milliseconds: 500), () {
         if (_state.status == ConversationStatus.processing) {
-          _updateState(status: ConversationStatus.idle);
+          _updateState(
+            status: ConversationStatus.idle,
+            isAgentThinking: false,
+          );
         }
       });
     } else if (_state.status != ConversationStatus.processing) {
@@ -854,6 +1072,9 @@ class LiveKitService extends ChangeNotifier {
     bool clearCurrentUserTranscript = false,
     TranscriptEntry? currentAgentTranscript,
     bool clearCurrentAgentTranscript = false,
+    List<SystemEvent>? systemEvents,
+    bool? isAgentThinking,
+    DiagnosticsInfo? diagnostics,
   }) {
     _state = _state.copyWith(
       status: status,
@@ -870,8 +1091,46 @@ class LiveKitService extends ChangeNotifier {
       clearCurrentUserTranscript: clearCurrentUserTranscript,
       currentAgentTranscript: currentAgentTranscript,
       clearCurrentAgentTranscript: clearCurrentAgentTranscript,
+      systemEvents: systemEvents,
+      isAgentThinking: isAgentThinking,
+      diagnostics: diagnostics,
     );
     notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Inline system events (task 020)
+  // ---------------------------------------------------------------------------
+
+  /// Emit or update a system event in the conversation state.
+  ///
+  /// Events with the same [SystemEvent.id] are updated in place (status
+  /// transitions), not duplicated.
+  void _emitSystemEvent(SystemEvent event) {
+    final events = List<SystemEvent>.from(_state.systemEvents);
+    final idx = events.indexWhere((e) => e.id == event.id);
+    if (idx >= 0) {
+      events[idx] = event;
+    } else {
+      events.add(event);
+    }
+    _updateState(systemEvents: events);
+  }
+
+  /// Describe the transport type from a resolved URL.
+  ///
+  /// Parses the host to determine tailscale (100.x.x.x), emulator
+  /// (10.0.2.2), or LAN.
+  static String _describeTransport(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final host = uri.host;
+      if (host.startsWith('100.')) return 'tailscale $host';
+      if (host == '10.0.2.2') return 'emulator $host';
+      return 'lan $host';
+    } catch (_) {
+      return url;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -980,6 +1239,15 @@ class LiveKitService extends ChangeNotifier {
 
     // Re-resolve URL (network may have changed, e.g. WiFi→cellular)
     final resolved = await resolveLivekitUrl(urls: _allUrls);
+    // Update any pending network switch event with resolved transport (task 020)
+    _emitSystemEvent(SystemEvent(
+      id: 'network-reconnect-${DateTime.now().millisecondsSinceEpoch}',
+      type: SystemEventType.network,
+      status: SystemEventStatus.success,
+      message: _describeTransport(resolved.url),
+      timestamp: DateTime.now(),
+      prefix: '\u26A1',
+    ));
     await connect(url: resolved.url, token: _token!);
 
     // If connect succeeded, refresh session timestamp
@@ -1019,6 +1287,7 @@ class LiveKitService extends ChangeNotifier {
   /// disconnects the session on expiry. Screen-locked means the user may
   /// be talking via earbuds, so we skip the timeout.
   void onAppBackgrounded({required bool isScreenLocked}) {
+    debugPrint('[Fletcher] onAppBackgrounded called — room=${_room != null ? 'connected' : 'NULL'}, isScreenLocked=$isScreenLocked');
     if (_room == null) return;
     if (isScreenLocked) {
       debugPrint('[Fletcher] Screen locked — skipping background timeout');
@@ -1119,6 +1388,9 @@ class LiveKitService extends ChangeNotifier {
     // Clear waveform buffers — old audio levels are meaningless
     _userWaveformBuffer.clear();
     _aiWaveformBuffer.clear();
+
+    // Clear RT measurement state
+    _userSpeechEndTime = null;
 
     if (!preserveTranscripts) {
       _url = null;

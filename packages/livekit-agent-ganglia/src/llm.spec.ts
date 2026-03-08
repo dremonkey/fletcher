@@ -1,7 +1,15 @@
-import { describe, it, expect, mock } from 'bun:test';
+import { describe, it, expect, mock, beforeAll } from 'bun:test';
 import { OpenClawLLM, extractSessionFromContext } from './llm.js';
 import { llm as agents } from '@livekit/agents';
 import type { LiveKitSessionInfo, OpenClawChatResponse } from './types/index.js';
+
+// LLMStream constructor requires the @livekit/agents logger to be initialized.
+// In production this happens via cli.runApp(); in tests we must do it manually.
+// initializeLogger is @internal (excluded from .d.ts) but re-exported at runtime.
+import * as agentsPkg from '@livekit/agents';
+beforeAll(() => {
+  (agentsPkg as any).initializeLogger({ pretty: false, level: 'silent' });
+});
 
 describe('OpenClawLLM', () => {
   it('should have the correct label and model', () => {
@@ -78,9 +86,10 @@ describe('Message Mapping', () => {
     // The empty system message should be filtered out
     expect(capturedMessages.length).toBe(1);
     expect(capturedMessages[0].role).toBe('user');
-    // TASK-013: user messages are wrapped with STT skepticism metadata
-    expect(capturedMessages[0].content).toContain('Hello');
-    expect(capturedMessages[0].content).toContain('Speech-to-Text');
+    // TASK-013: STT metadata is now sent once as a bootstrap message at session
+    // start (see bootstrap.ts), no longer wrapped per-message.
+    // Content is passed through as-is (no STT wrapper prepended).
+    expect(capturedMessages[0].content ?? '').not.toInclude('Speech-to-Text');
   });
 });
 
