@@ -343,18 +343,18 @@ Refactor the Fletcher voice agent to use the native OpenClaw **OpenResponses API
 
 **Depends on:** Epic 4 (Ganglia), OpenClaw Gateway OpenResponses endpoint
 
-### 19. [Local Piper TTS Integration](./19-local-piper-tts) 📋
+### 19. [Local Piper TTS Integration](./19-local-piper-tts) 🔄
 Move the Piper TTS engine from the server sidecar to the mobile client (Android/iOS) for on-device voice synthesis. Eliminate cloud voice-out costs (drop COGS to $0), enable offline operation, and achieve zero-network-hop voice latency.
 
 **Tasks:**
-- [ ] 001: Local PiperTTS Discovery & Feasibility 📋 — sherpa-onnx evaluation, model selection, performance benchmarking (migrated from 13-031)
-- [ ] 002: Sherpa-ONNX Flutter Integration 📋 — native platform integration, inference pipeline, audio output
-- [ ] 003: Model Selection & Bundling Strategy 📋 — voice character selection, APK/OBB bundling, model updates
-- [ ] 004: Local TTS Pipeline & Fallback Integration 📋 — wire local Piper into voice agent as fallback tier, LiveKit audio track integration
-- [ ] 005: Performance Optimization & Battery Impact 📋 — ONNX Runtime acceleration, quantization, battery profiling
-- [ ] 006: Offline Mode & Edge TTS Coordination 📋 — offline TTS, VAD coordination, voice consistency
+- [x] 001: Local PiperTTS Discovery & Feasibility ✅ — sherpa-onnx v1.12.28 confirmed as integration path; model is 63MB (not 18MB); NNAPI crashes for TTS; download-on-first-use recommended; ~500MB peak RAM is key risk
+- [ ] 002: Sherpa-ONNX Flutter Integration 📋 — ready for prototyping; API validated, code examples documented
+- [~] 003: Model Selection & Bundling Strategy 🔄 — research complete (en_US-lessac-medium, download-on-first-use); benchmarking and INT8 quantization pending
+- [ ] 004: Local TTS Pipeline & Fallback Integration 📋 — server-side artifacts already exist (tts-fallback-monitor.ts); audio playback conflict needs design
+- [ ] 005: Performance Optimization & Battery Impact 📋 — NNAPI not viable; CPU-only; memory is primary risk
+- [ ] 006: Offline Mode & Edge TTS Coordination 📋 — ConnectivityService already exists; model must be pre-downloaded for offline
 
-**Context:** This is the key to reaching a 50% margin for the Fletcher Pro tier by removing the ~$0.135/min cloud TTS overhead.
+**Context:** This is the key to reaching a 50% margin for the Fletcher Pro tier by removing the ~$0.135/min cloud TTS overhead. Discovery phase complete (2026-03-08).
 
 **Depends on:** Epic 3 (Flutter App), Epic 13 (Edge Intelligence)
 

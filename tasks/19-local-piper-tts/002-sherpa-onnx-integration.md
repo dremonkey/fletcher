@@ -1,29 +1,45 @@
 # Task 002: Sherpa-ONNX Flutter Integration
 
-**Epic:** 19 - Local Piper TTS Integration  
-**Status:** 📋 Backlog  
-**Depends on:** 001 (Technical Spec & Discovery)
+**Epic:** 19 - Local Piper TTS Integration
+**Status:** 📋 Backlog (Ready for Prototyping)
+**Depends on:** 001 (Technical Spec & Discovery) -- COMPLETE
 
 ## Objective
 
 Integrate the `sherpa-onnx` Flutter package into the Fletcher mobile app to enable on-device Piper TTS inference.
 
-## Requirements
+## Discovery Findings (from Task 001)
 
-- Add `sherpa-onnx` package dependency to Flutter project
-- Implement platform-specific setup (Android/iOS)
-- Create `LocalPiperTTS` service wrapper
-- Verify model loading and basic synthesis
+Key facts validated by research:
 
-## Implementation
+- **Package:** `sherpa_onnx` v1.12.28 (actively maintained, 9.1k weekly downloads)
+- **Android min SDK:** 23 (Fletcher currently targets higher)
+- **iOS min version:** 13.0
+- **Model size:** 63 MB (NOT 18 MB as originally estimated)
+- **espeak-ng-data:** Required for phonemization (~3-5 MB), shared across Piper languages
+- **NNAPI:** Does NOT work for TTS (crashes, Issue #958) -- must use CPU provider
+- **API:** Synchronous `generate()` -- must run on isolate to avoid UI blocking
+- **Memory:** Peak ~500 MB during inference, settling to ~100-200 MB
+
+## Revised Requirements
+
+- [x] ~~Research sherpa-onnx API and Piper compatibility~~ (Done in Task 001)
+- [ ] Add `sherpa_onnx` package dependency to Flutter project
+- [ ] Implement platform-specific setup (Android/iOS)
+- [ ] Download and prepare model files (ONNX + espeak-ng-data + tokens)
+- [ ] Create `LocalPiperTTS` service wrapper with isolate-based synthesis
+- [ ] Verify model loading and basic synthesis on Android device
+- [ ] Verify audio output (PCM samples playable)
+
+## Implementation Plan
 
 ### 1. Add Dependencies
 
 **pubspec.yaml:**
 ```yaml
 dependencies:
-  sherpa_onnx: ^1.10.0  # Latest stable version
-  path_provider: ^2.1.0 # For model file paths
+  sherpa_onnx: ^1.12.28
+  path_provider: ^2.1.0  # For model file paths
 ```
 
 ### 2. Platform Setup
@@ -32,9 +48,9 @@ dependencies:
 ```gradle
 android {
     defaultConfig {
-        minSdkVersion 24  // sherpa-onnx requirement
+        minSdkVersion 24  // sherpa-onnx requires min 23, Fletcher uses 24+
         ndk {
-            abiFilters 'armeabi-v7a', 'arm64-v8a'
+            abiFilters 'arm64-v8a'  // Primary target
         }
     }
 }
@@ -45,106 +61,98 @@ android {
 platform :ios, '13.0'  # sherpa-onnx requirement
 ```
 
-### 3. Create LocalPiperTTS Service
+### 3. Prepare Model Files
+
+Download from sherpa-onnx releases and Hugging Face:
+
+```bash
+# espeak-ng-data (shared by all Piper models)
+wget https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/espeak-ng-data.tar.bz2
+tar xf espeak-ng-data.tar.bz2
+
+# Model files (already in repo at models/piper/)
+# en_US-lessac-medium.onnx (63 MB)
+# en_US-lessac-medium.onnx.json (5 KB)
+
+# tokens.txt -- extract from JSON config or download from sherpa-onnx
+```
+
+**Note:** For the prototype, model files should be placed on the device filesystem (not bundled in APK). Use `adb push` for initial testing.
+
+### 4. Create LocalPiperTTS Service
+
+**Key Design Decisions:**
+- Synthesis runs on a Dart `Isolate` to avoid blocking the UI thread
+- Model loaded once per session, freed after 5 minutes of idle
+- CPU-only provider (NNAPI crashes for TTS)
+- Match server-side Piper params: noise_scale=0.667, noise_w=0.8, length_scale=1.0
 
 **lib/services/local_piper_tts.dart:**
 ```dart
-import 'package:sherpa_onnx/sherpa_onnx.dart';
-import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'dart:isolate';
+import 'package:sherpa_onnx/sherpa_onnx.dart';
+import 'package:path_provider/path_provider.dart';
 
 class LocalPiperTTS {
   OfflineTts? _tts;
   bool _initialized = false;
-  
-  /// Initialize the Piper TTS engine with bundled model
-  Future<void> initialize() async {
+  Timer? _unloadTimer;
+
+  bool get isInitialized => _initialized;
+  int get sampleRate => _tts?.sampleRate ?? 22050;
+
+  /// Initialize the Piper TTS engine
+  ///
+  /// [modelDir] must contain:
+  ///   - en_US-lessac-medium.onnx
+  ///   - tokens.txt
+  ///   - espeak-ng-data/ (directory)
+  Future<void> initialize(String modelDir) async {
     if (_initialized) return;
-    
-    try {
-      // Extract model files from assets to app directory
-      final modelDir = await _extractModelFromAssets();
-      
-      // Create TTS engine
-      _tts = await OfflineTts.create(
-        model: OfflineTtsModelConfig(
-          vits: OfflineTtsVitsModelConfig(
-            model: '$modelDir/en_US-lessac-medium.onnx',
-            tokens: '$modelDir/tokens.txt',
-            dataDir: modelDir,
-            lengthScale: 1.0,
-            noiseScale: 0.667,
-            noiseScaleW: 0.8,
-          ),
+
+    final config = OfflineTtsConfig(
+      model: OfflineTtsModelConfig(
+        vits: OfflineTtsVitsModelConfig(
+          model: '$modelDir/en_US-lessac-medium.onnx',
+          tokens: '$modelDir/tokens.txt',
+          dataDir: '$modelDir/espeak-ng-data',
+          // Match server-side Piper params from models/piper/*.onnx.json
+          noiseScale: 0.667,
+          noiseScaleW: 0.8,
+          lengthScale: 1.0,
         ),
-      );
-      
-      _initialized = true;
-      print('LocalPiperTTS initialized successfully');
-    } catch (e) {
-      print('Failed to initialize LocalPiperTTS: $e');
-      rethrow;
-    }
-  }
-  
-  /// Extract Piper model files from assets to app directory
-  Future<String> _extractModelFromAssets() async {
-    final appDir = await getApplicationDocumentsDirectory();
-    final modelDir = Directory('${appDir.path}/models/piper');
-    
-    if (!await modelDir.exists()) {
-      await modelDir.create(recursive: true);
-      
-      // Extract model files
-      final files = [
-        'en_US-lessac-medium.onnx',
-        'en_US-lessac-medium.onnx.json',
-        'tokens.txt',
-      ];
-      
-      for (final file in files) {
-        final data = await rootBundle.load('assets/models/piper/$file');
-        final outFile = File('${modelDir.path}/$file');
-        await outFile.writeAsBytes(
-          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
-        );
-      }
-    }
-    
-    return modelDir.path;
-  }
-  
-  /// Synthesize text to audio samples (Int16 PCM, 22050 Hz)
-  Future<GeneratedAudio> synthesize(String text) async {
-    if (!_initialized || _tts == null) {
-      throw StateError('LocalPiperTTS not initialized');
-    }
-    
-    final audio = _tts!.generate(
-      text: text,
-      speed: 1.0,
-      speakerId: 0,
+        numThreads: 2,
+        provider: 'cpu',  // NNAPI crashes for TTS (sherpa-onnx #958)
+      ),
     );
-    
-    return audio;
+
+    _tts = OfflineTts(config);
+    _initialized = true;
+    _resetUnloadTimer();
   }
-  
-  /// Generate audio and return as stream of PCM samples
-  Stream<Float32List> synthesizeStream(String text) async* {
-    final audio = await synthesize(text);
-    
-    // Convert Int16 samples to Float32 for audio playback
-    final samples = Float32List(audio.samples.length);
-    for (int i = 0; i < audio.samples.length; i++) {
-      samples[i] = audio.samples[i] / 32768.0; // Normalize to [-1, 1]
-    }
-    
-    yield samples;
+
+  /// Synthesize text to PCM audio (Float32, 22050 Hz mono)
+  ///
+  /// WARNING: This is a blocking call. Run on an isolate for UI safety.
+  GeneratedAudio? synthesize(String text, {double speed = 1.0}) {
+    if (!_initialized || _tts == null) return null;
+
+    _resetUnloadTimer();
+    return _tts!.generate(text: text, sid: 0, speed: speed);
   }
-  
-  /// Dispose of resources
+
+  /// Reset the auto-unload timer (5 minutes idle)
+  void _resetUnloadTimer() {
+    _unloadTimer?.cancel();
+    _unloadTimer = Timer(const Duration(minutes: 5), () {
+      dispose();
+    });
+  }
+
+  /// Free native resources
   void dispose() {
+    _unloadTimer?.cancel();
     _tts?.free();
     _tts = null;
     _initialized = false;
@@ -152,125 +160,83 @@ class LocalPiperTTS {
 }
 ```
 
-### 4. Register Service (Dependency Injection)
+### 5. Model File Management
 
-**lib/main.dart:**
+For the prototype, model files will be pushed to the device via adb.
+For production (Task 003), implement download-on-first-use.
+
 ```dart
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize local TTS
-  final localTts = LocalPiperTTS();
-  await localTts.initialize();
-  
-  runApp(
-    MultiProvider(
-      providers: [
-        Provider.value(value: localTts),
-        // ... other providers
-      ],
-      child: FletcherApp(),
-    ),
-  );
+/// Check if model files exist on device
+Future<bool> isModelAvailable() async {
+  final appDir = await getApplicationDocumentsDirectory();
+  final modelDir = Directory('${appDir.path}/models/piper');
+  final modelFile = File('${modelDir.path}/en_US-lessac-medium.onnx');
+  return modelFile.existsSync();
 }
 ```
 
 ## Testing
 
-### Unit Test
+### Manual Test (Prototype)
 
-**test/services/local_piper_tts_test.dart:**
+1. Push model files to device:
+   ```bash
+   adb push models/piper/ /data/local/tmp/piper/
+   adb push espeak-ng-data/ /data/local/tmp/piper/espeak-ng-data/
+   ```
+
+2. In the prototype app, point to `/data/local/tmp/piper/` as the model directory.
+
+3. Synthesize "Hello, how are you today?" and verify:
+   - PCM samples are returned (non-empty Float32List)
+   - Sample rate is 22050
+   - Audio sounds intelligible when played
+
+### Unit Test (Post-Prototype)
+
 ```dart
-import 'package:flutter_test/flutter_test.dart';
-import 'package:fletcher/services/local_piper_tts.dart';
+test('should synthesize simple text', () async {
+  final tts = LocalPiperTTS();
+  await tts.initialize(modelDir);
 
-void main() {
-  late LocalPiperTTS tts;
-  
-  setUp(() {
-    tts = LocalPiperTTS();
-  });
-  
-  tearDown(() {
-    tts.dispose();
-  });
-  
-  test('should initialize successfully', () async {
-    await tts.initialize();
-    expect(tts._initialized, true);
-  });
-  
-  test('should synthesize simple text', () async {
-    await tts.initialize();
-    
-    final audio = await tts.synthesize('Hello world');
-    
-    expect(audio.samples.isNotEmpty, true);
-    expect(audio.sampleRate, 22050);
-  });
-  
-  test('should throw if synthesize called before init', () async {
-    expect(
-      () => tts.synthesize('test'),
-      throwsStateError,
-    );
-  });
-}
+  final audio = tts.synthesize('Hello world');
+
+  expect(audio, isNotNull);
+  expect(audio!.samples.isNotEmpty, true);
+  expect(audio.sampleRate, 22050);
+
+  tts.dispose();
+});
 ```
 
-### Integration Test
+## Prototype Scope
 
-**integration_test/local_tts_test.dart:**
-```dart
-import 'package:flutter_test/flutter_test.dart';
-import 'package:integration_test/integration_test.dart';
-import 'package:fletcher/main.dart' as app;
+For the initial spike, the goal is MINIMAL:
+1. Get sherpa-onnx building in the Flutter project
+2. Load the Piper model on an Android device
+3. Synthesize a test sentence to PCM
+4. Play the PCM audio (even if just saving to a WAV file)
 
-void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  
-  testWidgets('local TTS should generate audio', (tester) async {
-    app.main();
-    await tester.pumpAndSettle();
-    
-    // TODO: Trigger local TTS synthesis and verify audio output
-  });
-}
-```
-
-## Asset Bundling
-
-Add model files to `pubspec.yaml`:
-
-```yaml
-flutter:
-  assets:
-    - assets/models/piper/en_US-lessac-medium.onnx
-    - assets/models/piper/en_US-lessac-medium.onnx.json
-    - assets/models/piper/tokens.txt
-```
-
-**Note:** Model files must be downloaded separately from the Piper repository and placed in `assets/models/piper/`. See Task 003 for model selection.
+This is NOT production integration. Pipeline wiring comes in Task 004.
 
 ## Success Criteria
 
-- [ ] `sherpa-onnx` package integrated and building on Android/iOS
+- [ ] `sherpa-onnx` package integrated and building on Android
 - [ ] `LocalPiperTTS` service loads Piper model successfully
 - [ ] `synthesize()` method generates valid PCM audio samples
-- [ ] Unit tests passing
-- [ ] Integration test verifies end-to-end synthesis
+- [ ] Audio is audible and intelligible
+- [ ] Synthesis completes in <2 seconds for a short sentence on test device
+- [ ] No crashes or memory leaks during basic usage
 
-## Files Modified
+## Concerns Identified During Discovery
 
-- `pubspec.yaml` (add dependencies)
-- `android/app/build.gradle` (min SDK version)
-- `ios/Podfile` (platform version)
-- `lib/services/local_piper_tts.dart` (new file)
-- `lib/main.dart` (register service)
-- `test/services/local_piper_tts_test.dart` (new file)
+1. **Memory:** ~500MB peak RAM is high. Must test on target devices before committing.
+2. **Isolate communication:** Passing large Float32List audio buffers between isolates may have overhead. Consider `TransferableTypedData`.
+3. **espeak-ng-data:** Must be filesystem files, not Flutter assets. Extraction from assets to filesystem adds first-launch latency.
+4. **Build size:** sherpa-onnx native libs add ~7.2MB to APK (acceptable).
 
 ## Next Steps
 
 After this task:
-- Task 003: Download and bundle optimal Piper model
+- Task 003: Download and bundle optimal Piper model (INT8 evaluation)
 - Task 004: Wire into voice pipeline as fallback

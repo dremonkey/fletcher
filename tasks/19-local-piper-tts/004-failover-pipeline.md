@@ -1,8 +1,22 @@
 # Task 004: Fail-Over Pipeline & Data Channel Bridge
 
-**Epic:** 19 - Local Piper TTS Integration  
-**Status:** 📋 Backlog  
+**Epic:** 19 - Local Piper TTS Integration
+**Status:** 📋 Backlog
 **Depends on:** 002 (Sherpa-ONNX Integration), 003 (Model Selection)
+
+## Discovery Notes (from Task 001 research, 2026-03-08)
+
+**Concerns and dependencies identified during discovery:**
+
+1. **Server-side infrastructure already exists.** The `tts-fallback-monitor.ts` already publishes "Voice Degraded" and "Voice Restored" artifacts via the data channel. The "Voice Unavailable" state (all TTS failed) is handled separately in `agent.ts`. The mobile client just needs to listen for these events -- no new protocol needed.
+
+2. **Blocking synthesis call.** `sherpa-onnx` `generate()` is synchronous and blocks for 500-1800ms depending on text length and device. Must run on a Dart `Isolate`. The `VoiceFallbackController` design in this task spec needs to account for async isolate communication and buffer management.
+
+3. **Audio playback conflict.** When switching from cloud TTS (LiveKit audio track) to local TTS (raw PCM), there may be a conflict. LiveKit audio track may still be subscribed. Need to either mute the remote track or mix audio. Design decision needed.
+
+4. **Model availability.** The download-on-first-use strategy (Task 003) means the model may NOT be available when the first fallback is triggered. The `VoiceFallbackController` must handle the case where local TTS is requested but the model hasn't been downloaded yet. Options: show a "downloading voice pack" toast, or fall back to text-only mode.
+
+5. **ConnectivityService already exists.** The Flutter app already has a working `ConnectivityService` at `apps/mobile/lib/services/connectivity_service.dart` with `isOnline` getter and `onConnectivityChanged` stream. No need to create a new one (Task 006 spec incorrectly proposes a new service).
 
 ## Objective
 

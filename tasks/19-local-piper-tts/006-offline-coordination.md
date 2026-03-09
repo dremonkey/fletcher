@@ -1,8 +1,20 @@
 # Task 006: Offline Mode & Edge Intelligence Coordination
 
-**Epic:** 19 - Local Piper TTS Integration  
-**Status:** 📋 Backlog  
+**Epic:** 19 - Local Piper TTS Integration
+**Status:** 📋 Backlog
 **Depends on:** 004 (Fail-Over Pipeline), Epic 13 (Edge Intelligence)
+
+## Discovery Notes (from Task 001 research, 2026-03-08)
+
+**Findings relevant to this task:**
+
+1. **ConnectivityService already exists.** The Flutter app already has a working `ConnectivityService` at `apps/mobile/lib/services/connectivity_service.dart`. It tracks online/offline state, exposes `isOnline` getter and `onConnectivityChanged` stream. The code block in the "Offline Mode Detection" section below proposes creating a new service -- this is unnecessary. Use the existing one and extend it if needed.
+
+2. **Model must be pre-downloaded for offline.** The download-on-first-use strategy (Task 003) means offline TTS only works if the model was previously downloaded while online. Need a "Download Voice Pack" button in settings so users can proactively prepare for offline use.
+
+3. **Voice consistency is guaranteed.** Using the same `en_US-lessac-medium` model with the same inference params (noise_scale=0.667, noise_w=0.8, length_scale=1.0) on both server and client produces identical audio. The existing server config at `models/piper/en_US-lessac-medium.onnx.json` confirms these params.
+
+4. **Offline TTS is useful even without offline LLM.** Even in online mode, local TTS fallback provides value when server-side TTS fails (the primary use case). Full offline stack (local VAD + local STT + local LLM + local TTS) is a separate, longer-term goal (Epic 13).
 
 ## Objective
 

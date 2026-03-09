@@ -14,7 +14,7 @@
 
 ## Status
 
-**Epic Status:** 📋 BACKLOG (Planning / Discovery Phase)
+**Epic Status:** 📋 BACKLOG (Discovery Complete, Prototyping Next)
 
 ## Tasks
 
@@ -23,21 +23,21 @@
 
 Research and prototype moving PiperTTS from the server-side Docker sidecar to on-device inference in the Flutter mobile client.
 
-**Key Questions:**
-- Which Flutter/Dart integration path? (`sherpa-onnx`, FFI, platform channel)
-- What are the performance characteristics? (inference latency, memory, battery)
-- Which Piper model/voice to ship? (quality vs. size tradeoff)
-- How does local TTS integrate with the existing fallback chain?
-- Model bundling strategy? (APK bundle vs. download-on-first-use)
+**Key Questions (ANSWERED):**
+- Which Flutter/Dart integration path? **sherpa-onnx (v1.12.28) -- the only mature option**
+- What are the performance characteristics? **RTF ~0.15-0.40 on Android, ~500MB peak RAM, CPU-only (NNAPI crashes)**
+- Which Piper model/voice to ship? **en_US-lessac-medium (63 MB, matches server Piper)**
+- How does local TTS integrate with the existing fallback chain? **Via existing ganglia-events "Voice Unavailable" artifact**
+- Model bundling strategy? **Download-on-first-use (model is 63 MB, not 18 MB as originally estimated)**
 
-**Status:** 📋 BACKLOG (Discovery / Spike)
+**Status:** [x] COMPLETE (Discovery)
 
-**See:** [031-local-piper-tts.md](../13-edge-intelligence/031-local-piper-tts.md) for full discovery checklist.
+**See:** [001-technical-spec.md](001-technical-spec.md) for full findings.
 
 ---
 
 ### 002: Sherpa-ONNX Flutter Integration
-**Status:** 📋 BACKLOG
+**Status:** 📋 BACKLOG (Ready for Prototyping)
 
 Integrate the `sherpa-onnx` library into the Flutter app for on-device Piper model inference.
 
@@ -52,7 +52,7 @@ Integrate the `sherpa-onnx` library into the Flutter app for on-device Piper mod
 ---
 
 ### 003: Model Selection & Bundling Strategy
-**Status:** 📋 BACKLOG
+**Status:** [~] Partially Complete (Research done, benchmarking pending)
 
 Select the optimal Piper voice model and implement the bundling/delivery strategy.
 
@@ -141,11 +141,11 @@ Flutter App (Mobile)
 ## Success Metrics
 
 - **COGS Reduction:** Voice-out cost drops to $0 (from ~$0.135/min cloud TTS)
-- **Latency:** Local TTS inference <500ms for typical 1-2 sentence utterance
-- **Offline:** Voice synthesis works with zero network connectivity
+- **Latency:** Local TTS inference <500ms for typical 1-2 sentence utterance on high-end devices
+- **Offline:** Voice synthesis works with zero network connectivity (requires pre-downloaded model)
 - **Quality:** Voice character matches server-side Piper voice (`en_US-lessac-medium`)
 - **Battery:** <5% additional battery drain during continuous TTS usage
-- **App Size:** Model bundled in APK or OBB, total app size increase <100MB
+- **Download Size:** Model download ~63 MB (FP32) or ~22 MB (INT8 quantized); APK runtime impact ~7 MB
 
 ## References
 

@@ -1,268 +1,220 @@
 # Task 003: Piper Model Selection & Bundling Strategy
 
-**Epic:** 19 - Local Piper TTS Integration  
-**Status:** 📋 Backlog  
-**Depends on:** 001 (Technical Spec), 002 (Sherpa-ONNX Integration)
+**Epic:** 19 - Local Piper TTS Integration
+**Status:** [~] Partially Complete (Research done, benchmarking pending)
+**Depends on:** 001 (Technical Spec) -- COMPLETE, 002 (Sherpa-ONNX Integration) -- Backlog
 
 ## Objective
 
 Select the optimal Piper voice model for on-device synthesis and implement the bundling/delivery strategy.
 
-## Model Selection Criteria
+## Discovery Findings (from Task 001)
 
-### Primary Constraints
+### Model Size Reality Check
 
-1. **Voice Consistency:** Should match current server-side Piper voice (`en_US-lessac-medium`)
-2. **Quality:** Acceptable voice quality for "Pro" tier users
-3. **Size:** Minimize APK size impact (<25MB)
-4. **Performance:** Fast enough for real-time synthesis on mid-range devices
+**CRITICAL:** The original estimates in this task were wrong. Updated with actual data:
 
-### Model Variants
+| Model | ONNX Size | Sample Rate | Quality | Parameters |
+|-------|-----------|-------------|---------|------------|
+| `en_US-lessac-low` | **63.2 MB** | 16,000 Hz | Acceptable | 15-20M |
+| `en_US-lessac-medium` | **63.2 MB** | 22,050 Hz | Good | 15-20M |
+| `en_US-lessac-high` | **114 MB** | 22,050 Hz | Excellent | 28-32M |
 
-Piper offers three quality tiers for each voice:
+Key insight: low and medium models are the SAME architecture (same parameter count, same file size). The only difference is the training data preprocessing:
+- **Low:** trained on 16kHz audio (lower fidelity output)
+- **Medium:** trained on 22.05kHz audio (higher fidelity output)
 
-| Model | Size | Quality | Inference Speed |
-|-------|------|---------|-----------------|
-| `en_US-lessac-low` | ~5MB | Acceptable | Fast |
-| `en_US-lessac-medium` | ~18MB | Good | Medium |
-| `en_US-lessac-high` | ~63MB | Excellent | Slow |
+There is effectively no size benefit to using the "low" model. The quality difference is audible, so **medium is strictly better than low**.
 
-**Recommendation:** Start with `medium` quality to match server-side voice. Evaluate `low` quality if performance or size becomes an issue.
+### INT8 Quantization (Size Reduction Path)
 
-## Benchmarking Plan
+Quantizing the FP32 model to INT8 can reduce the file from ~63MB to ~22MB:
+- 3x size reduction
+- 2-4x inference speedup
+- Slight quality degradation (usually imperceptible)
 
-### Test Devices
+This is the primary lever for reducing download size.
 
-- **High-end:** Pixel 7 Pro, iPhone 14 Pro
-- **Mid-range:** Pixel 6a, iPhone 12
-- **Low-end:** Budget Android (Snapdragon 6-series)
+## Model Selection: RECOMMENDATION
 
-### Metrics to Collect
+### Primary: `en_US-lessac-medium` (FP32)
 
-```dart
-class SynthesisBenchmark {
-  final String modelName;
-  final String text;
-  final int textLength;
-  final Duration synthesisTime;
-  final int audioSamples;
-  final double realTimeRatio; // synthesis_time / audio_duration
-  final int memoryUsageMB;
-  
-  // Target: realTimeRatio < 0.5 (faster than real-time)
-  // Target: memoryUsageMB < 100
-}
-```
+**Why:**
+- Matches the server-side Piper voice exactly (voice consistency)
+- Server config: `models/piper/en_US-lessac-medium.onnx.json` (noise_scale: 0.667, length_scale: 1, noise_w: 0.8, sample_rate: 22050)
+- Medium quality is perceptually very close to high quality (most users cannot distinguish on phone speakers)
+- Single speaker (speaker_id: 0), English US
 
-### Test Cases
+### Alternative: `en_US-lessac-medium` (INT8 quantized)
 
-1. **Short utterance** (1 sentence, ~10 words)
-2. **Medium utterance** (2-3 sentences, ~30 words)
-3. **Long utterance** (paragraph, ~100 words)
+**When to use:**
+- If FP32 is too slow on mid-range devices
+- If 63MB download is too large for user acceptance
+- Trade slight quality for 3x smaller size and 2-4x faster inference
 
-**Example:**
-```dart
-final testCases = [
-  'Hello, how can I help you today?',
-  'The weather in San Francisco is sunny with a high of 72 degrees. It will be a beautiful day for outdoor activities.',
-  'Here is a longer response that contains multiple sentences with various punctuation marks. This will test the synthesis performance on more complex text inputs. The model should handle this gracefully without stuttering or excessive latency.',
-];
-```
+### NOT Recommended: `en_US-lessac-low`
 
-## Model Download & Preparation
+**Why not:**
+- Same file size as medium (63MB)
+- Lower audio quality (16kHz vs 22.05kHz)
+- No benefit over medium
 
-### 1. Download from Piper Repository
+### NOT Recommended: `en_US-lessac-high`
 
-```bash
-# Download medium quality model
-wget https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx
-wget https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json
-wget https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/MODEL_CARD
+**Why not:**
+- 114 MB file size (almost 2x medium)
+- Quality difference barely perceptible on phone speakers
+- Significantly slower inference (28-32M params vs 15-20M)
+- Not used server-side, so no voice consistency benefit
 
-# Get tokens file (shared across models)
-wget https://github.com/rhasspy/piper/raw/master/src/python/piper_train/vits/espeak/tokens.txt
-```
+## Bundling Strategy: REVISED
 
-### 2. Validate Model
+### Original vs Revised Recommendation
 
-```bash
-# Test synthesis with piper CLI
-echo "Hello world" | piper --model en_US-lessac-medium.onnx --output_file test.wav
-aplay test.wav  # Verify audio quality
-```
+| | Original Plan | Revised Plan |
+|--|---|---|
+| **Strategy** | APK Bundle (Option A) | Download-on-First-Use (Option B) |
+| **Estimated Model Size** | ~18 MB | **63 MB** (or ~22 MB quantized) |
+| **APK Impact** | +20 MB | **+70-75 MB** (unacceptable) |
+| **Rationale** | Small enough to bundle | Too large; most users never need local TTS |
 
-### 3. Place in Assets
-
-```
-flutter_app/
-  assets/
-    models/
-      piper/
-        en_US-lessac-medium.onnx        (~18MB)
-        en_US-lessac-medium.onnx.json   (~2KB)
-        tokens.txt                       (~50KB)
-```
-
-## Bundling Strategy
-
-### Option A: APK Bundle (Recommended for MVP)
-
-**Pros:**
-- Zero latency—model available immediately on first launch
-- Works offline from day one
-- No download UI/error handling needed
-
-**Cons:**
-- Increases APK size by ~20MB
-- All users download model even if they never use local TTS
+### Recommended: Download-on-First-Use
 
 **Implementation:**
-```yaml
-# pubspec.yaml
-flutter:
-  assets:
-    - assets/models/piper/
-```
 
-### Option B: Download on First Use (Future Optimization)
-
-**Pros:**
-- Smaller APK (~100KB vs. ~20MB)
-- Users only download if they need local TTS
-
-**Cons:**
-- Requires network for first local TTS usage (defeats "offline" purpose)
-- Needs download UI, progress indicators, retry logic
-- More complex error handling
-
-**Implementation (Future):**
 ```dart
-class ModelDownloader {
-  static const modelUrl = 'https://cdn.fletcher.app/models/piper/en_US-lessac-medium.onnx';
-  
-  Future<void> downloadModelIfNeeded() async {
-    final modelPath = await _getModelPath();
-    if (await File(modelPath).exists()) return;
-    
-    // Show download progress
-    await _downloadWithProgress(modelUrl, modelPath);
+class PiperModelManager {
+  static const _modelVersion = '1.0.0';
+  static const _modelUrl = 'https://cdn.fletcher.app/models/piper/v1/';
+
+  /// Check if model is downloaded and ready
+  Future<bool> isModelReady() async {
+    final modelDir = await _getModelDir();
+    final modelFile = File('${modelDir.path}/en_US-lessac-medium.onnx');
+    return modelFile.existsSync();
   }
-}
-```
 
-**Decision:** Use Option A (APK bundle) for MVP. Migrate to Option B if app store reviewers complain about size.
+  /// Download model files with progress callback
+  Future<void> downloadModel({
+    required void Function(double progress) onProgress,
+  }) async {
+    final modelDir = await _getModelDir();
+    await modelDir.create(recursive: true);
 
-## Model Versioning
+    final files = [
+      ('en_US-lessac-medium.onnx', 63 * 1024 * 1024),    // 63 MB
+      ('en_US-lessac-medium.onnx.json', 5 * 1024),        // 5 KB
+      ('tokens.txt', 1024),                                 // ~1 KB
+      ('espeak-ng-data.tar.gz', 5 * 1024 * 1024),         // ~5 MB
+    ];
 
-### Version Management
+    var totalDownloaded = 0;
+    final totalSize = files.fold(0, (sum, f) => sum + f.$2);
 
-Models should be versioned to support OTA updates without full app update:
-
-```dart
-class PiperModelMetadata {
-  final String version = '1.0.0';  // Model version
-  final String voice = 'lessac';
-  final String quality = 'medium';
-  final int sampleRate = 22050;
-  final String language = 'en_US';
-}
-```
-
-### Future: OTA Model Updates
-
-```dart
-class ModelUpdateService {
-  Future<void> checkForUpdates() async {
-    final latestVersion = await _fetchLatestModelVersion();
-    final currentVersion = await _getCurrentModelVersion();
-    
-    if (latestVersion > currentVersion) {
-      await _downloadAndInstallUpdate(latestVersion);
+    for (final (filename, expectedSize) in files) {
+      await _downloadFile(
+        '$_modelUrl$filename',
+        '${modelDir.path}/$filename',
+        onProgress: (bytes) {
+          totalDownloaded += bytes;
+          onProgress(totalDownloaded / totalSize);
+        },
+      );
     }
+
+    // Extract espeak-ng-data
+    await _extractTarGz(
+      '${modelDir.path}/espeak-ng-data.tar.gz',
+      modelDir.path,
+    );
+  }
+
+  Future<Directory> _getModelDir() async {
+    final appDir = await getApplicationDocumentsDirectory();
+    return Directory('${appDir.path}/models/piper/$_modelVersion');
   }
 }
 ```
 
-**Note:** Implement in Phase 2 after MVP is stable.
+### User-Triggered Download
 
-## Multi-Language Support (Future)
+Two trigger paths:
 
-For international expansion, we'll need to bundle multiple language models:
+1. **Automatic:** When fallback TTS is needed but model isn't downloaded
+   - Show toast: "Downloading local voice pack..."
+   - Non-blocking, continue showing text transcript
+   - Next fallback event will use local TTS
+
+2. **Manual:** Settings screen "Download Offline Voice"
+   - Shows download progress
+   - Allows users to proactively prepare for offline use
+
+### Model Hosting Options
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **CDN (e.g., CloudFront/R2)** | Fast, global, reliable | Cost (~$0.085/GB) |
+| **GitHub Releases** | Free, reliable | Rate limits, no CDN |
+| **Hugging Face** | Free, models already there | Slow in some regions |
+| **Bundle in APK expansion** (OBB/PAD) | Google-managed delivery | Complex setup |
+
+**Recommendation:** Start with GitHub Releases for MVP, migrate to CDN if download speed becomes an issue.
+
+## Existing Model Files in Repo
+
+Fletcher already has the Piper model files for the server-side sidecar:
 
 ```
-assets/models/piper/
-  en_US-lessac-medium.onnx    (~18MB)
-  es_ES-davefx-medium.onnx    (~18MB)
-  fr_FR-siwis-medium.onnx     (~18MB)
-  ...
+models/piper/
+  en_US-lessac-medium.onnx       (63 MB, Git LFS)
+  en_US-lessac-medium.onnx.json  (5 KB)
 ```
 
-**Strategy:** Download language packs on-demand based on user locale.
+These are the exact same files needed for local TTS. Missing:
+- `tokens.txt` -- needs to be generated or downloaded from sherpa-onnx
+- `espeak-ng-data/` -- needs to be downloaded from sherpa-onnx releases
 
-## Testing Plan
+## Benchmarking Plan (Pending)
 
-### Benchmark Script
+### Test Matrix
+
+| Model Variant | Device | Metrics |
+|--------------|--------|---------|
+| medium (FP32, 63MB) | Pixel 7 | RTF, latency, RAM |
+| medium (FP32, 63MB) | Pixel 6a | RTF, latency, RAM |
+| medium (INT8, ~22MB) | Pixel 7 | RTF, latency, RAM |
+| medium (INT8, ~22MB) | Pixel 6a | RTF, latency, RAM |
+
+### Test Utterances
 
 ```dart
-// tools/benchmark_piper_models.dart
-
-Future<void> main() async {
-  final models = [
-    'en_US-lessac-low',
-    'en_US-lessac-medium',
-    // 'en_US-lessac-high',  // Too large for mobile
-  ];
-  
-  final testCases = [
-    'Hello, how are you?',
-    'The quick brown fox jumps over the lazy dog.',
-    // ... more test cases
-  ];
-  
-  for (final model in models) {
-    print('Benchmarking $model...');
-    
-    final tts = LocalPiperTTS();
-    await tts.loadModel(model);
-    
-    for (final text in testCases) {
-      final start = DateTime.now();
-      final audio = await tts.synthesize(text);
-      final duration = DateTime.now().difference(start);
-      
-      final audioLengthSec = audio.samples.length / audio.sampleRate;
-      final realTimeRatio = duration.inMilliseconds / (audioLengthSec * 1000);
-      
-      print('  Text: "$text"');
-      print('  Synthesis time: ${duration.inMilliseconds}ms');
-      print('  Real-time ratio: ${realTimeRatio.toStringAsFixed(2)}x');
-      print('');
-    }
-  }
-}
+final testCases = [
+  // Short (1 sentence, ~10 words)
+  'Hello, how can I help you today?',
+  // Medium (2-3 sentences, ~30 words)
+  'The weather is sunny with a high of 72 degrees. It should be a great day for a walk.',
+  // Long (paragraph, ~60 words)
+  'Here is a longer response that spans multiple sentences. It tests synthesis performance on complex input. The model should handle punctuation, pauses, and natural pacing without stuttering or excessive latency. This is the kind of response length we see from OpenClaw during typical conversations.',
+];
 ```
 
 ### Quality Assessment
 
-Conduct blind listening tests:
-1. Play 10 samples: 5 from cloud TTS, 5 from local Piper
-2. Ask users to rate quality 1-5
-3. Target: Local Piper scores ≥4/5 average
+- A/B comparison: server-side Piper vs local Piper (should be identical if same model)
+- A/B comparison: FP32 vs INT8 quantized (quality difference?)
+- Subjective rating on phone speaker vs headphones
 
 ## Success Criteria
 
-- [ ] `en_US-lessac-medium` model downloaded and validated
-- [ ] Model files bundled in `assets/models/piper/`
-- [ ] Benchmark results show real-time ratio <0.5 on mid-range devices
-- [ ] Memory usage <100MB during synthesis
-- [ ] Quality assessment shows ≥4/5 rating
-- [ ] APK size increase <25MB
-
-## Files Modified
-
-- `assets/models/piper/` (new model files)
-- `pubspec.yaml` (add asset paths)
-- `lib/services/local_piper_tts.dart` (update model paths)
+- [x] ~~Model variants researched and documented~~ (Task 001 discovery)
+- [x] ~~Model sizes validated against actual files~~ (63 MB confirmed)
+- [x] ~~Bundling strategy selected~~ (Download-on-first-use)
+- [ ] INT8 quantized model generated and quality-tested
+- [ ] Benchmark results on target devices
+- [ ] espeak-ng-data downloaded and validated
+- [ ] tokens.txt generated/downloaded and validated
+- [ ] Model download pipeline implemented
+- [ ] APK size impact measured (runtime only, no model)
 
 ## Next Steps
 

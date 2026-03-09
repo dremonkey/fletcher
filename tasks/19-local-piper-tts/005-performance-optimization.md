@@ -1,8 +1,22 @@
 # Task 005: Performance Optimization & Battery Impact
 
-**Epic:** 19 - Local Piper TTS Integration  
-**Status:** 📋 Backlog  
+**Epic:** 19 - Local Piper TTS Integration
+**Status:** 📋 Backlog
 **Depends on:** 004 (Fail-Over Pipeline Integration)
+
+## Discovery Notes (from Task 001 research, 2026-03-08)
+
+**Critical findings that affect this task:**
+
+1. **NNAPI does NOT work for TTS.** The spec below suggests enabling NNAPI delegate. This will crash the app. sherpa-onnx Issue #958 confirms NNAPI produces dimension errors with VITS TTS models. CPU-only is the only viable provider. Remove all NNAPI optimization plans from scope.
+
+2. **Memory is the biggest risk, not latency.** Piper models consume ~500MB peak RAM during inference (vs the ~100MB target in this spec). This is a show-stopper for low-end devices with 3-4GB RAM. Priority should be: (a) measure actual RAM usage on target devices, (b) evaluate if INT8 quantization reduces memory proportionally, (c) implement aggressive model unloading.
+
+3. **RTF benchmarks are encouraging.** Raspberry Pi 4 (Cortex-A72 @ 1.5GHz) achieves RTF 0.482 with 2 threads. Modern Android SoCs are 2-3x faster, suggesting RTF 0.15-0.25 on Pixel 7. The <500ms latency target for 1-2 sentence utterances appears achievable on high-end devices.
+
+4. **Thread count tradeoff.** More threads = faster synthesis but higher battery drain. Recommend starting with numThreads=2 and benchmarking. 1 thread is too slow; 4 threads provides diminishing returns and excessive power draw.
+
+5. **CoreML (iOS) is untested.** No data on whether CoreML acceleration works for Piper TTS on iOS. This is an open question.
 
 ## Objective
 
