@@ -64,28 +64,28 @@ Response appears in ChatTranscript
 ## Tasks
 
 ### State Management
-- [ ] 001: Add `TextInputMode` state to ConversationBloc (voice-first vs text-input)
-- [ ] 002: Implement long-press gesture detector on Mic button (Amber Orb)
-- [ ] 003: Add mode toggle logic (voice-first ↔ text-input) on long-press
+- [ ] [001: Add TextInputMode State to ConversationBloc](./001-text-input-mode-state.md)
+- [ ] [002: Implement Long-Press Gesture Detector on Mic Button](./002-long-press-gesture-detector.md)
+- [ ] [003: Add Mode Toggle Logic (Voice-First ↔ Text-Input)](./003-mode-toggle-logic.md)
 
 ### Animation & Layout
-- [ ] 004: Implement sliding animation for Mic button (center → right, right → center)
-- [ ] 005: Implement expanding/sliding animation for text input field (left → center)
-- [ ] 006: Create AnimationController and Tween setup for smooth transitions (~300-500ms)
-- [ ] 007: Handle layout reflow and positioning for hybrid state
+- [ ] [004: Implement Sliding Animation for Mic Button](./004-mic-button-slide-animation.md)
+- [ ] [005: Implement Expanding/Sliding Animation for Text Input Field](./005-text-field-expand-animation.md)
+- [ ] [006: Create AnimationController and Tween Setup](./006-animation-controller-setup.md)
+- [ ] [007: Handle Layout Reflow and Positioning for Hybrid State](./007-hybrid-state-layout.md)
 
 ### Text Input Functionality
-- [ ] 008: Add TextField widget with TUI Brutalist styling
-- [ ] 009: Wire TextField to ConversationBloc.sendTextMessage()
-- [ ] 010: Implement text message routing (data channel vs HTTP)
-- [ ] 011: Update ChatTranscript to render text-origin messages
-- [ ] 012: Add Enter-key submission handler
-- [ ] 013: Add send button (visible in text-input mode)
+- [ ] [008: Add TextField Widget with TUI Brutalist Styling](./008-text-field-widget.md)
+- [ ] [009: Wire TextField to ConversationBloc.sendTextMessage()](./009-wire-text-to-bloc.md)
+- [ ] [010: Implement Text Message Routing (Data Channel vs HTTP)](./010-text-message-routing.md)
+- [ ] [011: Update ChatTranscript to Render Text-Origin Messages](./011-chat-transcript-text-messages.md)
+- [ ] [012: Add Enter-Key Submission Handler](./012-enter-key-submission.md)
+- [ ] [013: Add Send Button (Visible in Text-Input Mode)](./013-send-button.md)
 
 ### Polish
-- [ ] 014: Visual feedback for long-press detection (haptic, visual cue)
-- [ ] 015: Ensure text field auto-focuses when entering text-input mode
-- [ ] 016: Ensure keyboard dismisses and text clears when reverting to voice-first mode
+- [ ] [014: Visual Feedback for Long-Press Detection](./014-long-press-feedback.md)
+- [ ] [015: Ensure Text Field Auto-Focuses When Entering Text-Input Mode](./015-auto-focus-text-field.md)
+- [ ] [016: Ensure Keyboard Dismisses and Text Clears on Revert](./016-cleanup-on-revert.md)
 
 ## Success Criteria
 
