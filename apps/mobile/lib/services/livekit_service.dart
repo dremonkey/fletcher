@@ -7,9 +7,12 @@ import 'package:livekit_client/livekit_client.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/conversation_state.dart';
 import '../models/system_event.dart';
+import 'agent_dispatch_service.dart';
+import 'agent_presence_service.dart';
 import 'connectivity_service.dart';
 import 'disconnect_reason.dart' as dr;
 import 'health_service.dart';
+import 'local_vad_service.dart';
 import 'reconnect_scheduler.dart';
 import 'session_storage.dart';
 import 'token_service.dart';
@@ -74,6 +77,9 @@ class LiveKitService extends ChangeNotifier {
 
   final HealthService healthService = HealthService();
   final ConnectivityService connectivityService = ConnectivityService();
+
+  /// Agent presence lifecycle for on-demand dispatch (Epic 20).
+  late final AgentPresenceService agentPresenceService = _createAgentPresenceService();
   // Reconnection audio buffer — captures mic during SDK reconnect (BUG-027)
   PreConnectAudioBuffer? _reconnectBuffer;
 
@@ -545,6 +551,8 @@ class LiveKitService extends ChangeNotifier {
           agentIdentity: event.participant.identity,
         ),
       );
+      // Notify agent presence service (Epic 20)
+      agentPresenceService.onAgentConnected();
       // Emit/update agent connected system event (task 020)
       _emitSystemEvent(SystemEvent(
         id: 'agent-boot',
@@ -565,6 +573,8 @@ class LiveKitService extends ChangeNotifier {
         _updateState(
           diagnostics: _state.diagnostics.copyWith(clearAgentIdentity: true),
         );
+        // Notify agent presence service (Epic 20)
+        agentPresenceService.onAgentDisconnected();
       }
       // Emit agent disconnected system event (task 020)
       _emitSystemEvent(SystemEvent(
@@ -1254,6 +1264,64 @@ class LiveKitService extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
+  // Agent presence service (Epic 20)
+  // ---------------------------------------------------------------------------
+
+  AgentPresenceService _createAgentPresenceService() {
+    final localVad = LocalVadService(onSpeechDetected: () {
+      agentPresenceService.onSpeechDetected();
+    });
+
+    // Token server base URL derived from the first configured URL.
+    // Dispatch service is created eagerly; the actual URL is only used when
+    // dispatchAgent() is called, by which point we have a valid URL.
+    final dispatchService = AgentDispatchService(
+      baseUrl: 'http://localhost:$_tokenServerPort',
+    );
+
+    final service = AgentPresenceService(
+      localVad: localVad,
+      dispatchService: dispatchService,
+      onSystemEvent: (id, category, message) {
+        // Map the presence event to a SystemEvent status:
+        // - "Connecting..." / "Going idle..." = pending
+        // - "Connected" / "Staying connected" = success
+        // - "Disconnected..." = error (visual distinction)
+        final SystemEventStatus status;
+        final String prefix;
+        if (id == 'agent-dispatching' || id == 'agent-idle-warning') {
+          status = SystemEventStatus.pending;
+          prefix = '\u25B8'; // ▸
+        } else if (id == 'agent-idle-disconnect') {
+          status = SystemEventStatus.error;
+          prefix = '\u2715'; // ✕
+        } else {
+          status = SystemEventStatus.success;
+          prefix = '\u25B8'; // ▸
+        }
+        _emitSystemEvent(SystemEvent(
+          id: 'agent-presence-$id',
+          type: SystemEventType.agent,
+          status: status,
+          message: message,
+          timestamp: DateTime.now(),
+          prefix: prefix,
+        ));
+      },
+    );
+
+    // Wire data channel callbacks to presence service
+    onAgentIdleWarning = (disconnectInMs) {
+      service.onIdleWarning(disconnectInMs);
+    };
+    onAgentDisconnected = (reason) {
+      service.onAgentIdleDisconnect();
+    };
+
+    return service;
+  }
+
+  // ---------------------------------------------------------------------------
   // Inline system events (task 020)
   // ---------------------------------------------------------------------------
 
@@ -1557,6 +1625,7 @@ class LiveKitService extends ChangeNotifier {
   @override
   void dispose() {
     disconnect();
+    agentPresenceService.dispose();
     connectivityService.dispose();
     super.dispose();
   }
