@@ -1,7 +1,7 @@
 # TASK-010: Implement Text Message Routing (Data Channel vs HTTP)
 
 ## Status
-- **Status:** Partial — client-side routing complete, agent-side `text_message` handler needed
+- **Status:** [x] Complete
 - **Priority:** High
 - **Owner:** Unassigned
 - **Created:** 2026-03-08
@@ -25,5 +25,5 @@ Should text messages route through the LiveKit data channel (`ganglia-events` to
 ## Acceptance Criteria
 - [x] Routing strategy decided and documented — uses LiveKit data channel (`ganglia-events` topic)
 - [x] Text messages reach the agent/LLM through chosen path
-- [ ] Agent responds to text messages using same session context as voice (requires agent-side handler)
-- [ ] Text input works even when voice pipeline is degraded (requires agent-side handler)
+- [x] Agent responds to text messages using same session context as voice — TASK-017 adds `text_message` handler in agent.ts
+- [x] Text input works even when voice pipeline is degraded — text bypasses STT/VAD entirely

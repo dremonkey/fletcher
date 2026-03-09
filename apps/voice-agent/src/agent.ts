@@ -261,6 +261,14 @@ export default defineAgent({
           session.output.setAudioEnabled(ttsEnabled);
           logger.info({ ttsEnabled, participant: participant?.identity }, 'TTS mode changed');
         }
+
+        // Text input from mobile client — inject typed text into the LLM
+        // pipeline as a user message.  The response flows through the normal
+        // TTS + transcript pipeline. (TASK-017, Epic 17)
+        if (event.type === 'text_message' && typeof event.text === 'string' && event.text.trim()) {
+          logger.info({ text: event.text, participant: participant?.identity }, 'Text message received');
+          session.generateReply({ userInput: event.text });
+        }
       } catch (e) {
         logger.debug({ error: e }, 'Failed to parse incoming data channel event');
       }

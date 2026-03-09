@@ -77,10 +77,13 @@ Response appears in ChatTranscript
 ### Text Input Functionality
 - [x] [008: Add TextField Widget with TUI Brutalist Styling](./008-text-field-widget.md)
 - [x] [009: Wire TextField to ConversationBloc.sendTextMessage()](./009-wire-text-to-bloc.md)
-- [~] [010: Implement Text Message Routing (Data Channel vs HTTP)](./010-text-message-routing.md) — client-side complete, agent-side handler needed
+- [x] [010: Implement Text Message Routing (Data Channel vs HTTP)](./010-text-message-routing.md) ✅
 - [x] [011: Update ChatTranscript to Render Text-Origin Messages](./011-chat-transcript-text-messages.md)
 - [x] [012: Add Enter-Key Submission Handler](./012-enter-key-submission.md)
 - [x] [013: Add Send Button (Visible in Text-Input Mode)](./013-send-button.md)
+
+### Agent Integration ✅
+- [x] [017: Agent-Side Text Message Handler](./017-agent-text-message-handler.md) ✅
 
 ### Polish
 - [~] [014: Visual Feedback for Long-Press Detection](./014-long-press-feedback.md) — haptic done, visual cue deferred

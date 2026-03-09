@@ -309,13 +309,14 @@ Add a text entry field to the Fletcher mobile app as a "safety hatch" for situat
 - [x] 007: Handle Layout Reflow and Positioning for Hybrid State ✅
 - [x] 008: Add TextField Widget with TUI Brutalist Styling ✅
 - [x] 009: Wire TextField to ConversationBloc.sendTextMessage() ✅
-- [~] 010: Implement Text Message Routing (Data Channel vs HTTP) 🔄 — client-side routing via data channel done; agent-side handler needed
+- [x] 010: Implement Text Message Routing (Data Channel vs HTTP) ✅ — data channel routing with agent-side `text_message` handler
 - [x] 011: Update ChatTranscript to Render Text-Origin Messages ✅
 - [x] 012: Add Enter-Key Submission Handler ✅
 - [x] 013: Add Send Button (Visible in Text-Input Mode) ✅
 - [~] 014: Visual Feedback for Long-Press Detection 🔄 — haptic done, visual progress ring deferred
 - [x] 015: Ensure Text Field Auto-Focuses When Entering Text-Input Mode ✅
 - [x] 016: Ensure Keyboard Dismisses and Text Clears on Revert ✅
+- [x] 017: Agent-Side Text Message Handler ✅ — `text_message` event handler in voice agent injects typed text into LLM pipeline
 
 **Depends on:** Epic 11 (TUI Brutalist UI), Epic 4 (Ganglia)
 
