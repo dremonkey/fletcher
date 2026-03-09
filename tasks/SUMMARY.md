@@ -296,29 +296,10 @@ Upstream bugs and limitations in the `livekit_client` Flutter/Dart SDK that affe
 
 **Related closed tasks** (resolved with workarounds in Epic 9): 007 (ICE renegotiation), 009 (BT audio recovery), 011 (audio track timeout).
 
-### 17. [Text Input Mode](./17-text-input) 🔄
-Add a text entry field to the Fletcher mobile app as a "safety hatch" for situations where voice is not the right medium (noisy environments, quiet spaces, precision corrections). Long-press on Mic button toggles between voice-first and text-input modes.
+### 17. [Text Input Mode](./17-text-input) ✅
+Text entry "safety hatch" for when voice isn't ideal. Tap mic to mute and reveal text field; tap again to unmute and hide. Enter key submits. Messages route via LiveKit data channel to the same conversation context as voice.
 
-**Tasks:**
-- [x] 001: Add TextInputMode State to ConversationBloc ✅
-- [x] 002: Implement Long-Press Gesture Detector on Mic Button ✅
-- [x] 003: Add Mode Toggle Logic (Voice-First ↔ Text-Input) ✅
-- [x] 004: Implement Sliding Animation for Mic Button ✅
-- [x] 005: Implement Expanding/Sliding Animation for Text Input Field ✅
-- [x] 006: Create AnimationController and Tween Setup ✅
-- [x] 007: Handle Layout Reflow and Positioning for Hybrid State ✅
-- [x] 008: Add TextField Widget with TUI Brutalist Styling ✅
-- [x] 009: Wire TextField to ConversationBloc.sendTextMessage() ✅
-- [x] 010: Implement Text Message Routing (Data Channel vs HTTP) ✅ — data channel routing with agent-side `text_message` handler
-- [x] 011: Update ChatTranscript to Render Text-Origin Messages ✅
-- [x] 012: Add Enter-Key Submission Handler ✅
-- [x] 013: Add Send Button (Visible in Text-Input Mode) ✅
-- [~] 014: Visual Feedback for Long-Press Detection 🔄 — haptic done, visual progress ring deferred
-- [x] 015: Ensure Text Field Auto-Focuses When Entering Text-Input Mode ✅
-- [x] 016: Ensure Keyboard Dismisses and Text Clears on Revert ✅
-- [x] 017: Agent-Side Text Message Handler ✅ — `text_message` event handler in voice agent injects typed text into LLM pipeline
-
-**Depends on:** Epic 11 (TUI Brutalist UI), Epic 4 (Ganglia)
+**All 17 tasks complete.** See [EPIC.md](./17-text-input/EPIC.md) for details.
 
 ### 18. [OpenResponses API Integration](./18-openresponses-api) 🔄
 Refactor the Fletcher voice agent to use the native OpenClaw **OpenResponses API** (`/v1/responses`) instead of the OpenAI-compatible **Chat Completions API** (`/v1/chat/completions`) for more reliable delivery and better session management.

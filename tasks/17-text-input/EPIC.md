@@ -1,6 +1,6 @@
 # Epic 17: Text Input Mode
 
-**Status:** 🚧 In Progress
+**Status:** ✅ Complete
 **Goal:** Add a text entry field to the Fletcher mobile app as a "safety hatch" for situations where voice is not the right medium.
 
 ## Purpose
@@ -21,27 +21,18 @@ Text input provides a reliable fallback that maintains the same conversation con
 - **UI integration** — follows TUI Brutalist design system (AppColors, AppTypography, TuiCard)
 - **Send button** or Enter-key submission
 
-### Interaction Design
+### Interaction Design (Final)
 
-**Trigger:**
-- Long-press on the center **Mic button** (Amber Orb) to enter Text Input mode
+**Trigger:** Tap the Mic button (toggles mute + text input simultaneously)
 
-**Animation/Transition:**
-- Upon long-press detection, the Mic button **slides to the right-hand side**
-- Simultaneously, a text input field **expands/slides in from the left** to fill the vacated space
-- The transition should be smooth and fluid (~300-500ms)
+**Enter Text Mode:**
+- Tap mic → mic mutes, slides right, text field expands from left (~400ms)
+- Keyboard does NOT auto-open; user taps text field to type
+- Submit via keyboard Enter key (TextInputAction.send)
 
-**Hybrid State:**
-- The UI is now in **'Text Input' mode** (Safety Hatch)
-- Mic button remains visible on the right side (visual anchor)
-- Text field occupies the center/left area for typing
-- Designed for noisy/quiet environments or precision typing needs
-
-**Reversion:**
-- A second long-press on the Mic button (now positioned on the right)
-- Mic button **slides back to center position**
-- Text input field **disappears** (slides out or fades)
-- App returns to **'Voice-First' mode**
+**Exit Text Mode:**
+- Tap mic again → mic unmutes, slides back to center
+- Keyboard dismissed, text field cleared, text field slides out
 
 ## Architecture
 
@@ -74,21 +65,21 @@ Response appears in ChatTranscript
 - [x] [006: Create AnimationController and Tween Setup](./006-animation-controller-setup.md)
 - [x] [007: Handle Layout Reflow and Positioning for Hybrid State](./007-hybrid-state-layout.md)
 
-### Text Input Functionality
-- [x] [008: Add TextField Widget with TUI Brutalist Styling](./008-text-field-widget.md)
-- [x] [009: Wire TextField to ConversationBloc.sendTextMessage()](./009-wire-text-to-bloc.md)
-- [x] [010: Implement Text Message Routing (Data Channel vs HTTP)](./010-text-message-routing.md) ✅
-- [x] [011: Update ChatTranscript to Render Text-Origin Messages](./011-chat-transcript-text-messages.md)
-- [x] [012: Add Enter-Key Submission Handler](./012-enter-key-submission.md)
-- [x] [013: Add Send Button (Visible in Text-Input Mode)](./013-send-button.md)
+### Text Input Functionality ✅
+- [x] [008: Add TextField Widget with TUI Brutalist Styling](./_closed/008-text-field-widget.md)
+- [x] [009: Wire TextField to ConversationBloc.sendTextMessage()](./_closed/009-wire-text-to-bloc.md)
+- [x] [010: Implement Text Message Routing (Data Channel)](./_closed/010-text-message-routing.md)
+- [x] [011: Update ChatTranscript to Render Text-Origin Messages](./_closed/011-chat-transcript-text-messages.md)
+- [x] [012: Add Enter-Key Submission Handler](./_closed/012-enter-key-submission.md)
+- [x] [013: Add Send Button (Visible in Text-Input Mode)](./_closed/013-send-button.md) — later removed; Enter key suffices
 
 ### Agent Integration ✅
-- [x] [017: Agent-Side Text Message Handler](./017-agent-text-message-handler.md) ✅
+- [x] [017: Agent-Side Text Message Handler](./_closed/017-agent-text-message-handler.md)
 
-### Polish
-- [~] [014: Visual Feedback for Long-Press Detection](./014-long-press-feedback.md) — haptic done, visual cue deferred
-- [x] [015: Ensure Text Field Auto-Focuses When Entering Text-Input Mode](./015-auto-focus-text-field.md)
-- [x] [016: Ensure Keyboard Dismisses and Text Clears on Revert](./016-cleanup-on-revert.md)
+### Polish ✅
+- [x] [014: Long-Press Feedback](./_closed/014-long-press-feedback.md) — superseded; long-press replaced with tap-to-mute
+- [x] [015: Ensure Text Field Auto-Focuses When Entering Text-Input Mode](./_closed/015-auto-focus-text-field.md)
+- [x] [016: Ensure Keyboard Dismisses and Text Clears on Revert](./_closed/016-cleanup-on-revert.md)
 
 ## Success Criteria
 

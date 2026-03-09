@@ -1123,6 +1123,14 @@ class LiveKitService extends ChangeNotifier {
         : TextInputMode.voiceFirst;
     debugPrint('[Fletcher] Input mode toggled: $current → $next');
     _state = _state.copyWith(inputMode: next);
+
+    // Auto-mute mic when entering text mode, unmute when reverting to voice
+    if (next == TextInputMode.textInput && !_isMuted) {
+      toggleMute();
+    } else if (next == TextInputMode.voiceFirst && _isMuted) {
+      toggleMute();
+    }
+
     notifyListeners();
   }
 

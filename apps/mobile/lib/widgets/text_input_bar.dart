@@ -10,10 +10,8 @@ import 'mic_button.dart';
 /// Animated input bar that transitions between voice-first (centered mic)
 /// and text-input mode (text field + mic on right).
 ///
-/// The bar listens to [LiveKitService] state for the current [TextInputMode]
-/// and drives a single [AnimationController] that synchronizes:
-///   - Mic button sliding from center to right
-///   - Text field expanding from left
+/// Tap the mic button to mute and reveal the text field; tap again to unmute
+/// and hide it (keyboard is dismissed automatically).
 ///
 /// Submit via the keyboard's carriage return (TextInputAction.send).
 class TextInputBar extends StatefulWidget {
@@ -84,13 +82,10 @@ class _TextInputBarState extends State<TextInputBar>
   }
 
   void _onAnimationStatus(AnimationStatus status) {
-    if (status == AnimationStatus.completed) {
-      // Auto-focus the text field when entering text-input mode
-      _focusNode.requestFocus();
-    }
+    // No auto-focus — the user taps the text field to open the keyboard.
   }
 
-  void _onLongPress() {
+  void _onTapMic() {
     widget.service.toggleInputMode();
   }
 
@@ -137,8 +132,7 @@ class _TextInputBarState extends State<TextInputBar>
                 status: state.status,
                 aiAudioLevel: state.aiAudioLevel,
                 isMuted: widget.service.isMuted,
-                onToggleMute: widget.service.toggleMute,
-                onLongPress: _onLongPress,
+                onToggleMute: _onTapMic,
               ),
             ],
           ),
