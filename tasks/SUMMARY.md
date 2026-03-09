@@ -134,25 +134,21 @@ Local-first voice identification and context injection.
 
 **Spec:** [docs/specs/06-voice-fingerprinting/spec.md](../docs/specs/06-voice-fingerprinting/spec.md)
 
-### 7. [Sovereign Pairing](./07-sovereign-pairing) 🔄
-Secure handshake between Fletcher and Heirloom Hub (OpenClaw).
+### 7. [Sovereign Pairing](./07-sovereign-pairing) 📋
+Secure, zero-config onboarding: scan a QR code to pair Fletcher with a self-hosted Hub.
 
 **Tasks:**
 - [x] 001: Create Protocol Specification ✅
 - [x] 002: Implement Token Endpoint (`/fletcher/token`) ✅
 - [x] 003: Integrate with LiveKit Channel Plugin ✅
-- [ ] 004: Vessel Key Specification 📋 — JSON payload for full Hub config (Tailscale, Gateway, Identity)
-- [ ] 007: "Fletcher Bridge" OpenClaw Skill 📋 — Server-side skill for Vessel Key generation and context bootstrapping
-- [ ] 005: "Blank Slate" Bootloader UI 📋 — First-run experience for App Store users
-- [ ] 006: Camera-based Handshake 📋 — QR/OCR pairing from Hub terminal
+- [ ] 011: OpenClaw Plugin Scaffold + Vessel Key Generation 📋 — `openclaw-plugin-fletcher` package; `vessel-key generate` CLI; QR rendering; 15-min pairing tokens
+- [ ] 010: Device Registration Endpoint 📋 — `POST /fletcher/devices/register` via plugin route; pairing token validation; single-use revocation
+- [ ] 012: Room Join Endpoint 📋 — `POST /fletcher/rooms/join` via plugin route; Ed25519 signature verification; LiveKit token generation
 - [ ] 008: QR Code Scanner for Vessel Key Pairing 📋 — blank slate detection, `mobile_scanner` QR scanning, Vessel Key JSON parsing/validation
-- [ ] 009: Ed25519 Keypair Generation & Device Registration 📋 — generate keypair, POST to Hub, store credentials in FlutterSecureStorage
-- [ ] 010: Hub-Side Device Registration Endpoint 📋 — `POST /fletcher/devices/register`; pairing token validation; single-use revocation
-- [ ] 011: Vessel Key Generation CLI Command 📋 — `openclaw vessel-key generate`; QR terminal rendering; 15-min token expiry
-- [ ] 012: Hub-Side Room Join Endpoint 📋 — `POST /fletcher/rooms/join`; Ed25519 signature verification; LiveKit token generation
-- [ ] 013: Mobile Managed Connection 📋 — `HubAuthService` with Ed25519 auth; network fallback (mDNS → Tailscale)
+- [ ] 009: Ed25519 Keypair Generation & Device Registration 📋 — generate keypair, POST to Hub plugin endpoint, store credentials in FlutterSecureStorage
+- [ ] 013: Mobile Managed Connection 📋 — `HubAuthService` with Ed25519 auth; TCP-race URL resolution (Epic 9); replaces `bun run token:generate`
 
-**Spec:** [docs/specs/07-sovereign-pairing.md](../docs/specs/07-sovereign-pairing.md)
+**Specs:** [sovereign-pairing.md](../docs/specs/07-sovereign-pairing.md) | [vessel-key-pairing-spec.md](../docs/specs/vessel-key-pairing-spec.md) | [phase-1-mvp-spec.md](../docs/specs/phase-1-mvp-spec.md)
 
 ### 8. [Security](./08-security) 📋
 Hardening secrets management, auth, and dev environment security.
