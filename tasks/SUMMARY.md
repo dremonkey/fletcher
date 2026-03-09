@@ -348,7 +348,7 @@ Eliminate idle agent costs by disconnecting the agent when nobody is speaking an
 - [~] 003: Client-Side VAD Integration (Flutter) 🔄 — `LocalVadService` + `AgentDispatchService` created with 11 unit tests; `vad` and `http` packages added; integration with LiveKitService deferred to Task 005
 - [x] 004: Agent Idle Timeout & Auto-Disconnect ✅ — `IdleTimeout` class with configurable timer, warning callback, env-var config (`FLETCHER_IDLE_TIMEOUT_MS`); resets on speech/text input; 14 unit tests
 - [x] 005: Client State Machine (Agent Presence Lifecycle) ✅ — `AgentPresenceService` with 4-state machine (agentAbsent/dispatching/agentPresent/idleWarning); wires LocalVadService + AgentDispatchService; data channel event parsing in LiveKitService; 29 unit tests
-- [ ] 006: Cold-Start Latency Mitigation — `prewarm`, `numIdleProcesses`, warm-down grace period
+- [~] 006: Cold-Start Latency Mitigation 🔄 — `prewarm` (VAD pre-load), warm-down grace period (`FLETCHER_WARM_DOWN_MS`), dispatch latency metric implemented; `numIdleProcesses` + full benchmarking TBD
 - [ ] 007: UX Polish — Transition Feedback — visual/audio cues for agent lifecycle transitions
 - [ ] 008: Integration Test & Cost Validation — e2e lifecycle test + LiveKit Cloud billing verification
 
