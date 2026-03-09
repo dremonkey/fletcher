@@ -1,7 +1,7 @@
 # Task 001: Switch Agent to Explicit Dispatch
 
 **Epic:** 20 — Agent Cost Optimization
-**Status:** [ ]
+**Status:** [x]
 **Priority:** High (foundation for all other tasks)
 
 ## Problem
@@ -59,11 +59,11 @@ After this change, the agent should still auto-join rooms when a participant con
 
 ## Acceptance Criteria
 
-- [ ] Agent has `agentName: 'fletcher-voice'` set
-- [ ] Token endpoint includes `RoomAgentDispatch` in room configuration
-- [ ] Agent still auto-joins rooms when participants connect (no UX change)
-- [ ] Agent does NOT join rooms that don't include `RoomAgentDispatch` in their token
-- [ ] Verified with `lk room list` / `lk room list-participants` that agent appears as before
+- [x] Agent has `agentName: 'fletcher-voice'` set
+- [x] Token endpoint includes `RoomAgentDispatch` in room configuration
+- [ ] Agent still auto-joins rooms when participants connect (no UX change) — needs field verification
+- [ ] Agent does NOT join rooms that don't include `RoomAgentDispatch` in their token — needs field verification
+- [ ] Verified with `lk room list` / `lk room list-participants` that agent appears as before — needs field verification
 
 ## Dependencies
 

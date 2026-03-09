@@ -343,7 +343,7 @@ Move the Piper TTS engine from the server sidecar to the mobile client (Android/
 Eliminate idle agent costs by disconnecting the agent when nobody is speaking and re-dispatching on demand via client-side VAD. At multi-tenant scale, idle agents are the dominant cost driver ($0.01/min per connected agent regardless of activity). On-demand dispatch reduces idle costs by ~20x (from $0.60/hr to $0.03/hr per idle user).
 
 **Tasks:**
-- [ ] 001: Switch Agent to Explicit Dispatch — set `agentName`, use `RoomAgentDispatch` in tokens
+- [~] 001: Switch Agent to Explicit Dispatch 🔄 — `agentName: 'fletcher-voice'` set on ServerOptions; `RoomAgentDispatch` added to token server; token-server refactored for testability with 12 unit tests; field verification pending
 - [ ] 002: Add Dispatch Endpoint to Token Server — `POST /dispatch-agent` calls `AgentDispatchClient.createDispatch()`
 - [ ] 003: Client-Side VAD Integration (Flutter) — `vad` package (Silero v5 on-device) detects speech when agent absent
 - [x] 004: Agent Idle Timeout & Auto-Disconnect ✅ — `IdleTimeout` class with configurable timer, warning callback, env-var config (`FLETCHER_IDLE_TIMEOUT_MS`); resets on speech/text input; 14 unit tests
