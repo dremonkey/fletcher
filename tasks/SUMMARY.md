@@ -310,10 +310,9 @@ Refactor the Fletcher voice agent to use the native OpenClaw **OpenResponses API
 - [x] 003: Implement OpenResponses SSE parser ✅
 - [x] 004: Map OpenResponses events to LLMStream interface ✅
 - [x] 005: Update voice agent to use `respond()` instead of `chat()` ✅
-- [ ] 006: Handle artifact items via data channel 📋
-- [x] 007: Add error handling for OpenResponses error items ✅
-- [~] 008: Integration test with real OpenClaw Gateway 🔄 — unit tests (22 new) passing; integration pending Gateway
-- [ ] 009: Deprecation plan for Chat Completions endpoint 📋
+- [x] 006: Enhanced error handling for OpenResponses error items ✅
+- [~] 007: Integration test with real OpenClaw Gateway 🔄 — unit tests (22 new) passing; integration pending Gateway
+- [ ] 008: Deprecation plan for Chat Completions endpoint 📋
 
 **Implemented:**
 - `OpenClawClient.respond()` targets `/v1/responses` with full SSE parsing
