@@ -1,7 +1,7 @@
 # TASK-016: Ensure Keyboard Dismisses and Text Clears on Revert to Voice-First
 
 ## Status
-- **Status:** Open
+- **Status:** Complete
 - **Priority:** Low
 - **Owner:** Unassigned
 - **Created:** 2026-03-08
@@ -19,6 +19,6 @@ When the user long-presses to revert from text-input mode back to voice-first mo
 4. Consider whether to warn if there's unsent text (probably not — keep it frictionless)
 
 ## Acceptance Criteria
-- [ ] Keyboard dismisses when reverting to voice-first mode
-- [ ] Text field content is cleared on revert
-- [ ] No orphaned focus or lingering keyboard after mode switch
+- [x] Keyboard dismisses when reverting to voice-first mode
+- [x] Text field content is cleared on revert
+- [x] No orphaned focus or lingering keyboard after mode switch

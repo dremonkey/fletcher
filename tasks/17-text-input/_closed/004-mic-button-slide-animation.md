@@ -1,7 +1,7 @@
 # TASK-004: Implement Sliding Animation for Mic Button
 
 ## Status
-- **Status:** Open
+- **Status:** Complete
 - **Priority:** Medium
 - **Owner:** Unassigned
 - **Created:** 2026-03-08
@@ -20,7 +20,7 @@ When entering text-input mode, the Mic button needs to smoothly slide from its c
 5. Use an appropriate curve (e.g., `Curves.easeInOut`) for fluid motion
 
 ## Acceptance Criteria
-- [ ] Mic button slides from center to right on entering text-input mode
-- [ ] Mic button slides from right to center on reverting to voice-first mode
-- [ ] Animation duration is ~300-500ms with smooth easing curve
-- [ ] No visual jank or layout jumps during transition
+- [x] Mic button slides from center to right on entering text-input mode
+- [x] Mic button slides from right to center on reverting to voice-first mode
+- [x] Animation duration is ~300-500ms with smooth easing curve
+- [x] No visual jank or layout jumps during transition

@@ -1,7 +1,7 @@
 # TASK-007: Handle Layout Reflow and Positioning for Hybrid State
 
 ## Status
-- **Status:** Open
+- **Status:** Complete
 - **Priority:** Medium
 - **Owner:** Unassigned
 - **Created:** 2026-03-08
@@ -20,7 +20,7 @@ The hybrid state (text field + Mic button side by side) requires proper layout h
 5. Ensure the keyboard inset doesn't cause layout issues (use `MediaQuery.of(context).viewInsets`)
 
 ## Acceptance Criteria
-- [ ] Hybrid layout renders correctly on various screen widths
-- [ ] No overflow or clipping in text-input mode
-- [ ] Keyboard appearance doesn't break layout
-- [ ] Layout transitions cleanly between voice-first and text-input states
+- [x] Hybrid layout renders correctly on various screen widths
+- [x] No overflow or clipping in text-input mode
+- [x] Keyboard appearance doesn't break layout
+- [x] Layout transitions cleanly between voice-first and text-input states

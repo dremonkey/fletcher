@@ -1,7 +1,7 @@
 # TASK-009: Wire TextField to ConversationBloc.sendTextMessage()
 
 ## Status
-- **Status:** Open
+- **Status:** Complete
 - **Priority:** High
 - **Owner:** Unassigned
 - **Created:** 2026-03-08
@@ -20,7 +20,7 @@ When the user submits text (via Enter key or send button), the message needs to 
 5. Handle empty/whitespace-only submissions (no-op)
 
 ## Acceptance Criteria
-- [ ] `SendTextMessage` event added to ConversationBloc
-- [ ] User's typed message appears in transcript immediately after submission
-- [ ] Text field clears after successful send
-- [ ] Empty/whitespace-only messages are rejected (no-op)
+- [x] `SendTextMessage` event added to ConversationBloc
+- [x] User's typed message appears in transcript immediately after submission
+- [x] Text field clears after successful send
+- [x] Empty/whitespace-only messages are rejected (no-op)

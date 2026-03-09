@@ -1,7 +1,7 @@
 # TASK-011: Update ChatTranscript to Render Text-Origin Messages
 
 ## Status
-- **Status:** Open
+- **Status:** Complete
 - **Priority:** Medium
 - **Owner:** Unassigned
 - **Created:** 2026-03-08
@@ -19,7 +19,7 @@ The ChatTranscript widget currently renders messages from the voice pipeline (ST
 4. Agent responses to text messages render identically to voice-triggered responses
 
 ## Acceptance Criteria
-- [ ] Text-origin messages appear in ChatTranscript alongside voice messages
-- [ ] Messages maintain chronological order regardless of origin
-- [ ] Optional visual indicator distinguishes text vs voice origin
-- [ ] Agent responses render consistently regardless of input origin
+- [x] Text-origin messages appear in ChatTranscript alongside voice messages
+- [x] Messages maintain chronological order regardless of origin
+- [x] Optional visual indicator distinguishes text vs voice origin (keyboard icon)
+- [x] Agent responses render consistently regardless of input origin

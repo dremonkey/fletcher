@@ -1,7 +1,7 @@
 # TASK-003: Add Mode Toggle Logic (Voice-First ↔ Text-Input)
 
 ## Status
-- **Status:** Open
+- **Status:** Complete
 - **Priority:** High
 - **Owner:** Unassigned
 - **Created:** 2026-03-08
@@ -20,7 +20,7 @@ The app needs clean toggle logic to switch between voice-first and text-input mo
 3. Consider edge cases: what happens if a recording is in progress during long-press?
 
 ## Acceptance Criteria
-- [ ] Toggling to text-input mode stops active recording if in progress
-- [ ] Toggling to voice-first mode clears text input state
-- [ ] Mode transitions are idempotent
-- [ ] Edge cases (mid-recording toggle, mid-typing toggle) handled gracefully
+- [x] Toggling to text-input mode stops active recording if in progress
+- [x] Toggling to voice-first mode clears text input state
+- [x] Mode transitions are idempotent
+- [x] Edge cases (mid-recording toggle, mid-typing toggle) handled gracefully

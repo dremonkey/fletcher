@@ -1,7 +1,7 @@
 # TASK-012: Add Enter-Key Submission Handler
 
 ## Status
-- **Status:** Open
+- **Status:** Complete
 - **Priority:** Medium
 - **Owner:** Unassigned
 - **Created:** 2026-03-08
@@ -19,6 +19,6 @@ Users expect to submit text messages by pressing Enter on the soft keyboard (or 
 4. Ensure Shift+Enter inserts a newline (for multi-line messages) if desired, or keep it single-line
 
 ## Acceptance Criteria
-- [ ] Pressing Enter/Send on keyboard submits the message
-- [ ] Submission triggers the same flow as the send button
-- [ ] Keyboard action button shows "Send" (not "Done" or "Return")
+- [x] Pressing Enter/Send on keyboard submits the message
+- [x] Submission triggers the same flow as the send button
+- [x] Keyboard action button shows "Send" (not "Done" or "Return")

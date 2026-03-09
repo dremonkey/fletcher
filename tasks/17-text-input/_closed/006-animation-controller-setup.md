@@ -1,7 +1,7 @@
 # TASK-006: Create AnimationController and Tween Setup
 
 ## Status
-- **Status:** Open
+- **Status:** Complete
 - **Priority:** Medium
 - **Owner:** Unassigned
 - **Created:** 2026-03-08
@@ -23,7 +23,7 @@ The Mic button slide and text field expansion need a shared animation infrastruc
 6. Listen to ConversationBloc state to trigger `forward()` / `reverse()`
 
 ## Acceptance Criteria
-- [ ] Single `AnimationController` drives both animations in sync
-- [ ] Proper lifecycle: init in `initState`, dispose in `dispose`
-- [ ] Smooth curve applied (not linear)
-- [ ] Controller responds to ConversationBloc state changes
+- [x] Single `AnimationController` drives both animations in sync
+- [x] Proper lifecycle: init in `initState`, dispose in `dispose`
+- [x] Smooth curve applied (not linear)
+- [x] Controller responds to ConversationBloc state changes

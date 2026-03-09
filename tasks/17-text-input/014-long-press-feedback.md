@@ -1,7 +1,7 @@
 # TASK-014: Visual Feedback for Long-Press Detection
 
 ## Status
-- **Status:** Open
+- **Status:** Partial — haptic feedback done, visual cue (progress ring) deferred
 - **Priority:** Low
 - **Owner:** Unassigned
 - **Created:** 2026-03-08
@@ -22,6 +22,6 @@ Users need immediate feedback that a long-press is being detected, so they know 
 4. Keep feedback subtle — don't distract from the primary voice UX
 
 ## Acceptance Criteria
-- [ ] Haptic feedback fires on long-press detection
-- [ ] Visual cue indicates the long-press is in progress
-- [ ] Feedback feels responsive and intentional
+- [x] Haptic feedback fires on long-press detection (HapticFeedback.heavyImpact)
+- [ ] Visual cue indicates the long-press is in progress (future: add radial progress)
+- [x] Feedback feels responsive and intentional

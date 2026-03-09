@@ -296,26 +296,26 @@ Upstream bugs and limitations in the `livekit_client` Flutter/Dart SDK that affe
 
 **Related closed tasks** (resolved with workarounds in Epic 9): 007 (ICE renegotiation), 009 (BT audio recovery), 011 (audio track timeout).
 
-### 17. [Text Input Mode](./17-text-input) 📋
+### 17. [Text Input Mode](./17-text-input) 🔄
 Add a text entry field to the Fletcher mobile app as a "safety hatch" for situations where voice is not the right medium (noisy environments, quiet spaces, precision corrections). Long-press on Mic button toggles between voice-first and text-input modes.
 
 **Tasks:**
-- [ ] 001: Add TextInputMode State to ConversationBloc 📋
-- [ ] 002: Implement Long-Press Gesture Detector on Mic Button 📋
-- [ ] 003: Add Mode Toggle Logic (Voice-First ↔ Text-Input) 📋
-- [ ] 004: Implement Sliding Animation for Mic Button 📋
-- [ ] 005: Implement Expanding/Sliding Animation for Text Input Field 📋
-- [ ] 006: Create AnimationController and Tween Setup 📋
-- [ ] 007: Handle Layout Reflow and Positioning for Hybrid State 📋
-- [ ] 008: Add TextField Widget with TUI Brutalist Styling 📋
-- [ ] 009: Wire TextField to ConversationBloc.sendTextMessage() 📋
-- [ ] 010: Implement Text Message Routing (Data Channel vs HTTP) 📋
-- [ ] 011: Update ChatTranscript to Render Text-Origin Messages 📋
-- [ ] 012: Add Enter-Key Submission Handler 📋
-- [ ] 013: Add Send Button (Visible in Text-Input Mode) 📋
-- [ ] 014: Visual Feedback for Long-Press Detection 📋
-- [ ] 015: Ensure Text Field Auto-Focuses When Entering Text-Input Mode 📋
-- [ ] 016: Ensure Keyboard Dismisses and Text Clears on Revert 📋
+- [x] 001: Add TextInputMode State to ConversationBloc ✅
+- [x] 002: Implement Long-Press Gesture Detector on Mic Button ✅
+- [x] 003: Add Mode Toggle Logic (Voice-First ↔ Text-Input) ✅
+- [x] 004: Implement Sliding Animation for Mic Button ✅
+- [x] 005: Implement Expanding/Sliding Animation for Text Input Field ✅
+- [x] 006: Create AnimationController and Tween Setup ✅
+- [x] 007: Handle Layout Reflow and Positioning for Hybrid State ✅
+- [x] 008: Add TextField Widget with TUI Brutalist Styling ✅
+- [x] 009: Wire TextField to ConversationBloc.sendTextMessage() ✅
+- [~] 010: Implement Text Message Routing (Data Channel vs HTTP) 🔄 — client-side routing via data channel done; agent-side handler needed
+- [x] 011: Update ChatTranscript to Render Text-Origin Messages ✅
+- [x] 012: Add Enter-Key Submission Handler ✅
+- [x] 013: Add Send Button (Visible in Text-Input Mode) ✅
+- [~] 014: Visual Feedback for Long-Press Detection 🔄 — haptic done, visual progress ring deferred
+- [x] 015: Ensure Text Field Auto-Focuses When Entering Text-Input Mode ✅
+- [x] 016: Ensure Keyboard Dismisses and Text Clears on Revert ✅
 
 **Depends on:** Epic 11 (TUI Brutalist UI), Epic 4 (Ganglia)
 

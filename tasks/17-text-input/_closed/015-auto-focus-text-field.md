@@ -1,7 +1,7 @@
 # TASK-015: Ensure Text Field Auto-Focuses When Entering Text-Input Mode
 
 ## Status
-- **Status:** Open
+- **Status:** Complete
 - **Priority:** Low
 - **Owner:** Unassigned
 - **Created:** 2026-03-08
@@ -19,6 +19,6 @@ When the user long-presses to enter text-input mode, the text field should autom
 4. Ensure the keyboard appears automatically on focus
 
 ## Acceptance Criteria
-- [ ] Text field auto-focuses when entering text-input mode
-- [ ] Keyboard appears automatically (no extra tap required)
-- [ ] Focus request is timed after animation completes (not during)
+- [x] Text field auto-focuses when entering text-input mode
+- [x] Keyboard appears automatically (no extra tap required)
+- [x] Focus request is timed after animation completes (not during)

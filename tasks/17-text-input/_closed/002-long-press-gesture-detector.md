@@ -1,7 +1,7 @@
 # TASK-002: Implement Long-Press Gesture Detector on Mic Button
 
 ## Status
-- **Status:** Open
+- **Status:** Complete
 - **Priority:** High
 - **Owner:** Unassigned
 - **Created:** 2026-03-08
@@ -19,6 +19,6 @@ The Mic button (Amber Orb) currently handles tap gestures for start/stop recordi
 4. Consider a ~500ms long-press duration threshold
 
 ## Acceptance Criteria
-- [ ] Long-press on Mic button is detected and dispatches `ToggleInputMode`
-- [ ] Tap behavior (start/stop recording) is preserved and unaffected
-- [ ] Long-press duration threshold feels natural (~400-600ms)
+- [x] Long-press on Mic button is detected and dispatches `ToggleInputMode`
+- [x] Tap behavior (start/stop recording) is preserved and unaffected
+- [x] Long-press duration threshold feels natural (~400-600ms)

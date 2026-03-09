@@ -1,7 +1,7 @@
 # TASK-013: Add Send Button (Visible in Text-Input Mode)
 
 ## Status
-- **Status:** Open
+- **Status:** Complete
 - **Priority:** Medium
 - **Owner:** Unassigned
 - **Created:** 2026-03-08
@@ -20,7 +20,7 @@ A visible send button provides a clear affordance for submitting text messages, 
 5. Position: between the text field and the Mic button (right side)
 
 ## Acceptance Criteria
-- [ ] Send button visible in text-input mode, hidden in voice-first mode
-- [ ] Tapping send button submits the message
-- [ ] Button is disabled/dimmed when text field is empty
-- [ ] Styled consistently with TUI Brutalist design system
+- [x] Send button visible in text-input mode, hidden in voice-first mode
+- [x] Tapping send button submits the message
+- [x] Button is disabled/dimmed when text field is empty
+- [x] Styled consistently with TUI Brutalist design system

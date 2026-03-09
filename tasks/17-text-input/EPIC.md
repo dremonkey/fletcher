@@ -1,6 +1,6 @@
 # Epic 17: Text Input Mode
 
-**Status:** 📋 Planned  
+**Status:** 🚧 In Progress
 **Goal:** Add a text entry field to the Fletcher mobile app as a "safety hatch" for situations where voice is not the right medium.
 
 ## Purpose
@@ -59,33 +59,33 @@ Agent processes via same pipeline
 Response appears in ChatTranscript
 ```
 
-**Open Question:** Should text messages route through the LiveKit data channel (`ganglia-events` topic) or go directly to the OpenClaw HTTP API? Data channel keeps everything within the existing voice session; HTTP API provides a separate, more reliable path when audio is degraded.
+**Decision:** Text messages route through the LiveKit data channel (`ganglia-events` topic) with event type `text_message`. This keeps everything within the existing voice session and avoids adding a separate HTTP code path. The agent-side Ganglia plugin needs a handler for the `text_message` event type to inject the text into the LLM pipeline.
 
 ## Tasks
 
-### State Management
-- [ ] [001: Add TextInputMode State to ConversationBloc](./001-text-input-mode-state.md)
-- [ ] [002: Implement Long-Press Gesture Detector on Mic Button](./002-long-press-gesture-detector.md)
-- [ ] [003: Add Mode Toggle Logic (Voice-First ↔ Text-Input)](./003-mode-toggle-logic.md)
+### State Management ✅
+- [x] [001: Add TextInputMode State to ConversationBloc](./001-text-input-mode-state.md)
+- [x] [002: Implement Long-Press Gesture Detector on Mic Button](./002-long-press-gesture-detector.md)
+- [x] [003: Add Mode Toggle Logic (Voice-First ↔ Text-Input)](./003-mode-toggle-logic.md)
 
-### Animation & Layout
-- [ ] [004: Implement Sliding Animation for Mic Button](./004-mic-button-slide-animation.md)
-- [ ] [005: Implement Expanding/Sliding Animation for Text Input Field](./005-text-field-expand-animation.md)
-- [ ] [006: Create AnimationController and Tween Setup](./006-animation-controller-setup.md)
-- [ ] [007: Handle Layout Reflow and Positioning for Hybrid State](./007-hybrid-state-layout.md)
+### Animation & Layout ✅
+- [x] [004: Implement Sliding Animation for Mic Button](./004-mic-button-slide-animation.md)
+- [x] [005: Implement Expanding/Sliding Animation for Text Input Field](./005-text-field-expand-animation.md)
+- [x] [006: Create AnimationController and Tween Setup](./006-animation-controller-setup.md)
+- [x] [007: Handle Layout Reflow and Positioning for Hybrid State](./007-hybrid-state-layout.md)
 
 ### Text Input Functionality
-- [ ] [008: Add TextField Widget with TUI Brutalist Styling](./008-text-field-widget.md)
-- [ ] [009: Wire TextField to ConversationBloc.sendTextMessage()](./009-wire-text-to-bloc.md)
-- [ ] [010: Implement Text Message Routing (Data Channel vs HTTP)](./010-text-message-routing.md)
-- [ ] [011: Update ChatTranscript to Render Text-Origin Messages](./011-chat-transcript-text-messages.md)
-- [ ] [012: Add Enter-Key Submission Handler](./012-enter-key-submission.md)
-- [ ] [013: Add Send Button (Visible in Text-Input Mode)](./013-send-button.md)
+- [x] [008: Add TextField Widget with TUI Brutalist Styling](./008-text-field-widget.md)
+- [x] [009: Wire TextField to ConversationBloc.sendTextMessage()](./009-wire-text-to-bloc.md)
+- [~] [010: Implement Text Message Routing (Data Channel vs HTTP)](./010-text-message-routing.md) — client-side complete, agent-side handler needed
+- [x] [011: Update ChatTranscript to Render Text-Origin Messages](./011-chat-transcript-text-messages.md)
+- [x] [012: Add Enter-Key Submission Handler](./012-enter-key-submission.md)
+- [x] [013: Add Send Button (Visible in Text-Input Mode)](./013-send-button.md)
 
 ### Polish
-- [ ] [014: Visual Feedback for Long-Press Detection](./014-long-press-feedback.md)
-- [ ] [015: Ensure Text Field Auto-Focuses When Entering Text-Input Mode](./015-auto-focus-text-field.md)
-- [ ] [016: Ensure Keyboard Dismisses and Text Clears on Revert](./016-cleanup-on-revert.md)
+- [~] [014: Visual Feedback for Long-Press Detection](./014-long-press-feedback.md) — haptic done, visual cue deferred
+- [x] [015: Ensure Text Field Auto-Focuses When Entering Text-Input Mode](./015-auto-focus-text-field.md)
+- [x] [016: Ensure Keyboard Dismisses and Text Clears on Revert](./016-cleanup-on-revert.md)
 
 ## Success Criteria
 

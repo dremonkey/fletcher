@@ -1,7 +1,7 @@
 # TASK-005: Implement Expanding/Sliding Animation for Text Input Field
 
 ## Status
-- **Status:** Open
+- **Status:** Complete
 - **Priority:** Medium
 - **Owner:** Unassigned
 - **Created:** 2026-03-08
@@ -19,7 +19,7 @@ When the Mic button slides right, a text input field needs to expand/slide in fr
 4. Text field should appear to grow naturally as the Mic button moves aside
 
 ## Acceptance Criteria
-- [ ] Text field expands from left as Mic button slides right
-- [ ] Text field collapses/slides out when reverting to voice-first mode
-- [ ] Animation is synchronized with Mic button movement (same controller/duration)
-- [ ] Transition feels smooth and cohesive
+- [x] Text field expands from left as Mic button slides right
+- [x] Text field collapses/slides out when reverting to voice-first mode
+- [x] Animation is synchronized with Mic button movement (same controller/duration)
+- [x] Transition feels smooth and cohesive
