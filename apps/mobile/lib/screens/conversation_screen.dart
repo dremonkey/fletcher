@@ -11,6 +11,7 @@ import '../widgets/chat_transcript.dart';
 import '../widgets/header_bar.dart';
 import '../widgets/diagnostics_bar.dart';
 import '../widgets/mic_button.dart';
+import '../widgets/text_input_bar.dart';
 
 class ConversationScreen extends StatefulWidget {
   final List<String> livekitUrls;
@@ -152,13 +153,8 @@ class _ConversationScreenState extends State<ConversationScreen>
             ),
             const SizedBox(height: AppSpacing.sm),
 
-            // Mic button (centered)
-            MicButton(
-              status: state.status,
-              aiAudioLevel: state.aiAudioLevel,
-              isMuted: _liveKitService.isMuted,
-              onToggleMute: _liveKitService.toggleMute,
-            ),
+            // Input bar: mic button (voice-first) or text field + mic (text-input)
+            TextInputBar(service: _liveKitService),
             const SizedBox(height: AppSpacing.base),
           ],
         ),

@@ -317,9 +317,25 @@ class _TranscriptMessage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TuiHeader(
-            label: entry.speaker,
-            color: headerColor,
+          Row(
+            children: [
+              Expanded(
+                child: TuiHeader(
+                  label: entry.speaker,
+                  color: headerColor,
+                ),
+              ),
+              // Subtle keyboard icon for text-origin messages
+              if (entry.origin == MessageOrigin.text)
+                Padding(
+                  padding: const EdgeInsets.only(left: AppSpacing.sm),
+                  child: Icon(
+                    Icons.keyboard_rounded,
+                    size: 14,
+                    color: AppColors.textSecondary.withAlpha(128),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(

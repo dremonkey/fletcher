@@ -20,12 +20,17 @@ class MicButton extends StatefulWidget {
   final bool isMuted;
   final VoidCallback onToggleMute;
 
+  /// Called when the user long-presses the mic button (~500ms).
+  /// Used to toggle text-input mode.
+  final VoidCallback? onLongPress;
+
   const MicButton({
     super.key,
     required this.status,
     required this.aiAudioLevel,
     required this.isMuted,
     required this.onToggleMute,
+    this.onLongPress,
   });
 
   @override
@@ -137,6 +142,12 @@ class _MicButtonState extends State<MicButton> with TickerProviderStateMixin {
                 HapticFeedback.mediumImpact();
                 widget.onToggleMute();
               },
+              onLongPress: widget.onLongPress != null
+                  ? () {
+                      HapticFeedback.heavyImpact();
+                      widget.onLongPress!();
+                    }
+                  : null,
               child: SizedBox(
                 width: 56,
                 height: 56,
