@@ -339,18 +339,18 @@ Move the Piper TTS engine from the server sidecar to the mobile client (Android/
 
 **Depends on:** Epic 3 (Flutter App), Epic 13 (Edge Intelligence)
 
-### 20. [Agent Cost Optimization](./20-agent-cost-optimization) 📋
+### 20. [Agent Cost Optimization](./20-agent-cost-optimization) 🔄
 Eliminate idle agent costs by disconnecting the agent when nobody is speaking and re-dispatching on demand via client-side VAD. At multi-tenant scale, idle agents are the dominant cost driver ($0.01/min per connected agent regardless of activity). On-demand dispatch reduces idle costs by ~20x (from $0.60/hr to $0.03/hr per idle user).
 
 **Tasks:**
-- [~] 001: Switch Agent to Explicit Dispatch 🔄 — `agentName: 'fletcher-voice'` set on ServerOptions; `RoomAgentDispatch` added to token server; token-server refactored for testability with 12 unit tests; field verification pending
-- [x] 002: Add Dispatch Endpoint to Token Server ✅ — `POST /dispatch-agent` calls `AgentDispatchClient.createDispatch()`; `wsUrlToHttp` helper; 9 new tests (21 total)
-- [~] 003: Client-Side VAD Integration (Flutter) 🔄 — `LocalVadService` + `AgentDispatchService` created with 11 unit tests; `vad` and `http` packages added; integration with LiveKitService deferred to Task 005
-- [x] 004: Agent Idle Timeout & Auto-Disconnect ✅ — `IdleTimeout` class with configurable timer, warning callback, env-var config (`FLETCHER_IDLE_TIMEOUT_MS`); resets on speech/text input; 14 unit tests
-- [x] 005: Client State Machine (Agent Presence Lifecycle) ✅ — `AgentPresenceService` with 4-state machine (agentAbsent/dispatching/agentPresent/idleWarning); wires LocalVadService + AgentDispatchService; data channel event parsing in LiveKitService; 29 unit tests
-- [~] 006: Cold-Start Latency Mitigation 🔄 — `prewarm` (VAD pre-load), warm-down grace period (`FLETCHER_WARM_DOWN_MS`), dispatch latency metric implemented; `numIdleProcesses` + full benchmarking TBD
-- [ ] 007: UX Polish — Transition Feedback — visual/audio cues for agent lifecycle transitions
-- [ ] 008: Integration Test & Cost Validation — e2e lifecycle test + LiveKit Cloud billing verification
+- [x] 001: Switch Agent to Explicit Dispatch ✅ — `agentName: 'fletcher-voice'` set on ServerOptions; `RoomAgentDispatch` added to token server; 12 unit tests
+- [x] 002: Add Dispatch Endpoint to Token Server ✅ — `POST /dispatch-agent` calls `AgentDispatchClient.createDispatch()`; `wsUrlToHttp` helper; 21 total tests
+- [x] 003: Client-Side VAD Integration (Flutter) ✅ — `LocalVadService` + `AgentDispatchService` with 11 unit tests; `vad` and `http` packages added
+- [x] 004: Agent Idle Timeout & Auto-Disconnect ✅ — `IdleTimeout` class with configurable timer, warning + warm-down callbacks; 20 unit tests
+- [x] 005: Client State Machine (Agent Presence Lifecycle) ✅ — `AgentPresenceService` 4-state machine; wires LocalVadService + AgentDispatchService; 29 unit tests
+- [x] 006: Cold-Start Latency Mitigation ✅ — `prewarm` (VAD pre-load), warm-down grace period (`FLETCHER_WARM_DOWN_MS`), dispatch latency metric
+- [x] 007: UX Polish — Transition Feedback ✅ — system event emission on state transitions; data channel callbacks in LiveKitService; 9 new tests
+- [ ] 008: Integration Test & Cost Validation 📋 — e2e lifecycle test + LiveKit Cloud billing verification (requires running infrastructure)
 
 **Depends on:** Epic 2 (Voice Agent), Epic 3 (Flutter App), Epic 9 (Connectivity)
 
