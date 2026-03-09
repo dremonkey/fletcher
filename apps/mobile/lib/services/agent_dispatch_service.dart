@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 ///
 /// Called when local VAD detects speech while the agent is disconnected.
 class AgentDispatchService {
-  final String baseUrl;
+  String baseUrl;
   final http.Client _client;
 
   AgentDispatchService({

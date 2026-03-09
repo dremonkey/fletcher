@@ -113,6 +113,16 @@ class LiveKitService extends ChangeNotifier {
   final List<double> _userWaveformBuffer = [];
   final List<double> _aiWaveformBuffer = [];
 
+  // Queued text messages sent while agent was absent (Epic 20).
+  // Flushed when the agent connects.
+  final List<String> _pendingTextMessages = [];
+
+  // Speech detection via audio levels when agent is absent (Epic 20).
+  // Counts consecutive frames above threshold to confirm speech.
+  static const _speechThreshold = 0.05;
+  static const _speechFramesRequired = 3; // 300ms at 100ms polling
+  int _speechFrameCount = 0;
+
   Future<bool> requestPermissions() async {
     final status = await Permission.microphone.request();
     // Bluetooth permission is needed so audio routing survives headphone
@@ -401,6 +411,15 @@ class LiveKitService extends ChangeNotifier {
       // the microphone when the app goes to background (BUG-022)
       await _startForegroundService();
 
+      // Enable agent presence service for on-demand dispatch (Epic 20).
+      // Derive dispatch URL from the LiveKit URL (same host, token server port).
+      if (_currentRoomName != null) {
+        final uri = Uri.parse(url);
+        final dispatchBaseUrl = 'http://${uri.host}:$_tokenServerPort';
+        agentPresenceService.updateDispatchBaseUrl(dispatchBaseUrl);
+        agentPresenceService.enable(_currentRoomName!);
+      }
+
       // Send text-only mode state to agent on connect (TASK-030)
       if (_textOnlyMode) {
         await _sendTtsMode();
@@ -553,6 +572,8 @@ class LiveKitService extends ChangeNotifier {
       );
       // Notify agent presence service (Epic 20)
       agentPresenceService.onAgentConnected();
+      // Flush any text messages queued while agent was absent
+      _flushPendingTextMessages();
       // Emit/update agent connected system event (task 020)
       _emitSystemEvent(SystemEvent(
         id: 'agent-boot',
@@ -1039,6 +1060,24 @@ class LiveKitService extends ChangeNotifier {
       }
     }
 
+    // Detect speech via audio levels when agent is absent (Epic 20).
+    // Uses consecutive frame counting instead of a separate VAD mic capture
+    // to avoid mic conflicts with LiveKit's audio session.
+    if (agentPresenceService.enabled &&
+        agentPresenceService.state == AgentPresenceState.agentAbsent &&
+        !_isMuted) {
+      if (userLevel > _speechThreshold) {
+        _speechFrameCount++;
+        if (_speechFrameCount >= _speechFramesRequired) {
+          debugPrint('[Fletcher] Speech detected via audio levels — triggering dispatch');
+          _speechFrameCount = 0;
+          agentPresenceService.onSpeechDetected();
+        }
+      } else {
+        _speechFrameCount = 0;
+      }
+    }
+
     // Update waveform buffers
     _userWaveformBuffer.add(userLevel);
     if (_userWaveformBuffer.length > _maxWaveformSamples) {
@@ -1113,16 +1152,18 @@ class LiveKitService extends ChangeNotifier {
     _isMuted = !_isMuted;
     debugPrint('[Fletcher] Mute toggled: muted=$_isMuted');
 
+    // Await mic enable/disable so the OS mic resource is fully
+    // released BEFORE updating the UI. This prevents the text field
+    // from appearing (and keyboard STT becoming available) while
+    // LiveKit still holds the mic.
+    await _localParticipant?.setMicrophoneEnabled(!_isMuted);
+    debugPrint('[Fletcher] Mic ${_isMuted ? "stopped" : "started"}');
+
     if (_isMuted) {
       _updateState(status: ConversationStatus.muted);
     } else {
       _updateState(status: ConversationStatus.idle);
     }
-
-    // Await mic enable/disable so the OS mic resource is fully
-    // released before the keyboard (Android STT) tries to use it.
-    await _localParticipant?.setMicrophoneEnabled(!_isMuted);
-    debugPrint('[Fletcher] Mic ${_isMuted ? "stopped" : "started"}');
   }
 
   // ---------------------------------------------------------------------------
@@ -1194,6 +1235,9 @@ class LiveKitService extends ChangeNotifier {
 
     debugPrint('[Fletcher] Sending text message: ${trimmed.length} chars');
 
+    // Trigger agent dispatch if agent is absent (Epic 20)
+    agentPresenceService.onTextMessageSent();
+
     // Optimistic: add to local transcript immediately
     final entry = TranscriptEntry(
       id: 'text-${DateTime.now().millisecondsSinceEpoch}',
@@ -1215,11 +1259,33 @@ class LiveKitService extends ChangeNotifier {
     }
     _updateState(transcript: updatedTranscript);
 
-    // Send via data channel
-    await _sendEvent({
-      'type': 'text_message',
-      'text': trimmed,
-    });
+    // If agent is absent/dispatching, queue the message for delivery
+    // once the agent connects. Otherwise send immediately.
+    final agentState = agentPresenceService.state;
+    if (agentPresenceService.enabled &&
+        (agentState == AgentPresenceState.agentAbsent ||
+         agentState == AgentPresenceState.dispatching)) {
+      debugPrint('[Fletcher] Agent absent — queuing text message for delivery');
+      _pendingTextMessages.add(trimmed);
+    } else {
+      await _sendEvent({
+        'type': 'text_message',
+        'text': trimmed,
+      });
+    }
+  }
+
+  /// Send any text messages that were queued while the agent was absent.
+  Future<void> _flushPendingTextMessages() async {
+    if (_pendingTextMessages.isEmpty) return;
+    debugPrint('[Fletcher] Flushing ${_pendingTextMessages.length} queued text message(s)');
+    for (final text in _pendingTextMessages) {
+      await _sendEvent({
+        'type': 'text_message',
+        'text': text,
+      });
+    }
+    _pendingTextMessages.clear();
   }
 
   void _updateState({
@@ -1568,6 +1634,7 @@ class LiveKitService extends ChangeNotifier {
 
   Future<void> disconnect({bool preserveTranscripts = false}) async {
     debugPrint('[Fletcher] Disconnecting (preserveTranscripts=$preserveTranscripts)');
+    agentPresenceService.disable();
     await _stopForegroundService();
     await _reconnectBuffer?.reset();
     _reconnectBuffer = null;

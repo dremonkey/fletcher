@@ -113,6 +113,20 @@ class AgentPresenceService extends ChangeNotifier {
     // If already dispatching or agent present, ignore
   }
 
+  /// Called when the user sends a text message.
+  /// Triggers dispatch if the agent is absent.
+  void onTextMessageSent() {
+    if (!_enabled) return;
+    if (_state == AgentPresenceState.agentAbsent) {
+      _transitionTo(AgentPresenceState.dispatching);
+    }
+  }
+
+  /// Update the dispatch service base URL (e.g. after URL resolution).
+  void updateDispatchBaseUrl(String baseUrl) {
+    _dispatchService.baseUrl = baseUrl;
+  }
+
   void _transitionTo(AgentPresenceState newState) {
     if (_state == newState) return;
 
@@ -194,12 +208,10 @@ class AgentPresenceService extends ChangeNotifier {
   }
 
   void _startLocalVad() {
-    _localVad.stopListening(); // ensure clean state
-    _localVad.startListening().then((_) {
-      debugPrint('[AgentPresence] Local VAD started — listening for speech');
-    }).catchError((e) {
-      debugPrint('[AgentPresence] Failed to start local VAD: $e');
-    });
+    // Local VAD mic capture is disabled — speech detection is handled by
+    // LiveKitService._updateAudioLevels() using the existing LiveKit audio
+    // session to avoid mic capture conflicts on Android.
+    debugPrint('[AgentPresence] Waiting for speech (via audio level monitoring)');
   }
 
   Future<void> _dispatchAgent() async {
