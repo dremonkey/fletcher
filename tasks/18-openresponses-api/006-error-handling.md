@@ -1,7 +1,7 @@
 # Task 006: Enhanced Error Handling for OpenResponses
 
 **Epic:** 18 - OpenResponses API Integration  
-**Status:** 📋 Planned  
+**Status:** [x] Complete
 **Depends on:** 005 (Voice Agent Update)
 
 ## Objective
@@ -209,10 +209,10 @@ async retryWithBackoff<T>(
 
 ## Testing
 
-- [ ] Unit test: HTTP error handling (401, 429, 500)
-- [ ] Unit test: SSE `response.failed` event
-- [ ] Unit test: `Retry-After` header parsing
-- [ ] Unit test: Retry logic with backoff
+- [x] Unit test: HTTP error handling (401, 429, 500)
+- [x] Unit test: SSE `response.failed` event
+- [x] Unit test: `Retry-After` header parsing
+- [ ] Unit test: Retry logic with backoff (deferred — retry is consumer-side)
 - [ ] Integration test: Rate limit error triggers artifact
 - [ ] Field test: User sees friendly error messages
 

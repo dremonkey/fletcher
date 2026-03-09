@@ -1,7 +1,7 @@
 # Task 002: Add respond() Method to OpenClawClient
 
 **Epic:** 18 - OpenResponses API Integration  
-**Status:** 📋 Planned  
+**Status:** [x] Complete
 **Depends on:** 001 (Technical Spec)
 
 ## Objective
@@ -87,10 +87,10 @@ if (options.sessionKey?.type === 'owner') {
 
 ## Testing
 
-- [ ] Unit test: `respond()` sends correct request body
-- [ ] Unit test: Session routing (sessionKey vs user)
-- [ ] Unit test: Auth headers match `chat()` method
-- [ ] Unit test: AbortSignal cancellation
+- [x] Unit test: `respond()` sends correct request body
+- [x] Unit test: Session routing (sessionKey vs user)
+- [x] Unit test: Auth headers match `chat()` method
+- [x] Unit test: AbortSignal cancellation
 - [ ] Integration test: Connect to real Gateway
 
 ## Files Modified

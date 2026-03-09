@@ -319,19 +319,27 @@ Add a text entry field to the Fletcher mobile app as a "safety hatch" for situat
 
 **Depends on:** Epic 11 (TUI Brutalist UI), Epic 4 (Ganglia)
 
-### 18. [OpenResponses API Integration](./18-openresponses-api) 📋
+### 18. [OpenResponses API Integration](./18-openresponses-api) 🔄
 Refactor the Fletcher voice agent to use the native OpenClaw **OpenResponses API** (`/v1/responses`) instead of the OpenAI-compatible **Chat Completions API** (`/v1/chat/completions`) for more reliable delivery and better session management.
 
 **Tasks:**
-- [ ] 001: Research OpenResponses API spec 📋
-- [ ] 002: Add `respond()` method to OpenClawClient 📋
-- [ ] 003: Implement OpenResponses SSE parser 📋
-- [ ] 004: Map OpenResponses events to LLMStream interface 📋
-- [ ] 005: Update voice agent to use `respond()` instead of `chat()` 📋
+- [x] 001: Research OpenResponses API spec ✅
+- [x] 002: Add `respond()` method to OpenClawClient ✅
+- [x] 003: Implement OpenResponses SSE parser ✅
+- [x] 004: Map OpenResponses events to LLMStream interface ✅
+- [x] 005: Update voice agent to use `respond()` instead of `chat()` ✅
 - [ ] 006: Handle artifact items via data channel 📋
-- [ ] 007: Add error handling for OpenResponses error items 📋
-- [ ] 008: Integration test with real OpenClaw Gateway 📋
+- [x] 007: Add error handling for OpenResponses error items ✅
+- [~] 008: Integration test with real OpenClaw Gateway 🔄 — unit tests (22 new) passing; integration pending Gateway
 - [ ] 009: Deprecation plan for Chat Completions endpoint 📋
+
+**Implemented:**
+- `OpenClawClient.respond()` targets `/v1/responses` with full SSE parsing
+- `OpenClawClient.respondAsChat()` maps events to ChatResponse format (backward compatible)
+- `OpenClawLLM` uses `respondAsChat()` when `useOpenResponses: true` or `USE_OPENRESPONSES=true`
+- `convertMessagesToInput()` bridges Chat Completions messages to InputItem format
+- Error classes: `OpenResponsesError`, `RateLimitError` with Retry-After support
+- 22 new unit tests covering all methods, event types, errors, and routing
 
 **Depends on:** Epic 4 (Ganglia), OpenClaw Gateway OpenResponses endpoint
 

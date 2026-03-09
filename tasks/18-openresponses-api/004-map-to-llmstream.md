@@ -1,7 +1,7 @@
 # Task 004: Map OpenResponses Events to LLMStream Interface
 
 **Epic:** 18 - OpenResponses API Integration  
-**Status:** 📋 Planned  
+**Status:** [x] Complete
 **Depends on:** 003 (SSE Event Parser)
 
 ## Objective
@@ -199,10 +199,10 @@ async *respond(options: OpenClawRespondOptions): AsyncIterableIterator<OpenRespo
 
 ## Testing
 
-- [ ] Unit test: Text delta mapping
-- [ ] Unit test: Completion mapping
-- [ ] Unit test: Error mapping
-- [ ] Unit test: Lifecycle events skipped (no chat deltas)
+- [x] Unit test: Text delta mapping
+- [x] Unit test: Completion mapping
+- [x] Unit test: Error mapping
+- [x] Unit test: Lifecycle events skipped (no chat deltas)
 - [ ] Integration test: Voice agent consumes `respondAsChat()`
 
 ## Files Modified

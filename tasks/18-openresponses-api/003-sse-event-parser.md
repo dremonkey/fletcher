@@ -1,7 +1,7 @@
 # Task 003: Implement OpenResponses SSE Event Parser
 
 **Epic:** 18 - OpenResponses API Integration  
-**Status:** 📋 Planned  
+**Status:** [x] Complete
 **Depends on:** 002 (respond() method)
 
 ## Objective
@@ -151,11 +151,11 @@ dbg.openresponses('event=%s data=%j', event.event, event.data);
 
 ## Testing
 
-- [ ] Unit test: Parse single-line event
-- [ ] Unit test: Parse multi-line data payload
-- [ ] Unit test: Detect [DONE] sentinel
-- [ ] Unit test: Handle malformed JSON gracefully
-- [ ] Unit test: Handle AbortSignal cancellation
+- [x] Unit test: Parse single-line event
+- [x] Unit test: Parse multi-line data payload
+- [x] Unit test: Detect [DONE] sentinel
+- [x] Unit test: Handle malformed JSON gracefully
+- [x] Unit test: Handle AbortSignal cancellation
 - [ ] Integration test: Parse real OpenResponses stream
 
 ## Files Modified

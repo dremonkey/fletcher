@@ -1,7 +1,7 @@
 # Task 005: Update Voice Agent to Use OpenResponses
 
 **Epic:** 18 - OpenResponses API Integration  
-**Status:** 📋 Planned  
+**Status:** [x] Complete
 **Depends on:** 004 (Event Mapping)
 
 ## Objective
@@ -171,8 +171,8 @@ If OpenResponses has issues, we can roll back by:
 
 ## Testing
 
-- [ ] Unit test: OpenClawLLM uses `respond()` when enabled
-- [ ] Unit test: Session routing uses `user` field
+- [x] Unit test: OpenClawLLM uses `respond()` when enabled
+- [x] Unit test: Session routing uses `user` field
 - [ ] Integration test: Voice agent connects via OpenResponses
 - [ ] Integration test: Session continuity across multiple turns
 - [ ] Field test: Verify no regressions in voice pipeline

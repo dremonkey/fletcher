@@ -1,7 +1,7 @@
 # Task 007: Integration Testing for OpenResponses
 
 **Epic:** 18 - OpenResponses API Integration  
-**Status:** 📋 Planned  
+**Status:** [~] Partially Complete (unit tests done, integration tests pending Gateway)
 **Depends on:** 006 (Error Handling)
 
 ## Objective
