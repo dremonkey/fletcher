@@ -276,9 +276,11 @@ Move sensing capabilities (Wake Word, VAD, STT) to the edge device to improve pr
 - [~] 003: Integrated Wake Word 🔄 — Wired into Amber Orb state machine; debug trigger added
 - [ ] 004: Local VAD Evaluation 📋 — Benchmark Silero VAD on-device vs server-side
 - [ ] 005: Offline Mode 📋 — Cache interactions when offline
-- [ ] 031: Local PiperTTS on Android 📋 — Move PiperTTS fallback from server sidecar to on-device inference (sherpa-onnx / ONNX Runtime); enables offline TTS and zero-network-hop fallback
+- [x] 031: Local PiperTTS on Android → **MIGRATED to Epic 19** ✅
 
 **Spec:** [docs/specs/wake-word-integration.md](../docs/specs/wake-word-integration.md)
+
+**Note:** Task 031 (Local PiperTTS) has been promoted to its own epic (Epic 19: Local Piper TTS Integration) due to its strategic importance for COGS reduction and offline operation.
 
 ### 15. [Macro Shortcuts](./15-macro-shortcuts) 📋
 Customizable quick-action buttons for triggering skill-driven commands without voice input. 3×3 grid optimized for thumb-zone ergonomics.
@@ -293,6 +295,50 @@ Upstream bugs and limitations in the `livekit_client` Flutter/Dart SDK that affe
 - [ ] 004: Fix `addTransceiver: track is null` During Reconnect 📋 — null track reference during `rePublishAllTracks` after rapid reconnect cycles ([BUG-025](../docs/field-tests/20260303-buglog.md))
 
 **Related closed tasks** (resolved with workarounds in Epic 9): 007 (ICE renegotiation), 009 (BT audio recovery), 011 (audio track timeout).
+
+### 17. [Text Input Mode](./17-text-input) 📋
+Add a text entry field to the Fletcher mobile app as a "safety hatch" for situations where voice is not the right medium (noisy environments, quiet spaces, precision corrections).
+
+**Tasks:**
+- [ ] 001: Add TextField widget to main chat view 📋
+- [ ] 002: Wire TextField to ConversationBloc 📋
+- [ ] 003: Implement text message routing (data channel vs HTTP) 📋
+- [ ] 004: Update ChatTranscript to render text-origin messages 📋
+- [ ] 005: Add Enter-key submission handler 📋
+- [ ] 006: (Optional) Voice/Text mode toggle UI 📋
+
+**Depends on:** Epic 11 (TUI Brutalist UI), Epic 4 (Ganglia)
+
+### 18. [OpenResponses API Integration](./18-openresponses-api) 📋
+Refactor the Fletcher voice agent to use the native OpenClaw **OpenResponses API** (`/v1/responses`) instead of the OpenAI-compatible **Chat Completions API** (`/v1/chat/completions`) for more reliable delivery and better session management.
+
+**Tasks:**
+- [ ] 001: Research OpenResponses API spec 📋
+- [ ] 002: Add `respond()` method to OpenClawClient 📋
+- [ ] 003: Implement OpenResponses SSE parser 📋
+- [ ] 004: Map OpenResponses events to LLMStream interface 📋
+- [ ] 005: Update voice agent to use `respond()` instead of `chat()` 📋
+- [ ] 006: Handle artifact items via data channel 📋
+- [ ] 007: Add error handling for OpenResponses error items 📋
+- [ ] 008: Integration test with real OpenClaw Gateway 📋
+- [ ] 009: Deprecation plan for Chat Completions endpoint 📋
+
+**Depends on:** Epic 4 (Ganglia), OpenClaw Gateway OpenResponses endpoint
+
+### 19. [Local Piper TTS Integration](./19-local-piper-tts) 📋
+Move the Piper TTS engine from the server sidecar to the mobile client (Android/iOS) for on-device voice synthesis. Eliminate cloud voice-out costs (drop COGS to $0), enable offline operation, and achieve zero-network-hop voice latency.
+
+**Tasks:**
+- [ ] 001: Local PiperTTS Discovery & Feasibility 📋 — sherpa-onnx evaluation, model selection, performance benchmarking (migrated from 13-031)
+- [ ] 002: Sherpa-ONNX Flutter Integration 📋 — native platform integration, inference pipeline, audio output
+- [ ] 003: Model Selection & Bundling Strategy 📋 — voice character selection, APK/OBB bundling, model updates
+- [ ] 004: Local TTS Pipeline & Fallback Integration 📋 — wire local Piper into voice agent as fallback tier, LiveKit audio track integration
+- [ ] 005: Performance Optimization & Battery Impact 📋 — ONNX Runtime acceleration, quantization, battery profiling
+- [ ] 006: Offline Mode & Edge TTS Coordination 📋 — offline TTS, VAD coordination, voice consistency
+
+**Context:** This is the key to reaching a 50% margin for the Fletcher Pro tier by removing the ~$0.135/min cloud TTS overhead.
+
+**Depends on:** Epic 3 (Flutter App), Epic 13 (Edge Intelligence)
 
 ## Development Path
 
