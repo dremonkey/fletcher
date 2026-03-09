@@ -10,11 +10,27 @@
  *   TOKEN_SERVER_PORT=7882 bun run scripts/token-server.ts
  *
  * Endpoints:
- *   GET /token?room=<name>&identity=<id>  → { "token": "<jwt>", "url": "ws://..." }
- *   GET /health                           → { "ok": true }
+ *   GET  /token?room=<name>&identity=<id>  → { "token": "<jwt>", "url": "ws://..." }
+ *   GET  /health                           → { "ok": true }
+ *   POST /dispatch-agent                   → { "status": "dispatched", ... }
  */
 
-import { AccessToken, RoomConfiguration, RoomAgentDispatch } from "livekit-server-sdk";
+import { AccessToken, RoomConfiguration, RoomAgentDispatch, AgentDispatchClient } from "livekit-server-sdk";
+
+/**
+ * Convert a WebSocket URL to its HTTP equivalent.
+ * LiveKit's LIVEKIT_URL env var is typically ws:// or wss://,
+ * but AgentDispatchClient expects http:// or https://.
+ */
+export function wsUrlToHttp(wsUrl: string): string {
+  if (wsUrl.startsWith("wss://")) {
+    return "https://" + wsUrl.slice("wss://".length);
+  }
+  if (wsUrl.startsWith("ws://")) {
+    return "http://" + wsUrl.slice("ws://".length);
+  }
+  return wsUrl;
+}
 
 export interface TokenServerConfig {
   livekitUrl: string;
@@ -28,6 +44,9 @@ export interface TokenServerConfig {
  * Exported for testing — the handler is a pure function of its config.
  */
 export function createFetchHandler(config: TokenServerConfig) {
+  const httpUrl = wsUrlToHttp(config.livekitUrl);
+  const dispatchClient = new AgentDispatchClient(httpUrl, config.apiKey, config.apiSecret);
+
   return async function fetch(req: Request): Promise<Response> {
     const url = new URL(req.url);
 
@@ -69,6 +88,35 @@ export function createFetchHandler(config: TokenServerConfig) {
 
       const jwt = await token.toJwt();
       return Response.json({ token: jwt, url: config.livekitUrl });
+    }
+
+    if (req.method === "POST" && url.pathname === "/dispatch-agent") {
+      const body = await req.json();
+      const roomName = body.room_name;
+
+      if (!roomName || typeof roomName !== "string") {
+        return Response.json(
+          { status: "error", message: "Missing required field: room_name" },
+          { status: 400 },
+        );
+      }
+
+      try {
+        const dispatch = await dispatchClient.createDispatch(roomName, config.agentName, {
+          metadata: body.metadata ? JSON.stringify(body.metadata) : undefined,
+        });
+
+        return Response.json({
+          status: "dispatched",
+          agent_name: config.agentName,
+          dispatch_id: dispatch.id,
+        });
+      } catch (err: any) {
+        return Response.json(
+          { status: "error", message: err.message || "Dispatch failed" },
+          { status: 500 },
+        );
+      }
     }
 
     return Response.json({ error: "Not found" }, { status: 404 });

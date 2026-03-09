@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeAll, afterAll } from 'bun:test';
 import { TokenVerifier } from 'livekit-server-sdk';
-import { createFetchHandler, type TokenServerConfig } from './token-server';
+import { createFetchHandler, wsUrlToHttp, type TokenServerConfig } from './token-server';
 
 const TEST_API_KEY = 'test-api-key';
 const TEST_API_SECRET = 'test-secret-that-is-long-enough-for-jose';
@@ -17,9 +17,18 @@ function makeConfig(overrides: Partial<TokenServerConfig> = {}): TokenServerConf
   };
 }
 
-/** Helper to build a Request object for testing. */
+/** Helper to build a GET Request object for testing. */
 function makeRequest(path: string): Request {
   return new Request(`http://localhost${path}`);
+}
+
+/** Helper to build a POST Request with JSON body. */
+function makePostRequest(path: string, body: unknown): Request {
+  return new Request(`http://localhost${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 }
 
 describe('token-server', () => {
@@ -127,6 +136,72 @@ describe('token-server', () => {
     it('returns 404 for unknown paths', async () => {
       const handler = createFetchHandler(makeConfig());
       const res = await handler(makeRequest('/unknown'));
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('wsUrlToHttp', () => {
+    it('converts ws:// to http://', () => {
+      expect(wsUrlToHttp('ws://localhost:7880')).toBe('http://localhost:7880');
+    });
+
+    it('converts wss:// to https://', () => {
+      expect(wsUrlToHttp('wss://my-project.livekit.cloud')).toBe('https://my-project.livekit.cloud');
+    });
+
+    it('leaves http:// unchanged', () => {
+      expect(wsUrlToHttp('http://localhost:7880')).toBe('http://localhost:7880');
+    });
+
+    it('leaves https:// unchanged', () => {
+      expect(wsUrlToHttp('https://example.com')).toBe('https://example.com');
+    });
+  });
+
+  describe('POST /dispatch-agent', () => {
+    it('returns 400 when room_name is missing', async () => {
+      const handler = createFetchHandler(makeConfig());
+      const res = await handler(makePostRequest('/dispatch-agent', {}));
+      expect(res.status).toBe(400);
+
+      const body = await res.json();
+      expect(body.status).toBe('error');
+      expect(body.message).toContain('room_name');
+    });
+
+    it('returns 400 when room_name is not a string', async () => {
+      const handler = createFetchHandler(makeConfig());
+      const res = await handler(makePostRequest('/dispatch-agent', { room_name: 123 }));
+      expect(res.status).toBe(400);
+
+      const body = await res.json();
+      expect(body.status).toBe('error');
+      expect(body.message).toContain('room_name');
+    });
+
+    it('returns 400 when room_name is an empty string', async () => {
+      const handler = createFetchHandler(makeConfig());
+      const res = await handler(makePostRequest('/dispatch-agent', { room_name: '' }));
+      expect(res.status).toBe(400);
+
+      const body = await res.json();
+      expect(body.status).toBe('error');
+    });
+
+    it('returns 500 when dispatch fails (no LiveKit server)', async () => {
+      const handler = createFetchHandler(makeConfig());
+      const res = await handler(makePostRequest('/dispatch-agent', { room_name: 'test-room' }));
+      // Without a real LiveKit server, the dispatch call will fail
+      expect(res.status).toBe(500);
+
+      const body = await res.json();
+      expect(body.status).toBe('error');
+      expect(typeof body.message).toBe('string');
+    });
+
+    it('rejects GET requests to /dispatch-agent with 404', async () => {
+      const handler = createFetchHandler(makeConfig());
+      const res = await handler(makeRequest('/dispatch-agent'));
       expect(res.status).toBe(404);
     });
   });
