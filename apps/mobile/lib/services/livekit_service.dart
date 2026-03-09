@@ -1107,6 +1107,64 @@ class LiveKitService extends ChangeNotifier {
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // Text input mode — safety hatch for noisy/quiet environments (Epic 17)
+  // ---------------------------------------------------------------------------
+
+  /// Toggle between voice-first and text-input modes.
+  ///
+  /// When entering text-input mode, any active mute state is preserved.
+  /// When reverting to voice-first mode, the text input cleanup happens
+  /// at the widget layer (clearing text, dismissing keyboard).
+  void toggleInputMode() {
+    final current = _state.inputMode;
+    final next = current == TextInputMode.voiceFirst
+        ? TextInputMode.textInput
+        : TextInputMode.voiceFirst;
+    debugPrint('[Fletcher] Input mode toggled: $current → $next');
+    _state = _state.copyWith(inputMode: next);
+    notifyListeners();
+  }
+
+  /// Send a text message through the LiveKit data channel.
+  ///
+  /// The message is sent as a `text_message` event on the `ganglia-events`
+  /// topic, keeping it within the existing voice session. The user's message
+  /// is also added to the local transcript immediately (optimistic update).
+  Future<void> sendTextMessage(String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+
+    debugPrint('[Fletcher] Sending text message: ${trimmed.length} chars');
+
+    // Optimistic: add to local transcript immediately
+    final entry = TranscriptEntry(
+      id: 'text-${DateTime.now().millisecondsSinceEpoch}',
+      role: TranscriptRole.user,
+      text: trimmed,
+      isFinal: true,
+      timestamp: DateTime.now(),
+      origin: MessageOrigin.text,
+    );
+
+    final updatedTranscript = List<TranscriptEntry>.from(_state.transcript)
+      ..add(entry);
+    // Trim to max entries
+    if (updatedTranscript.length > _maxTranscriptEntries) {
+      updatedTranscript.removeRange(
+        0,
+        updatedTranscript.length - _maxTranscriptEntries,
+      );
+    }
+    _updateState(transcript: updatedTranscript);
+
+    // Send via data channel
+    await _sendEvent({
+      'type': 'text_message',
+      'text': trimmed,
+    });
+  }
+
   void _updateState({
     ConversationStatus? status,
     double? userAudioLevel,

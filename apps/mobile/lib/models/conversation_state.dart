@@ -11,6 +11,19 @@ enum ConversationStatus {
   error,
 }
 
+/// Whether the user is in voice-first mode (default) or text-input mode
+/// (safety hatch for noisy/quiet environments or precision typing).
+enum TextInputMode {
+  voiceFirst,
+  textInput,
+}
+
+/// The origin of a transcript message — voice (STT) or typed text.
+enum MessageOrigin {
+  voice,
+  text,
+}
+
 // Ganglia Event Types
 
 /// Status actions from the agent
@@ -383,6 +396,9 @@ class ConversationState {
   /// Live diagnostics info (round-trip latency, session, agent, uptime, providers).
   final DiagnosticsInfo diagnostics;
 
+  /// Current input mode — voice-first (default) or text-input (safety hatch).
+  final TextInputMode inputMode;
+
   const ConversationState({
     this.status = ConversationStatus.connecting,
     this.userAudioLevel = 0.0,
@@ -398,6 +414,7 @@ class ConversationState {
     this.systemEvents = const [],
     this.isAgentThinking = false,
     this.diagnostics = const DiagnosticsInfo(),
+    this.inputMode = TextInputMode.voiceFirst,
   });
 
   ConversationState copyWith({
@@ -418,6 +435,7 @@ class ConversationState {
     List<SystemEvent>? systemEvents,
     bool? isAgentThinking,
     DiagnosticsInfo? diagnostics,
+    TextInputMode? inputMode,
   }) {
     return ConversationState(
       status: status ?? this.status,
@@ -438,6 +456,7 @@ class ConversationState {
       systemEvents: systemEvents ?? this.systemEvents,
       isAgentThinking: isAgentThinking ?? this.isAgentThinking,
       diagnostics: diagnostics ?? this.diagnostics,
+      inputMode: inputMode ?? this.inputMode,
     );
   }
 }
@@ -451,12 +470,17 @@ class TranscriptEntry {
   final bool isFinal;
   final DateTime timestamp;
 
+  /// How this message was created — voice (STT) or typed text.
+  /// Defaults to [MessageOrigin.voice] for backward compatibility.
+  final MessageOrigin origin;
+
   const TranscriptEntry({
     required this.id,
     required this.role,
     required this.text,
     this.isFinal = false,
     required this.timestamp,
+    this.origin = MessageOrigin.voice,
   });
 
   String get speaker => role == TranscriptRole.user ? 'You' : 'Fletcher';
@@ -464,6 +488,7 @@ class TranscriptEntry {
   TranscriptEntry copyWith({
     String? text,
     bool? isFinal,
+    MessageOrigin? origin,
   }) {
     return TranscriptEntry(
       id: id,
@@ -471,6 +496,7 @@ class TranscriptEntry {
       text: text ?? this.text,
       isFinal: isFinal ?? this.isFinal,
       timestamp: timestamp,
+      origin: origin ?? this.origin,
     );
   }
 }
