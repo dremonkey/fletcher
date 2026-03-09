@@ -835,6 +835,19 @@ class LiveKitService extends ChangeNotifier {
           llmProvider: json['llm'] as String?,
         ),
       );
+    } else if (eventType == 'agent-idle-warning') {
+      // Agent is about to disconnect due to idle timeout (Epic 20).
+      // Expected shape: { type: "agent-idle-warning", disconnectInMs: 30000 }
+      final disconnectInMs = json['disconnectInMs'] as int? ?? 30000;
+      // TODO: Wire to AgentPresenceService once available in widget tree
+      debugPrint(
+          '[Ganglia] Agent idle warning — disconnect in ${disconnectInMs}ms');
+    } else if (eventType == 'agent-disconnected') {
+      // Agent has disconnected due to idle timeout (Epic 20).
+      // Expected shape: { type: "agent-disconnected", reason: "idle_timeout" }
+      final reason = json['reason'] as String? ?? 'unknown';
+      // TODO: Wire to AgentPresenceService once available in widget tree
+      debugPrint('[Ganglia] Agent disconnected — reason: $reason');
     }
   }
 
