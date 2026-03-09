@@ -34,6 +34,7 @@ POST to `${vesselKey.network.gatewayUrl}/fletcher/devices/register` with:
 Store in `FlutterSecureStorage` (iOS Keychain / Android Keystore):
 - `device_id` — returned by Hub
 - `device_private_key` — Ed25519 private key (base64)
+- `agent_name` — returned by Hub (display name for the AI in the chat UI)
 - `hub_gateway_url`, `hub_tailscale_ip`, `hub_public_key`, `livekit_url`
 
 ### Dependencies
@@ -44,7 +45,7 @@ Store in `FlutterSecureStorage` (iOS Keychain / Android Keystore):
 - [ ] Ed25519 keypair is generated on device
 - [ ] Device registers with Hub via POST endpoint
 - [ ] Registration uses pairing token as Bearer auth
-- [ ] Hub returns a `deviceId` on success (201)
+- [ ] Hub returns a `deviceId` and `agentName` on success (201)
 - [ ] All credentials stored in FlutterSecureStorage (not SharedPreferences)
 - [ ] Private key is stored encrypted (hardware-backed on Android)
 - [ ] Registration failure shows clear error to user

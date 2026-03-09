@@ -1,3 +1,4 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'system_event.dart';
 
 enum ConversationStatus {
@@ -483,7 +484,7 @@ class TranscriptEntry {
     this.origin = MessageOrigin.voice,
   });
 
-  String get speaker => role == TranscriptRole.user ? 'You' : 'Fletcher';
+  String get speaker => role == TranscriptRole.user ? 'You' : (dotenv.env['AGENT_NAME'] ?? 'Fletcher');
 
   TranscriptEntry copyWith({
     String? text,

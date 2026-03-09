@@ -26,7 +26,7 @@ All pairing data stays local. The Hub never phones home.
 Build `openclaw-plugin-fletcher` — an OpenClaw plugin that provides vessel key generation, device registration, and room join endpoints.
 
 - [ ] **011: OpenClaw Plugin Scaffold + Vessel Key Generation** — Create the plugin package (`openclaw-plugin-fletcher`); implement `vessel-key generate` CLI command with QR output and 15-min pairing tokens.
-- [ ] **010: Device Registration Endpoint** — `POST /fletcher/devices/register` via `api.registerHttpRoute()`; validate pairing token, store device identity, revoke token.
+- [ ] **010: Device Registration Endpoint** — `POST /fletcher/devices/register` via `api.registerHttpRoute()`; validate pairing token, store device identity, revoke token. Registration response includes `agentName` so the app knows what to call the AI.
 - [ ] **012: Room Join Endpoint** — `POST /fletcher/rooms/join` via `api.registerHttpRoute()`; Ed25519 signature verification, LiveKit token generation.
 
 ### Phase 2: Mobile Client

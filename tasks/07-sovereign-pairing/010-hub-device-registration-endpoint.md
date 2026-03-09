@@ -36,7 +36,7 @@ Authorization: `Bearer <pairing_token>`
 2. Generate `device_<random_hex>` device ID
 3. Store device identity (deviceId, publicKey, hubId, createdAt) in the plugin's device store
 4. Revoke pairing token (single-use enforcement)
-5. Return `201 { "deviceId": "device_..." }`
+5. Return `201 { "deviceId": "device_...", "agentName": "Glitch" }`
 
 ### Error Responses
 - `401` — Invalid or expired pairing token
