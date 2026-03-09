@@ -339,6 +339,21 @@ Move the Piper TTS engine from the server sidecar to the mobile client (Android/
 
 **Depends on:** Epic 3 (Flutter App), Epic 13 (Edge Intelligence)
 
+### 20. [Agent Cost Optimization](./20-agent-cost-optimization) 📋
+Eliminate idle agent costs by disconnecting the agent when nobody is speaking and re-dispatching on demand via client-side VAD. At multi-tenant scale, idle agents are the dominant cost driver ($0.01/min per connected agent regardless of activity). On-demand dispatch reduces idle costs by ~20x (from $0.60/hr to $0.03/hr per idle user).
+
+**Tasks:**
+- [ ] 001: Switch Agent to Explicit Dispatch — set `agentName`, use `RoomAgentDispatch` in tokens
+- [ ] 002: Add Dispatch Endpoint to Token Server — `POST /dispatch-agent` calls `AgentDispatchClient.createDispatch()`
+- [ ] 003: Client-Side VAD Integration (Flutter) — `vad` package (Silero v5 on-device) detects speech when agent absent
+- [ ] 004: Agent Idle Timeout & Auto-Disconnect — idle timer → `ctx.shutdown()` after N min silence
+- [ ] 005: Client State Machine (Agent Presence Lifecycle) — AGENT_ABSENT ↔ DISPATCHING ↔ AGENT_PRESENT states
+- [ ] 006: Cold-Start Latency Mitigation — `prewarm`, `numIdleProcesses`, warm-down grace period
+- [ ] 007: UX Polish — Transition Feedback — visual/audio cues for agent lifecycle transitions
+- [ ] 008: Integration Test & Cost Validation — e2e lifecycle test + LiveKit Cloud billing verification
+
+**Depends on:** Epic 2 (Voice Agent), Epic 3 (Flutter App), Epic 9 (Connectivity)
+
 ## Development Path
 
 1. **Phase 1: Infrastructure** ✅
