@@ -1,7 +1,8 @@
 import { describe, it, expect, mock, beforeAll } from 'bun:test';
-import { OpenClawLLM, extractSessionFromContext } from './llm.js';
+import { OpenClawLLM, extractSessionFromContext, convertMessagesToInput } from './llm.js';
 import { llm as agents } from '@livekit/agents';
 import type { LiveKitSessionInfo, OpenClawChatResponse } from './types/index.js';
+import type { InputItem } from './types/openresponses.js';
 
 // LLMStream constructor requires the @livekit/agents logger to be initialized.
 // In production this happens via cli.runApp(); in tests we must do it manually.
@@ -539,5 +540,164 @@ describe('Abort signal propagation (BUG-022)', () => {
     // Unblock the generator so run() can complete
     resolveHang?.();
     await runPromise;
+  });
+});
+
+// ---------------------------------------------------------------------------
+// convertMessagesToInput — bridges Chat Completions messages to OpenResponses input
+// ---------------------------------------------------------------------------
+
+describe('convertMessagesToInput', () => {
+  it('should return string for a single user message', () => {
+    const result = convertMessagesToInput([
+      { role: 'user', content: 'Hello world' },
+    ]);
+
+    expect(typeof result).toBe('string');
+    expect(result).toBe('Hello world');
+  });
+
+  it('should return InputItem array for multiple messages', () => {
+    const result = convertMessagesToInput([
+      { role: 'system', content: 'You are a helpful assistant' },
+      { role: 'user', content: 'Hello' },
+    ]) as InputItem[];
+
+    expect(Array.isArray(result)).toBe(true);
+    expect(result).toHaveLength(2);
+    expect(result[0].type).toBe('message');
+    expect(result[0].role).toBe('system');
+    expect(result[0].content).toEqual([{ type: 'text', text: 'You are a helpful assistant' }]);
+    expect(result[1].role).toBe('user');
+  });
+
+  it('should convert tool results to function_call_output items', () => {
+    const result = convertMessagesToInput([
+      { role: 'user', content: 'What time is it?' },
+      { role: 'assistant', tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'get_time', arguments: '{}' } }] },
+      { role: 'tool', content: '3:00 PM', tool_call_id: 'call_1', name: 'get_time' },
+    ]) as InputItem[];
+
+    expect(Array.isArray(result)).toBe(true);
+    expect(result).toHaveLength(3);
+    expect(result[0].type).toBe('message');
+    expect(result[0].role).toBe('user');
+    expect(result[2].type).toBe('function_call_output');
+    expect(result[2].call_id).toBe('call_1');
+    expect(result[2].output).toBe('3:00 PM');
+  });
+
+  it('should handle assistant messages without content', () => {
+    const result = convertMessagesToInput([
+      { role: 'user', content: 'test' },
+      { role: 'assistant' },
+    ]) as InputItem[];
+
+    expect(Array.isArray(result)).toBe(true);
+    expect(result[1].type).toBe('message');
+    expect(result[1].role).toBe('assistant');
+    expect(result[1].content).toBeUndefined();
+  });
+
+  it('should return string only for single user message without tool_calls', () => {
+    // Single user message with tool_calls should NOT be simplified to string
+    const result = convertMessagesToInput([
+      { role: 'user', content: 'Hello', tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'x', arguments: '{}' } }] },
+    ]);
+
+    // Should be an array, not a string, because tool_calls are present
+    expect(Array.isArray(result)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// OpenClawLLM useOpenResponses config
+// ---------------------------------------------------------------------------
+
+describe('OpenClawLLM useOpenResponses', () => {
+  it('should default to false', () => {
+    const origEnv = process.env.USE_OPENRESPONSES;
+    delete process.env.USE_OPENRESPONSES;
+
+    const llm = new OpenClawLLM();
+    expect(llm.isUsingOpenResponses()).toBe(false);
+
+    if (origEnv !== undefined) process.env.USE_OPENRESPONSES = origEnv;
+  });
+
+  it('should respect config flag', () => {
+    const llm = new OpenClawLLM({ useOpenResponses: true });
+    expect(llm.isUsingOpenResponses()).toBe(true);
+  });
+
+  it('should respect USE_OPENRESPONSES env var', () => {
+    const origEnv = process.env.USE_OPENRESPONSES;
+    process.env.USE_OPENRESPONSES = 'true';
+
+    const llm = new OpenClawLLM();
+    expect(llm.isUsingOpenResponses()).toBe(true);
+
+    if (origEnv !== undefined) process.env.USE_OPENRESPONSES = origEnv;
+    else delete process.env.USE_OPENRESPONSES;
+  });
+
+  it('should use respondAsChat when useOpenResponses is true', async () => {
+    const llm = new OpenClawLLM({ useOpenResponses: true });
+    const client = llm.getClient();
+
+    let calledMethod = '';
+    // Mock respondAsChat to track that it was called instead of chat
+    async function* fakeRespondAsChat(opts: any) {
+      calledMethod = 'respondAsChat';
+      yield {
+        id: 'resp_1',
+        choices: [{ delta: { role: 'assistant', content: 'Hi' } }],
+      };
+    }
+    (client as any).respondAsChat = fakeRespondAsChat;
+
+    // Also mock chat to detect if it's called
+    async function* fakeChat(opts: any) {
+      calledMethod = 'chat';
+      yield {
+        id: '1',
+        choices: [{ delta: { role: 'assistant', content: 'Hi' } }],
+      };
+    }
+    (client as any).chat = fakeChat;
+
+    const chatCtx = new (agents as any).ChatContext();
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'user', text: 'Hello' }));
+
+    const stream = llm.chat({ chatCtx });
+    await (stream as any).run();
+
+    expect(calledMethod).toBe('respondAsChat');
+  });
+
+  it('should use chat when useOpenResponses is false', async () => {
+    const llm = new OpenClawLLM({ useOpenResponses: false });
+    const client = llm.getClient();
+
+    let calledMethod = '';
+    async function* fakeRespondAsChat(opts: any) {
+      calledMethod = 'respondAsChat';
+      yield { id: 'resp_1', choices: [{ delta: { content: 'Hi' } }] };
+    }
+    (client as any).respondAsChat = fakeRespondAsChat;
+
+    async function* fakeChat(opts: any) {
+      calledMethod = 'chat';
+      yield { id: '1', choices: [{ delta: { role: 'assistant', content: 'Hi' } }] };
+    }
+    (client as any).chat = fakeChat;
+
+    const chatCtx = new (agents as any).ChatContext();
+    chatCtx.items.push(new (agents as any).ChatMessage({ role: 'user', text: 'Hello' }));
+
+    const stream = llm.chat({ chatCtx });
+    await (stream as any).run();
+
+    expect(calledMethod).toBe('chat');
   });
 });
