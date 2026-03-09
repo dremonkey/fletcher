@@ -8,30 +8,50 @@
 
 Select the optimal Piper voice model for on-device synthesis and implement the bundling/delivery strategy.
 
-## Discovery Findings (from Task 001)
+## Discovery Findings (from Task 001, updated 2026-03-08)
 
 ### Model Size Reality Check
 
-**CRITICAL:** The original estimates in this task were wrong. Updated with actual data:
+**CRITICAL:** The original estimates in this task were wrong. Updated with actual data from Hugging Face:
 
-| Model | ONNX Size | Sample Rate | Quality | Parameters |
-|-------|-----------|-------------|---------|------------|
-| `en_US-lessac-low` | **63.2 MB** | 16,000 Hz | Acceptable | 15-20M |
-| `en_US-lessac-medium` | **63.2 MB** | 22,050 Hz | Good | 15-20M |
-| `en_US-lessac-high` | **114 MB** | 22,050 Hz | Excellent | 28-32M |
+| Model | ONNX Size | Sample Rate | VITS Architecture | Decoder |
+|-------|-----------|-------------|-------------------|---------|
+| `en_US-lessac-low` | **63.2 MB** | 16,000 Hz | Medium (hidden=192, inter=192, filter=768) | resblock "2" (standard) |
+| `en_US-lessac-medium` | **63.2 MB** | 22,050 Hz | Medium (hidden=192, inter=192, filter=768) | resblock "2" (standard) |
+| `en_US-lessac-high` | **114 MB** | 22,050 Hz | Medium encoder + Large decoder (resblock "1", upsample_channels=512) | resblock "1" (larger) |
 
-Key insight: low and medium models are the SAME architecture (same parameter count, same file size). The only difference is the training data preprocessing:
-- **Low:** trained on 16kHz audio (lower fidelity output)
-- **Medium:** trained on 22.05kHz audio (higher fidelity output)
+### Why low and medium are the same size
 
-There is effectively no size benefit to using the "low" model. The quality difference is audible, so **medium is strictly better than low**.
+Confirmed by the Piper developer (synesthesiam): "The low-quality models are actually of medium size (architecture), the only difference is they are trained on data preprocessed with 16kHz resolution."
+
+The Piper training CLI (`--quality` flag) defines three architecture tiers -- `x-low`, `medium` (default), and `high`. There is **no `--quality low`** flag. "Low" quality models use the medium architecture trained on 16kHz audio. This is why they are 63 MB, identical to medium.
+
+True x-low models (hidden_channels=96, inter=96, filter=384) would be significantly smaller (~16-20 MB estimated), but no x-low lessac models are available on Hugging Face.
+
+**Bottom line:** There is zero size benefit to using "low" quality. Medium is strictly superior (same size, higher fidelity output at 22.05kHz).
+
+### Piper Model File Format
+
+Each Piper voice is distributed as exactly two files on Hugging Face (`rhasspy/piper-voices`):
+1. **`.onnx`** -- the VITS neural network (FP32, already graph-optimized via onnx-simplifier during export)
+2. **`.onnx.json`** -- configuration file (sample rate, phoneme ID map, inference params, speaker info)
+
+Additional files needed for sherpa-onnx integration:
+3. **`tokens.txt`** -- phoneme-to-ID mapping (generated from the `.onnx.json` phoneme_id_map)
+4. **`espeak-ng-data/`** -- phonemization data directory (~3-5 MB, downloaded from sherpa-onnx releases)
+
+**All models are FP32 only.** No INT8 or FP16 variants are distributed by Piper.
 
 ### INT8 Quantization (Size Reduction Path)
 
-Quantizing the FP32 model to INT8 can reduce the file from ~63MB to ~22MB:
-- 3x size reduction
-- 2-4x inference speedup
-- Slight quality degradation (usually imperceptible)
+**Pre-quantized Piper models do NOT exist.** The official `rhasspy/piper-voices` repository on Hugging Face distributes FP32 ONNX models only. The sherpa-onnx project provides pre-quantized INT8 models for *some* voices (e.g., `vits-vctk.int8.onnx` at 37 MB vs 116 MB FP32, a 3.1x reduction), but NOT for Piper lessac models specifically.
+
+Manual quantization is required. Expected results (based on vits-vctk ratios):
+- FP32: 63 MB --> INT8: ~20-22 MB (3x reduction)
+- Expected inference speedup: ~2-4x
+- Quality: slight degradation, but VITS decoder layers may be sensitive -- requires listening test
+
+**Important caveat:** VITS models use a neural vocoder (HiFi-GAN-derived decoder) that converts mel spectrograms to audio waveforms. Quantization artifacts in the decoder can produce audible buzzing or metallic sounds. The encoder and flow layers typically quantize well, but the decoder requires careful validation.
 
 This is the primary lever for reducing download size.
 
@@ -55,17 +75,23 @@ This is the primary lever for reducing download size.
 ### NOT Recommended: `en_US-lessac-low`
 
 **Why not:**
-- Same file size as medium (63MB)
-- Lower audio quality (16kHz vs 22.05kHz)
-- No benefit over medium
+- Same file size as medium (63 MB) -- uses identical VITS medium architecture (hidden=192)
+- Lower audio quality (16 kHz vs 22.05 kHz output)
+- "Low" is just medium architecture trained on 16 kHz audio data -- no size or speed benefit
+- Strictly dominated by medium in every dimension
 
 ### NOT Recommended: `en_US-lessac-high`
 
 **Why not:**
-- 114 MB file size (almost 2x medium)
+- 114 MB file size (~1.8x medium)
+- Same encoder architecture as medium (hidden=192), but much larger decoder (resblock "1" with 3x kernel sizes, 512 upsample channels)
 - Quality difference barely perceptible on phone speakers
-- Significantly slower inference (28-32M params vs 15-20M)
+- Significantly slower inference due to larger decoder
 - Not used server-side, so no voice consistency benefit
+
+### Not Available: `en_US-lessac-x_low`
+
+**Note:** No x-low quality lessac model exists on Hugging Face. True x-low models use a smaller architecture (hidden=96, inter=96, filter=384) and would be significantly smaller (~16-20 MB), but the Piper developer did not train x-low versions for most voices.
 
 ## Bundling Strategy: REVISED
 
@@ -166,13 +192,26 @@ Fletcher already has the Piper model files for the server-side sidecar:
 
 ```
 models/piper/
-  en_US-lessac-medium.onnx       (63 MB, Git LFS)
-  en_US-lessac-medium.onnx.json  (5 KB)
+  en_US-lessac-medium.onnx       (63 MB, Git LFS) -- FP32 ONNX, graph-optimized
+  en_US-lessac-medium.onnx.json  (4.89 KB)        -- config with phoneme_id_map, inference params
 ```
 
-These are the exact same files needed for local TTS. Missing:
-- `tokens.txt` -- needs to be generated or downloaded from sherpa-onnx
-- `espeak-ng-data/` -- needs to be downloaded from sherpa-onnx releases
+These are the exact same FP32 files distributed on Hugging Face (`rhasspy/piper-voices`). No quantized variants exist upstream -- they must be created manually.
+
+**Config file key fields (from `en_US-lessac-medium.onnx.json`):**
+- `audio.sample_rate`: 22050
+- `audio.quality`: "medium"
+- `inference.noise_scale`: 0.667
+- `inference.length_scale`: 1
+- `inference.noise_w`: 0.8
+- `phoneme_type`: "espeak"
+- `num_speakers`: 1
+- `num_symbols`: 256
+- `piper_version`: "1.0.0"
+
+**Missing files for sherpa-onnx integration:**
+- `tokens.txt` -- needs to be generated from the `phoneme_id_map` in the JSON config (or downloaded from sherpa-onnx)
+- `espeak-ng-data/` -- needs to be downloaded from sherpa-onnx releases (~3-5 MB compressed)
 
 ## Benchmarking Plan (Pending)
 
@@ -215,6 +254,44 @@ final testCases = [
 - [ ] tokens.txt generated/downloaded and validated
 - [ ] Model download pipeline implemented
 - [ ] APK size impact measured (runtime only, no model)
+
+## Piper Model Format Details
+
+### Distribution Format
+
+All Piper voices on Hugging Face are distributed as:
+- **FP32 ONNX** models (no quantized variants available upstream)
+- Each voice = 2 files: `.onnx` (model) + `.onnx.json` (config)
+- Models are exported via `piper_train/export_onnx.py` and post-processed with `onnx-simplifier`
+
+### VITS Architecture Per Quality Level (from Piper source code)
+
+| Quality | Training Flag | hidden_channels | inter_channels | filter_channels | Decoder (resblock) | Sample Rate |
+|---------|--------------|-----------------|----------------|-----------------|-------------------|-------------|
+| x-low | `--quality x-low` | 96 | 96 | 384 | "2" (smaller) | 16,000 Hz |
+| low | `--quality medium` + 16kHz data | 192 | 192 | 768 | "2" (standard) | 16,000 Hz |
+| medium | `--quality medium` (default) | 192 | 192 | 768 | "2" (standard) | 22,050 Hz |
+| high | `--quality high` | 192 | 192 | 768 | "1" (larger: 3 kernel sizes, 512 upsample channels) | 22,050 Hz |
+
+Source: [piper/src/python/piper_train/vits/config.py](https://github.com/rhasspy/piper/blob/master/src/python/piper_train/vits/config.py) and [piper/src/python/piper_train/__main__.py](https://github.com/rhasspy/piper/blob/master/src/python/piper_train/__main__.py)
+
+### Quantization Options (All Manual)
+
+| Method | Tool | Target | Expected Size Reduction | Notes |
+|--------|------|--------|------------------------|-------|
+| Dynamic INT8 | `onnxruntime.quantization` | MatMul ops | ~3x (63 MB -> ~22 MB) | Best for CPU inference |
+| Static INT8 | `onnxruntime.quantization` | All ops | ~3-4x | Requires calibration dataset |
+| FP16 | ONNX model converter | All weights | ~2x (63 MB -> ~32 MB) | Minimal quality loss but limited speedup on CPU |
+
+**Recommendation:** Start with dynamic INT8 quantization targeting MatMul operations. This matches what sherpa-onnx uses for its pre-quantized models (e.g., vits-vctk.int8.onnx). Validate quality before deploying.
+
+### Reference: sherpa-onnx Pre-Quantized Models (Not Piper Lessac)
+
+For reference, the sherpa-onnx project provides INT8 models for some voices:
+- `vits-vctk.onnx`: 116 MB (FP32) -> `vits-vctk.int8.onnx`: 37 MB (INT8) -- 3.1x reduction
+- `kitten-mini-en-v0_1-fp16`: FP16 quantized model (separate project)
+
+These demonstrate that VITS models can be quantized successfully, but the quality impact must be verified per-model.
 
 ## Next Steps
 

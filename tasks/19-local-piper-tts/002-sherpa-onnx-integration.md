@@ -228,6 +228,42 @@ This is NOT production integration. Pipeline wiring comes in Task 004.
 - [ ] Synthesis completes in <2 seconds for a short sentence on test device
 - [ ] No crashes or memory leaks during basic usage
 
+## Why sherpa-onnx Over Piper-Specific Flutter Packages
+
+Three Piper-specific Flutter packages were evaluated (see Task 001 Section 7 for full details). None are production-ready alternatives to sherpa-onnx:
+
+### `piper_tts` (v0.0.1, pub.dev)
+
+- **Publisher:** Mobile-Artificial-Intelligence
+- **API:** `Piper.modelPath = '...'; await Piper.generateSpeech(text);` -- returns `Future<File>`
+- **Native backend:** babylon.cpp (C/C++ reimplementation with DeepPhonemizer, not espeak-ng)
+- **Platforms:** Android (broken per changelog), Linux, Windows -- **no iOS**
+- **Status:** ABANDONED -- 23 months since last update, GitHub repo returns 404, changelog says "Android not working yet"
+- **Verdict:** Dead project. Clean API design but unusable.
+
+### `piper_tts_plugin` (v0.0.2, pub.dev)
+
+- **Publisher:** dev-6768
+- **API:** `loadViaVoicePack(PiperVoicePack.norman); synthesizeToFile(text, path);`
+- **Native backend:** ONNX Runtime via `onnxruntime` Flutter package + `piper_phonemizer_plugin`
+- **Platforms:** Android, Windows -- **no iOS** (planned)
+- **Status:** EARLY DEVELOPMENT -- published Feb 2026, only 8 GitHub commits, 4 stars
+- **Verdict:** Promising direction but too immature. Only ships bundled voice packs (Amy, John, Kristin, Norman, Rohan) -- unclear if custom models like lessac-medium can be loaded. Worth monitoring.
+
+### Comparison Matrix
+
+| Criterion | sherpa_onnx | piper_tts | piper_tts_plugin |
+|-----------|------------|-----------|------------------|
+| iOS support | Yes | No | No |
+| Downloads/week | ~9,100 | ~0 | ~8 |
+| Custom Piper model loading | Yes (any .onnx) | Requires conversion | Bundled packs only |
+| Phonemization | espeak-ng (native) | DeepPhonemizer | espeak (via plugin) |
+| Last updated | Weekly | Mar 2024 | Feb 2026 |
+| GitHub stars | 3,800+ | Repo deleted | 4 |
+| Production apps using it | Multiple | None known | None known |
+
+**Decision: sherpa-onnx.** It is the only option with iOS support, active maintenance, and the ability to load our specific lessac-medium model directly.
+
 ## Concerns Identified During Discovery
 
 1. **Memory:** ~500MB peak RAM is high. Must test on target devices before committing.

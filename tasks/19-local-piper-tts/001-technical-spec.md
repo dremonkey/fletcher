@@ -104,17 +104,29 @@ sherpa-onnx explicitly supports all Piper models. The project converts Piper mod
 - `tokens.txt` -- NOT in repo, needs to be generated/downloaded
 - `espeak-ng-data/` -- NOT in repo, must be downloaded from sherpa-onnx releases
 
-### 3. Model Sizes: SIGNIFICANTLY LARGER THAN ESTIMATED
+### 3. Model Sizes and Architecture: SIGNIFICANTLY LARGER THAN ESTIMATED
 
 **CRITICAL CORRECTION:** The original task files estimated the model at ~15-20MB. The actual sizes are:
 
-| Model | ONNX File Size | Sample Rate | Parameters |
-|-------|---------------|-------------|------------|
-| `en_US-lessac-low` | **63.2 MB** | 16,000 Hz | 15-20M |
-| `en_US-lessac-medium` | **63.2 MB** | 22,050 Hz | 15-20M |
-| `en_US-lessac-high` | **114 MB** | 22,050 Hz | 28-32M |
+| Model | ONNX File Size | Sample Rate | VITS Architecture | Notes |
+|-------|---------------|-------------|-------------------|-------|
+| `en_US-lessac-low` | **63.2 MB** | 16,000 Hz | Medium (hidden=192, inter=192, filter=768) | Same arch as medium, lower sample rate |
+| `en_US-lessac-medium` | **63.2 MB** | 22,050 Hz | Medium (hidden=192, inter=192, filter=768) | **Recommended** |
+| `en_US-lessac-high` | **114 MB** | 22,050 Hz | Large (same encoder, bigger decoder: resblock "1", upsample_channels=512) | ~1.8x larger |
 
-The low and medium models are the SAME size (~63MB) because they share the same architecture -- the only difference is the audio output sample rate (16kHz vs 22.05kHz). The "low" model is not actually smaller; it just produces lower-fidelity audio.
+**Why low and medium are the same size (63 MB):**
+
+This was confirmed by the Piper developer (synesthesiam): "The low-quality models are actually of medium size (architecture), the only difference is they are trained on data preprocessed with 16kHz resolution." The Piper training CLI (`--quality` flag) defines three architecture tiers:
+
+| Quality Flag | `hidden_channels` | `inter_channels` | `filter_channels` | Decoder | Sample Rate |
+|-------------|-------------------|-------------------|--------------------|---------| ------------|
+| `x-low` | 96 | 96 | 384 | resblock "2" (smaller) | 16,000 Hz |
+| `medium` (default) | 192 | 192 | 768 | resblock "2" (standard) | 22,050 Hz |
+| `high` | 192 | 192 | 768 | resblock "1" (larger: 3x kernel sizes, 512 upsample channels) | 22,050 Hz |
+
+Critically, there is no `--quality low` flag in Piper training. The "low" quality models on Hugging Face use the **medium architecture** trained on **16kHz audio data** (i.e., `--quality medium` with 16kHz preprocessing). This is why `en_US-lessac-low` is 63 MB -- identical to medium.
+
+True x-low models (96 hidden channels) would be significantly smaller (~16-20 MB), but there are no x-low lessac models available. The developer stated there "wasn't enough of a difference in performance for me to spend time training x-low quality versions of all the voices."
 
 **Total on-device storage requirement:**
 - ONNX model: ~63 MB
@@ -199,24 +211,110 @@ This is within the <500ms target for high-end devices but may exceed it on mid-r
 | Package | Version | Maturity | Verdict |
 |---------|---------|----------|---------|
 | [`sherpa_onnx`](https://pub.dev/packages/sherpa_onnx) | 1.12.28 | High (92 likes, 9.1k/wk downloads) | **RECOMMENDED** |
-| [`piper_tts`](https://pub.dev/packages/piper_tts) | 0.0.1 | Very Low (66 total downloads, "in development") | Not ready |
-| [`piper_tts_plugin`](https://github.com/dev-6768/piper_tts_plugin) | N/A | Low (GitHub only, unverified) | Not ready |
+| [`piper_tts`](https://pub.dev/packages/piper_tts) | 0.0.1 | Low (66 total downloads, 3 likes) | Not production-ready (see detailed evaluation below) |
+| [`piper_tts_plugin`](https://pub.dev/packages/piper_tts_plugin) | 0.0.2 | Low (123 downloads, 1 like) | Newer but still early-stage (see below) |
 | [`flutter_tts`](https://pub.dev/packages/flutter_tts) | Stable | High (uses OS TTS engine) | No Piper support |
 | Platform channels + raw ONNX Runtime | N/A | DIY | Too much work for MVP |
 
-**sherpa-onnx is the only viable option.** The Piper-specific Flutter packages are unmaintained proof-of-concepts. flutter_tts uses the OS TTS engine (Google TTS / Apple Siri) and cannot load custom ONNX models.
+**sherpa-onnx is the recommended integration path.** The Piper-specific Flutter packages were evaluated thoroughly (see below) and none are production-ready. flutter_tts uses the OS TTS engine (Google TTS / Apple Siri) and cannot load custom ONNX models.
+
+#### 7a. `piper_tts` (v0.0.1) -- Detailed Evaluation
+
+**Published:** March 2024 (23 months ago, no updates since)
+**Publisher:** Mobile-Artificial-Intelligence (unverified on pub.dev)
+**Platforms:** Android, Linux, Windows (NO iOS support)
+**License:** MIT
+**Stats:** 3 likes, 150 pub points, 66 total downloads
+
+**API Surface:**
+```dart
+import 'package:piper_tts/piper_tts.dart';
+
+// Static property for model path
+Piper.modelPath = '/path/to/model.onnx';
+
+// Generate speech -- returns a File with audio
+final file = await Piper.generateSpeech('Hello world');
+```
+
+The API is minimal but clean. The `Piper` class exposes:
+- `Piper.modelPath` (read/write String) -- set the model file location
+- `Piper.generateSpeech(String text)` -- returns `Future<File>` with audio
+- `Piper.lib` (read-only) -- internal library instance
+
+**Architecture:** Uses `ffi` bindings (Dart FFI) to call into native code. The underlying native library is [`babylon.cpp`](https://github.com/Mobile-Artificial-Intelligence/babylon.cpp), a C/C++ library that reimplements the Piper TTS pipeline using ONNX Runtime with its own DeepPhonemizer-based phonemization (rather than espeak-ng). Piper models are "compatible after a conversion script is run."
+
+**Critical Issues:**
+1. **Changelog states "Android not working yet"** -- the only platform most relevant to Fletcher
+2. **GitHub repository returns 404** -- the original `Mobile-Artificial-Intelligence/piper_tts` repo appears deleted or renamed
+3. **0% API documentation** on pub.dev (0 of 6 API elements documented)
+4. **No iOS support** -- Fletcher needs both Android and iOS
+5. **No updates in 23 months** -- appears abandoned
+6. **Requires model conversion** -- Piper models need conversion to babylon.cpp format, adding friction
+7. **No espeak-ng phonemization** -- uses DeepPhonemizer instead, which may produce different pronunciations
+
+**Verdict:** Despite having a clean API design, `piper_tts` is not usable for production. The "Android not working yet" admission in its own changelog, the deleted GitHub repo, and 23 months of inactivity make it a dead end.
+
+#### 7b. `piper_tts_plugin` (v0.0.2) -- Detailed Evaluation
+
+**Published:** February 2026 (15 days ago as of writing)
+**Publisher:** dev-6768 (unverified on pub.dev)
+**Platforms:** Android, Windows (iOS planned)
+**License:** MIT
+**Stats:** 1 like, 150 pub points, 123 total downloads
+**GitHub:** [dev-6768/piper_tts_plugin](https://github.com/dev-6768/piper_tts_plugin) (4 stars, 8 commits)
+
+**API Surface:**
+```dart
+// Load a voice pack
+await _tts.loadViaVoicePack(PiperVoicePack.norman);
+
+// Synthesize to file
+await _tts.synthesizeToFile(text, outputPath);
+```
+
+**Key differences from piper_tts:**
+- Uses `onnxruntime` package directly (not babylon.cpp)
+- Ships with built-in voice packs (Amy, John, Kristin, Norman, Rohan)
+- Depends on `piper_phonemizer_plugin` for phonemization
+- More actively maintained (last commit Feb 2026)
+
+**Critical Issues:**
+1. **Only 8 commits total** -- extremely early development
+2. **No iOS support** (planned but not implemented)
+3. **4 stars on GitHub** -- minimal community validation
+4. **Bundled voice packs only** -- not clear if custom models (like lessac-medium) can be loaded
+5. **Depends on `onnxruntime` Flutter package** -- adds another dependency layer vs sherpa-onnx's integrated approach
+
+**Verdict:** More promising than `piper_tts` and actively developing, but too early for production use. Worth monitoring for future evaluation. The bundled-voice-pack approach is limiting compared to sherpa-onnx's flexibility with any Piper model.
+
+#### 7c. Why sherpa-onnx Remains the Right Choice
+
+| Criterion | sherpa_onnx | piper_tts | piper_tts_plugin |
+|-----------|------------|-----------|------------------|
+| Platform coverage | Android, iOS, desktop | Android (broken), Linux, Windows | Android, Windows |
+| Downloads/week | ~9,100 | ~0 | ~8 |
+| Last updated | Feb 2026 (weekly releases) | Mar 2024 (23mo ago) | Feb 2026 |
+| iOS support | Yes (arm64, min iOS 13) | No | No (planned) |
+| Custom model support | Any Piper ONNX model | Requires conversion | Bundled packs only |
+| espeak-ng phonemization | Yes (native integration) | No (DeepPhonemizer) | Yes (via plugin) |
+| API documentation | Comprehensive | 0% | Minimal |
+| GitHub stars | 3.8k+ (sherpa-onnx) | Repo deleted | 4 |
+| Community/maintainer | k2-fsa (academic org, 15+ contributors) | Solo dev, inactive | Solo dev, new |
 
 ### 8. INT8 Quantization Opportunity
 
+**Pre-quantized models: NOT available for Piper lessac.** The official Piper voices on Hugging Face (`rhasspy/piper-voices`) are distributed in FP32 ONNX format only. No INT8 or FP16 variants are provided. The sherpa-onnx project provides pre-quantized INT8 models for *some* voices (e.g., `vits-vctk.int8.onnx` at 37 MB vs 116 MB FP32), but NOT for the Piper lessac models specifically. Manual quantization is required.
+
 The medium model can be quantized from FP32 to INT8:
 - Original size: 63 MB
-- Quantized size: ~22 MB (3x reduction)
-- Inference speedup: ~2-4x
+- Expected quantized size: ~22 MB (3x reduction, based on vits-vctk ratios)
+- Expected inference speedup: ~2-4x
 - Quality: slight degradation, usually imperceptible
 
 This could bring the model download to ~22MB + 5MB espeak-ng-data = ~27MB, much more reasonable for download-on-first-use.
 
-**Quantization command:**
+**Quantization command (ONNX Runtime dynamic quantization):**
 ```bash
 python -m onnxruntime.quantization.quantize_dynamic \
   --model_input en_US-lessac-medium.onnx \
@@ -224,7 +322,9 @@ python -m onnxruntime.quantization.quantize_dynamic \
   --op_types_to_quantize MatMul
 ```
 
-This should be evaluated during prototyping (Task 002).
+**Note:** The Piper export process already runs `onnx-simplifier` on the model, so the FP32 ONNX file is already graph-optimized. The quantization step only affects weight precision, not graph structure.
+
+This should be evaluated during prototyping (Task 002). Quality validation is essential -- VITS TTS models can be sensitive to quantization artifacts in the decoder (vocoder) layers.
 
 ---
 
@@ -347,25 +447,40 @@ The server-side already has the building blocks:
 
 ## Open Questions
 
-1. **INT8 quality:** Is the quality loss from INT8 quantization acceptable? Requires A/B listening test.
+1. **INT8 quality:** Is the quality loss from INT8 quantization acceptable? No pre-quantized Piper lessac models exist -- we must quantize ourselves and do A/B listening test. VITS decoder layers may be sensitive to quantization.
 2. **Model hosting:** Where do we host the model download? CDN vs Hugging Face vs GitHub releases?
 3. **iOS CoreML:** Does CoreML acceleration work for TTS on iOS? (NNAPI does not on Android)
 4. **Sentence chunking:** Can sherpa-onnx generate audio incrementally per-sentence, or must it process the full text?
 5. **Audio playback:** How do we play raw PCM samples in Flutter while LiveKit audio track is active? Need AudioOutputService.
+6. **piper_tts_plugin trajectory:** The `piper_tts_plugin` package (v0.0.2, Feb 2026) is actively developing. Worth re-evaluating in 3-6 months if it adds iOS support and matures, but sherpa-onnx remains the clear choice for now.
 
 ## References
 
-- [sherpa_onnx Flutter Package (pub.dev)](https://pub.dev/packages/sherpa_onnx)
+### Flutter Integration Packages
+- [sherpa_onnx Flutter Package (pub.dev)](https://pub.dev/packages/sherpa_onnx) -- **Recommended**
 - [sherpa_onnx Dart API docs](https://pub.dev/documentation/sherpa_onnx/latest/)
 - [sherpa-onnx Flutter TTS Example](https://github.com/k2-fsa/sherpa-onnx/tree/master/flutter-examples/tts)
-- [sherpa-onnx Piper Integration Docs](https://k2-fsa.github.io/sherpa/onnx/tts/piper.html)
-- [sherpa-onnx VITS Pretrained Models (benchmarks)](https://k2-fsa.github.io/sherpa/onnx/tts/pretrained_models/vits.html)
+- [piper_tts Flutter Package (pub.dev)](https://pub.dev/packages/piper_tts) -- v0.0.1, evaluated and not recommended
+- [piper_tts_plugin Flutter Package (pub.dev)](https://pub.dev/packages/piper_tts_plugin) -- v0.0.2, evaluated and not recommended
+- [babylon.cpp (native TTS library behind piper_tts)](https://github.com/Mobile-Artificial-Intelligence/babylon.cpp)
+
+### Piper TTS Project
 - [Piper TTS Voices (Hugging Face)](https://huggingface.co/rhasspy/piper-voices)
 - [Piper lessac model directory](https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/lessac)
 - [Piper Voice Quality Levels](https://github.com/rhasspy/piper/blob/master/VOICES.md)
+- [Piper VITS Config (quality-level architecture)](https://github.com/rhasspy/piper/blob/master/src/python/piper_train/vits/config.py)
+- [Piper Training Script (quality flag handling)](https://github.com/rhasspy/piper/blob/master/src/python/piper_train/__main__.py)
+- [Piper developer on low vs medium quality](https://huggingface.co/datasets/rhasspy/piper-checkpoints/discussions/8)
+
+### sherpa-onnx Documentation
+- [sherpa-onnx Piper Integration Docs](https://k2-fsa.github.io/sherpa/onnx/tts/piper.html)
+- [sherpa-onnx VITS Pretrained Models (benchmarks)](https://k2-fsa.github.io/sherpa/onnx/tts/pretrained_models/vits.html)
+- [sherpa-onnx TTS Model Downloads](https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models)
 - [sherpa-onnx NNAPI TTS crash (Issue #958)](https://github.com/k2-fsa/sherpa-onnx/issues/958)
 - [Piper Memory Usage (Issue #484)](https://github.com/rhasspy/piper/issues/484)
 - [ONNX Runtime Mobile](https://onnxruntime.ai/docs/tutorials/mobile/)
+
+### Fletcher Project
 - [Fletcher Server-Side Piper TTS](../../apps/voice-agent/src/piper-tts.ts)
 - [Fletcher TTS Fallback Monitor](../../apps/voice-agent/src/tts-fallback-monitor.ts)
 - [Fletcher TTS Provider Factory](../../apps/voice-agent/src/tts-provider.ts)
