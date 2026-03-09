@@ -1066,16 +1066,20 @@ class LiveKitService extends ChangeNotifier {
     );
   }
 
-  void toggleMute() {
+  Future<void> toggleMute() async {
     _isMuted = !_isMuted;
     debugPrint('[Fletcher] Mute toggled: muted=$_isMuted');
-    _localParticipant?.setMicrophoneEnabled(!_isMuted);
 
     if (_isMuted) {
       _updateState(status: ConversationStatus.muted);
     } else {
       _updateState(status: ConversationStatus.idle);
     }
+
+    // Await mic enable/disable so the OS mic resource is fully
+    // released before the keyboard (Android STT) tries to use it.
+    await _localParticipant?.setMicrophoneEnabled(!_isMuted);
+    debugPrint('[Fletcher] Mic ${_isMuted ? "stopped" : "started"}');
   }
 
   // ---------------------------------------------------------------------------
@@ -1116,7 +1120,7 @@ class LiveKitService extends ChangeNotifier {
   /// When entering text-input mode, any active mute state is preserved.
   /// When reverting to voice-first mode, the text input cleanup happens
   /// at the widget layer (clearing text, dismissing keyboard).
-  void toggleInputMode() {
+  Future<void> toggleInputMode() async {
     final current = _state.inputMode;
     final next = current == TextInputMode.voiceFirst
         ? TextInputMode.textInput
@@ -1124,11 +1128,13 @@ class LiveKitService extends ChangeNotifier {
     debugPrint('[Fletcher] Input mode toggled: $current → $next');
     _state = _state.copyWith(inputMode: next);
 
-    // Auto-mute mic when entering text mode, unmute when reverting to voice
+    // Auto-mute mic when entering text mode, unmute when reverting to voice.
+    // Await so the OS mic resource is fully released before the keyboard
+    // appears — this lets Android STT use the mic without conflict.
     if (next == TextInputMode.textInput && !_isMuted) {
-      toggleMute();
+      await toggleMute();
     } else if (next == TextInputMode.voiceFirst && _isMuted) {
-      toggleMute();
+      await toggleMute();
     }
 
     notifyListeners();
