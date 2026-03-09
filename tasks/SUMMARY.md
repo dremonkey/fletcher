@@ -230,9 +230,8 @@ Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layou
 - [ ] 027: Fix Arrow Loading Indicator Rendering 📋 — "box" artifact and missing chunky visual weight in ThinkingSpinner ([BUG-017](../docs/field-tests/20260307-buglog.md))
 - [ ] 029: Random Two-Word-Dash Room Names 📋 — human-readable room names instead of timestamps ([BUG-019](../docs/field-tests/20260307-buglog.md))
 - [x] 030: Text-Only Response Mode ✅ — `[TTS: ON/OFF]` toggle via data channel; agent skips TTS natively via `setAudioEnabled()`; persisted across restarts
-- [ ] 030: Split Header into Two-Column Layout 📋 — brutalist UI: user histogram (left) + TTS toggle area (right)
-- [ ] 031: TTSToggle Component with Dual-State Rendering 📋 — "TTS OFF" text ↔ agent histogram; single-tap toggle; accessible button; localStorage persistence
-- [ ] 032: Wire TTS Toggle to Agent TTS Enable/Disable 📋 — `tts-mode` data channel event; agent `setAudioEnabled()` + ack chime gating
+- [x] 030: Split Header into Two-Column Layout ✅ — cyan user histogram (left) + TTS toggle (right); HeaderBar widget
+- [x] 031/032: TTS Toggle Component + Agent Wiring ✅ — "TTS OFF" button ↔ amber agent histogram; single-tap toggle; `tts-mode` data channel event; persisted via SessionStorage
 - [ ] 033: SpeakingRing Component 📋 — animated ring around participant avatars; VAD-driven; amber (user) / blue (agent)
 - [ ] 034: Inline Participant Histogram 📋 — compact AudioVisualizer in each participant row; 30fps throttle for 3+ participants
 - [ ] 035: Per-Participant Audio Stream Wiring 📋 — AnalyserNode per participant; connect to SpeakingRing + inline histogram
