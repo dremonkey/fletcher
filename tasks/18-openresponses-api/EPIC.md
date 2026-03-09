@@ -37,6 +37,15 @@ The transition from the standard OpenAI Chat Completions API to the OpenClaw Ope
 - **Dynamic UI Push:** Leverage OpenResponses `content_part` to push Custom Artifacts (e.g., system diagnostics, code snippets) directly into the stream, anchored to the response.
 - **TUI Integration:** Map `artifact` content parts to the Brutalist Drawer (Epic 07-ui-ux) for real-time dashboard population.
 
+## The "Free Route": Native Silicon Strategy
+
+- **Native STT/TTS Bridge:** Provide an option to use on-device STT (iOS SFSpeech / Android SpeechRecognizer) and on-device TTS (Epic 19: Local Piper) as the default "Free" tier.
+- **Data-Channel-Only Voice:** This creates a "BYO-Silicon" path where zero raw audio is streamed to the server, reducing marginal costs to near-zero and providing extreme reliability in low-bandwidth (Nose Hole) environments.
+- **Tiered Interaction & Upsell:**
+    - **Standard (Free):** Native on-device STT/TTS + OpenResponses text deltas. This is the "BYO-Silicon" path with near-zero marginal cost.
+    - **Premium (Heirloom):** High-fidelity cloud STT (Deepgram) and TTS (ElevenLabs) with raw audio streaming.
+    - **Native Upgrade Path:** Provide a seamless in-app toggle to "Upgrade to Premium Voice." This single purchase unlocks the "Heirloom" cloud bundle: Premium Ears (Deepgram) and Premium Mouth (ElevenLabs), providing an ultra-high-fidelity, patient-listener experience that mirrors the existing TTS quality selection.
+
 ## Next Steps
 
 - [ ] Perform a live field test to verify "fail-over" behavior when the stream is interrupted.
