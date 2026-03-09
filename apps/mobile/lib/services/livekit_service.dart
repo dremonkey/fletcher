@@ -88,6 +88,18 @@ class LiveKitService extends ChangeNotifier {
   // Tracks when user stopped speaking so we can measure RT when agent starts
   DateTime? _userSpeechEndTime;
 
+  /// Callback for agent idle warning from data channel (Epic 20).
+  void Function(int disconnectInMs)? onAgentIdleWarning;
+
+  /// Callback for agent disconnect from data channel (Epic 20).
+  void Function(String reason)? onAgentDisconnected;
+
+  /// Callback for agent warm-down from data channel (Epic 20 / Task 006).
+  void Function()? onAgentWarmDown;
+
+  /// Callback for agent warm-down cancelled from data channel (Epic 20 / Task 006).
+  void Function()? onAgentWarmDownCancelled;
+
   // Buffer for reassembling chunked messages
   final Map<String, List<String?>> _chunks = {};
 
@@ -839,15 +851,23 @@ class LiveKitService extends ChangeNotifier {
       // Agent is about to disconnect due to idle timeout (Epic 20).
       // Expected shape: { type: "agent-idle-warning", disconnectInMs: 30000 }
       final disconnectInMs = json['disconnectInMs'] as int? ?? 30000;
-      // TODO: Wire to AgentPresenceService once available in widget tree
       debugPrint(
           '[Ganglia] Agent idle warning — disconnect in ${disconnectInMs}ms');
+      onAgentIdleWarning?.call(disconnectInMs);
     } else if (eventType == 'agent-disconnected') {
       // Agent has disconnected due to idle timeout (Epic 20).
       // Expected shape: { type: "agent-disconnected", reason: "idle_timeout" }
       final reason = json['reason'] as String? ?? 'unknown';
-      // TODO: Wire to AgentPresenceService once available in widget tree
       debugPrint('[Ganglia] Agent disconnected — reason: $reason');
+      onAgentDisconnected?.call(reason);
+    } else if (eventType == 'agent-warm-down') {
+      // Agent entering warm-down period before disconnect (Epic 20 / Task 006).
+      debugPrint('[Ganglia] Agent entering warm-down');
+      onAgentWarmDown?.call();
+    } else if (eventType == 'agent-warm-down-cancelled') {
+      // Agent warm-down cancelled (user spoke) (Epic 20 / Task 006).
+      debugPrint('[Ganglia] Agent warm-down cancelled');
+      onAgentWarmDownCancelled?.call();
     }
   }
 

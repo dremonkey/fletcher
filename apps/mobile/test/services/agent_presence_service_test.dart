@@ -418,5 +418,194 @@ void main() {
 
       expect(vadForDispose.stopCallCount, greaterThan(0));
     });
+
+    // -----------------------------------------------------------------------
+    // System event emission (Task 007)
+    // -----------------------------------------------------------------------
+
+    group('system event emission', () {
+      /// Recorded system events: list of (id, category, message) tuples.
+      late List<(String, String, String)> emittedEvents;
+      late AgentPresenceService eventService;
+
+      setUp(() {
+        emittedEvents = [];
+        eventService = AgentPresenceService(
+          localVad: mockVad,
+          dispatchService: mockDispatch,
+          onSystemEvent: (id, category, message) {
+            emittedEvents.add((id, category, message));
+          },
+        );
+      });
+
+      tearDown(() {
+        eventService.dispose();
+      });
+
+      test('emits agent-dispatching on speech detected', () {
+        eventService.enable('test-room');
+        emittedEvents.clear();
+
+        eventService.onSpeechDetected(); // → dispatching
+
+        expect(emittedEvents, hasLength(1));
+        expect(emittedEvents.first.$1, 'agent-dispatching');
+        expect(emittedEvents.first.$2, 'AGENT');
+        expect(emittedEvents.first.$3, 'Connecting...');
+      });
+
+      test('emits agent-reconnected when agent connects from dispatching', () {
+        eventService.enable('test-room');
+        eventService.onSpeechDetected(); // → dispatching
+        emittedEvents.clear();
+
+        eventService.onAgentConnected(); // → agentPresent (from dispatching)
+
+        expect(emittedEvents, hasLength(1));
+        expect(emittedEvents.first.$1, 'agent-reconnected');
+        expect(emittedEvents.first.$2, 'AGENT');
+        expect(emittedEvents.first.$3, 'Connected');
+      });
+
+      test('emits agent-idle-warning on idle warning', () {
+        eventService.enable('test-room');
+        eventService.onSpeechDetected();
+        eventService.onAgentConnected(); // → agentPresent
+        emittedEvents.clear();
+
+        eventService.onIdleWarning(30000); // → idleWarning
+
+        expect(emittedEvents, hasLength(1));
+        expect(emittedEvents.first.$1, 'agent-idle-warning');
+        expect(emittedEvents.first.$2, 'AGENT');
+        expect(emittedEvents.first.$3, contains('Going idle'));
+      });
+
+      test('emits agent-idle-cancelled when user speaks during warning', () {
+        eventService.enable('test-room');
+        eventService.onSpeechDetected();
+        eventService.onAgentConnected(); // → agentPresent
+        eventService.onIdleWarning(30000); // → idleWarning
+        emittedEvents.clear();
+
+        eventService.onAgentConnected(); // → agentPresent (from idleWarning)
+
+        expect(emittedEvents, hasLength(1));
+        expect(emittedEvents.first.$1, 'agent-idle-cancelled');
+        expect(emittedEvents.first.$2, 'AGENT');
+        expect(emittedEvents.first.$3, 'Staying connected');
+      });
+
+      test('emits agent-idle-disconnect when agent disconnects from present',
+          () {
+        eventService.enable('test-room');
+        eventService.onSpeechDetected();
+        eventService.onAgentConnected(); // → agentPresent
+        emittedEvents.clear();
+
+        eventService.onAgentDisconnected(); // → agentAbsent (from present)
+
+        expect(emittedEvents, hasLength(1));
+        expect(emittedEvents.first.$1, 'agent-idle-disconnect');
+        expect(emittedEvents.first.$2, 'AGENT');
+        expect(emittedEvents.first.$3, contains('Disconnected'));
+      });
+
+      test(
+          'emits agent-idle-disconnect when agent disconnects from idle warning',
+          () {
+        eventService.enable('test-room');
+        eventService.onSpeechDetected();
+        eventService.onAgentConnected();
+        eventService.onIdleWarning(30000); // → idleWarning
+        emittedEvents.clear();
+
+        eventService.onAgentIdleDisconnect(); // → agentAbsent (from warning)
+
+        expect(emittedEvents, hasLength(1));
+        expect(emittedEvents.first.$1, 'agent-idle-disconnect');
+        expect(emittedEvents.first.$2, 'AGENT');
+        expect(emittedEvents.first.$3, contains('speak to reconnect'));
+      });
+
+      test('does NOT emit disconnect event on dispatch failure', () async {
+        mockDispatch.nextResult = const DispatchResult(
+          status: 'error',
+          message: 'Room not found',
+        );
+
+        eventService.enable('test-room');
+        emittedEvents.clear();
+
+        eventService.onSpeechDetected(); // → dispatching
+        await Future.delayed(Duration.zero); // dispatch fails → agentAbsent
+
+        // Should have the dispatching event but NOT the disconnect event
+        // (dispatch failure is not a "disconnect from present/warning")
+        expect(
+          emittedEvents.where((e) => e.$1 == 'agent-idle-disconnect'),
+          isEmpty,
+        );
+      });
+
+      test('no events emitted when service is disabled', () {
+        // Service is not enabled — all callbacks should be no-ops
+        final disabledService = AgentPresenceService(
+          localVad: mockVad,
+          dispatchService: mockDispatch,
+          onSystemEvent: (id, category, message) {
+            emittedEvents.add((id, category, message));
+          },
+        );
+
+        disabledService.onSpeechDetected();
+        disabledService.onAgentConnected();
+        disabledService.onAgentDisconnected();
+        disabledService.onIdleWarning(30000);
+        disabledService.onAgentIdleDisconnect();
+
+        expect(emittedEvents, isEmpty);
+
+        disabledService.dispose();
+      });
+
+      test('no events emitted when onSystemEvent is null', () {
+        // The default service (from setUp) has no onSystemEvent callback.
+        // Just verify no errors when transitioning without a callback.
+        service.enable('test-room');
+        service.onSpeechDetected();
+        service.onAgentConnected();
+        service.onIdleWarning(30000);
+        service.onAgentIdleDisconnect();
+        // If we got here without errors, the null callback is handled correctly.
+      });
+
+      test('full lifecycle emits correct sequence of events', () {
+        eventService.enable('test-room');
+        emittedEvents.clear();
+
+        // 1. Speech detected → dispatching
+        eventService.onSpeechDetected();
+        // 2. Agent connects → agentPresent
+        eventService.onAgentConnected();
+        // 3. Idle warning
+        eventService.onIdleWarning(30000);
+        // 4. Idle disconnect
+        eventService.onAgentIdleDisconnect();
+        // 5. Speech detected again → dispatching
+        eventService.onSpeechDetected();
+        // 6. Agent reconnects
+        eventService.onAgentConnected();
+
+        expect(emittedEvents, hasLength(6));
+        expect(emittedEvents[0].$1, 'agent-dispatching');
+        expect(emittedEvents[1].$1, 'agent-reconnected');
+        expect(emittedEvents[2].$1, 'agent-idle-warning');
+        expect(emittedEvents[3].$1, 'agent-idle-disconnect');
+        expect(emittedEvents[4].$1, 'agent-dispatching');
+        expect(emittedEvents[5].$1, 'agent-reconnected');
+      });
+    });
   });
 }

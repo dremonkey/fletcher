@@ -39,6 +39,13 @@ class AgentPresenceService extends ChangeNotifier {
   /// dispatched via token (backward compat).
   bool _enabled = false;
 
+  /// Callback for emitting system events to the chat transcript.
+  ///
+  /// Parameters: (id, category, message).
+  /// The category is always 'AGENT' for agent presence events.
+  final void Function(String id, String category, String message)?
+      onSystemEvent;
+
   AgentPresenceState get state => _state;
   int? get idleDisconnectInMs => _idleDisconnectInMs;
   bool get enabled => _enabled;
@@ -46,6 +53,7 @@ class AgentPresenceService extends ChangeNotifier {
   AgentPresenceService({
     required LocalVadService localVad,
     required AgentDispatchService dispatchService,
+    this.onSystemEvent,
   })  : _localVad = localVad,
         _dispatchService = dispatchService;
 
@@ -112,6 +120,9 @@ class AgentPresenceService extends ChangeNotifier {
     _state = newState;
     debugPrint('[AgentPresence] $oldState → $newState');
 
+    // Emit system events for transcript feedback.
+    _emitTransitionEvent(oldState, newState);
+
     switch (newState) {
       case AgentPresenceState.agentAbsent:
         _startLocalVad();
@@ -130,6 +141,56 @@ class AgentPresenceService extends ChangeNotifier {
     }
 
     notifyListeners();
+  }
+
+  /// Emit a system event based on the state transition.
+  void _emitTransitionEvent(
+      AgentPresenceState from, AgentPresenceState to) {
+    if (onSystemEvent == null) return;
+
+    switch (to) {
+      case AgentPresenceState.agentAbsent:
+        // Only emit disconnect event when transitioning from present/warning
+        // (not on initial enable or dispatch failure).
+        if (from == AgentPresenceState.agentPresent ||
+            from == AgentPresenceState.idleWarning) {
+          onSystemEvent!(
+            'agent-idle-disconnect',
+            'AGENT',
+            'Disconnected \u2014 speak to reconnect',
+          );
+        }
+        break;
+      case AgentPresenceState.dispatching:
+        onSystemEvent!(
+          'agent-dispatching',
+          'AGENT',
+          'Connecting...',
+        );
+        break;
+      case AgentPresenceState.agentPresent:
+        if (from == AgentPresenceState.dispatching) {
+          onSystemEvent!(
+            'agent-reconnected',
+            'AGENT',
+            'Connected',
+          );
+        } else if (from == AgentPresenceState.idleWarning) {
+          onSystemEvent!(
+            'agent-idle-cancelled',
+            'AGENT',
+            'Staying connected',
+          );
+        }
+        break;
+      case AgentPresenceState.idleWarning:
+        onSystemEvent!(
+          'agent-idle-warning',
+          'AGENT',
+          'Going idle in 30s \u2014 speak to stay',
+        );
+        break;
+    }
   }
 
   void _startLocalVad() {
