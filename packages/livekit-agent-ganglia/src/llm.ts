@@ -9,6 +9,7 @@ import {
   OpenClawToolCallDelta,
   LiveKitSessionInfo,
 } from './types/index.js';
+import type { InputItem, OpenClawRespondOptions } from './types/openresponses.js';
 import { dbg } from './logger.js';
 import { getShuffledPhrases } from './pondering.js';
 
@@ -83,6 +84,7 @@ export class OpenClawLLM extends LLMBase implements GangliaLLM {
   private _model: string;
   private _sessionKey?: SessionKey;
   private _historyMode: 'full' | 'latest';
+  private _useOpenResponses: boolean;
   private _onPondering?: (phrase: string | null, streamId: string) => void;
   private _onContent?: (delta: string, fullText: string, streamId: string) => void;
   private _nextStreamSeq = 0;
@@ -92,6 +94,7 @@ export class OpenClawLLM extends LLMBase implements GangliaLLM {
     this.client = new OpenClawClient(config);
     this._model = config.model || 'openclaw-gateway';
     this._historyMode = config.historyMode ?? 'latest';
+    this._useOpenResponses = config.useOpenResponses ?? (process.env.USE_OPENRESPONSES === 'true');
     this._onPondering = config.onPondering;
     this._onContent = config.onContent;
 
@@ -153,6 +156,13 @@ export class OpenClawLLM extends LLMBase implements GangliaLLM {
     return this._sessionKey;
   }
 
+  /**
+   * Returns whether this LLM instance is configured to use the OpenResponses API.
+   */
+  isUsingOpenResponses(): boolean {
+    return this._useOpenResponses;
+  }
+
   chat({
     chatCtx,
     toolCtx,
@@ -172,11 +182,52 @@ export class OpenClawLLM extends LLMBase implements GangliaLLM {
       connOptions: connOptions || { maxRetry: 3, retryIntervalMs: 2000, timeoutMs: 10000 },
       sessionKey: this._sessionKey,
       historyMode: this._historyMode,
+      useOpenResponses: this._useOpenResponses,
       onPondering: this._onPondering,
       onContent: this._onContent,
       streamId,
     });
   }
+}
+
+/**
+ * Converts an array of OpenClawMessages (Chat Completions format) to
+ * OpenResponses InputItems. This bridges the existing message serialization
+ * with the new /v1/responses endpoint.
+ *
+ * Simple case: a single user message -> just the text string.
+ * Complex case: multi-turn / tool calls -> array of InputItems.
+ */
+export function convertMessagesToInput(messages: OpenClawMessage[]): string | InputItem[] {
+  // Simple case: single user message with text content
+  if (messages.length === 1 && messages[0].role === 'user' && messages[0].content && !messages[0].tool_calls) {
+    return messages[0].content;
+  }
+
+  // Complex case: map to InputItems
+  const items: InputItem[] = [];
+  for (const msg of messages) {
+    if (msg.role === 'tool') {
+      // Tool results -> function_call_output items
+      items.push({
+        type: 'function_call_output',
+        call_id: msg.tool_call_id,
+        output: msg.content || '',
+      });
+    } else {
+      // Regular messages -> message items
+      const item: InputItem = {
+        type: 'message',
+        role: msg.role as 'system' | 'user' | 'assistant',
+        content: msg.content
+          ? [{ type: 'text' as const, text: msg.content }]
+          : undefined,
+      };
+      items.push(item);
+    }
+  }
+
+  return items;
 }
 
 /** How often to rotate the pondering phrase (ms). */
@@ -186,6 +237,7 @@ class OpenClawChatStream extends LLMStream {
   private openclawClient: OpenClawClient;
   private _sessionKey?: SessionKey;
   private _historyMode: 'full' | 'latest';
+  private _useOpenResponses: boolean;
   private _onPondering?: (phrase: string | null, streamId: string) => void;
   private _onContent?: (delta: string, fullText: string, streamId: string) => void;
   private _streamId: string;
@@ -199,6 +251,7 @@ class OpenClawChatStream extends LLMStream {
       connOptions,
       sessionKey,
       historyMode,
+      useOpenResponses,
       onPondering,
       onContent,
       streamId,
@@ -208,6 +261,7 @@ class OpenClawChatStream extends LLMStream {
       connOptions: APIConnectOptions;
       sessionKey?: SessionKey;
       historyMode: 'full' | 'latest';
+      useOpenResponses: boolean;
       onPondering?: (phrase: string | null, streamId: string) => void;
       onContent?: (delta: string, fullText: string, streamId: string) => void;
       streamId: string;
@@ -217,6 +271,7 @@ class OpenClawChatStream extends LLMStream {
     this.openclawClient = client;
     this._sessionKey = sessionKey;
     this._historyMode = historyMode;
+    this._useOpenResponses = useOpenResponses;
     this._onPondering = onPondering;
     this._onContent = onContent;
     this._streamId = streamId;
@@ -336,14 +391,23 @@ class OpenClawChatStream extends LLMStream {
       dbg.openclawStream('sessionKey: %O', this._sessionKey);
 
       const streamStart = performance.now();
-      const stream = this.openclawClient.chat({
-        messages,
-        stream: true,
-        tools: tools && tools.length > 0 ? tools : undefined,
-        session,
-        sessionKey: this._sessionKey,
-        signal: this.abortController.signal,
-      });
+      const stream = this._useOpenResponses
+        ? this.openclawClient.respondAsChat({
+            input: convertMessagesToInput(messages),
+            stream: true,
+            tools: tools && tools.length > 0 ? tools : undefined,
+            session,
+            sessionKey: this._sessionKey,
+            signal: this.abortController.signal,
+          })
+        : this.openclawClient.chat({
+            messages,
+            stream: true,
+            tools: tools && tools.length > 0 ? tools : undefined,
+            session,
+            sessionKey: this._sessionKey,
+            signal: this.abortController.signal,
+          });
 
       // Start pondering: emit rotating fun phrases while waiting for first content
       if (this._onPondering) {

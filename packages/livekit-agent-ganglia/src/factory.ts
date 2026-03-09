@@ -126,7 +126,8 @@ export async function createGangliaFromEnv(opts?: {
   if (type === 'openclaw') {
     const baseUrl = process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:8080';
     const historyMode = opts?.historyMode ?? envHistoryMode ?? 'latest';
-    dbg.factory('creating openclaw: baseUrl=%s hasApiKey=%s historyMode=%s', baseUrl, !!process.env.OPENCLAW_API_KEY, historyMode);
+    const useOpenResponses = process.env.USE_OPENRESPONSES === 'true';
+    dbg.factory('creating openclaw: baseUrl=%s hasApiKey=%s historyMode=%s useOpenResponses=%s', baseUrl, !!process.env.OPENCLAW_API_KEY, historyMode, useOpenResponses);
     logger.info(`Creating ganglia backend: openclaw (${baseUrl})`);
     return createGanglia({
       type: 'openclaw',
@@ -137,6 +138,7 @@ export async function createGangliaFromEnv(opts?: {
         onPondering: opts?.onPondering,
         onContent: opts?.onContent,
         historyMode,
+        useOpenResponses,
       },
     });
   }

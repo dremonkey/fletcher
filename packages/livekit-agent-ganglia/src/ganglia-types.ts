@@ -39,6 +39,11 @@ export interface OpenClawConfig {
   onContent?: (delta: string, fullText: string, streamId: string) => void;
   /** Controls how much conversation history to send. Default: 'latest' */
   historyMode?: 'full' | 'latest';
+  /**
+   * When true, use the OpenResponses `/v1/responses` endpoint instead of
+   * Chat Completions `/v1/chat/completions`. Default: false.
+   */
+  useOpenResponses?: boolean;
 }
 
 /**

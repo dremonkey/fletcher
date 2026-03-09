@@ -6,7 +6,14 @@ import {
   OpenClawSessionHeaders,
   AuthenticationError,
   SessionError,
+  OpenResponsesError,
+  RateLimitError,
 } from './types/index.js';
+import type {
+  OpenClawRespondOptions,
+  OpenResponsesEvent,
+  OpenResponsesEventType,
+} from './types/openresponses.js';
 import type { SessionKey } from './session-routing.js';
 import { type Logger, noopLogger, dbg } from './logger.js';
 
@@ -155,6 +162,322 @@ export class OpenClawClient {
    */
   setDefaultSession(session: LiveKitSessionInfo): void {
     this.defaultSession = session;
+  }
+
+  /**
+   * Returns the configured model name.
+   */
+  getModel(): string {
+    return this.model;
+  }
+
+  /**
+   * Sends a request to the OpenResponses `/v1/responses` endpoint and yields
+   * raw SSE events as they arrive. This is the low-level method; most consumers
+   * should prefer `respondAsChat()` which maps events to the ChatResponse format.
+   *
+   * Yields `OpenResponsesEvent` objects with typed `event` and JSON `data` fields.
+   * The generator returns when the stream completes (either `[DONE]` sentinel or
+   * stream end). Throws on HTTP errors or `response.failed` events.
+   */
+  async *respond(options: OpenClawRespondOptions): AsyncIterableIterator<OpenResponsesEvent> {
+    const controller = new AbortController();
+    const fetchSignal = options.signal
+      ? AbortSignal.any([controller.signal, options.signal])
+      : controller.signal;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    // Add authentication header (same as chat())
+    if (this.apiKey) {
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+
+    const body: Record<string, any> = {
+      model: this.model,
+      input: options.input,
+      stream: options.stream !== false, // default true
+    };
+
+    if (options.instructions) {
+      body.instructions = options.instructions;
+    }
+    if (options.tools) {
+      body.tools = options.tools;
+    }
+    if (options.tool_choice) {
+      body.tool_choice = options.tool_choice;
+    }
+
+    // Session routing: sessionKey > user field > session-derived user
+    const session = options.session || this.defaultSession;
+
+    if (options.sessionKey) {
+      applySessionKey(options.sessionKey, headers, body);
+      if (session) {
+        Object.assign(headers, buildMetadataHeaders(session));
+      }
+    } else if (options.user) {
+      body.user = options.user;
+      if (session) {
+        Object.assign(headers, buildMetadataHeaders(session));
+      }
+    } else if (session?.participantIdentity) {
+      body.user = `fletcher_${session.participantIdentity}`;
+      Object.assign(headers, buildMetadataHeaders(session));
+    }
+
+    const url = `${this.baseUrl}/v1/responses`;
+    dbg.openresponses('POST %s input=%s hasTools=%s sessionKey=%s',
+      url,
+      typeof options.input === 'string' ? `"${options.input.slice(0, 60)}"` : `[${(options.input as any[]).length} items]`,
+      !!(options.tools && options.tools.length > 0),
+      options.sessionKey?.type ?? 'none',
+    );
+
+    const fetchStart = performance.now();
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: fetchSignal,
+      });
+    } catch (fetchError) {
+      if (options.signal?.aborted && fetchError instanceof DOMException && fetchError.name === 'AbortError') {
+        dbg.openresponses('fetch aborted by external signal (graceful cancellation)');
+        return;
+      }
+      this.logger.error(`OpenClawClient.respond() fetch failed for ${url}: ${fetchError}`);
+      throw fetchError;
+    }
+
+    const responseMs = Math.round(performance.now() - fetchStart);
+    dbg.openresponses('response %d %s (fetchLatency=%dms)', response.status, response.statusText, responseMs);
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+
+      if (response.status === 401) {
+        throw new AuthenticationError(
+          `Authentication failed: ${errorText}`,
+          'UNAUTHORIZED',
+          401,
+        );
+      }
+
+      if (response.status === 403) {
+        throw new AuthenticationError(
+          `Access forbidden: ${errorText}`,
+          'FORBIDDEN',
+          403,
+        );
+      }
+
+      if (response.status === 429) {
+        const retryAfterHeader = response.headers.get('Retry-After');
+        const retryAfter = retryAfterHeader ? parseInt(retryAfterHeader, 10) : undefined;
+        throw new RateLimitError(
+          `Rate limit exceeded: ${errorText}`,
+          isNaN(retryAfter as number) ? undefined : retryAfter,
+        );
+      }
+
+      if (response.status === 440 || errorText.toLowerCase().includes('session expired')) {
+        const sid = options.sessionKey?.key || options.user || 'unknown';
+        throw new SessionError(
+          `Session expired: ${errorText}`,
+          sid,
+          'expired',
+        );
+      }
+
+      throw new OpenResponsesError(
+        `HTTP ${response.status}: ${errorText}`,
+        'http_error',
+        response.status.toString(),
+      );
+    }
+
+    if (!response.body) {
+      throw new OpenResponsesError('No response body', 'http_error', 'no_body');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let currentEventType: string = '';
+    let eventCount = 0;
+    let firstEventAt: number | undefined;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+
+          // Empty line = end of SSE event block (reset)
+          if (!trimmed) {
+            currentEventType = '';
+            continue;
+          }
+
+          // End of stream sentinel
+          if (trimmed === 'data: [DONE]') {
+            dbg.openresponses('received [DONE] sentinel');
+            return;
+          }
+
+          // SSE event type line
+          if (trimmed.startsWith('event: ')) {
+            currentEventType = trimmed.slice(7);
+            continue;
+          }
+
+          // SSE data line
+          if (trimmed.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(trimmed.slice(6));
+              eventCount++;
+              if (!firstEventAt) {
+                firstEventAt = performance.now();
+                dbg.openresponses('timing: fetchStart->firstEvent=%dms', Math.round(firstEventAt - fetchStart));
+              }
+
+              const event: OpenResponsesEvent = {
+                event: (currentEventType || 'message') as OpenResponsesEventType,
+                data,
+              };
+
+              // Log lifecycle events
+              if (event.event === 'response.created') {
+                dbg.openresponses('response created: id=%s', data.id);
+              } else if (event.event === 'response.completed') {
+                dbg.openresponses('response completed: usage=%j', data.usage);
+              } else if (event.event === 'response.failed') {
+                dbg.openresponses('response failed: error=%j', data.error);
+                this.logger.error(`OpenResponses response.failed: ${data.error?.message || 'unknown error'}`);
+              }
+
+              yield event;
+            } catch (e) {
+              this.logger.warn(`OpenResponses: failed to parse SSE data: ${trimmed}`);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      if (options.signal?.aborted && err instanceof DOMException && err.name === 'AbortError') {
+        dbg.openresponses('stream read aborted by external signal (graceful cancellation)');
+        return;
+      }
+      controller.abort();
+      throw err;
+    } finally {
+      const streamEndMs = Math.round(performance.now() - fetchStart);
+      dbg.openresponses('timing: totalStreamDuration=%dms events=%d', streamEndMs, eventCount);
+      reader.releaseLock();
+    }
+  }
+
+  /**
+   * Wrapper around `respond()` that maps OpenResponses events into the
+   * `OpenClawChatResponse` format expected by the existing LLMStream pipeline.
+   *
+   * This allows consumers that use the Chat Completions interface to
+   * transparently switch to the OpenResponses backend.
+   *
+   * Mapping:
+   * - `response.output_text.delta` -> choices[0].delta.content
+   * - `response.output_text.done`  -> choices[0].finish_reason = 'stop'
+   * - `response.output_item.done` (function_call) -> choices[0].delta.tool_calls
+   * - `response.failed`           -> throws OpenResponsesError
+   * - lifecycle events             -> skipped (logged by respond())
+   */
+  async *respondAsChat(options: OpenClawRespondOptions): AsyncIterableIterator<OpenClawChatResponse> {
+    let responseId = '';
+
+    for await (const event of this.respond(options)) {
+      switch (event.event) {
+        case 'response.created':
+          responseId = event.data.id || '';
+          break;
+
+        case 'response.output_text.delta':
+          yield {
+            id: responseId,
+            choices: [{
+              delta: { content: event.data.delta },
+            }],
+          };
+          break;
+
+        case 'response.output_text.done':
+          // The final text is complete — emit a stop signal
+          yield {
+            id: responseId,
+            choices: [{
+              delta: {},
+              finish_reason: 'stop',
+            }],
+          };
+          break;
+
+        case 'response.output_item.done': {
+          // Handle function_call items — map to tool_calls delta
+          const item = event.data.item || event.data;
+          if (item.type === 'function_call' && item.name && item.call_id) {
+            yield {
+              id: responseId,
+              choices: [{
+                delta: {
+                  tool_calls: [{
+                    index: 0,
+                    id: item.call_id,
+                    type: 'function',
+                    function: {
+                      name: item.name,
+                      arguments: item.arguments || '{}',
+                    },
+                  }],
+                },
+              }],
+            };
+          }
+          break;
+        }
+
+        case 'response.failed': {
+          const error = event.data.error || { message: 'Unknown error', type: 'server_error' };
+          throw new OpenResponsesError(
+            error.message,
+            error.type,
+            error.code,
+          );
+        }
+
+        // Lifecycle events: logged by respond(), not mapped to chat deltas
+        case 'response.in_progress':
+        case 'response.completed':
+        case 'response.output_item.added':
+        case 'response.content_part.added':
+        case 'response.content_part.done':
+          break;
+
+        default:
+          dbg.openresponses('unmapped event: %s', event.event);
+          break;
+      }
+    }
   }
 
   async *chat(options: OpenClawChatOptions): AsyncIterableIterator<OpenClawChatResponse> {

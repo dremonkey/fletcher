@@ -29,6 +29,7 @@ export const dbg = {
   factory: Debug('ganglia:factory'),
   openclawStream: Debug('ganglia:openclaw:stream'),
   openclawClient: Debug('ganglia:openclaw:client'),
+  openresponses: Debug('ganglia:openclaw:openresponses'),
   nanoclawStream: Debug('ganglia:nanoclaw:stream'),
   nanoclawClient: Debug('ganglia:nanoclaw:client'),
 };

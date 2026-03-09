@@ -110,7 +110,20 @@ import { OpenClawLLM } from './llm.js';
 export { OpenClawLLM };
 export { extractSessionFromContext } from './llm.js';
 export { OpenClawClient, generateSessionId, buildSessionHeaders, buildMetadataHeaders, applySessionKey } from './client.js';
+export { convertMessagesToInput } from './llm.js';
 export * from './types/index.js';
+export type {
+  OpenResponsesEventType,
+  OpenResponsesEvent,
+  OpenClawRespondOptions,
+  InputItem,
+  OutputTextDeltaData,
+  OutputTextDoneData,
+  ResponseCreatedData,
+  ResponseCompletedData,
+  ResponseFailedData,
+} from './types/openresponses.js';
+export { OpenResponsesError, RateLimitError } from './types/openresponses.js';
 
 // Nanoclaw Implementation
 import { NanoclawLLM } from './nanoclaw.js';

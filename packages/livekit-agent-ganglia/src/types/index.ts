@@ -27,6 +27,13 @@ export interface OpenClawConfig {
   onContent?: (delta: string, fullText: string, streamId: string) => void;
   /** Controls how much conversation history to send. Default: 'latest' */
   historyMode?: 'full' | 'latest';
+  /**
+   * When true, the LLM layer uses the OpenResponses `/v1/responses` endpoint
+   * instead of Chat Completions `/v1/chat/completions`. The response is
+   * transparently mapped to the ChatResponse format for backward compatibility.
+   * Default: false (opt-in during Phase 1 rollout).
+   */
+  useOpenResponses?: boolean;
 }
 
 /**
@@ -111,6 +118,28 @@ export interface OpenClawToolCallDelta {
     arguments?: string;
   };
 }
+
+// Re-export OpenResponses types
+export type {
+  OpenResponsesEventType,
+  OpenResponsesEvent,
+  ResponseCreatedData,
+  OutputTextDeltaData,
+  OutputTextDoneData,
+  OutputItemAddedData,
+  OutputItemDoneData,
+  ContentPartAddedData,
+  ContentPartDoneData,
+  ResponseCompletedData,
+  ResponseFailedData,
+  InputItem,
+  OpenClawRespondOptions,
+} from './openresponses.js';
+
+export {
+  OpenResponsesError,
+  RateLimitError,
+} from './openresponses.js';
 
 /** Authentication error types */
 export type AuthErrorCode = 'UNAUTHORIZED' | 'FORBIDDEN' | 'INVALID_TOKEN' | 'TOKEN_EXPIRED';
