@@ -24,6 +24,8 @@
  *   FLETCHER_ACK_SOUND - Acknowledgment sound on EOU: path to audio file, 'builtin' (default), or 'disabled'
  *   PIPER_URL - Piper TTS sidecar URL for local fallback (e.g. 'http://localhost:5000')
  *   PIPER_VOICE - Piper voice name (default: sidecar default)
+ *   FLETCHER_IDLE_TIMEOUT_MS - Idle time before agent auto-disconnect (ms). 0 = disabled. Default: 300000 (5 min)
+ *   FLETCHER_IDLE_WARNING_MS - Time before disconnect to send warning (ms). Default: 30000 (30s)
  */
 
 import { defineAgent, cli, ServerOptions, tts, type JobContext } from '@livekit/agents';
@@ -42,6 +44,7 @@ import { TranscriptManager } from './transcript-manager';
 import { initHeapDiagnostics } from './heap-snapshot';
 import { buildBootstrapMessage } from './bootstrap';
 import { attachFallbackMonitor } from './tts-fallback-monitor';
+import { IdleTimeout, readIdleTimeoutConfig } from './idle-timeout';
 
 // ---------------------------------------------------------------------------
 // Logger setup — pretty-print when running locally, JSON in production
@@ -122,6 +125,32 @@ export default defineAgent({
         : { type: 'status', action, startedAt: Date.now() };
       publishEvent(event);
     };
+
+    // -----------------------------------------------------------------------
+    // Idle timeout — disconnect agent after prolonged silence to save costs.
+    // Configure via FLETCHER_IDLE_TIMEOUT_MS (default: 300000 = 5 min).
+    // Set to 0 to disable.  The timer is started after the bootstrap message
+    // and reset on every user activity (speech or text input).
+    // -----------------------------------------------------------------------
+    const idleConfig = readIdleTimeoutConfig();
+    const idleTimeout = new IdleTimeout({
+      ...idleConfig,
+      logger,
+      onWarning: (disconnectInMs) => {
+        publishEvent({
+          type: 'agent-idle-warning',
+          disconnectInMs,
+        });
+      },
+      onTimeout: () => {
+        publishEvent({
+          type: 'agent-disconnected',
+          reason: 'idle-timeout',
+        });
+        // Grace period for data channel message delivery before shutdown
+        setTimeout(() => ctx.shutdown(), 500);
+      },
+    });
 
     // -----------------------------------------------------------------------
     // Acknowledgment sound — plays a looping chime while the brain is
@@ -266,6 +295,7 @@ export default defineAgent({
         // pipeline as a user message.  The response flows through the normal
         // TTS + transcript pipeline. (TASK-017, Epic 17)
         if (event.type === 'text_message' && typeof event.text === 'string' && event.text.trim()) {
+          idleTimeout.reset();
           logger.info({ text: event.text, participant: participant?.identity }, 'Text message received');
           session.generateReply({ userInput: event.text });
         }
@@ -333,6 +363,9 @@ export default defineAgent({
     let currentUserSegmentId: string | null = null;
 
     session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (ev) => {
+      // Reset idle timer on any user speech
+      idleTimeout.reset();
+
       if (ev.isFinal) {
         logger.info({ transcript: ev.transcript }, 'User input (final)');
       }
@@ -469,6 +502,14 @@ export default defineAgent({
     logger.info({ room: ctx.room.name, e2e: isE2e }, 'Sending bootstrap message');
     session.generateReply({ userInput: bootstrapMsg });
 
+    // Start idle timer after bootstrap
+    if (!idleTimeout.disabled) {
+      idleTimeout.reset();
+      logger.info({ timeoutMs: idleConfig.timeoutMs, warningMs: idleConfig.warningMs }, 'Idle timeout enabled');
+    } else {
+      logger.info('Idle timeout disabled');
+    }
+
     // -----------------------------------------------------------------------
     // Participant lifecycle — log disconnect/reconnect for observability.
     // The actual reconnection is handled by LiveKit infrastructure: the
@@ -489,6 +530,7 @@ export default defineAgent({
 
     ctx.addShutdownCallback(async () => {
       logger.info('Shutting down voice agent...');
+      idleTimeout.stop();
       await bgAudioPlayer?.close();
       await session.close();
       await shutdownTelemetry();
@@ -510,6 +552,7 @@ export default defineAgent({
 cli.runApp(
   new ServerOptions({
     agent: import.meta.filename,
+    agentName: 'fletcher-voice',
     initializeProcessTimeout: 60_000,
     loadFunc: async () => 0,
   }),
