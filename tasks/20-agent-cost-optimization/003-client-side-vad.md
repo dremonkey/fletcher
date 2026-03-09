@@ -1,7 +1,7 @@
 # Task 003: Client-Side VAD Integration (Flutter)
 
 **Epic:** 20 — Agent Cost Optimization
-**Status:** [ ]
+**Status:** [~] Services created; integration with LiveKitService is Task 005
 **Priority:** High
 
 ## Problem
@@ -98,12 +98,20 @@ Silero VAD v5 is lightweight (ONNX model ~2MB), but continuous mic access drains
 
 ## Acceptance Criteria
 
-- [ ] `vad` package added and builds on Android
+- [x] `vad` package added and builds on Android
 - [ ] `LocalVadService` detects speech within ~200ms of utterance start
 - [ ] Local VAD stops cleanly when agent connects (no mic conflict)
 - [ ] Local VAD restarts when agent disconnects
 - [ ] No false triggers from ambient noise (test in quiet + noisy environments)
 - [ ] Battery impact measured over 1-hour idle session
+
+## Implementation Notes (2026-03-09)
+
+- Added `vad: ^0.0.7` and `http: ^1.2.0` dependencies to pubspec.yaml
+- Created `LocalVadService` with Silero VAD v5, using `onRealSpeechStart` (not `onSpeechStart`) for confirmed speech detection
+- Created `AgentDispatchService` with HTTP client injection for testability
+- Unit tests: 4 for LocalVadService (state management), 7 for AgentDispatchService (HTTP mocking)
+- Integration with LiveKitService deferred to Task 005 (Client State Machine)
 
 ## Dependencies
 

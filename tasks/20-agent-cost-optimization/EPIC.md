@@ -66,7 +66,7 @@ Create a `POST /dispatch-agent` endpoint that accepts a room name and calls `Age
 ### 003: Client-Side VAD Integration (Flutter)
 Add the `vad` Flutter package (Silero VAD v5, on-device ONNX) to the mobile app. Run local VAD when no agent is connected. On confirmed speech, call the dispatch endpoint. Stop local VAD once the agent connects (to free the mic for LiveKit's audio track).
 
-**Status:** [ ]
+**Status:** [~] Services created (`LocalVadService`, `AgentDispatchService`); integration with LiveKitService deferred to Task 005
 
 ---
 

@@ -345,7 +345,7 @@ Eliminate idle agent costs by disconnecting the agent when nobody is speaking an
 **Tasks:**
 - [~] 001: Switch Agent to Explicit Dispatch 🔄 — `agentName: 'fletcher-voice'` set on ServerOptions; `RoomAgentDispatch` added to token server; token-server refactored for testability with 12 unit tests; field verification pending
 - [x] 002: Add Dispatch Endpoint to Token Server ✅ — `POST /dispatch-agent` calls `AgentDispatchClient.createDispatch()`; `wsUrlToHttp` helper; 9 new tests (21 total)
-- [ ] 003: Client-Side VAD Integration (Flutter) — `vad` package (Silero v5 on-device) detects speech when agent absent
+- [~] 003: Client-Side VAD Integration (Flutter) 🔄 — `LocalVadService` + `AgentDispatchService` created with 11 unit tests; `vad` and `http` packages added; integration with LiveKitService deferred to Task 005
 - [x] 004: Agent Idle Timeout & Auto-Disconnect ✅ — `IdleTimeout` class with configurable timer, warning callback, env-var config (`FLETCHER_IDLE_TIMEOUT_MS`); resets on speech/text input; 14 unit tests
 - [ ] 005: Client State Machine (Agent Presence Lifecycle) — AGENT_ABSENT ↔ DISPATCHING ↔ AGENT_PRESENT states
 - [ ] 006: Cold-Start Latency Mitigation — `prewarm`, `numIdleProcesses`, warm-down grace period
