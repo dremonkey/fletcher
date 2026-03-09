@@ -34,6 +34,7 @@ class LiveKitService extends ChangeNotifier {
 
   bool _textOnlyMode = false;
   bool get textOnlyMode => _textOnlyMode;
+  bool get voiceOutEnabled => !_textOnlyMode;
 
   Timer? _audioLevelTimer;
   Timer? _statusClearTimer;
@@ -163,14 +164,16 @@ class LiveKitService extends ChangeNotifier {
         prefix: '\u25B8',
       ));
 
-      // Extract host from resolved URL for token endpoint
-      final resolvedUri = Uri.parse(resolved.url);
-      final tokenHost = resolvedUri.host;
+      // Extract all candidate hosts for token endpoint racing
+      final tokenHosts = urls
+          .map((u) => Uri.parse(u).host)
+          .where((h) => h.isNotEmpty)
+          .toList();
 
-      // Fetch token from endpoint
+      // Fetch token (races all hosts, same as URL resolver)
       final identity = await SessionStorage.getDeviceId();
       final result = await fetchToken(
-        host: tokenHost,
+        hosts: tokenHosts,
         port: tokenServerPort,
         roomName: roomName,
         identity: identity,
@@ -244,12 +247,14 @@ class LiveKitService extends ChangeNotifier {
       // Resolve URL
       final resolved = await resolveLivekitUrl(urls: _allUrls);
 
-      final resolvedUri = Uri.parse(resolved.url);
-      final tokenHost = resolvedUri.host;
+      final tokenHosts = _allUrls
+          .map((u) => Uri.parse(u).host)
+          .where((h) => h.isNotEmpty)
+          .toList();
 
       final identity = await SessionStorage.getDeviceId();
       final result = await fetchToken(
-        host: tokenHost,
+        hosts: tokenHosts,
         port: _tokenServerPort,
         roomName: roomName,
         identity: identity,

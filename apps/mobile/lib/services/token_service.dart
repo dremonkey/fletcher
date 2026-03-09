@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -11,10 +12,45 @@ class TokenResult {
 
 /// Fetches LiveKit access tokens from the token endpoint.
 ///
-/// The token endpoint runs alongside the LiveKit server and generates JWTs
-/// on demand so the mobile client can create dynamic room names without
-/// bundling API secrets on-device.
+/// Races all candidate hosts in parallel — whichever responds first wins.
+/// This mirrors the URL resolver strategy so the token fetch works in all
+/// topologies (LAN, Tailscale, emulator 10.0.2.2).
 Future<TokenResult> fetchToken({
+  required List<String> hosts,
+  required int port,
+  required String roomName,
+  required String identity,
+}) async {
+  if (hosts.isEmpty) {
+    throw Exception('No token server hosts configured');
+  }
+
+  debugPrint('[TokenService] Racing ${hosts.length} hosts for token: ${hosts.join(", ")}');
+
+  final completer = Completer<TokenResult>();
+  final errors = <String>[];
+
+  for (final host in hosts) {
+    _tryFetchToken(host: host, port: port, roomName: roomName, identity: identity)
+        .then((result) {
+      if (!completer.isCompleted) {
+        completer.complete(result);
+      }
+    }).catchError((e) {
+      errors.add('$host: $e');
+      // If all hosts failed, complete with error
+      if (errors.length == hosts.length && !completer.isCompleted) {
+        completer.completeError(
+          Exception('All token hosts failed:\n${errors.join("\n")}'),
+        );
+      }
+    });
+  }
+
+  return completer.future;
+}
+
+Future<TokenResult> _tryFetchToken({
   required String host,
   required int port,
   required String roomName,
@@ -25,7 +61,7 @@ Future<TokenResult> fetchToken({
     'identity': identity,
   });
 
-  debugPrint('[TokenService] Fetching token from $uri');
+  debugPrint('[TokenService] Trying $uri');
 
   final client = HttpClient();
   client.connectionTimeout = const Duration(seconds: 5);
@@ -47,7 +83,7 @@ Future<TokenResult> fetchToken({
       throw Exception('Token endpoint returned incomplete response: $body');
     }
 
-    debugPrint('[TokenService] Token acquired for room=$roomName');
+    debugPrint('[TokenService] Token acquired from $host for room=$roomName');
     return TokenResult(token: token, url: url);
   } finally {
     client.close();

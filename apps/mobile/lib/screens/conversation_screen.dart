@@ -8,7 +8,7 @@ import '../theme/app_typography.dart';
 import '../theme/tui_widgets.dart';
 import '../widgets/artifact_viewer.dart';
 import '../widgets/chat_transcript.dart';
-import '../widgets/compact_waveform.dart';
+import '../widgets/header_bar.dart';
 import '../widgets/diagnostics_bar.dart';
 import '../widgets/mic_button.dart';
 
@@ -93,10 +93,12 @@ class _ConversationScreenState extends State<ConversationScreen>
       body: SafeArea(
         child: Column(
           children: [
-            // Compact waveform (48dp)
-            CompactWaveform(
+            // Split header: user histogram (left) + TTS toggle (right)
+            HeaderBar(
               userAmplitudes: state.userWaveform,
               agentAmplitudes: state.aiWaveform,
+              voiceOutEnabled: _liveKitService.voiceOutEnabled,
+              onToggleTts: _liveKitService.toggleTextOnlyMode,
             ),
             const SizedBox(height: AppSpacing.xs),
 
@@ -150,25 +152,12 @@ class _ConversationScreenState extends State<ConversationScreen>
             ),
             const SizedBox(height: AppSpacing.sm),
 
-            // Bottom row: TTS toggle + Mic button (TASK-030)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                TuiButton(
-                  label: _liveKitService.textOnlyMode ? 'TTS: OFF' : 'TTS: ON',
-                  color: _liveKitService.textOnlyMode
-                      ? AppColors.textSecondary
-                      : AppColors.amber,
-                  onPressed: _liveKitService.toggleTextOnlyMode,
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                MicButton(
-                  status: state.status,
-                  aiAudioLevel: state.aiAudioLevel,
-                  isMuted: _liveKitService.isMuted,
-                  onToggleMute: _liveKitService.toggleMute,
-                ),
-              ],
+            // Mic button (centered)
+            MicButton(
+              status: state.status,
+              aiAudioLevel: state.aiAudioLevel,
+              isMuted: _liveKitService.isMuted,
+              onToggleMute: _liveKitService.toggleMute,
             ),
             const SizedBox(height: AppSpacing.base),
           ],
