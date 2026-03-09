@@ -1,5 +1,10 @@
 # Task 031: Local PiperTTS on Android Device
 
+> **⚠️ MIGRATED:** This task has been promoted to **Epic 19: Local Piper TTS Integration** due to its strategic importance for COGS reduction and offline operation.  
+> **See:** [tasks/19-local-piper-tts/SUMMARY.md](../../19-local-piper-tts/SUMMARY.md) for the current epic plan.
+
+---
+
 ## Summary
 
 Investigate moving the PiperTTS fallback from its current Docker sidecar (running on the server alongside the voice agent) to run locally on the Android device. This would enable offline TTS, eliminate network round-trips for fallback speech, and improve resilience when cloud TTS is unavailable.
