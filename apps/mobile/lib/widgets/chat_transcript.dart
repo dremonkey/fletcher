@@ -328,13 +328,17 @@ class _TranscriptMessage extends StatelessWidget {
               // Subtle keyboard icon for text-origin messages
               if (entry.origin == MessageOrigin.text)
                 Padding(
-                  padding: const EdgeInsets.only(left: AppSpacing.sm),
+                  padding: const EdgeInsets.only(right: AppSpacing.sm),
                   child: Icon(
                     Icons.keyboard_rounded,
                     size: 14,
                     color: AppColors.textSecondary.withAlpha(128),
                   ),
                 ),
+              Text(
+                _formatTimestamp(entry.timestamp),
+                style: AppTypography.overline,
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -346,11 +350,6 @@ class _TranscriptMessage extends StatelessWidget {
                   ? AppColors.textPrimary
                   : AppColors.textSecondary,
             ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            _formatTimestamp(entry.timestamp),
-            style: AppTypography.overline,
           ),
           // Inline artifact buttons
           if (artifacts.isNotEmpty) ...[

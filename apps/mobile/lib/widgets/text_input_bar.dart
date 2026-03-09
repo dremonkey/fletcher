@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../models/conversation_state.dart';
 import '../services/livekit_service.dart';
@@ -9,13 +8,14 @@ import '../theme/app_typography.dart';
 import 'mic_button.dart';
 
 /// Animated input bar that transitions between voice-first (centered mic)
-/// and text-input mode (text field + mic on right + send button).
+/// and text-input mode (text field + mic on right).
 ///
 /// The bar listens to [LiveKitService] state for the current [TextInputMode]
 /// and drives a single [AnimationController] that synchronizes:
 ///   - Mic button sliding from center to right
 ///   - Text field expanding from left
-///   - Send button fading in
+///
+/// Submit via the keyboard's carriage return (TextInputAction.send).
 class TextInputBar extends StatefulWidget {
   final LiveKitService service;
 
@@ -28,9 +28,7 @@ class TextInputBar extends StatefulWidget {
 class _TextInputBarState extends State<TextInputBar>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _slideAnimation;
   late Animation<double> _expandAnimation;
-  late Animation<double> _fadeAnimation;
 
   final TextEditingController _textController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
@@ -44,29 +42,14 @@ class _TextInputBarState extends State<TextInputBar>
       duration: const Duration(milliseconds: 400),
     );
 
-    // Mic button slides from center (0.0) to right (1.0)
-    _slideAnimation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeInOutCubic,
-    );
-
     // Text field expands from 0.0 (collapsed) to 1.0 (full width)
     _expandAnimation = CurvedAnimation(
       parent: _controller,
       curve: Curves.easeInOutCubic,
     );
 
-    // Send button fades in slightly delayed
-    _fadeAnimation = CurvedAnimation(
-      parent: _controller,
-      curve: const Interval(0.3, 1.0, curve: Curves.easeIn),
-    );
-
     // Listen to animation status for auto-focus
     _controller.addStatusListener(_onAnimationStatus);
-
-    // Listen for text changes to update send button state
-    _textController.addListener(_onTextChanged);
 
     widget.service.addListener(_onServiceChanged);
 
@@ -81,7 +64,6 @@ class _TextInputBarState extends State<TextInputBar>
     widget.service.removeListener(_onServiceChanged);
     _controller.removeStatusListener(_onAnimationStatus);
     _controller.dispose();
-    _textController.removeListener(_onTextChanged);
     _textController.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -106,11 +88,6 @@ class _TextInputBarState extends State<TextInputBar>
       // Auto-focus the text field when entering text-input mode
       _focusNode.requestFocus();
     }
-  }
-
-  void _onTextChanged() {
-    // Rebuild to update send button enabled state
-    if (mounted) setState(() {});
   }
 
   void _onLongPress() {
@@ -152,15 +129,8 @@ class _TextInputBarState extends State<TextInputBar>
                   ),
                 ),
 
-              // Send button (visible in text-input mode)
-              if (isExpanded) ...[
+              if (isExpanded)
                 const SizedBox(width: AppSpacing.sm),
-                Opacity(
-                  opacity: _fadeAnimation.value,
-                  child: _buildSendButton(),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-              ],
 
               // Mic button (always visible, slides right)
               MicButton(
@@ -202,40 +172,15 @@ class _TextInputBarState extends State<TextInputBar>
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.md,
-            vertical: AppSpacing.md,
           ),
-          isDense: true,
+          isCollapsed: true,
         ),
+        expands: true,
+        maxLines: null,
+        minLines: null,
+        textAlignVertical: TextAlignVertical.center,
       ),
     );
   }
 
-  Widget _buildSendButton() {
-    final hasText = _textController.text.trim().isNotEmpty;
-
-    return GestureDetector(
-      onTap: hasText ? _sendMessage : null,
-      child: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.zero,
-          border: Border.all(
-            color: hasText
-                ? AppColors.amber
-                : AppColors.amber.withAlpha(51), // 0.2 opacity
-            width: 1,
-          ),
-        ),
-        child: Icon(
-          Icons.arrow_upward_rounded,
-          color: hasText
-              ? AppColors.amber
-              : AppColors.amber.withAlpha(51),
-          size: 22,
-        ),
-      ),
-    );
-  }
 }

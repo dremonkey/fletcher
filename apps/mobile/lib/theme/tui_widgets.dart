@@ -83,22 +83,23 @@ class TuiButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       height: 48,
-      child: OutlinedButton(
-        onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          side: BorderSide(color: color),
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.zero,
+      child: Center(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onPressed,
+          child: Container(
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.base),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.zero,
+              border: Border.all(color: color),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              label.toUpperCase(),
+              style: AppTypography.label.copyWith(color: color),
+            ),
           ),
-          minimumSize: const Size(0, 48),
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.base,
-            vertical: AppSpacing.sm,
-          ),
-        ),
-        child: Text(
-          label.toUpperCase(),
-          style: AppTypography.label.copyWith(color: color),
         ),
       ),
     );

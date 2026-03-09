@@ -169,6 +169,24 @@ function isContentEvent(event: GangliaEvent): event is ContentEvent;
 
 The mobile client can send control events to the voice agent on the same `ganglia-events` topic. These are JSON-encoded `publishData` calls with `reliable: true`.
 
+### Text Message (Epic 17)
+
+Sends a typed text message from the client to the voice agent, bypassing STT. The agent injects the text directly into the LLM pipeline as a user message, producing a response via the normal TTS + transcript flow.
+
+```typescript
+interface TextMessageEvent {
+  type: 'text_message';
+  text: string;           // The user's typed message
+}
+```
+
+The agent handles this by:
+1. Receiving the event on the `ganglia-events` data channel
+2. Injecting the text as a user message into the current `AgentSession` conversation
+3. The LLM responds normally — TTS synthesizes the response, transcript flows back via `lk.transcription`
+
+This enables "safety hatch" text input when voice is impractical (noisy/quiet environments, network degradation, precision corrections). The text message shares the same conversation context as voice — no separate session or history.
+
 ### TTS Mode Toggle (TASK-030)
 
 Disables or re-enables TTS synthesis on the agent. When TTS is off, the agent skips all TTS API calls and acknowledgment sounds — responses arrive as text only via the data channel transcript. STT remains active.

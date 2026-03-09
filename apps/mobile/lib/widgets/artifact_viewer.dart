@@ -361,19 +361,23 @@ class ArtifactInlineButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 48),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.base,
-          vertical: AppSpacing.sm,
-        ),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.zero,
-          border: Border.all(color: AppColors.amber, width: 1),
-        ),
-        child: Text(
-          '[ARTIFACT: ${_shortenTitle(artifact.displayTitle)}]',
-          style: AppTypography.artifactBadge.copyWith(color: AppColors.amber),
+      child: IntrinsicHeight(
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 48),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.base,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.zero,
+            border: Border.all(color: AppColors.amber, width: 1),
+          ),
+          child: Center(
+            widthFactor: 1.0,
+            child: Text(
+              '[ARTIFACT: ${_shortenTitle(artifact.displayTitle)}]',
+              style: AppTypography.artifactBadge.copyWith(color: AppColors.amber),
+            ),
+          ),
         ),
       ),
     );
