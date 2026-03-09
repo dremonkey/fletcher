@@ -29,7 +29,7 @@ class LiveKitService extends ChangeNotifier {
   ConversationState _state = const ConversationState();
   ConversationState get state => _state;
 
-  bool _isMuted = false;
+  bool _isMuted = true;
   bool get isMuted => _isMuted;
 
   bool _textOnlyMode = false;

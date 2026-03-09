@@ -415,7 +415,7 @@ class ConversationState {
     this.systemEvents = const [],
     this.isAgentThinking = false,
     this.diagnostics = const DiagnosticsInfo(),
-    this.inputMode = TextInputMode.voiceFirst,
+    this.inputMode = TextInputMode.textInput,
   });
 
   ConversationState copyWith({
