@@ -232,6 +232,7 @@ Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layou
 - [ ] 033: SpeakingRing Component 📋 — animated ring around participant avatars; VAD-driven; amber (user) / blue (agent)
 - [ ] 034: Inline Participant Histogram 📋 — compact AudioVisualizer in each participant row; 30fps throttle for 3+ participants
 - [ ] 035: Per-Participant Audio Stream Wiring 📋 — AnalyserNode per participant; connect to SpeakingRing + inline histogram
+- [ ] 036: TUI Theme Bundles (Solarized, Gruvbox, Nord) 📋 — implementation of classic terminal-inspired color palettes
 **Retained:**
 - [x] 015: Single Audio Ack + Visual Spinner ✅ — Single-shot ack tone + SweepGradient spin on AmberOrb during thinking state
 - [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 done; Phase 3 (soft TTS fade) needs SDK support
