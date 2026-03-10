@@ -626,8 +626,18 @@ class LiveKitService extends ChangeNotifier {
       // If the agent's audio track is unsubscribed during a network transition,
       // keep the reconnecting state visible until re-subscribed. Without this,
       // the UI briefly shows "idle" during the 55s publish gap. (BUG-021)
+      //
+      // Guard: do not show the reconnecting banner when the agent is
+      // disconnecting intentionally (idle timeout, on-demand dispatch
+      // lifecycle). The agent presence UX (Task 007 system events) already
+      // communicates what happened. (Epic 20, Task 009)
       if (event.track.kind == TrackType.AUDIO) {
-        _updateState(status: ConversationStatus.reconnecting);
+        final isIntentionalDisconnect = agentPresenceService.enabled &&
+            (agentPresenceService.state == AgentPresenceState.idleWarning ||
+                agentPresenceService.state == AgentPresenceState.agentAbsent);
+        if (!isIntentionalDisconnect) {
+          _updateState(status: ConversationStatus.reconnecting);
+        }
       }
     });
 
@@ -1179,6 +1189,14 @@ class LiveKitService extends ChangeNotifier {
       }
     } else {
       _updateState(status: ConversationStatus.idle);
+      // Unmuting while the agent is absent is a strong intent signal —
+      // dispatch immediately for a ~300-500ms head start before audio-level
+      // speech detection kicks in. (Epic 20, Task 010)
+      if (agentPresenceService.enabled &&
+          agentPresenceService.state == AgentPresenceState.agentAbsent) {
+        debugPrint('[Fletcher] Unmute while agent absent — triggering dispatch');
+        agentPresenceService.onSpeechDetected();
+      }
       // Republish a fresh audio track — setMicrophoneEnabled(true) creates
       // a new LocalAudioTrack and publishes it to the PeerConnection.
       await _localParticipant?.setMicrophoneEnabled(true);
