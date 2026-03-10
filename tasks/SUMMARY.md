@@ -293,6 +293,7 @@ Upstream bugs and limitations in the `livekit_client` Flutter/Dart SDK that affe
 
 **Tasks:**
 - [ ] 004: Fix `addTransceiver: track is null` During Reconnect 📋 — null track reference during `rePublishAllTracks` after rapid reconnect cycles ([BUG-025](../docs/field-tests/20260303-buglog.md))
+- [ ] 005: Release Android AudioManager Mode on Mute 📋 — `MODE_IN_COMMUNICATION` blocks keyboard STT after muting; toggle via `flutter_webrtc` API ([BUG-001](../docs/field-tests/20260309-buglog.md))
 
 **Related closed tasks** (resolved with workarounds in Epic 9): 007 (ICE renegotiation), 009 (BT audio recovery), 011 (audio track timeout).
 

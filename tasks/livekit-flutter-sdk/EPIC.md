@@ -7,6 +7,7 @@ These are issues whose root cause lies in the SDK itself (not Fletcher applicati
 ## Open Tasks
 
 - [ ] 004: Fix `addTransceiver: track is null` During Reconnect — null track reference during `rePublishAllTracks` after rapid reconnect cycles ([BUG-025](../../docs/field-tests/20260303-buglog.md))
+- [ ] 005: Release Android AudioManager Mode on Mute — `MODE_IN_COMMUNICATION` blocks keyboard STT after muting; toggle via `flutter_webrtc` API ([BUG-001](../../docs/field-tests/20260309-buglog.md))
 
 ## Related Closed Tasks (in other epics)
 
