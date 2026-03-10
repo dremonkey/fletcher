@@ -401,12 +401,12 @@ class LiveKitService extends ChangeNotifier {
         ),
       );
 
-      // Enable microphone — respect mute state across reconnects
-      await _localParticipant!.setMicrophoneEnabled(!_isMuted);
-      // BUG-001: room.connect() starts the native AudioRecord via ADM.
-      // If the user is muted, stop it so keyboard STT can access the mic.
-      if (_isMuted && Platform.isAndroid) {
-        await rtc.NativeAudioManagement.stopLocalRecording();
+      // BUG-001: Only publish the mic track if the user is NOT muted.
+      // Publishing creates an RtpSender in the PeerConnection, which causes
+      // WebRTC's native layer to hold the AudioRecord open — blocking
+      // Android keyboard STT. When muted, skip publishing entirely.
+      if (!_isMuted) {
+        await _localParticipant!.setMicrophoneEnabled(true);
       }
       debugPrint('[Fletcher] Audio config: AEC=on NS=on AGC=on voiceIsolation=on highPass=on bitrate=speech(24k) dtx=on');
 
@@ -581,6 +581,10 @@ class LiveKitService extends ChangeNotifier {
       agentPresenceService.onAgentConnected();
       // Flush any text messages queued while agent was absent
       _flushPendingTextMessages();
+      // Re-sync TTS mode with new agent after idle disconnect (BUG-004)
+      if (_textOnlyMode) {
+        _sendTtsMode();
+      }
       // Emit/update agent connected system event (task 020)
       _emitSystemEvent(SystemEvent(
         id: 'agent-boot',
@@ -1161,24 +1165,24 @@ class LiveKitService extends ChangeNotifier {
 
     if (_isMuted) {
       _updateState(status: ConversationStatus.muted);
-      await _localParticipant?.setMicrophoneEnabled(false);
-      // BUG-001: Muting only stops the WebRTC MediaStreamTrack, but the
-      // native AudioRecord inside JavaAudioDeviceModule stays open, holding
-      // the OS mic. stopLocalRecording() calls requestStopRecording() on
-      // the ADM to actually release the native AudioRecord, freeing the mic
-      // for Android keyboard STT.
-      if (Platform.isAndroid) {
-        await rtc.NativeAudioManagement.stopLocalRecording();
-        debugPrint('[Fletcher] Android ADM recording stopped (mic released for OS)');
+      // BUG-001: setMicrophoneEnabled(false) only mutes the track — the
+      // RtpSender stays in the PeerConnection and WebRTC's native layer
+      // keeps the AudioRecord open. We must fully unpublish the track
+      // (removePublishedTrack) which calls pc.removeTrack(sender) +
+      // SDP renegotiation, causing the native layer to release AudioRecord
+      // so Android keyboard STT can access the mic.
+      final pub = _localParticipant?.getTrackPublicationBySource(TrackSource.microphone);
+      if (pub != null) {
+        await _localParticipant!.removePublishedTrack(pub.sid);
+        debugPrint('[Fletcher] Audio track unpublished (mic released for OS)');
+      } else {
+        // Fallback: no publication found, just disable
+        await _localParticipant?.setMicrophoneEnabled(false);
       }
     } else {
       _updateState(status: ConversationStatus.idle);
-      // Prewarm the ADM AudioRecord before restarting the track, so the
-      // native recording pipeline is ready when getUserMedia is called.
-      if (Platform.isAndroid) {
-        await rtc.NativeAudioManagement.startLocalRecording();
-        debugPrint('[Fletcher] Android ADM recording prewarm');
-      }
+      // Republish a fresh audio track — setMicrophoneEnabled(true) creates
+      // a new LocalAudioTrack and publishes it to the PeerConnection.
       await _localParticipant?.setMicrophoneEnabled(true);
     }
     debugPrint('[Fletcher] Mic ${_isMuted ? "stopped" : "started"}');
