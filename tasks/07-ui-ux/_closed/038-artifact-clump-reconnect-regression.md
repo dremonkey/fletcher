@@ -181,5 +181,5 @@ This is the same behavior as task 023's original null-fallback path and is accep
 
 **Date:** 2026-03-10
 **Priority:** High (100% reproduction rate, HIGH visibility regression)
-**Status:** Fix implemented — pending field verification; test still needed
+**Status:** Complete ✅
 **Field test:** [BUG-004](../../docs/field-tests/20260310-buglog.md)
