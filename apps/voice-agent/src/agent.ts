@@ -71,7 +71,7 @@ const ttsProvider = (process.env.TTS_PROVIDER ?? 'piper') as TTSProvider;
 
 // Skip env validation for download-files (runs during Docker build without env)
 if (!process.argv.includes('download-files')) {
-  const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
+  const missing: string[] = REQUIRED_ENV.filter((k) => !process.env[k]);
 
   // TTS-provider-specific requirements
   if (ttsProvider === 'elevenlabs' && !process.env.ELEVENLABS_API_KEY) {

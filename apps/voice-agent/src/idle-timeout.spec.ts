@@ -32,6 +32,10 @@ function buildOpts(overrides: Partial<IdleTimeoutOptions> = {}): IdleTimeoutOpti
     ...(overrides.onWarning ? {} : { onWarning }),
     ...(overrides.onWarmDown ? {} : { onWarmDown }),
     ...(overrides.onTimeout ? {} : { onTimeout }),
+  } as unknown as IdleTimeoutOptions & {
+    onWarning: ReturnType<typeof jest.fn>;
+    onWarmDown: ReturnType<typeof jest.fn>;
+    onTimeout: ReturnType<typeof jest.fn>;
   };
 }
 

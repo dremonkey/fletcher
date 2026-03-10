@@ -69,7 +69,7 @@ describe('PiperTTS', () => {
 
     globalThis.fetch = mock(async () =>
       new Response(wavBuf, { status: 200, headers: { 'Content-Type': 'audio/wav' } }),
-    ) as typeof fetch;
+    ) as unknown as typeof fetch;
 
     const piperTts = new PiperTTS({ baseUrl: BASE_URL });
     const stream = piperTts.synthesize('Hello world');
@@ -104,7 +104,7 @@ describe('PiperTTS', () => {
     globalThis.fetch = mock(async (_url: any, init: any) => {
       capturedBody = init.body;
       return new Response(wavBuf, { status: 200 });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const piperTts = new PiperTTS({ baseUrl: BASE_URL });
     const stream = piperTts.synthesize('Hi');
@@ -120,7 +120,7 @@ describe('PiperTTS', () => {
 
     globalThis.fetch = mock(async () =>
       new Response(wavBuf, { status: 200 }),
-    ) as typeof fetch;
+    ) as unknown as typeof fetch;
 
     const piperTts = new PiperTTS({ baseUrl: BASE_URL, sampleRate });
     expect(piperTts.sampleRate).toBe(16000);
@@ -139,7 +139,7 @@ describe('PiperTTS', () => {
     globalThis.fetch = mock(async (url: any) => {
       capturedUrl = String(url);
       return new Response(wavBuf, { status: 200 });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const piperTts = new PiperTTS({ baseUrl: 'http://piper:5000/' });
     const stream = piperTts.synthesize('Test');
@@ -169,7 +169,7 @@ describe('PiperTTS', () => {
 
     globalThis.fetch = mock(async () =>
       new Response(wavBuf, { status: 200 }),
-    ) as typeof fetch;
+    ) as unknown as typeof fetch;
 
     const result = await piperSynthesize({
       baseUrl: BASE_URL,
@@ -182,7 +182,7 @@ describe('PiperTTS', () => {
   it('piperSynthesize() throws APIStatusError on HTTP 500', async () => {
     globalThis.fetch = mock(async () =>
       new Response('Internal Server Error', { status: 500 }),
-    ) as typeof fetch;
+    ) as unknown as typeof fetch;
 
     try {
       await piperSynthesize({ baseUrl: BASE_URL, text: 'Hello', timeoutMs: 5000 });
@@ -198,7 +198,7 @@ describe('PiperTTS', () => {
   it('piperSynthesize() throws APIStatusError on HTTP 429', async () => {
     globalThis.fetch = mock(async () =>
       new Response('Too Many Requests', { status: 429 }),
-    ) as typeof fetch;
+    ) as unknown as typeof fetch;
 
     try {
       await piperSynthesize({ baseUrl: BASE_URL, text: 'Hello', timeoutMs: 5000 });
@@ -214,7 +214,7 @@ describe('PiperTTS', () => {
   it('piperSynthesize() throws APIConnectionError on network failure', async () => {
     globalThis.fetch = mock(async () => {
       throw new TypeError('fetch failed');
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     try {
       await piperSynthesize({ baseUrl: BASE_URL, text: 'Hello', timeoutMs: 5000 });
@@ -229,7 +229,7 @@ describe('PiperTTS', () => {
     const emptyWav = new ArrayBuffer(WAV_HEADER_SIZE);
     globalThis.fetch = mock(async () =>
       new Response(emptyWav, { status: 200 }),
-    ) as typeof fetch;
+    ) as unknown as typeof fetch;
 
     try {
       await piperSynthesize({ baseUrl: BASE_URL, text: 'Hello', timeoutMs: 5000 });
@@ -248,7 +248,7 @@ describe('PiperTTS', () => {
     globalThis.fetch = mock(async (_url: any, init: any) => {
       capturedBody = init.body;
       return new Response(wavBuf, { status: 200 });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     await piperSynthesize({
       baseUrl: BASE_URL,

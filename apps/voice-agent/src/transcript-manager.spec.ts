@@ -23,7 +23,6 @@ function makeDeps(): TranscriptManagerDeps & {
   };
   // Self-reference so stopAck can update the counter on the returned object
   var deps: ReturnType<typeof makeDeps>;
-  // @ts-expect-error: assigned before first use
   deps = undefined as any;
 }
 

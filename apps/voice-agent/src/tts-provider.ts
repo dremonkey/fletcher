@@ -31,7 +31,6 @@ export function createTTS(provider: TTSProvider, logger: Logger): tts.TTS {
   if (piperUrl) {
     const piper = new PiperTTS({
       baseUrl: piperUrl,
-      voice: process.env.PIPER_VOICE,
     });
     logger.info({ piperUrl, voice: process.env.PIPER_VOICE }, 'Piper fallback enabled');
     return new tts.FallbackAdapter({
@@ -58,7 +57,6 @@ function createPrimaryTTS(provider: TTSProvider, logger: Logger): tts.TTS {
       logger.info({ piperUrl, voice: process.env.PIPER_VOICE }, 'Using Piper TTS (local)');
       return new PiperTTS({
         baseUrl: piperUrl,
-        voice: process.env.PIPER_VOICE,
       });
     }
 
@@ -67,7 +65,7 @@ function createPrimaryTTS(provider: TTSProvider, logger: Logger): tts.TTS {
       logger.info('Using ElevenLabs TTS');
       return new elevenlabs.TTS({
         apiKey: process.env.ELEVENLABS_API_KEY,
-        modelId: 'eleven_turbo_v2_5',
+        model: 'eleven_turbo_v2_5',
         voiceId: process.env.ELEVENLABS_VOICE_ID,
         syncAlignment: false,
       });
