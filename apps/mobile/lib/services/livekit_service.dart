@@ -605,6 +605,9 @@ class LiveKitService extends ChangeNotifier {
         );
         // Notify agent presence service (Epic 20)
         agentPresenceService.onAgentDisconnected();
+        // Reset segment ID so artifacts from the new session are not stamped
+        // with the stale ID from the previous session. (BUG-004)
+        _lastAgentSegmentId = null;
       }
       // Emit agent disconnected system event (task 020)
       _emitSystemEvent(SystemEvent(
