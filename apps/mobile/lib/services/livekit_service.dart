@@ -425,10 +425,11 @@ class LiveKitService extends ChangeNotifier {
         agentPresenceService.enable(_currentRoomName!);
       }
 
-      // Send text-only mode state to agent on connect (TASK-030)
-      if (_textOnlyMode) {
-        await _sendTtsMode();
-      }
+      // Always send TTS mode state to agent on connect (BUG-001, TASK-030).
+      // Unconditional so the agent always receives the current state, not just
+      // when TTS is off.  If no agent is in the room yet (on-demand dispatch),
+      // the message is lost — the ParticipantConnectedEvent handler below resends it.
+      await _sendTtsMode();
 
       _updateState(
         status: _isMuted ? ConversationStatus.muted : ConversationStatus.idle,
@@ -579,10 +580,11 @@ class LiveKitService extends ChangeNotifier {
       agentPresenceService.onAgentConnected();
       // Flush any text messages queued while agent was absent
       _flushPendingTextMessages();
-      // Re-sync TTS mode with new agent after idle disconnect (BUG-004)
-      if (_textOnlyMode) {
-        _sendTtsMode();
-      }
+      // Always re-sync TTS mode when a new agent joins (BUG-001, BUG-004).
+      // Unconditional so the agent always has the current state.  Combined with
+      // the 200ms settle window in agent.ts, this ensures tts-mode:off arrives
+      // before the bootstrap pipeline captures audioOutput.
+      _sendTtsMode();
       // Emit/update agent connected system event (task 020)
       _emitSystemEvent(SystemEvent(
         id: 'agent-boot',

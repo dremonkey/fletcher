@@ -565,6 +565,15 @@ export default defineAgent({
       participantIdentity: participant.identity,
     });
     const isE2e = (ctx.room.name ?? '').startsWith('e2e-');
+    // Settle window: on wake-up, ctx.waitForParticipant() resolves immediately
+    // (the client was already in the room), but the client's ParticipantConnectedEvent
+    // handler takes ~37ms+ to fire, call _sendTtsMode(), and have the data channel
+    // message processed here.  The SDK captures audioOutput synchronously inside
+    // _pipelineReplyTaskImpl — before the first await — so calling generateReply()
+    // before the tts-mode:off command arrives causes the bootstrap response to play
+    // audio even when TTS is disabled.  200ms is well above the observed 37ms window
+    // and has no perceptible effect on UX (LLM TTFT is 300–800ms anyway). (BUG-001)
+    await new Promise<void>((resolve) => setTimeout(resolve, 200));
     logger.info({ room: ctx.room.name, e2e: isE2e }, 'Sending bootstrap message');
     session.generateReply({ userInput: bootstrapMsg });
 
