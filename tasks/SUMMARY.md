@@ -182,7 +182,7 @@ Bulletproof connection handling: survive network switches, Bluetooth changes, ai
 - [ ] 010: Diagnostics Stale After Reconnect 📋 — HealthService doesn't re-enumerate participants after DUPLICATE_IDENTITY reconnect ([BUG-016](../docs/field-tests/20260302-buglog.md))
 - [ ] 011: Network Transition Audio Track Timeout 📋 — WiFi→cellular causes 55s audio track publish delay (Tailscale tunnel re-establishment) + BT audio route disruption ([BUG-021](../docs/field-tests/20260303-buglog.md))
 - [ ] 012: Foreground Service for Background Microphone 📋 — Android 14+ silences mic within 5s of backgrounding; add `FOREGROUND_SERVICE_MICROPHONE` to keep voice session alive in pocket ([BUG-022](../docs/field-tests/20260303-buglog.md))
-- [~] 013: Client-Side Audio Buffering 🔄 — switched from broken `AudioCaptureService` stub to SDK's `PreConnectAudioBuffer`; mic audio captured natively during SDK reconnect and sent to agent via `streamBytes()` on reconnection (BUG-027). Remaining: verify agent-side handles `lk.agent.pre-connect-audio-buffer` topic. See [013-audio-buffering-plan.md](./09-connectivity/013-audio-buffering-plan.md).
+- [~] 013: Client-Side Audio Buffering 🔄 — covers two scenarios: (A) network dead zones via SDK `PreConnectAudioBuffer` (client-side done), (B) agent dispatch latency — first seconds of speech lost while agent connects after on-demand dispatch (not started). Agent-side handler for `lk.agent.pre-connect-audio-buffer` topic not yet verified for either. See [013-audio-buffering-plan.md](./09-connectivity/013-audio-buffering-plan.md).
 - [x] 017: Time-Budgeted Reconnect ✅ — extend client retry window from ~71s to match server departure_timeout (130s); two-phase strategy: 5 fast retries + slow 10s poll until budget expires; budget clock starts on first SDK reconnect attempt; verified via e2e test 008 ([BUG-028](../docs/field-tests/20260304-buglog.md))
 - [~] 018: Fix URL Resolver VPN Detection 🔄 — TCP race between LAN and Tailscale URLs (Option A); replaces broken "always use Tailscale" approach; needs field test ([BUG-031](../docs/field-tests/20260304-buglog.md), [BUG-004](../docs/field-tests/20260306-buglog.md))
 - [~] 019: Background Session Timeout & App-Close Disconnect 🔄 — implemented: `stopWithTask="true"` for swipe-away disconnect, screen lock detection via method channel, 10-min background timeout with notification countdown; pending field verification
@@ -339,18 +339,20 @@ Move the Piper TTS engine from the server sidecar to the mobile client (Android/
 
 **Depends on:** Epic 3 (Flutter App), Epic 13 (Edge Intelligence)
 
-### 20. [Agent Cost Optimization](./20-agent-cost-optimization) 📋
+### 20. [Agent Cost Optimization](./20-agent-cost-optimization) 🔄
 Eliminate idle agent costs by disconnecting the agent when nobody is speaking and re-dispatching on demand via client-side VAD. At multi-tenant scale, idle agents are the dominant cost driver ($0.01/min per connected agent regardless of activity). On-demand dispatch reduces idle costs by ~20x (from $0.60/hr to $0.03/hr per idle user).
 
 **Tasks:**
-- [ ] 001: Switch Agent to Explicit Dispatch — set `agentName`, use `RoomAgentDispatch` in tokens
-- [ ] 002: Add Dispatch Endpoint to Token Server — `POST /dispatch-agent` calls `AgentDispatchClient.createDispatch()`
-- [ ] 003: Client-Side VAD Integration (Flutter) — `vad` package (Silero v5 on-device) detects speech when agent absent
-- [ ] 004: Agent Idle Timeout & Auto-Disconnect — idle timer → `ctx.shutdown()` after N min silence
-- [ ] 005: Client State Machine (Agent Presence Lifecycle) — AGENT_ABSENT ↔ DISPATCHING ↔ AGENT_PRESENT states
-- [ ] 006: Cold-Start Latency Mitigation — `prewarm`, `numIdleProcesses`, warm-down grace period
-- [ ] 007: UX Polish — Transition Feedback — visual/audio cues for agent lifecycle transitions
-- [ ] 008: Integration Test & Cost Validation — e2e lifecycle test + LiveKit Cloud billing verification
+- [x] 001: Switch Agent to Explicit Dispatch ✅ — `agentName: 'fletcher-voice'` set on ServerOptions; `RoomAgentDispatch` added to token server; 12 unit tests
+- [x] 002: Add Dispatch Endpoint to Token Server ✅ — `POST /dispatch-agent` calls `AgentDispatchClient.createDispatch()`; `wsUrlToHttp` helper; 21 total tests
+- [x] 003: Client-Side VAD Integration (Flutter) ✅ — `LocalVadService` + `AgentDispatchService` with 11 unit tests; `vad` and `http` packages added
+- [x] 004: Agent Idle Timeout & Auto-Disconnect ✅ — `IdleTimeout` class with configurable timer, warning + warm-down callbacks; 20 unit tests
+- [x] 005: Client State Machine (Agent Presence Lifecycle) ✅ — `AgentPresenceService` 4-state machine; wires LocalVadService + AgentDispatchService; 29 unit tests
+- [x] 006: Cold-Start Latency Mitigation ✅ — `prewarm` (VAD pre-load), warm-down grace period (`FLETCHER_WARM_DOWN_MS`), dispatch latency metric
+- [x] 007: UX Polish — Transition Feedback ✅ — system event emission on state transitions; data channel callbacks in LiveKitService; 9 new tests
+- [ ] 008: Integration Test & Cost Validation 📋 — e2e lifecycle test + LiveKit Cloud billing verification (requires running infrastructure)
+- [ ] 009: Suppress Reconnecting Banner on Intentional Agent Disconnect 📋 — `TrackUnsubscribedEvent` unconditionally sets `ConversationStatus.reconnecting`, even during intentional idle disconnect; guard with `AgentPresenceState`
+- [ ] 010: Unmute as Agent Dispatch Trigger 📋 — unmuting while agent is absent should immediately trigger dispatch as intent signal; ~300-500ms head start before speech detection
 
 **Depends on:** Epic 2 (Voice Agent), Epic 3 (Flutter App), Epic 9 (Connectivity)
 

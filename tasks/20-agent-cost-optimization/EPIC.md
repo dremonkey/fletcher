@@ -66,7 +66,7 @@ Create a `POST /dispatch-agent` endpoint that accepts a room name and calls `Age
 ### 003: Client-Side VAD Integration (Flutter)
 Add the `vad` Flutter package (Silero VAD v5, on-device ONNX) to the mobile app. Run local VAD when no agent is connected. On confirmed speech, call the dispatch endpoint. Stop local VAD once the agent connects (to free the mic for LiveKit's audio track).
 
-**Status:** [ ]
+**Status:** [~] Services created (`LocalVadService`, `AgentDispatchService`); integration with LiveKitService deferred to Task 005
 
 ---
 
@@ -100,6 +100,20 @@ Design and implement visual/audio feedback for agent lifecycle transitions. User
 
 ### 008: Integration Test & Cost Validation
 End-to-end test of the full lifecycle: connect → local VAD → speech → dispatch → conversation → idle → disconnect → speech → re-dispatch. Validate that agent-minutes billing stops during idle periods. Measure actual cost savings vs. always-on baseline.
+
+**Status:** [ ]
+
+---
+
+### 009: Suppress Reconnecting Banner on Intentional Agent Disconnect
+When the agent disconnects due to idle timeout, `TrackUnsubscribedEvent` fires and unconditionally sets `ConversationStatus.reconnecting`, showing a yellow "Connection lost. Reconnecting..." banner. This is confusing — the agent left on purpose. Guard the handler with `AgentPresenceState` so the banner only appears for real network problems.
+
+**Status:** [ ]
+
+---
+
+### 010: Unmute as Agent Dispatch Trigger
+When the user unmutes their mic while the agent is absent, treat it as an intent signal and immediately trigger dispatch — don't wait for speech detection (~300ms audio-level threshold). This gives a head start on agent connection, reducing perceived latency. Unmuting is a deliberate user action that strongly predicts imminent speech.
 
 **Status:** [ ]
 

@@ -1,7 +1,7 @@
 # Task 004: Agent Idle Timeout & Auto-Disconnect
 
 **Epic:** 20 — Agent Cost Optimization
-**Status:** [ ]
+**Status:** [x]
 **Priority:** High
 
 ## Problem
@@ -104,14 +104,14 @@ The client uses these to transition its state machine (Task 005).
 
 ## Acceptance Criteria
 
-- [ ] Agent disconnects after configured idle timeout (default 5 min)
-- [ ] Timer resets on any user speech or text input
-- [ ] Client receives `agent-idle-warning` 30s before disconnect
-- [ ] Client receives `agent-disconnected` before shutdown
-- [ ] `ctx.shutdown()` is called (not `ctx.room.disconnect()`) to fully stop billing
-- [ ] Idle timeout is configurable via `FLETCHER_IDLE_TIMEOUT_MS`
-- [ ] Idle timeout can be disabled by setting value to 0
-- [ ] Existing session error disconnect logic still works
+- [x] Agent disconnects after configured idle timeout (default 5 min)
+- [x] Timer resets on any user speech or text input
+- [x] Client receives `agent-idle-warning` 30s before disconnect
+- [x] Client receives `agent-disconnected` before shutdown
+- [x] `ctx.shutdown()` is called (not `ctx.room.disconnect()`) to fully stop billing
+- [x] Idle timeout is configurable via `FLETCHER_IDLE_TIMEOUT_MS`
+- [x] Idle timeout can be disabled by setting value to 0
+- [x] Existing session error disconnect logic still works
 
 ## Dependencies
 

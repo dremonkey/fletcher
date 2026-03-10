@@ -7,9 +7,12 @@ import 'package:livekit_client/livekit_client.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/conversation_state.dart';
 import '../models/system_event.dart';
+import 'agent_dispatch_service.dart';
+import 'agent_presence_service.dart';
 import 'connectivity_service.dart';
 import 'disconnect_reason.dart' as dr;
 import 'health_service.dart';
+import 'local_vad_service.dart';
 import 'reconnect_scheduler.dart';
 import 'session_storage.dart';
 import 'token_service.dart';
@@ -74,6 +77,9 @@ class LiveKitService extends ChangeNotifier {
 
   final HealthService healthService = HealthService();
   final ConnectivityService connectivityService = ConnectivityService();
+
+  /// Agent presence lifecycle for on-demand dispatch (Epic 20).
+  late final AgentPresenceService agentPresenceService = _createAgentPresenceService();
   // Reconnection audio buffer — captures mic during SDK reconnect (BUG-027)
   PreConnectAudioBuffer? _reconnectBuffer;
 
@@ -88,12 +94,34 @@ class LiveKitService extends ChangeNotifier {
   // Tracks when user stopped speaking so we can measure RT when agent starts
   DateTime? _userSpeechEndTime;
 
+  /// Callback for agent idle warning from data channel (Epic 20).
+  void Function(int disconnectInMs)? onAgentIdleWarning;
+
+  /// Callback for agent disconnect from data channel (Epic 20).
+  void Function(String reason)? onAgentDisconnected;
+
+  /// Callback for agent warm-down from data channel (Epic 20 / Task 006).
+  void Function()? onAgentWarmDown;
+
+  /// Callback for agent warm-down cancelled from data channel (Epic 20 / Task 006).
+  void Function()? onAgentWarmDownCancelled;
+
   // Buffer for reassembling chunked messages
   final Map<String, List<String?>> _chunks = {};
 
   // Rolling waveform buffers
   final List<double> _userWaveformBuffer = [];
   final List<double> _aiWaveformBuffer = [];
+
+  // Queued text messages sent while agent was absent (Epic 20).
+  // Flushed when the agent connects.
+  final List<String> _pendingTextMessages = [];
+
+  // Speech detection via audio levels when agent is absent (Epic 20).
+  // Counts consecutive frames above threshold to confirm speech.
+  static const _speechThreshold = 0.05;
+  static const _speechFramesRequired = 3; // 300ms at 100ms polling
+  int _speechFrameCount = 0;
 
   Future<bool> requestPermissions() async {
     final status = await Permission.microphone.request();
@@ -383,6 +411,15 @@ class LiveKitService extends ChangeNotifier {
       // the microphone when the app goes to background (BUG-022)
       await _startForegroundService();
 
+      // Enable agent presence service for on-demand dispatch (Epic 20).
+      // Derive dispatch URL from the LiveKit URL (same host, token server port).
+      if (_currentRoomName != null) {
+        final uri = Uri.parse(url);
+        final dispatchBaseUrl = 'http://${uri.host}:$_tokenServerPort';
+        agentPresenceService.updateDispatchBaseUrl(dispatchBaseUrl);
+        agentPresenceService.enable(_currentRoomName!);
+      }
+
       // Send text-only mode state to agent on connect (TASK-030)
       if (_textOnlyMode) {
         await _sendTtsMode();
@@ -533,6 +570,10 @@ class LiveKitService extends ChangeNotifier {
           agentIdentity: event.participant.identity,
         ),
       );
+      // Notify agent presence service (Epic 20)
+      agentPresenceService.onAgentConnected();
+      // Flush any text messages queued while agent was absent
+      _flushPendingTextMessages();
       // Emit/update agent connected system event (task 020)
       _emitSystemEvent(SystemEvent(
         id: 'agent-boot',
@@ -553,6 +594,8 @@ class LiveKitService extends ChangeNotifier {
         _updateState(
           diagnostics: _state.diagnostics.copyWith(clearAgentIdentity: true),
         );
+        // Notify agent presence service (Epic 20)
+        agentPresenceService.onAgentDisconnected();
       }
       // Emit agent disconnected system event (task 020)
       _emitSystemEvent(SystemEvent(
@@ -835,6 +878,27 @@ class LiveKitService extends ChangeNotifier {
           llmProvider: json['llm'] as String?,
         ),
       );
+    } else if (eventType == 'agent-idle-warning') {
+      // Agent is about to disconnect due to idle timeout (Epic 20).
+      // Expected shape: { type: "agent-idle-warning", disconnectInMs: 30000 }
+      final disconnectInMs = json['disconnectInMs'] as int? ?? 30000;
+      debugPrint(
+          '[Ganglia] Agent idle warning — disconnect in ${disconnectInMs}ms');
+      onAgentIdleWarning?.call(disconnectInMs);
+    } else if (eventType == 'agent-disconnected') {
+      // Agent has disconnected due to idle timeout (Epic 20).
+      // Expected shape: { type: "agent-disconnected", reason: "idle_timeout" }
+      final reason = json['reason'] as String? ?? 'unknown';
+      debugPrint('[Ganglia] Agent disconnected — reason: $reason');
+      onAgentDisconnected?.call(reason);
+    } else if (eventType == 'agent-warm-down') {
+      // Agent entering warm-down period before disconnect (Epic 20 / Task 006).
+      debugPrint('[Ganglia] Agent entering warm-down');
+      onAgentWarmDown?.call();
+    } else if (eventType == 'agent-warm-down-cancelled') {
+      // Agent warm-down cancelled (user spoke) (Epic 20 / Task 006).
+      debugPrint('[Ganglia] Agent warm-down cancelled');
+      onAgentWarmDownCancelled?.call();
     }
   }
 
@@ -996,6 +1060,24 @@ class LiveKitService extends ChangeNotifier {
       }
     }
 
+    // Detect speech via audio levels when agent is absent (Epic 20).
+    // Uses consecutive frame counting instead of a separate VAD mic capture
+    // to avoid mic conflicts with LiveKit's audio session.
+    if (agentPresenceService.enabled &&
+        agentPresenceService.state == AgentPresenceState.agentAbsent &&
+        !_isMuted) {
+      if (userLevel > _speechThreshold) {
+        _speechFrameCount++;
+        if (_speechFrameCount >= _speechFramesRequired) {
+          debugPrint('[Fletcher] Speech detected via audio levels — triggering dispatch');
+          _speechFrameCount = 0;
+          agentPresenceService.onSpeechDetected();
+        }
+      } else {
+        _speechFrameCount = 0;
+      }
+    }
+
     // Update waveform buffers
     _userWaveformBuffer.add(userLevel);
     if (_userWaveformBuffer.length > _maxWaveformSamples) {
@@ -1151,6 +1233,9 @@ class LiveKitService extends ChangeNotifier {
 
     debugPrint('[Fletcher] Sending text message: ${trimmed.length} chars');
 
+    // Trigger agent dispatch if agent is absent (Epic 20)
+    agentPresenceService.onTextMessageSent();
+
     // Optimistic: add to local transcript immediately
     final entry = TranscriptEntry(
       id: 'text-${DateTime.now().millisecondsSinceEpoch}',
@@ -1172,11 +1257,33 @@ class LiveKitService extends ChangeNotifier {
     }
     _updateState(transcript: updatedTranscript);
 
-    // Send via data channel
-    await _sendEvent({
-      'type': 'text_message',
-      'text': trimmed,
-    });
+    // If agent is absent/dispatching, queue the message for delivery
+    // once the agent connects. Otherwise send immediately.
+    final agentState = agentPresenceService.state;
+    if (agentPresenceService.enabled &&
+        (agentState == AgentPresenceState.agentAbsent ||
+         agentState == AgentPresenceState.dispatching)) {
+      debugPrint('[Fletcher] Agent absent — queuing text message for delivery');
+      _pendingTextMessages.add(trimmed);
+    } else {
+      await _sendEvent({
+        'type': 'text_message',
+        'text': trimmed,
+      });
+    }
+  }
+
+  /// Send any text messages that were queued while the agent was absent.
+  Future<void> _flushPendingTextMessages() async {
+    if (_pendingTextMessages.isEmpty) return;
+    debugPrint('[Fletcher] Flushing ${_pendingTextMessages.length} queued text message(s)');
+    for (final text in _pendingTextMessages) {
+      await _sendEvent({
+        'type': 'text_message',
+        'text': text,
+      });
+    }
+    _pendingTextMessages.clear();
   }
 
   void _updateState({
@@ -1218,6 +1325,64 @@ class LiveKitService extends ChangeNotifier {
       diagnostics: diagnostics,
     );
     notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Agent presence service (Epic 20)
+  // ---------------------------------------------------------------------------
+
+  AgentPresenceService _createAgentPresenceService() {
+    final localVad = LocalVadService(onSpeechDetected: () {
+      agentPresenceService.onSpeechDetected();
+    });
+
+    // Token server base URL derived from the first configured URL.
+    // Dispatch service is created eagerly; the actual URL is only used when
+    // dispatchAgent() is called, by which point we have a valid URL.
+    final dispatchService = AgentDispatchService(
+      baseUrl: 'http://localhost:$_tokenServerPort',
+    );
+
+    final service = AgentPresenceService(
+      localVad: localVad,
+      dispatchService: dispatchService,
+      onSystemEvent: (id, category, message) {
+        // Map the presence event to a SystemEvent status:
+        // - "Connecting..." / "Going idle..." = pending
+        // - "Connected" / "Staying connected" = success
+        // - "Disconnected..." = error (visual distinction)
+        final SystemEventStatus status;
+        final String prefix;
+        if (id == 'agent-dispatching' || id == 'agent-idle-warning') {
+          status = SystemEventStatus.pending;
+          prefix = '\u25B8'; // ▸
+        } else if (id == 'agent-idle-disconnect') {
+          status = SystemEventStatus.error;
+          prefix = '\u2715'; // ✕
+        } else {
+          status = SystemEventStatus.success;
+          prefix = '\u25B8'; // ▸
+        }
+        _emitSystemEvent(SystemEvent(
+          id: 'agent-presence-$id',
+          type: SystemEventType.agent,
+          status: status,
+          message: message,
+          timestamp: DateTime.now(),
+          prefix: prefix,
+        ));
+      },
+    );
+
+    // Wire data channel callbacks to presence service
+    onAgentIdleWarning = (disconnectInMs) {
+      service.onIdleWarning(disconnectInMs);
+    };
+    onAgentDisconnected = (reason) {
+      service.onAgentIdleDisconnect();
+    };
+
+    return service;
   }
 
   // ---------------------------------------------------------------------------
@@ -1467,6 +1632,7 @@ class LiveKitService extends ChangeNotifier {
 
   Future<void> disconnect({bool preserveTranscripts = false}) async {
     debugPrint('[Fletcher] Disconnecting (preserveTranscripts=$preserveTranscripts)');
+    agentPresenceService.disable();
     await _stopForegroundService();
     await _reconnectBuffer?.reset();
     _reconnectBuffer = null;
@@ -1524,6 +1690,7 @@ class LiveKitService extends ChangeNotifier {
   @override
   void dispose() {
     disconnect();
+    agentPresenceService.dispose();
     connectivityService.dispose();
     super.dispose();
   }

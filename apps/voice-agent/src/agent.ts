@@ -24,9 +24,12 @@
  *   FLETCHER_ACK_SOUND - Acknowledgment sound on EOU: path to audio file, 'builtin' (default), or 'disabled'
  *   PIPER_URL - Piper TTS sidecar URL for local fallback (e.g. 'http://localhost:5000')
  *   PIPER_VOICE - Piper voice name (default: sidecar default)
+ *   FLETCHER_IDLE_TIMEOUT_MS - Idle time before agent auto-disconnect (ms). 0 = disabled. Default: 300000 (5 min)
+ *   FLETCHER_IDLE_WARNING_MS - Time before disconnect to send warning (ms). Default: 30000 (30s)
+ *   FLETCHER_WARM_DOWN_MS - Grace period after idle before full disconnect (ms). 0 = disabled. Default: 60000 (1 min)
  */
 
-import { defineAgent, cli, ServerOptions, tts, type JobContext } from '@livekit/agents';
+import { defineAgent, cli, ServerOptions, tts, type JobContext, type JobProcess } from '@livekit/agents';
 import { voice } from '@livekit/agents';
 import * as deepgram from '@livekit/agents-plugin-deepgram';
 import * as silero from '@livekit/agents-plugin-silero';
@@ -42,6 +45,7 @@ import { TranscriptManager } from './transcript-manager';
 import { initHeapDiagnostics } from './heap-snapshot';
 import { buildBootstrapMessage } from './bootstrap';
 import { attachFallbackMonitor } from './tts-fallback-monitor';
+import { IdleTimeout, readIdleTimeoutConfig } from './idle-timeout';
 
 // ---------------------------------------------------------------------------
 // Logger setup — pretty-print when running locally, JSON in production
@@ -102,7 +106,19 @@ if (!process.argv.includes('download-files')) {
 // Agent definition
 // ---------------------------------------------------------------------------
 export default defineAgent({
+  prewarm: async (_proc: JobProcess) => {
+    // Pre-load the Silero VAD model — this is the heaviest initialization
+    // in the pipeline and takes ~500ms on first load.  By loading it during
+    // process prewarm, the model is ready in memory when a job arrives,
+    // eliminating cold-start latency from VAD initialization.
+    //
+    // STT, TTS, and LLM clients don't need prewarming — they establish
+    // connections lazily on first use with negligible cold-start overhead.
+    await silero.VAD.load({ activationThreshold: 0.6 });
+    logger.info('Agent pre-warmed: VAD model loaded');
+  },
   entry: async (ctx: JobContext) => {
+    const entryStartMs = performance.now();
     await initTelemetry(logger);
     initHeapDiagnostics(logger);
 
@@ -122,6 +138,53 @@ export default defineAgent({
         : { type: 'status', action, startedAt: Date.now() };
       publishEvent(event);
     };
+
+    // -----------------------------------------------------------------------
+    // Idle timeout — disconnect agent after prolonged silence to save costs.
+    // Configure via FLETCHER_IDLE_TIMEOUT_MS (default: 300000 = 5 min).
+    // Set to 0 to disable.  The timer is started after the bootstrap message
+    // and reset on every user activity (speech or text input).
+    //
+    // Warm-down phase: after idle timeout, the agent enters a "warm-down"
+    // state where audio input is disabled but the agent stays connected.
+    // This costs agent-minutes but eliminates cold-start latency for users
+    // who return quickly.  Configure via FLETCHER_WARM_DOWN_MS (default:
+    // 60000 = 1 min).  Set to 0 to disable warm-down (immediate disconnect).
+    // -----------------------------------------------------------------------
+    // Forward reference — session is created below but warm-down callback
+    // captures it by closure.  Safe because reset() is only called after
+    // session.start().
+    let session: voice.AgentSession;
+
+    const idleConfig = readIdleTimeoutConfig();
+    const idleTimeout = new IdleTimeout({
+      ...idleConfig,
+      logger,
+      onWarning: (disconnectInMs) => {
+        publishEvent({
+          type: 'agent-idle-warning',
+          disconnectInMs,
+        });
+      },
+      onWarmDown: () => {
+        // Disable audio input — the agent stays connected but stops
+        // processing speech.  If the user speaks during warm-down,
+        // reset() is called (via UserInputTranscribed or text_message)
+        // which re-enables audio input below.
+        session?.input?.setAudioEnabled(false);
+        publishEvent({
+          type: 'agent-warm-down',
+        });
+      },
+      onTimeout: () => {
+        publishEvent({
+          type: 'agent-disconnected',
+          reason: 'idle-timeout',
+        });
+        // Grace period for data channel message delivery before shutdown
+        setTimeout(() => ctx.shutdown(), 500);
+      },
+    });
 
     // -----------------------------------------------------------------------
     // Acknowledgment sound — plays a looping chime while the brain is
@@ -196,7 +259,7 @@ export default defineAgent({
       attachFallbackMonitor(ttsInstance, { publishEvent, logger });
     }
 
-    const session = new voice.AgentSession({
+    session = new voice.AgentSession({
       vad,
       turnDetection,
       stt,
@@ -243,7 +306,22 @@ export default defineAgent({
       outputOptions: { transcriptionEnabled: false },
     });
     await ctx.connect();
-    logger.info(`Connected to room: ${ctx.room.name}`);
+    const connectLatencyMs = Math.round(performance.now() - entryStartMs);
+    logger.info({ connectLatencyMs }, `Agent dispatch-to-connect latency: ${connectLatencyMs}ms — room: ${ctx.room.name}`);
+
+    // -----------------------------------------------------------------------
+    // Warm-down recovery — when the user resumes activity during warm-down,
+    // re-enable audio input and notify the client.  Called before
+    // idleTimeout.reset() at every user activity point.
+    // -----------------------------------------------------------------------
+    const resetIdleWithWarmDownRecovery = () => {
+      if (idleTimeout.inWarmDown) {
+        session?.input?.setAudioEnabled(true);
+        publishEvent({ type: 'agent-warm-down-cancelled' });
+        logger.info('User activity during warm-down — re-enabling audio input');
+      }
+      idleTimeout.reset();
+    };
 
     // -----------------------------------------------------------------------
     // Client data channel commands — listen for control events from the
@@ -266,6 +344,7 @@ export default defineAgent({
         // pipeline as a user message.  The response flows through the normal
         // TTS + transcript pipeline. (TASK-017, Epic 17)
         if (event.type === 'text_message' && typeof event.text === 'string' && event.text.trim()) {
+          resetIdleWithWarmDownRecovery();
           logger.info({ text: event.text, participant: participant?.identity }, 'Text message received');
           session.generateReply({ userInput: event.text });
         }
@@ -333,6 +412,9 @@ export default defineAgent({
     let currentUserSegmentId: string | null = null;
 
     session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (ev) => {
+      // Reset idle timer on any user speech (recovers from warm-down if active)
+      resetIdleWithWarmDownRecovery();
+
       if (ev.isFinal) {
         logger.info({ transcript: ev.transcript }, 'User input (final)');
       }
@@ -469,6 +551,14 @@ export default defineAgent({
     logger.info({ room: ctx.room.name, e2e: isE2e }, 'Sending bootstrap message');
     session.generateReply({ userInput: bootstrapMsg });
 
+    // Start idle timer after bootstrap
+    if (!idleTimeout.disabled) {
+      idleTimeout.reset();
+      logger.info({ timeoutMs: idleConfig.timeoutMs, warningMs: idleConfig.warningMs, warmDownMs: idleConfig.warmDownMs }, 'Idle timeout enabled');
+    } else {
+      logger.info('Idle timeout disabled');
+    }
+
     // -----------------------------------------------------------------------
     // Participant lifecycle — log disconnect/reconnect for observability.
     // The actual reconnection is handled by LiveKit infrastructure: the
@@ -489,6 +579,7 @@ export default defineAgent({
 
     ctx.addShutdownCallback(async () => {
       logger.info('Shutting down voice agent...');
+      idleTimeout.stop();
       await bgAudioPlayer?.close();
       await session.close();
       await shutdownTelemetry();
@@ -510,6 +601,7 @@ export default defineAgent({
 cli.runApp(
   new ServerOptions({
     agent: import.meta.filename,
+    agentName: 'fletcher-voice',
     initializeProcessTimeout: 60_000,
     loadFunc: async () => 0,
   }),

@@ -1,7 +1,7 @@
 # Task 005: Client State Machine (Agent Presence Lifecycle)
 
 **Epic:** 20 — Agent Cost Optimization
-**Status:** [ ]
+**Status:** [x]
 **Priority:** High
 
 ## Problem
@@ -84,14 +84,14 @@ enum AgentPresenceState {
 
 ## Acceptance Criteria
 
-- [ ] State machine correctly transitions through all states
-- [ ] Local VAD starts when agent is absent, stops when agent connects
-- [ ] Dispatch is triggered on speech detection (debounced)
-- [ ] Client handles dispatch failure gracefully (retry + fallback)
-- [ ] Agent crash transitions client back to AGENT_ABSENT
-- [ ] `agent-idle-warning` shows countdown in UI
-- [ ] `agent-disconnected` transitions to AGENT_ABSENT and restarts local VAD
-- [ ] No duplicate dispatches during rapid state changes
+- [x] State machine correctly transitions through all states
+- [x] Local VAD starts when agent is absent, stops when agent connects
+- [x] Dispatch is triggered on speech detection (debounced)
+- [x] Client handles dispatch failure gracefully (retry + fallback)
+- [x] Agent crash transitions client back to AGENT_ABSENT
+- [ ] `agent-idle-warning` shows countdown in UI (Task 007 — UX)
+- [x] `agent-disconnected` transitions to AGENT_ABSENT and restarts local VAD
+- [x] No duplicate dispatches during rapid state changes
 
 ## Dependencies
 
