@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { ackToneFrames, synthesizeAckTone, createAckToneSource } from './ack-tone';
+import { ackToneFrames, ackToneSingleShot, synthesizeAckTone, createAckToneSource } from './ack-tone';
 
 describe('synthesizeAckTone', () => {
   it('produces a non-empty Int16Array', () => {
@@ -42,25 +42,23 @@ describe('synthesizeAckTone', () => {
 
 describe('ackToneFrames', () => {
   it('yields AudioFrame objects with correct properties', async () => {
-    const frames = [];
-    for await (const frame of ackToneFrames()) {
-      frames.push(frame);
-    }
-    expect(frames.length).toBeGreaterThan(0);
-
-    for (const frame of frames) {
-      expect(frame.sampleRate).toBe(48000);
-      expect(frame.channels).toBe(1);
-      expect(frame.samplesPerChannel).toBeGreaterThan(0);
-      expect(frame.data).toBeInstanceOf(Int16Array);
-      expect(frame.data.length).toBe(frame.samplesPerChannel);
-    }
+    // ackToneFrames() is an infinite generator — just check the first frame.
+    const iter = ackToneFrames();
+    const { value: frame, done } = await iter.next();
+    expect(done).toBe(false);
+    expect(frame.sampleRate).toBe(48000);
+    expect(frame.channels).toBe(1);
+    expect(frame.samplesPerChannel).toBeGreaterThan(0);
+    expect(frame.data).toBeInstanceOf(Int16Array);
+    expect(frame.data.length).toBe(frame.samplesPerChannel);
+    await iter.return(undefined); // clean up infinite generator
   });
 
   it('total samples across all frames matches synthesized PCM length', async () => {
+    // Use ackToneSingleShot() which is finite (one play-through, no loop).
     const pcm = synthesizeAckTone();
     let totalSamples = 0;
-    for await (const frame of ackToneFrames()) {
+    for await (const frame of ackToneSingleShot()) {
       totalSamples += frame.samplesPerChannel;
     }
     expect(totalSamples).toBe(pcm.length);
@@ -69,27 +67,28 @@ describe('ackToneFrames', () => {
 
 describe('createAckToneSource', () => {
   it('returns an AsyncIterable that can be consumed', async () => {
+    // createAckToneSource wraps an infinite generator — collect just one frame.
     const source = createAckToneSource();
-    const frames = [];
-    for await (const frame of source) {
-      frames.push(frame);
-    }
-    expect(frames.length).toBeGreaterThan(0);
+    const iter = source[Symbol.asyncIterator]();
+    const { value: frame, done } = await iter.next();
+    expect(done).toBe(false);
+    expect(frame).toBeDefined();
+    await iter.return?.(undefined);
   });
 
   it('can be iterated multiple times (new iterator each time)', async () => {
+    // Each call to [Symbol.asyncIterator]() must return a fresh generator.
+    // Collect one frame from each of two iterations and confirm both yield frames.
     const source = createAckToneSource();
 
-    const frames1 = [];
-    for await (const frame of source) {
-      frames1.push(frame);
-    }
+    const iter1 = source[Symbol.asyncIterator]();
+    const { value: frame1 } = await iter1.next();
+    await iter1.return?.(undefined);
 
-    const frames2 = [];
-    for await (const frame of source) {
-      frames2.push(frame);
-    }
+    const iter2 = source[Symbol.asyncIterator]();
+    const { value: frame2 } = await iter2.next();
+    await iter2.return?.(undefined);
 
-    expect(frames1.length).toBe(frames2.length);
+    expect(frame1.samplesPerChannel).toBe(frame2.samplesPerChannel);
   });
 });

@@ -5,7 +5,8 @@
   "description": "LiveKit voice agent runner with ganglia LLM backend",
   "scripts": {
     "start": "bun run src/agent.ts dev",
-    "dev": "bun run src/agent.ts dev"
+    "dev": "bun run src/agent.ts dev",
+    "test": "bun test --max-concurrency 3"
   },
   "dependencies": {
     "@knittt/livekit-agent-ganglia": "workspace:*",
