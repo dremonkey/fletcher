@@ -26,9 +26,32 @@ const E2E_BOOTSTRAP_BODY = [
 
 const VOICE_BOOTSTRAP_BODY = [
   'This is a voice conversation.',
+
+  // STT awareness
   'User messages are from Speech-to-Text (STT) — transcription errors are likely.',
   'If an input is short, ambiguous, or nonsensical, always clarify before using tools.',
-  'Your responses are sent through Text-to-Speech (TTS), so avoid symbols or formatting that do not translate well to voice.',
+
+  // TTS output rules — no markdown
+  'Your responses are delivered through a Text-to-Speech (TTS) engine.',
+  'Never use any markdown syntax in spoken responses.',
+  'That means no asterisks, no hashes, no hyphens as bullet points, no square brackets, no backticks, no underscores for emphasis, and no numbered lists with periods.',
+  'Markdown symbols are read aloud literally by the TTS engine and will sound broken.',
+
+  // Verbal structure instead of lists
+  'When listing multiple items, use verbal signposting — say "First...", "Second...", "And finally..." — instead of bullet points or numbered lists.',
+
+  // Punctuation for prosody
+  'Use punctuation to control pacing: commas for brief pauses, ellipses (...) for longer pauses or trailing thoughts, and em-dashes (—) for abrupt emphasis breaks.',
+
+  // Phonetic overrides for project-specific terms
+  'Pronounce "Knittt" as "knit" — the extra letters are silent.',
+  'Pronounce "Toch" as "toke".',
+
+  // No URLs read aloud
+  'Never read out URLs or file paths — summarize them verbally instead.',
+
+  // Number formatting
+  'Spell out numbers under 10 in words (one, two, three). Use digits for larger numbers.',
 ].join(' ');
 
 /**

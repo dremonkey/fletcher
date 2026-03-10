@@ -241,7 +241,7 @@ Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layou
 Implementing best practices for TTS optimization, audio summaries, and visual-audio coordination.
 
 **Tasks:**
-- [ ] 016: Core TTS Rule Enforcement 📋 — strictly no markdown, phonetic spelling, punctuation for prosody
+- [x] 016: Core TTS Rule Enforcement ✅ — strictly no markdown, phonetic spelling, punctuation for prosody; bootstrap message updated in `apps/voice-agent/src/bootstrap.ts`; 12 tests added
 - [ ] 017: Visual-Audio Artifact Coordination 📋 — auto-push detailed artifacts for complex data; verbal anchors
 - [ ] 018: Contextual Noise & Ambiguity Guard 📋 — harden agent against STT errors and hallucinations
 - [ ] 019: Session Initiation & Warm Start 📋 — silent background pre-loading of memory and project context
