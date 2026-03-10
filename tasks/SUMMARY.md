@@ -42,6 +42,7 @@ The voice agent audio pipeline — STT, TTS, voice detection, and agent dispatch
 - [x] 014: TTS Error Graceful Degradation ✅ — `maxUnrecoverableErrors: Infinity` prevents session death; `ttsConnOptions: { maxRetry: 0 }` eliminates 429 retry storms; debounced "Voice Unavailable" artifact sent to client ([BUG-024](../docs/field-tests/20260304-buglog.md))
 - [x] 032: Idle Timer TTS-Aware ✅ — reset idle timer on `speaking → listening` so TTS playout doesn't consume the idle window; field-verified 2026-03-10 ([BUG-002](../docs/field-tests/20260310-buglog.md))
 - [x] 033: Bootstrap TTS Settle Window ✅ — 200ms settle window + unconditional `_sendTtsMode()` + SCTP message reordering + bootstrap skip when user text arrives first; field-verified 2026-03-10 ([BUG-001](../docs/field-tests/20260310-buglog.md))
+- [ ] 039: Brain maxWait Timeout 📋 — configurable `FLETCHER_BRAIN_MAX_WAIT_MS`; cancel hung LLM streams after N seconds; surface "Brain timed out — please retry" artifact to client ([BUG-008](../docs/field-tests/20260310-buglog.md))
 
 **Implemented:**
 - VoiceAgent wired to `@livekit/agents` SDK (deepgram.STT, cartesia.TTS, voice.AgentSession)

@@ -419,6 +419,15 @@ export default defineAgent({
       if (ev.oldState === 'speaking' && ev.newState === 'listening') {
         resetIdleWithWarmDownRecovery();
       }
+      // Reset idle timer when brain starts thinking (BUG-006/BUG-007).
+      // Without this, the idle clock continues from the user's last speech
+      // event.  If the brain takes 30–60s to respond, the warning can fire
+      // mid-response and the warm-down/shutdown can cut TTS mid-sentence.
+      // Resetting here gives the full idle window from the point the brain
+      // receives the request, so slow backends don't trigger a false idle.
+      if (ev.newState === 'thinking') {
+        resetIdleWithWarmDownRecovery();
+      }
       // Start ack on EOU detection (thinking state) — skip when TTS is
       // disabled since there's no point playing a chime if the user wants
       // silence (TASK-030).
