@@ -359,6 +359,16 @@ Eliminate idle agent costs by disconnecting the agent when nobody is speaking an
 
 **Depends on:** Epic 2 (Voice Agent), Epic 3 (Flutter App), Epic 9 (Connectivity)
 
+### 21. [Photo Upload & Vision Support](./21-photo-upload-vision) 🔄
+Multi-modal input: upload photos and make them available to OpenClaw for vision reasoning.
+
+**Tasks:**
+- [ ] 001: Image Selection & Capture UI (Flutter)
+- [ ] 002: Direct Image Upload API in Gateway Integration
+- [ ] 003: Inline Image Previews in TUI Transcript
+- [ ] 004: Multi-Modal Session Context Support
+- [ ] 005: Voice-to-Vision Orchestration
+
 ## Development Path
 
 1. **Phase 1: Infrastructure** ✅
