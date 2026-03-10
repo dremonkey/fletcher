@@ -412,6 +412,13 @@ export default defineAgent({
 
     session.on(voice.AgentSessionEventTypes.AgentStateChanged, (ev) => {
       logger.info({ from: ev.oldState, to: ev.newState }, 'Agent state changed');
+      // Reset idle timer when TTS playout ends so the idle window starts from
+      // when the agent goes quiet, not from when the user last spoke. Without
+      // this, agent speech silently consumes the idle budget — in short-timeout
+      // sessions the warning fires mid-sentence and the user misses it. (BUG-002)
+      if (ev.oldState === 'speaking' && ev.newState === 'listening') {
+        resetIdleWithWarmDownRecovery();
+      }
       // Start ack on EOU detection (thinking state) — skip when TTS is
       // disabled since there's no point playing a chime if the user wants
       // silence (TASK-030).

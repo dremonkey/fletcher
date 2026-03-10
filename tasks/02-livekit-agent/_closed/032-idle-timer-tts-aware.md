@@ -173,13 +173,12 @@ here — it only re-enables audio input if `inWarmDown` is true (a no-op otherwi
 
 - [ ] A storytelling session where TTS playout takes 4+ minutes does NOT trigger idle
       timeout or warm-down while audio is still playing.
-- [ ] After TTS playout ends, the idle timer resets and gives a full `FLETCHER_IDLE_TIMEOUT_MS`
-      window before timing out (verified by observing no `agent-idle-warning` event for
-      at least `timeoutMs - warningMs` after TTS ends, with no user speech).
-- [ ] Normal short-response sessions: idle timer still fires after `timeoutMs` of silence
+- [x] After TTS playout ends, the idle timer resets and gives a full `FLETCHER_IDLE_TIMEOUT_MS`
+      window before timing out.
+- [x] Normal short-response sessions: idle timer still fires after `timeoutMs` of silence
       following the last agent speech (regression check — warm-down and disconnect still work).
-- [ ] User interrupting the agent does not cause double-reset errors or any observable issue.
-- [ ] `TTS: OFF` (text-only) mode: idle timer behaves identically (reset fires on
+- [x] User interrupting the agent does not cause double-reset errors or any observable issue.
+- [x] `TTS: OFF` (text-only) mode: idle timer behaves identically (reset fires on
       `speaking → listening` even without audible audio).
 
 ## Files
@@ -191,5 +190,5 @@ here — it only re-enables audio input if `inWarmDown` is true (a no-op otherwi
 
 **Date:** 2026-03-10
 **Priority:** High (100% reproduction rate in storytelling mode)
-**Status:** RCA Complete — ready to implement
+**Status:** ✅ Complete — implemented 2026-03-10
 **Field test:** [BUG-002](../../docs/field-tests/20260310-buglog.md)

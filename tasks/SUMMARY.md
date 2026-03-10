@@ -40,7 +40,7 @@ The voice agent audio pipeline — STT, TTS, voice detection, and agent dispatch
 - [~] 019: Internal Memory Leak Mitigations 🔄 — `knownStreamIds` cleanup, OTel span leak patch, Docker 4G limit, heap snapshot mechanism; pending field verification
 - [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 complete: fixed endpointing delay units bug (0.8→800ms), increased `minInterruptionDuration` to 800ms, added `minInterruptionWords: 1` to reduce false interruptions; Phase 2-3 (ack sound edge cases, soft TTS fade) deferred pending field testing
 - [x] 014: TTS Error Graceful Degradation ✅ — `maxUnrecoverableErrors: Infinity` prevents session death; `ttsConnOptions: { maxRetry: 0 }` eliminates 429 retry storms; debounced "Voice Unavailable" artifact sent to client ([BUG-024](../docs/field-tests/20260304-buglog.md))
-- [ ] 032: Idle Timer TTS-Aware 📋 — reset idle timer on `speaking → listening` so TTS playout doesn't consume the idle window; 100% repro in storytelling mode ([BUG-002](../docs/field-tests/20260310-buglog.md))
+- [x] 032: Idle Timer TTS-Aware ✅ — reset idle timer on `speaking → listening` so TTS playout doesn't consume the idle window; field-verified 2026-03-10 ([BUG-002](../docs/field-tests/20260310-buglog.md))
 - [x] 033: Bootstrap TTS Settle Window ✅ — 200ms settle window + unconditional `_sendTtsMode()` + SCTP message reordering + bootstrap skip when user text arrives first; field-verified 2026-03-10 ([BUG-001](../docs/field-tests/20260310-buglog.md))
 
 **Implemented:**
