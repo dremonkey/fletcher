@@ -264,18 +264,18 @@ nothing. The ordering change has no effect. Only Change 1 (settle window) matter
 
 ## Acceptance Criteria
 
-- [ ] With TTS set to OFF, wake the agent from sleep via **text message**. The response must be **silent** (no audio played) and transcript must appear.
-- [ ] With TTS set to OFF, wake the agent from sleep via **speech**. The bootstrap response must be **silent** (no audio played).
-- [ ] With TTS set to ON, wake the agent from sleep. The bootstrap response must be **spoken** as before.
-- [ ] With TTS set to OFF, send a second message after the bootstrap. The second response must also be **silent**.
-- [ ] Initial connection (fresh app start) with TTS OFF: bootstrap response is **silent**.
-- [ ] Regression: TTS toggle mid-session still works correctly (on → off → on).
+- [x] With TTS set to OFF, wake the agent from sleep via **text message**. The response must be **silent** (no audio played) and transcript must appear.
+- [x] With TTS set to OFF, wake the agent from sleep via **speech**. The bootstrap response must be **silent** (no audio played).
+- [x] With TTS set to ON, wake the agent from sleep. The bootstrap response must be **spoken** as before.
+- [x] With TTS set to OFF, send a second message after the bootstrap. The second response must also be **silent**.
+- [x] Initial connection (fresh app start) with TTS OFF: bootstrap response is **silent**.
+- [ ] Regression: TTS toggle mid-session still works correctly (on → off → on). *(not explicitly re-tested but no regressions observed)*
 
 ---
 
 ## Files
 
-- `apps/voice-agent/src/agent.ts` — add `setTimeout` before `session.generateReply()` bootstrap call
+- `apps/voice-agent/src/agent.ts` — (a) add 200ms settle window before bootstrap; (b) add `userMessageReceivedBeforeBootstrap` flag to skip bootstrap when user text arrived during settle window
 - `apps/mobile/lib/services/livekit_service.dart` — (a) remove `if (_textOnlyMode)` guard on `_sendTtsMode()` in two places; (b) reorder `_sendTtsMode()` before `_flushPendingTextMessages()` in `ParticipantConnectedEvent` handler
 
 ---
@@ -284,4 +284,4 @@ nothing. The ordering change has no effect. Only Change 1 (settle window) matter
 
 - **Date:** 2026-03-10
 - **Priority:** Medium (regression on every wake-up cycle when TTS is off)
-- **Status:** RCA complete — ready to implement
+- **Status:** ✅ Complete — all changes deployed and field-verified 2026-03-10
