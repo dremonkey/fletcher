@@ -1,7 +1,7 @@
 # Task 009: Suppress Reconnecting Banner on Intentional Agent Disconnect
 
 **Epic:** 20 — Agent Cost Optimization
-**Status:** [ ]
+**Status:** Complete
 **Priority:** High
 
 ## Problem
@@ -57,11 +57,11 @@ Also verify that the `ParticipantDisconnectedEvent` handler doesn't also trigger
 
 ## Acceptance Criteria
 
-- [ ] Reconnecting banner does NOT appear when agent disconnects due to idle timeout
-- [ ] Reconnecting banner DOES appear when the network actually drops
-- [ ] Reconnecting banner DOES appear when the agent crashes unexpectedly
-- [ ] System events (Task 007) still appear correctly in transcript during idle disconnect
-- [ ] No regression to BUG-021 (WiFi→5G audio track publish delay)
+- [x] Reconnecting banner does NOT appear when agent disconnects due to idle timeout
+- [x] Reconnecting banner DOES appear when the network actually drops
+- [x] Reconnecting banner DOES appear when the agent crashes unexpectedly
+- [x] System events (Task 007) still appear correctly in transcript during idle disconnect
+- [x] No regression to BUG-021 (WiFi→5G audio track publish delay)
 
 ## Dependencies
 

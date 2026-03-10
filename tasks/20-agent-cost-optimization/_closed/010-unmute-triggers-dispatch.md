@@ -1,7 +1,7 @@
 # Task 010: Unmute as Agent Dispatch Trigger
 
 **Epic:** 20 — Agent Cost Optimization
-**Status:** [ ]
+**Status:** Complete
 **Priority:** Medium
 
 ## Problem
@@ -48,10 +48,10 @@ Future<void> toggleMute() async {
 
 ## Acceptance Criteria
 
-- [ ] Unmuting while agent is absent triggers immediate dispatch
-- [ ] Unmuting while agent is present/dispatching does nothing extra
-- [ ] Unmuting while on-demand dispatch is disabled does nothing extra
-- [ ] Agent connects before (or as) the user starts speaking
+- [x] Unmuting while agent is absent triggers immediate dispatch
+- [x] Unmuting while agent is present/dispatching does nothing extra
+- [x] Unmuting while on-demand dispatch is disabled does nothing extra
+- [x] Agent connects before (or as) the user starts speaking
 
 ## Dependencies
 

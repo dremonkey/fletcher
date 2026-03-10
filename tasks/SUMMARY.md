@@ -352,8 +352,8 @@ Eliminate idle agent costs by disconnecting the agent when nobody is speaking an
 - [x] 006: Cold-Start Latency Mitigation ✅ — `prewarm` (VAD pre-load), warm-down grace period (`FLETCHER_WARM_DOWN_MS`), dispatch latency metric
 - [x] 007: UX Polish — Transition Feedback ✅ — system event emission on state transitions; data channel callbacks in LiveKitService; 9 new tests
 - [ ] 008: Integration Test & Cost Validation 📋 — e2e lifecycle test + LiveKit Cloud billing verification (requires running infrastructure)
-- [ ] 009: Suppress Reconnecting Banner on Intentional Agent Disconnect 📋 — `TrackUnsubscribedEvent` unconditionally sets `ConversationStatus.reconnecting`, even during intentional idle disconnect; guard with `AgentPresenceState`
-- [ ] 010: Unmute as Agent Dispatch Trigger 📋 — unmuting while agent is absent should immediately trigger dispatch as intent signal; ~300-500ms head start before speech detection
+- [x] 009: Suppress Reconnecting Banner on Intentional Agent Disconnect ✅ — guard `TrackUnsubscribedEvent` with `AgentPresenceState`; banner suppressed during idle timeout lifecycle
+- [x] 010: Unmute as Agent Dispatch Trigger ✅ — unmuting while agent absent calls `onSpeechDetected()`; ~300-500ms head start before audio-level detection
 
 **Depends on:** Epic 2 (Voice Agent), Epic 3 (Flutter App), Epic 9 (Connectivity)
 
