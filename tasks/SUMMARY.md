@@ -27,7 +27,7 @@ The voice agent audio pipeline — STT, TTS, voice detection, and agent dispatch
 - [x] 005: Token generation endpoint (Sovereign Pairing) ✅
 - [ ] 007: Noise-Robust Voice Detection 📋
 - [~] 008: Immediate Acknowledgment 🔄 — Phases 1-2 complete: looping two-note chime on EOU via BackgroundAudioPlayer (1.5s gap between repetitions); Phase 3 (client visual pairing) open ([BUG-006](../docs/field-tests/20260301-buglog.md))
-- [ ] 009: TTS Empty Chunk Guard 📋 — buffer initial TTS input to avoid Cartesia rejecting punctuation-only chunks ([BUG-005](../docs/field-tests/20260301-buglog.md))
+- [x] 009: TTS Empty Chunk Guard ✅ — provider-agnostic guard buffers leading punctuation/whitespace-only chunks before TTS; applied at `ttsNode()` via `GuardedAgent`; 18 unit tests ([BUG-005](../docs/field-tests/20260301-buglog.md))
 - [ ] 010: Fix Agent Dispatch in `dev` Mode 📋 — worker registers but LiveKit never dispatches jobs; `connect --room` workaround ([BUG-007](../docs/field-tests/20260301-buglog.md))
 - [ ] 011: Voice Selection Persistent Preferences 📋 — selection UI/API with persistent storage and env-var based config
 - [ ] 020: Agent Dual-Channel Transcript Emission 📋 — emit `TranscriptEvent` on `ganglia-events` data channel (reliable); fixes BUG-030 (Unidirectional Blackout)

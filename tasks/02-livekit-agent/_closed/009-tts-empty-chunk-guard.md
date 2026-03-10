@@ -6,7 +6,7 @@
 
 ## Problem
 
-Cartesia's streaming WebSocket rejects the initial TTS chunk if it contains only whitespace or punctuation. This happens when the LLM's first SSE chunk is a role-only delta or punctuation (e.g., `"` or `—`).
+Cartesia's streaming WebSocket rejects the initial TTS chunk if it contains only whitespace or punctuation. This happens when the LLM's first SSE chunk is a role-only delta or punctuation (e.g., `"` or `—`). The problem is provider-agnostic: ElevenLabs, Google TTS, and Piper can all behave similarly.
 
 ### Error
 
@@ -27,32 +27,43 @@ The LLM (via OpenClaw) streams SSE chunks. The first chunk sometimes contains:
 - Empty `content` (role-only delta)
 - Punctuation only (`"`, `—`, `...`)
 
-The Cartesia plugin's `BUFFERED_WORDS_COUNT` (8 words) sentence tokenizer buffers *subsequent* chunks, but the initial chunk bypass path sends directly to Cartesia without this buffering.
+The initial chunk is passed directly to the TTS engine before any real word content has arrived.
 
-## Proposed Fix
+## Implementation
 
-- [ ] Add a text guard before the first `cartesia.stream()` call
-  - Strip leading whitespace and punctuation-only content
-  - Buffer initial input until at least one non-punctuation word is present
-- [ ] Add unit test: empty string → no TTS call
-- [ ] Add unit test: punctuation-only string → no TTS call
-- [ ] Add unit test: `"Hello"` → TTS call proceeds
-- [ ] Verify fix works with Cartesia streaming WebSocket
-- [ ] If migrating to ElevenLabs (task 006), verify whether ElevenLabs has the same restriction
+Provider-agnostic guard applied at the `ttsNode()` level in the voice pipeline.
 
-## Files
+### Approach
 
-- `packages/openclaw-channel-livekit/src/livekit/audio.ts` — TTS streaming path
-- Voice agent TTS plugin configuration
+- `guardTTSInputStream(text: ReadableStream<string>)` — wraps the LLM text stream
+  - Buffers all chunks until the accumulated text contains at least one `\w` character
+  - Once a word is found, flushes the buffer as a single chunk and passes all subsequent chunks through immediately
+  - Empty string chunks are dropped in the pre-word buffering phase
+  - If the stream ends with only punctuation, the buffer is flushed rather than dropped (lets the TTS handle it gracefully)
+- `GuardedAgent extends voice.Agent` — overrides `ttsNode()` to apply the guard before the stream reaches any TTS provider
 
-## Context
+### Files Changed
 
-- **Frequency:** Intermittent — depends on LLM chunking behavior
-- **Related:** Task 006 (ElevenLabs migration) — may resolve this if ElevenLabs is more tolerant, but the guard is good defense regardless
-- **Related:** `BUFFERED_WORDS_COUNT` in Cartesia plugin's sentence tokenizer
+- `apps/voice-agent/src/tts-chunk-guard.ts` — guard implementation (new)
+- `apps/voice-agent/src/tts-chunk-guard.spec.ts` — 18 unit tests (new)
+- `apps/voice-agent/src/agent.ts` — `GuardedAgent` class + import
+
+## Checklist ✅
+
+- [x] Add a text guard before the TTS stream processes input
+  - Buffers initial chunks until at least one word character (`\w`) is present
+  - Once a word is detected, flushes the buffer and resumes normal flow
+- [x] Add unit test: empty string chunk is dropped (pre-word phase)
+- [x] Add unit test: punctuation-only chunks are buffered
+- [x] Add unit test: word-containing chunk (`"Hello"`) passes through immediately
+- [x] Add unit test: mixed chunk (`"Hello,"`) passes through correctly
+- [x] Add unit test: buffer flushed as single chunk when word arrives
+- [x] Guard is provider-agnostic (applied at `ttsNode()`, not Cartesia-specific)
+- [x] 18 unit tests passing (`bun test src/tts-chunk-guard.spec.ts`)
+- [~] Verify fix works with live TTS providers (pending field test)
 
 ## Status
 
-- **Date:** 2026-03-01
+- **Date:** 2026-03-10
 - **Priority:** Low
-- **Status:** Open
+- **Status:** Complete — implementation done, field verification pending
