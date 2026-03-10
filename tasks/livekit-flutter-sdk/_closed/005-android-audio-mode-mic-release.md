@@ -1,7 +1,7 @@
 # Task 005: Release Android AudioManager Mode on Mute
 
 **Epic:** LiveKit Flutter SDK Issues
-**Status:** [~] Implemented, pending field verification
+**Status:** [x] Complete — verified 2026-03-10
 **Priority:** High
 **Date:** 2026-03-09
 **Bug:** [BUG-001](../../docs/field-tests/20260309-buglog.md) — Mute doesn't release OS mic
@@ -244,4 +244,4 @@ if (_isMuted && Platform.isAndroid) {
 
 - **Date:** 2026-03-09
 - **Priority:** High — blocks keyboard STT usage in text-input mode
-- **Status:** Implemented, pending field verification
+- **Status:** [x] Complete — verified 2026-03-10
