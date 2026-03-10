@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:livekit_client/livekit_client.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/conversation_state.dart';
@@ -401,6 +403,13 @@ class LiveKitService extends ChangeNotifier {
 
       // Enable microphone — respect mute state across reconnects
       await _localParticipant!.setMicrophoneEnabled(!_isMuted);
+      // BUG-001: room.connect() sets AudioManager to MODE_IN_COMMUNICATION.
+      // If the user is muted, switch back to media mode so keyboard STT works.
+      if (_isMuted && Platform.isAndroid) {
+        await rtc.Helper.setAndroidAudioConfiguration(
+          rtc.AndroidAudioConfiguration.media,
+        );
+      }
       debugPrint('[Fletcher] Audio config: AEC=on NS=on AGC=on voiceIsolation=on highPass=on bitrate=speech(24k) dtx=on');
 
       _startAudioLevelMonitoring();
@@ -1154,13 +1163,30 @@ class LiveKitService extends ChangeNotifier {
 
     if (_isMuted) {
       _updateState(status: ConversationStatus.muted);
+      // Stop mic track first, then release Android AudioManager mode.
+      await _localParticipant?.setMicrophoneEnabled(false);
+      // BUG-001: LiveKit SDK sets AudioManager to MODE_IN_COMMUNICATION on
+      // room connect and only clears on disconnect — muting doesn't change
+      // the mode, which blocks Android's speech recognizer (keyboard STT).
+      // Switch to media mode to release the mic for the OS.
+      if (Platform.isAndroid) {
+        await rtc.Helper.setAndroidAudioConfiguration(
+          rtc.AndroidAudioConfiguration.media,
+        );
+        debugPrint('[Fletcher] Android audio mode → media (mic released for OS)');
+      }
     } else {
       _updateState(status: ConversationStatus.idle);
+      // Restore communication mode BEFORE restarting the mic, so the new
+      // audio track gets the correct processing pipeline (AEC, NS, AGC).
+      if (Platform.isAndroid) {
+        await rtc.Helper.setAndroidAudioConfiguration(
+          rtc.AndroidAudioConfiguration.communication,
+        );
+        debugPrint('[Fletcher] Android audio mode → communication');
+      }
+      await _localParticipant?.setMicrophoneEnabled(true);
     }
-
-    // Await mic enable/disable so the OS mic resource is fully
-    // released before the keyboard (Android STT) tries to use it.
-    await _localParticipant?.setMicrophoneEnabled(!_isMuted);
     debugPrint('[Fletcher] Mic ${_isMuted ? "stopped" : "started"}');
   }
 
