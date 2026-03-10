@@ -403,12 +403,10 @@ class LiveKitService extends ChangeNotifier {
 
       // Enable microphone — respect mute state across reconnects
       await _localParticipant!.setMicrophoneEnabled(!_isMuted);
-      // BUG-001: room.connect() sets AudioManager to MODE_IN_COMMUNICATION.
-      // If the user is muted, switch back to media mode so keyboard STT works.
+      // BUG-001: room.connect() starts the native AudioRecord via ADM.
+      // If the user is muted, stop it so keyboard STT can access the mic.
       if (_isMuted && Platform.isAndroid) {
-        await rtc.Helper.setAndroidAudioConfiguration(
-          rtc.AndroidAudioConfiguration.media,
-        );
+        await rtc.NativeAudioManagement.stopLocalRecording();
       }
       debugPrint('[Fletcher] Audio config: AEC=on NS=on AGC=on voiceIsolation=on highPass=on bitrate=speech(24k) dtx=on');
 
@@ -1163,27 +1161,23 @@ class LiveKitService extends ChangeNotifier {
 
     if (_isMuted) {
       _updateState(status: ConversationStatus.muted);
-      // Stop mic track first, then release Android AudioManager mode.
       await _localParticipant?.setMicrophoneEnabled(false);
-      // BUG-001: LiveKit SDK sets AudioManager to MODE_IN_COMMUNICATION on
-      // room connect and only clears on disconnect — muting doesn't change
-      // the mode, which blocks Android's speech recognizer (keyboard STT).
-      // Switch to media mode to release the mic for the OS.
+      // BUG-001: Muting only stops the WebRTC MediaStreamTrack, but the
+      // native AudioRecord inside JavaAudioDeviceModule stays open, holding
+      // the OS mic. stopLocalRecording() calls requestStopRecording() on
+      // the ADM to actually release the native AudioRecord, freeing the mic
+      // for Android keyboard STT.
       if (Platform.isAndroid) {
-        await rtc.Helper.setAndroidAudioConfiguration(
-          rtc.AndroidAudioConfiguration.media,
-        );
-        debugPrint('[Fletcher] Android audio mode → media (mic released for OS)');
+        await rtc.NativeAudioManagement.stopLocalRecording();
+        debugPrint('[Fletcher] Android ADM recording stopped (mic released for OS)');
       }
     } else {
       _updateState(status: ConversationStatus.idle);
-      // Restore communication mode BEFORE restarting the mic, so the new
-      // audio track gets the correct processing pipeline (AEC, NS, AGC).
+      // Prewarm the ADM AudioRecord before restarting the track, so the
+      // native recording pipeline is ready when getUserMedia is called.
       if (Platform.isAndroid) {
-        await rtc.Helper.setAndroidAudioConfiguration(
-          rtc.AndroidAudioConfiguration.communication,
-        );
-        debugPrint('[Fletcher] Android audio mode → communication');
+        await rtc.NativeAudioManagement.startLocalRecording();
+        debugPrint('[Fletcher] Android ADM recording prewarm');
       }
       await _localParticipant?.setMicrophoneEnabled(true);
     }
