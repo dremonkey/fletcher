@@ -346,6 +346,12 @@ export default defineAgent({
     // 'ganglia-events' topic. (TASK-030)
     // -----------------------------------------------------------------------
     let ttsEnabled = true;
+    // Track whether a user text message arrived before the bootstrap fires.
+    // If true, skip the bootstrap: the text message already carries full context
+    // and firing a second generateReply() creates a concurrent s_2 stream that
+    // causes TranscriptManager to finalize s_1 (the user message stream) before
+    // it produces content — silently dropping the first response. (BUG-001)
+    let userMessageReceivedBeforeBootstrap = false;
 
     ctx.room.on(RoomEvent.DataReceived, (payload: Uint8Array, participant: any, _kind: any, topic?: string) => {
       if (topic !== 'ganglia-events') return;
@@ -362,6 +368,7 @@ export default defineAgent({
         // TTS + transcript pipeline. (TASK-017, Epic 17)
         if (event.type === 'text_message' && typeof event.text === 'string' && event.text.trim()) {
           resetIdleWithWarmDownRecovery();
+          userMessageReceivedBeforeBootstrap = true;
           logger.info({ text: event.text, participant: participant?.identity }, 'Text message received');
           session.generateReply({ userInput: event.text });
         }
@@ -574,8 +581,18 @@ export default defineAgent({
     // audio even when TTS is disabled.  200ms is well above the observed 37ms window
     // and has no perceptible effect on UX (LLM TTFT is 300–800ms anyway). (BUG-001)
     await new Promise<void>((resolve) => setTimeout(resolve, 200));
-    logger.info({ room: ctx.room.name, e2e: isE2e }, 'Sending bootstrap message');
-    session.generateReply({ userInput: bootstrapMsg });
+    if (userMessageReceivedBeforeBootstrap) {
+      // A user text message already arrived during the settle window and
+      // triggered a generateReply() pipeline (s_1).  Sending the bootstrap
+      // now would start a concurrent s_2 stream that causes TranscriptManager
+      // to finalize s_1 before its LLM content arrives — silently dropping
+      // the first response.  Skip bootstrap: the user message carries the
+      // voice-conversation context via historyMode=latest anyway. (BUG-001)
+      logger.info({ room: ctx.room.name }, 'Bootstrap skipped — user message already in flight');
+    } else {
+      logger.info({ room: ctx.room.name, e2e: isE2e }, 'Sending bootstrap message');
+      session.generateReply({ userInput: bootstrapMsg });
+    }
 
     // Start idle timer after bootstrap
     if (!idleTimeout.disabled) {
