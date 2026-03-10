@@ -578,13 +578,16 @@ class LiveKitService extends ChangeNotifier {
       );
       // Notify agent presence service (Epic 20)
       agentPresenceService.onAgentConnected();
-      // Flush any text messages queued while agent was absent
-      _flushPendingTextMessages();
       // Always re-sync TTS mode when a new agent joins (BUG-001, BUG-004).
-      // Unconditional so the agent always has the current state.  Combined with
-      // the 200ms settle window in agent.ts, this ensures tts-mode:off arrives
-      // before the bootstrap pipeline captures audioOutput.
+      // Send BEFORE flushing queued text messages so the agent processes
+      // tts-mode:off before the queued user message triggers a generateReply()
+      // pipeline.  SCTP reliable delivery guarantees ordering — tts-mode
+      // arrives at the agent before the text_message, so audioOutput is
+      // captured as null when the text message pipeline starts. (BUG-001)
       _sendTtsMode();
+      // Flush any text messages queued while agent was absent.
+      // Must come AFTER _sendTtsMode() — see comment above.
+      _flushPendingTextMessages();
       // Emit/update agent connected system event (task 020)
       _emitSystemEvent(SystemEvent(
         id: 'agent-boot',

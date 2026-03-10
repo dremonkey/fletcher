@@ -193,6 +193,45 @@ if (_textOnlyMode) {
 await _sendTtsMode();
 ```
 
+### Change 3 — Flutter: send TTS mode BEFORE flushing queued text messages (`apps/mobile/lib/services/livekit_service.dart`)
+
+**Found during field verification (2026-03-10, second session analysis).**
+
+In `ParticipantConnectedEvent`, `_flushPendingTextMessages()` was called **before**
+`_sendTtsMode()`. When the user wakes the agent with a text message:
+
+1. Flutter queues the text message while agent is sleeping.
+2. Agent wakes, client gets `ParticipantConnectedEvent`.
+3. `_flushPendingTextMessages()` runs first — text message sent to agent.
+4. Text message arrives at agent (T+68ms), `DataReceived` fires, **`session.generateReply()`
+   is called with `audioOutput = non-null`** (TTS still ON).
+5. `_sendTtsMode()` runs next — tts-mode message sent.
+6. tts-mode arrives at agent (T+89ms), sets `audioEnabled = false`.
+7. Too late: the text message pipeline already captured `audioOutput = non-null`.
+
+SCTP reliable delivery guarantees message ordering within the same association.
+Sending `tts-mode` first guarantees it arrives at the agent before the text message.
+
+```dart
+// Before (livekit_service.dart ~line 581-587):
+// Flush any text messages queued while agent was absent
+_flushPendingTextMessages();
+// Always re-sync TTS mode when a new agent joins (BUG-001, BUG-004).
+_sendTtsMode();
+
+// After:
+// Always re-sync TTS mode when a new agent joins (BUG-001, BUG-004).
+// Send BEFORE flushing queued text messages so the agent processes
+// tts-mode:off before the queued user message triggers a generateReply()
+// pipeline.  SCTP reliable delivery guarantees ordering — tts-mode
+// arrives at the agent before the text_message, so audioOutput is
+// captured as null when the text message pipeline starts. (BUG-001)
+_sendTtsMode();
+// Flush any text messages queued while agent was absent.
+// Must come AFTER _sendTtsMode() — see comment above.
+_flushPendingTextMessages();
+```
+
 ---
 
 ## Edge Cases
@@ -215,13 +254,18 @@ the E2E suite.
 
 **Agent restarts (not wake-up):**
 If the agent process dies and is re-dispatched (e.g., OOM kill), the same race applies.
-Both changes 1 and 2 fix this scenario identically.
+Both changes 1, 2, and 3 fix this scenario identically.
+
+**No queued text message on wake-up:**
+If the user wakes the agent via speech (not text), `_flushPendingTextMessages()` does
+nothing. The ordering change has no effect. Only Change 1 (settle window) matters.
 
 ---
 
 ## Acceptance Criteria
 
-- [ ] With TTS set to OFF, wake the agent from sleep (trigger dispatch via speech or text). The bootstrap response must be **silent** (no audio played).
+- [ ] With TTS set to OFF, wake the agent from sleep via **text message**. The response must be **silent** (no audio played) and transcript must appear.
+- [ ] With TTS set to OFF, wake the agent from sleep via **speech**. The bootstrap response must be **silent** (no audio played).
 - [ ] With TTS set to ON, wake the agent from sleep. The bootstrap response must be **spoken** as before.
 - [ ] With TTS set to OFF, send a second message after the bootstrap. The second response must also be **silent**.
 - [ ] Initial connection (fresh app start) with TTS OFF: bootstrap response is **silent**.
@@ -232,7 +276,7 @@ Both changes 1 and 2 fix this scenario identically.
 ## Files
 
 - `apps/voice-agent/src/agent.ts` — add `setTimeout` before `session.generateReply()` bootstrap call
-- `apps/mobile/lib/services/livekit_service.dart` — remove `if (_textOnlyMode)` guard on `_sendTtsMode()` in two places
+- `apps/mobile/lib/services/livekit_service.dart` — (a) remove `if (_textOnlyMode)` guard on `_sendTtsMode()` in two places; (b) reorder `_sendTtsMode()` before `_flushPendingTextMessages()` in `ParticipantConnectedEvent` handler
 
 ---
 
