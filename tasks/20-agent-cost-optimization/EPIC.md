@@ -103,6 +103,20 @@ End-to-end test of the full lifecycle: connect → local VAD → speech → disp
 
 **Status:** [ ]
 
+---
+
+### 009: Suppress Reconnecting Banner on Intentional Agent Disconnect
+When the agent disconnects due to idle timeout, `TrackUnsubscribedEvent` fires and unconditionally sets `ConversationStatus.reconnecting`, showing a yellow "Connection lost. Reconnecting..." banner. This is confusing — the agent left on purpose. Guard the handler with `AgentPresenceState` so the banner only appears for real network problems.
+
+**Status:** [ ]
+
+---
+
+### 010: Unmute as Agent Dispatch Trigger
+When the user unmutes their mic while the agent is absent, treat it as an intent signal and immediately trigger dispatch — don't wait for speech detection (~300ms audio-level threshold). This gives a head start on agent connection, reducing perceived latency. Unmuting is a deliberate user action that strongly predicts imminent speech.
+
+**Status:** [ ]
+
 ## Latency Budget (First Utterance After Idle)
 
 | Phase | Expected Latency |

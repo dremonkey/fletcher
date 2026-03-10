@@ -1152,18 +1152,16 @@ class LiveKitService extends ChangeNotifier {
     _isMuted = !_isMuted;
     debugPrint('[Fletcher] Mute toggled: muted=$_isMuted');
 
-    // Await mic enable/disable so the OS mic resource is fully
-    // released BEFORE updating the UI. This prevents the text field
-    // from appearing (and keyboard STT becoming available) while
-    // LiveKit still holds the mic.
-    await _localParticipant?.setMicrophoneEnabled(!_isMuted);
-    debugPrint('[Fletcher] Mic ${_isMuted ? "stopped" : "started"}');
-
     if (_isMuted) {
       _updateState(status: ConversationStatus.muted);
     } else {
       _updateState(status: ConversationStatus.idle);
     }
+
+    // Await mic enable/disable so the OS mic resource is fully
+    // released before the keyboard (Android STT) tries to use it.
+    await _localParticipant?.setMicrophoneEnabled(!_isMuted);
+    debugPrint('[Fletcher] Mic ${_isMuted ? "stopped" : "started"}');
   }
 
   // ---------------------------------------------------------------------------
