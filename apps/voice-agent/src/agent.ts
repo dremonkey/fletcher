@@ -46,6 +46,7 @@ import { initHeapDiagnostics } from './heap-snapshot';
 import { buildBootstrapMessage } from './bootstrap';
 import { attachFallbackMonitor } from './tts-fallback-monitor';
 import { IdleTimeout, readIdleTimeoutConfig } from './idle-timeout';
+import { guardTTSInputStream } from './tts-chunk-guard';
 
 // ---------------------------------------------------------------------------
 // Logger setup — pretty-print when running locally, JSON in production
@@ -100,6 +101,22 @@ if (!process.argv.includes('download-files')) {
     gangliaType,
     ttsProvider,
   }, 'Environment validated');
+}
+
+// ---------------------------------------------------------------------------
+// Guarded Agent — applies the TTS empty chunk guard to all TTS inference.
+//
+// Overrides ttsNode() to wrap the LLM text stream with guardTTSInputStream()
+// before it reaches the TTS engine.  This prevents TTS errors caused by
+// leading punctuation-only or whitespace-only chunks (e.g., `"."`, `"—"`,
+// `" "`) which some TTS engines (Cartesia, ElevenLabs) reject with an
+// "invalid transcript" error.  See BUG-005, Task 02/009.
+// ---------------------------------------------------------------------------
+class GuardedAgent extends voice.Agent {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  override async ttsNode(text: any, modelSettings: any): Promise<any> {
+    return super.ttsNode(guardTTSInputStream(text as ReadableStream<string>) as any, modelSettings);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -297,7 +314,7 @@ export default defineAgent({
     });
 
     await session.start({
-      agent: new voice.Agent({ instructions: '' }),
+      agent: new GuardedAgent({ instructions: '' }),
       room: ctx.room,
       // Disable SDK transcription — we publish agent text ourselves via
       // the onContent callback → ganglia-events data channel.  This avoids
