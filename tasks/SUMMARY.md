@@ -41,6 +41,7 @@ The voice agent audio pipeline — STT, TTS, voice detection, and agent dispatch
 - [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 complete: fixed endpointing delay units bug (0.8→800ms), increased `minInterruptionDuration` to 800ms, added `minInterruptionWords: 1` to reduce false interruptions; Phase 2-3 (ack sound edge cases, soft TTS fade) deferred pending field testing
 - [x] 014: TTS Error Graceful Degradation ✅ — `maxUnrecoverableErrors: Infinity` prevents session death; `ttsConnOptions: { maxRetry: 0 }` eliminates 429 retry storms; debounced "Voice Unavailable" artifact sent to client ([BUG-024](../docs/field-tests/20260304-buglog.md))
 - [ ] 032: Idle Timer TTS-Aware 📋 — reset idle timer on `speaking → listening` so TTS playout doesn't consume the idle window; 100% repro in storytelling mode ([BUG-002](../docs/field-tests/20260310-buglog.md))
+- [ ] 033: Bootstrap TTS Settle Window 📋 — 200ms delay before bootstrap `generateReply()` + unconditional `_sendTtsMode()` on agent connect; prevents wake-up TTS race where `audioOutput` snapshot precedes client re-sync ([BUG-001](../docs/field-tests/20260310-buglog.md))
 
 **Implemented:**
 - VoiceAgent wired to `@livekit/agents` SDK (deepgram.STT, cartesia.TTS, voice.AgentSession)
