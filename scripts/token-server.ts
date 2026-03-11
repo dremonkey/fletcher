@@ -15,7 +15,7 @@
  *   POST /dispatch-agent                   → { "status": "dispatched", ... }
  */
 
-import { AccessToken, RoomConfiguration, RoomAgentDispatch, AgentDispatchClient } from "livekit-server-sdk";
+import { AccessToken, RoomConfiguration, RoomAgentDispatch, AgentDispatchClient, RoomServiceClient } from "livekit-server-sdk";
 
 /**
  * Convert a WebSocket URL to its HTTP equivalent.
@@ -46,6 +46,7 @@ export interface TokenServerConfig {
 export function createFetchHandler(config: TokenServerConfig) {
   const httpUrl = wsUrlToHttp(config.livekitUrl);
   const dispatchClient = new AgentDispatchClient(httpUrl, config.apiKey, config.apiSecret);
+  const roomService = new RoomServiceClient(httpUrl, config.apiKey, config.apiSecret);
 
   return async function fetch(req: Request): Promise<Response> {
     const url = new URL(req.url);
@@ -102,6 +103,23 @@ export function createFetchHandler(config: TokenServerConfig) {
       }
 
       try {
+        // Guard: check if an agent is already in the room (BUG-013).
+        // Prevents duplicate agents when the user force-quits and reconnects
+        // before the old agent's departure_timeout expires.
+        const PARTICIPANT_KIND_AGENT = 4;
+        try {
+          const participants = await roomService.listParticipants(roomName);
+          const existingAgents = participants.filter(p => p.kind === PARTICIPANT_KIND_AGENT);
+          if (existingAgents.length > 0) {
+            return Response.json({
+              status: "already_present",
+              agent_name: existingAgents[0].name || existingAgents[0].identity,
+            });
+          }
+        } catch {
+          // Room doesn't exist yet — proceed with dispatch
+        }
+
         const dispatch = await dispatchClient.createDispatch(roomName, config.agentName, {
           metadata: body.metadata ? JSON.stringify(body.metadata) : undefined,
         });

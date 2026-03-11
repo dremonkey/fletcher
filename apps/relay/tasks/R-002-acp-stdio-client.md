@@ -132,6 +132,32 @@ ACP_TRANSPORT=stdio        # stdio (default) or websocket (future)
 - [ ] Tests use a mock ACP agent (simple Bun subprocess that speaks JSON-RPC)
 - [ ] Existing JSON-RPC types from `src/rpc/types.ts` are reused
 
+## Testing without ACPX
+
+Write a mock ACP agent as a Bun script (`test/mock-acpx.ts`) that reads JSON-RPC from stdin and responds on stdout:
+
+```typescript
+// test/mock-acpx.ts — minimal ACP agent for testing
+const decoder = new TextDecoder();
+for await (const chunk of Bun.stdin.stream()) {
+  for (const line of decoder.decode(chunk).split('\n').filter(Boolean)) {
+    const msg = JSON.parse(line);
+    if (msg.method === 'initialize') {
+      console.log(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { capabilities: {} } }));
+    } else if (msg.method === 'session/new') {
+      console.log(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { sessionId: 'mock-sess-001' } }));
+    } else if (msg.method === 'session/prompt') {
+      const text = msg.params.prompt?.[0]?.text ?? '';
+      // Stream an update notification, then resolve
+      console.log(JSON.stringify({ jsonrpc: '2.0', method: 'session/update', params: { updates: [{ kind: 'content_chunk', content: { type: 'text', text: 'Echo: ' + text } }] } }));
+      console.log(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { stopReason: 'completed' } }));
+    }
+  }
+}
+```
+
+Point the relay at it with `ACP_COMMAND="bun" ACP_ARGS="test/mock-acpx.ts"`. This tests the full ACP client lifecycle without needing real ACPX or OpenClaw.
+
 ## Notes
 
 - One ACP client per room (each room gets its own ACPX subprocess)

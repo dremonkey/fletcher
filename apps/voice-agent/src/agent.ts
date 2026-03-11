@@ -31,7 +31,7 @@ import { voice } from '@livekit/agents';
 import * as deepgram from '@livekit/agents-plugin-deepgram';
 import * as silero from '@livekit/agents-plugin-silero';
 import * as livekit from '@livekit/agents-plugin-livekit';
-import { RoomEvent } from '@livekit/rtc-node';
+import { RoomEvent, ParticipantKind } from '@livekit/rtc-node';
 import { createGangliaFromEnv, resolveSessionKeySimple } from '@knittt/livekit-agent-ganglia';
 import pino from 'pino';
 import { TurnMetricsCollector } from './metrics';
@@ -512,6 +512,19 @@ export default defineAgent({
     });
 
     ctx.room.on(RoomEvent.ParticipantConnected, (p) => {
+      // Duplicate agent guard — if another agent joins, this (older) agent
+      // exits to prevent overlapping audio/responses (BUG-013).  The newer
+      // agent was dispatched intentionally; this one is likely a zombie from
+      // a previous session that outlived the user's departure_timeout.
+      if (p.kind === ParticipantKind.AGENT) {
+        logger.warn(
+          { newAgent: p.identity, myIdentity: ctx.room.localParticipant?.identity },
+          'Another agent joined — this agent exiting to prevent duplicate (BUG-013)',
+        );
+        ctx.room.disconnect();
+        return;
+      }
+
       logger.info({ identity: p.identity, room: ctx.room.name }, 'Participant connected');
       // If the reconnecting participant matches the original, update session routing
       if (p.identity === participant.identity) {
