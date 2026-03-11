@@ -93,10 +93,6 @@ void main() {
       expect(service.enabled, isFalse);
     });
 
-    test('idleDisconnectInMs is initially null', () {
-      expect(service.idleDisconnectInMs, isNull);
-    });
-
     // -----------------------------------------------------------------------
     // 2. onSpeechDetected → dispatching
     // -----------------------------------------------------------------------
@@ -146,15 +142,6 @@ void main() {
       expect(service.state, AgentPresenceState.agentPresent);
     });
 
-    test('onAgentConnected clears idleDisconnectInMs', () {
-      service.enable('test-room');
-      service.onSpeechDetected();
-      // Simulate that we were in idle warning before
-      service.onAgentConnected();
-
-      expect(service.idleDisconnectInMs, isNull);
-    });
-
     // -----------------------------------------------------------------------
     // 4. onAgentDisconnected → agentAbsent (from agentPresent)
     // -----------------------------------------------------------------------
@@ -170,51 +157,8 @@ void main() {
       expect(service.state, AgentPresenceState.agentAbsent);
     });
 
-    test('onAgentDisconnected starts local VAD', () {
-      service.enable('test-room');
-      service.onSpeechDetected();
-      service.onAgentConnected();
-      mockVad.reset();
-
-      service.onAgentDisconnected();
-
-      expect(mockVad.startCalled, isTrue);
-    });
-
     // -----------------------------------------------------------------------
-    // 5. onIdleWarning → idleWarning
-    // -----------------------------------------------------------------------
-
-    test('onIdleWarning transitions to idleWarning and sets disconnectInMs',
-        () {
-      service.enable('test-room');
-      service.onSpeechDetected();
-      service.onAgentConnected();
-
-      service.onIdleWarning(30000);
-
-      expect(service.state, AgentPresenceState.idleWarning);
-      expect(service.idleDisconnectInMs, 30000);
-    });
-
-    // -----------------------------------------------------------------------
-    // 6. onAgentIdleDisconnect → agentAbsent
-    // -----------------------------------------------------------------------
-
-    test('onAgentIdleDisconnect transitions to agentAbsent', () {
-      service.enable('test-room');
-      service.onSpeechDetected();
-      service.onAgentConnected();
-      service.onIdleWarning(30000);
-
-      service.onAgentIdleDisconnect();
-
-      expect(service.state, AgentPresenceState.agentAbsent);
-      expect(service.idleDisconnectInMs, isNull);
-    });
-
-    // -----------------------------------------------------------------------
-    // 7. Dispatch failure → agentAbsent
+    // 5. Dispatch failure → agentAbsent
     // -----------------------------------------------------------------------
 
     test('dispatch failure transitions back to agentAbsent', () async {
@@ -245,7 +189,7 @@ void main() {
     });
 
     // -----------------------------------------------------------------------
-    // 8. onSpeechDetected is no-op when already dispatching
+    // 6. onSpeechDetected is no-op when already dispatching
     // -----------------------------------------------------------------------
 
     test('onSpeechDetected is no-op when already dispatching', () {
@@ -260,7 +204,7 @@ void main() {
     });
 
     // -----------------------------------------------------------------------
-    // 9. onSpeechDetected is no-op when agent is present
+    // 7. onSpeechDetected is no-op when agent is present
     // -----------------------------------------------------------------------
 
     test('onSpeechDetected is no-op when agent is present', () {
@@ -276,7 +220,7 @@ void main() {
     });
 
     // -----------------------------------------------------------------------
-    // 10. disable() stops local VAD and sets state to agentPresent
+    // 8. disable() stops local VAD and sets state to agentPresent
     // -----------------------------------------------------------------------
 
     test('disable stops local VAD and sets state to agentPresent', () {
@@ -291,7 +235,7 @@ void main() {
     });
 
     // -----------------------------------------------------------------------
-    // 11. enable() sets room name and starts in agentAbsent
+    // 9. enable() sets room name and starts in agentAbsent
     // -----------------------------------------------------------------------
 
     test('enable sets room name and transitions to agentAbsent', () {
@@ -301,15 +245,8 @@ void main() {
       expect(service.state, AgentPresenceState.agentAbsent);
     });
 
-    test('enable starts local VAD', () {
-      service.enable('my-room');
-
-      // startListening is called as part of transitioning to agentAbsent
-      expect(mockVad.startCalled, isTrue);
-    });
-
     // -----------------------------------------------------------------------
-    // 12. Not enabled → all callbacks are no-ops
+    // 10. Not enabled → all callbacks are no-ops
     // -----------------------------------------------------------------------
 
     group('when not enabled', () {
@@ -326,17 +263,6 @@ void main() {
 
       test('onAgentDisconnected is a no-op', () {
         service.onAgentDisconnected();
-        expect(service.state, AgentPresenceState.agentAbsent);
-      });
-
-      test('onIdleWarning is a no-op', () {
-        service.onIdleWarning(30000);
-        expect(service.state, AgentPresenceState.agentAbsent);
-        expect(service.idleDisconnectInMs, isNull);
-      });
-
-      test('onAgentIdleDisconnect is a no-op', () {
-        service.onAgentIdleDisconnect();
         expect(service.state, AgentPresenceState.agentAbsent);
       });
     });
@@ -468,36 +394,7 @@ void main() {
         expect(emittedEvents.first.$3, 'Connected');
       });
 
-      test('emits agent-idle-warning on idle warning', () {
-        eventService.enable('test-room');
-        eventService.onSpeechDetected();
-        eventService.onAgentConnected(); // → agentPresent
-        emittedEvents.clear();
-
-        eventService.onIdleWarning(30000); // → idleWarning
-
-        expect(emittedEvents, hasLength(1));
-        expect(emittedEvents.first.$1, 'agent-idle-warning');
-        expect(emittedEvents.first.$2, 'AGENT');
-        expect(emittedEvents.first.$3, contains('Going idle'));
-      });
-
-      test('emits agent-idle-cancelled when user speaks during warning', () {
-        eventService.enable('test-room');
-        eventService.onSpeechDetected();
-        eventService.onAgentConnected(); // → agentPresent
-        eventService.onIdleWarning(30000); // → idleWarning
-        emittedEvents.clear();
-
-        eventService.onAgentConnected(); // → agentPresent (from idleWarning)
-
-        expect(emittedEvents, hasLength(1));
-        expect(emittedEvents.first.$1, 'agent-idle-cancelled');
-        expect(emittedEvents.first.$2, 'AGENT');
-        expect(emittedEvents.first.$3, 'Staying connected');
-      });
-
-      test('emits agent-idle-disconnect when agent disconnects from present',
+      test('emits agent-disconnected when agent disconnects from present',
           () {
         eventService.enable('test-room');
         eventService.onSpeechDetected();
@@ -507,26 +404,9 @@ void main() {
         eventService.onAgentDisconnected(); // → agentAbsent (from present)
 
         expect(emittedEvents, hasLength(1));
-        expect(emittedEvents.first.$1, 'agent-idle-disconnect');
+        expect(emittedEvents.first.$1, 'agent-disconnected');
         expect(emittedEvents.first.$2, 'AGENT');
         expect(emittedEvents.first.$3, contains('Disconnected'));
-      });
-
-      test(
-          'emits agent-idle-disconnect when agent disconnects from idle warning',
-          () {
-        eventService.enable('test-room');
-        eventService.onSpeechDetected();
-        eventService.onAgentConnected();
-        eventService.onIdleWarning(30000); // → idleWarning
-        emittedEvents.clear();
-
-        eventService.onAgentIdleDisconnect(); // → agentAbsent (from warning)
-
-        expect(emittedEvents, hasLength(1));
-        expect(emittedEvents.first.$1, 'agent-idle-disconnect');
-        expect(emittedEvents.first.$2, 'AGENT');
-        expect(emittedEvents.first.$3, contains('speak to reconnect'));
       });
 
       test('does NOT emit disconnect event on dispatch failure', () async {
@@ -542,9 +422,9 @@ void main() {
         await Future.delayed(Duration.zero); // dispatch fails → agentAbsent
 
         // Should have the dispatching event but NOT the disconnect event
-        // (dispatch failure is not a "disconnect from present/warning")
+        // (dispatch failure is not a "disconnect from present")
         expect(
-          emittedEvents.where((e) => e.$1 == 'agent-idle-disconnect'),
+          emittedEvents.where((e) => e.$1 == 'agent-disconnected'),
           isEmpty,
         );
       });
@@ -562,8 +442,6 @@ void main() {
         disabledService.onSpeechDetected();
         disabledService.onAgentConnected();
         disabledService.onAgentDisconnected();
-        disabledService.onIdleWarning(30000);
-        disabledService.onAgentIdleDisconnect();
 
         expect(emittedEvents, isEmpty);
 
@@ -576,8 +454,7 @@ void main() {
         service.enable('test-room');
         service.onSpeechDetected();
         service.onAgentConnected();
-        service.onIdleWarning(30000);
-        service.onAgentIdleDisconnect();
+        service.onAgentDisconnected();
         // If we got here without errors, the null callback is handled correctly.
       });
 
@@ -589,22 +466,19 @@ void main() {
         eventService.onSpeechDetected();
         // 2. Agent connects → agentPresent
         eventService.onAgentConnected();
-        // 3. Idle warning
-        eventService.onIdleWarning(30000);
-        // 4. Idle disconnect
-        eventService.onAgentIdleDisconnect();
-        // 5. Speech detected again → dispatching
+        // 3. Agent disconnects (crash/leave)
+        eventService.onAgentDisconnected();
+        // 4. Speech detected again → dispatching
         eventService.onSpeechDetected();
-        // 6. Agent reconnects
+        // 5. Agent reconnects
         eventService.onAgentConnected();
 
-        expect(emittedEvents, hasLength(6));
+        expect(emittedEvents, hasLength(5));
         expect(emittedEvents[0].$1, 'agent-dispatching');
         expect(emittedEvents[1].$1, 'agent-reconnected');
-        expect(emittedEvents[2].$1, 'agent-idle-warning');
-        expect(emittedEvents[3].$1, 'agent-idle-disconnect');
-        expect(emittedEvents[4].$1, 'agent-dispatching');
-        expect(emittedEvents[5].$1, 'agent-reconnected');
+        expect(emittedEvents[2].$1, 'agent-disconnected');
+        expect(emittedEvents[3].$1, 'agent-dispatching');
+        expect(emittedEvents[4].$1, 'agent-reconnected');
       });
     });
   });

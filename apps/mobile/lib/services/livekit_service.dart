@@ -94,18 +94,6 @@ class LiveKitService extends ChangeNotifier {
   // Tracks when user stopped speaking so we can measure RT when agent starts
   DateTime? _userSpeechEndTime;
 
-  /// Callback for agent idle warning from data channel (Epic 20).
-  void Function(int disconnectInMs)? onAgentIdleWarning;
-
-  /// Callback for agent disconnect from data channel (Epic 20).
-  void Function(String reason)? onAgentDisconnected;
-
-  /// Callback for agent warm-down from data channel (Epic 20 / Task 006).
-  void Function()? onAgentWarmDown;
-
-  /// Callback for agent warm-down cancelled from data channel (Epic 20 / Task 006).
-  void Function()? onAgentWarmDownCancelled;
-
   // Buffer for reassembling chunked messages
   final Map<String, List<String?>> _chunks = {};
 
@@ -635,15 +623,13 @@ class LiveKitService extends ChangeNotifier {
       // keep the reconnecting state visible until re-subscribed. Without this,
       // the UI briefly shows "idle" during the 55s publish gap. (BUG-021)
       //
-      // Guard: do not show the reconnecting banner when the agent is
-      // disconnecting intentionally (idle timeout, on-demand dispatch
-      // lifecycle). The agent presence UX (Task 007 system events) already
-      // communicates what happened. (Epic 20, Task 009)
+      // Guard: do not show the reconnecting banner when the agent is absent
+      // (on-demand dispatch lifecycle). The agent presence UX (system events)
+      // already communicates what happened.
       if (event.track.kind == TrackType.AUDIO) {
-        final isIntentionalDisconnect = agentPresenceService.enabled &&
-            (agentPresenceService.state == AgentPresenceState.idleWarning ||
-                agentPresenceService.state == AgentPresenceState.agentAbsent);
-        if (!isIntentionalDisconnect) {
+        final isAgentAbsent = agentPresenceService.enabled &&
+            agentPresenceService.state == AgentPresenceState.agentAbsent;
+        if (!isAgentAbsent) {
           _updateState(status: ConversationStatus.reconnecting);
         }
       }
@@ -905,27 +891,6 @@ class LiveKitService extends ChangeNotifier {
           llmProvider: json['llm'] as String?,
         ),
       );
-    } else if (eventType == 'agent-idle-warning') {
-      // Agent is about to disconnect due to idle timeout (Epic 20).
-      // Expected shape: { type: "agent-idle-warning", disconnectInMs: 30000 }
-      final disconnectInMs = json['disconnectInMs'] as int? ?? 30000;
-      debugPrint(
-          '[Ganglia] Agent idle warning — disconnect in ${disconnectInMs}ms');
-      onAgentIdleWarning?.call(disconnectInMs);
-    } else if (eventType == 'agent-disconnected') {
-      // Agent has disconnected due to idle timeout (Epic 20).
-      // Expected shape: { type: "agent-disconnected", reason: "idle_timeout" }
-      final reason = json['reason'] as String? ?? 'unknown';
-      debugPrint('[Ganglia] Agent disconnected — reason: $reason');
-      onAgentDisconnected?.call(reason);
-    } else if (eventType == 'agent-warm-down') {
-      // Agent entering warm-down period before disconnect (Epic 20 / Task 006).
-      debugPrint('[Ganglia] Agent entering warm-down');
-      onAgentWarmDown?.call();
-    } else if (eventType == 'agent-warm-down-cancelled') {
-      // Agent warm-down cancelled (user spoke) (Epic 20 / Task 006).
-      debugPrint('[Ganglia] Agent warm-down cancelled');
-      onAgentWarmDownCancelled?.call();
     }
   }
 
@@ -1396,15 +1361,15 @@ class LiveKitService extends ChangeNotifier {
       dispatchService: dispatchService,
       onSystemEvent: (id, category, message) {
         // Map the presence event to a SystemEvent status:
-        // - "Connecting..." / "Going idle..." = pending
-        // - "Connected" / "Staying connected" = success
+        // - "Connecting..." = pending
+        // - "Connected" = success
         // - "Disconnected..." = error (visual distinction)
         final SystemEventStatus status;
         final String prefix;
-        if (id == 'agent-dispatching' || id == 'agent-idle-warning') {
+        if (id == 'agent-dispatching') {
           status = SystemEventStatus.pending;
           prefix = '\u25B8'; // ▸
-        } else if (id == 'agent-idle-disconnect') {
+        } else if (id == 'agent-disconnected') {
           status = SystemEventStatus.error;
           prefix = '\u2715'; // ✕
         } else {
@@ -1421,14 +1386,6 @@ class LiveKitService extends ChangeNotifier {
         ));
       },
     );
-
-    // Wire data channel callbacks to presence service
-    onAgentIdleWarning = (disconnectInMs) {
-      service.onIdleWarning(disconnectInMs);
-    };
-    onAgentDisconnected = (reason) {
-      service.onAgentIdleDisconnect();
-    };
 
     return service;
   }

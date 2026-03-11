@@ -7,20 +7,16 @@ enum AgentPresenceState {
   agentAbsent, // Local VAD active, waiting for speech
   dispatching, // Speech detected, dispatch in progress
   agentPresent, // Agent connected, normal conversation
-  idleWarning, // Agent about to disconnect (warning received)
 }
 
 /// Manages agent presence lifecycle for on-demand dispatch.
 ///
 /// When the agent is absent, runs local VAD to detect speech.
 /// On speech detection, dispatches the agent via HTTP.
-/// When the agent goes idle, handles the warning and disconnect.
 ///
 /// State machine:
 /// ```
 /// AGENT_ABSENT → (speech detected) → DISPATCHING → (agent connected) → AGENT_PRESENT
-/// AGENT_PRESENT → (idle warning) → IDLE_WARNING → (timeout) → AGENT_ABSENT
-/// IDLE_WARNING → (user speaks) → AGENT_PRESENT (timer reset)
 /// DISPATCHING → (dispatch failed) → AGENT_ABSENT
 /// AGENT_PRESENT → (agent crashed/left) → AGENT_ABSENT
 /// ```
@@ -31,9 +27,6 @@ class AgentPresenceService extends ChangeNotifier {
 
   /// Current room name for dispatch calls.
   String? _roomName;
-
-  /// Idle warning countdown (ms remaining before disconnect).
-  int? _idleDisconnectInMs;
 
   /// Whether the feature is enabled. When disabled, agent is always
   /// dispatched via token (backward compat).
@@ -47,7 +40,6 @@ class AgentPresenceService extends ChangeNotifier {
       onSystemEvent;
 
   AgentPresenceState get state => _state;
-  int? get idleDisconnectInMs => _idleDisconnectInMs;
   bool get enabled => _enabled;
 
   AgentPresenceService({
@@ -80,27 +72,12 @@ class AgentPresenceService extends ChangeNotifier {
   void onAgentConnected() {
     if (!_enabled) return;
     _localVad.stopListening();
-    _idleDisconnectInMs = null;
     _transitionTo(AgentPresenceState.agentPresent);
   }
 
   /// Call when the last remote participant (agent) disconnects.
   void onAgentDisconnected() {
     if (!_enabled) return;
-    _transitionTo(AgentPresenceState.agentAbsent);
-  }
-
-  /// Call when an 'agent-idle-warning' data channel event is received.
-  void onIdleWarning(int disconnectInMs) {
-    if (!_enabled) return;
-    _idleDisconnectInMs = disconnectInMs;
-    _transitionTo(AgentPresenceState.idleWarning);
-  }
-
-  /// Call when an 'agent-disconnected' data channel event is received.
-  void onAgentIdleDisconnect() {
-    if (!_enabled) return;
-    _idleDisconnectInMs = null;
     _transitionTo(AgentPresenceState.agentAbsent);
   }
 
@@ -147,10 +124,6 @@ class AgentPresenceService extends ChangeNotifier {
         break;
       case AgentPresenceState.agentPresent:
         _localVad.stopListening();
-        _idleDisconnectInMs = null;
-        break;
-      case AgentPresenceState.idleWarning:
-        // Agent is still present, just warning
         break;
     }
 
@@ -164,12 +137,11 @@ class AgentPresenceService extends ChangeNotifier {
 
     switch (to) {
       case AgentPresenceState.agentAbsent:
-        // Only emit disconnect event when transitioning from present/warning
+        // Only emit disconnect event when transitioning from present
         // (not on initial enable or dispatch failure).
-        if (from == AgentPresenceState.agentPresent ||
-            from == AgentPresenceState.idleWarning) {
+        if (from == AgentPresenceState.agentPresent) {
           onSystemEvent!(
-            'agent-idle-disconnect',
+            'agent-disconnected',
             'AGENT',
             'Disconnected \u2014 speak to reconnect',
           );
@@ -189,20 +161,7 @@ class AgentPresenceService extends ChangeNotifier {
             'AGENT',
             'Connected',
           );
-        } else if (from == AgentPresenceState.idleWarning) {
-          onSystemEvent!(
-            'agent-idle-cancelled',
-            'AGENT',
-            'Staying connected',
-          );
         }
-        break;
-      case AgentPresenceState.idleWarning:
-        onSystemEvent!(
-          'agent-idle-warning',
-          'AGENT',
-          'Going idle in 30s \u2014 speak to stay',
-        );
         break;
     }
   }

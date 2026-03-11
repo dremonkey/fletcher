@@ -24,9 +24,6 @@
  *   FLETCHER_ACK_SOUND - Acknowledgment sound on EOU: path to audio file, 'builtin' (default), or 'disabled'
  *   PIPER_URL - Piper TTS sidecar URL for local fallback (e.g. 'http://localhost:5000')
  *   PIPER_VOICE - Piper voice name (default: sidecar default)
- *   FLETCHER_IDLE_TIMEOUT_MS - Idle time before agent auto-disconnect (ms). 0 = disabled. Default: 300000 (5 min)
- *   FLETCHER_IDLE_WARNING_MS - Time before disconnect to send warning (ms). Default: 30000 (30s)
- *   FLETCHER_WARM_DOWN_MS - Grace period after idle before full disconnect (ms). 0 = disabled. Default: 60000 (1 min)
  */
 
 import { defineAgent, cli, ServerOptions, tts, type JobContext, type JobProcess } from '@livekit/agents';
@@ -45,7 +42,6 @@ import { TranscriptManager } from './transcript-manager';
 import { initHeapDiagnostics } from './heap-snapshot';
 import { buildBootstrapMessage } from './bootstrap';
 import { attachFallbackMonitor } from './tts-fallback-monitor';
-import { IdleTimeout, readIdleTimeoutConfig } from './idle-timeout';
 import { guardTTSInputStream } from './tts-chunk-guard';
 
 // ---------------------------------------------------------------------------
@@ -156,52 +152,7 @@ export default defineAgent({
       publishEvent(event);
     };
 
-    // -----------------------------------------------------------------------
-    // Idle timeout — disconnect agent after prolonged silence to save costs.
-    // Configure via FLETCHER_IDLE_TIMEOUT_MS (default: 300000 = 5 min).
-    // Set to 0 to disable.  The timer is started after the bootstrap message
-    // and reset on every user activity (speech or text input).
-    //
-    // Warm-down phase: after idle timeout, the agent enters a "warm-down"
-    // state where audio input is disabled but the agent stays connected.
-    // This costs agent-minutes but eliminates cold-start latency for users
-    // who return quickly.  Configure via FLETCHER_WARM_DOWN_MS (default:
-    // 60000 = 1 min).  Set to 0 to disable warm-down (immediate disconnect).
-    // -----------------------------------------------------------------------
-    // Forward reference — session is created below but warm-down callback
-    // captures it by closure.  Safe because reset() is only called after
-    // session.start().
     let session: voice.AgentSession;
-
-    const idleConfig = readIdleTimeoutConfig();
-    const idleTimeout = new IdleTimeout({
-      ...idleConfig,
-      logger,
-      onWarning: (disconnectInMs) => {
-        publishEvent({
-          type: 'agent-idle-warning',
-          disconnectInMs,
-        });
-      },
-      onWarmDown: () => {
-        // Disable audio input — the agent stays connected but stops
-        // processing speech.  If the user speaks during warm-down,
-        // reset() is called (via UserInputTranscribed or text_message)
-        // which re-enables audio input below.
-        session?.input?.setAudioEnabled(false);
-        publishEvent({
-          type: 'agent-warm-down',
-        });
-      },
-      onTimeout: () => {
-        publishEvent({
-          type: 'agent-disconnected',
-          reason: 'idle-timeout',
-        });
-        // Grace period for data channel message delivery before shutdown
-        setTimeout(() => ctx.shutdown(), 500);
-      },
-    });
 
     // -----------------------------------------------------------------------
     // Acknowledgment sound — plays a looping chime while the brain is
@@ -327,31 +278,11 @@ export default defineAgent({
     logger.info({ connectLatencyMs }, `Agent dispatch-to-connect latency: ${connectLatencyMs}ms — room: ${ctx.room.name}`);
 
     // -----------------------------------------------------------------------
-    // Warm-down recovery — when the user resumes activity during warm-down,
-    // re-enable audio input and notify the client.  Called before
-    // idleTimeout.reset() at every user activity point.
-    // -----------------------------------------------------------------------
-    const resetIdleWithWarmDownRecovery = () => {
-      if (idleTimeout.inWarmDown) {
-        session?.input?.setAudioEnabled(true);
-        publishEvent({ type: 'agent-warm-down-cancelled' });
-        logger.info('User activity during warm-down — re-enabling audio input');
-      }
-      idleTimeout.reset();
-    };
-
-    // -----------------------------------------------------------------------
     // Client data channel commands — listen for control events from the
     // mobile app (e.g., tts-mode toggle).  Events arrive as JSON on the
     // 'ganglia-events' topic. (TASK-030)
     // -----------------------------------------------------------------------
     let ttsEnabled = true;
-    // Track whether a user text message arrived before the bootstrap fires.
-    // If true, skip the bootstrap: the text message already carries full context
-    // and firing a second generateReply() creates a concurrent s_2 stream that
-    // causes TranscriptManager to finalize s_1 (the user message stream) before
-    // it produces content — silently dropping the first response. (BUG-001)
-    let userMessageReceivedBeforeBootstrap = false;
 
     ctx.room.on(RoomEvent.DataReceived, (payload: Uint8Array, participant: any, _kind: any, topic?: string) => {
       if (topic !== 'ganglia-events') return;
@@ -367,8 +298,6 @@ export default defineAgent({
         // pipeline as a user message.  The response flows through the normal
         // TTS + transcript pipeline. (TASK-017, Epic 17)
         if (event.type === 'text_message' && typeof event.text === 'string' && event.text.trim()) {
-          resetIdleWithWarmDownRecovery();
-          userMessageReceivedBeforeBootstrap = true;
           logger.info({ text: event.text, participant: participant?.identity }, 'Text message received');
           session.generateReply({ userInput: event.text });
         }
@@ -412,22 +341,6 @@ export default defineAgent({
 
     session.on(voice.AgentSessionEventTypes.AgentStateChanged, (ev) => {
       logger.info({ from: ev.oldState, to: ev.newState }, 'Agent state changed');
-      // Reset idle timer when TTS playout ends so the idle window starts from
-      // when the agent goes quiet, not from when the user last spoke. Without
-      // this, agent speech silently consumes the idle budget — in short-timeout
-      // sessions the warning fires mid-sentence and the user misses it. (BUG-002)
-      if (ev.oldState === 'speaking' && ev.newState === 'listening') {
-        resetIdleWithWarmDownRecovery();
-      }
-      // Reset idle timer when brain starts thinking (BUG-006/BUG-007).
-      // Without this, the idle clock continues from the user's last speech
-      // event.  If the brain takes 30–60s to respond, the warning can fire
-      // mid-response and the warm-down/shutdown can cut TTS mid-sentence.
-      // Resetting here gives the full idle window from the point the brain
-      // receives the request, so slow backends don't trigger a false idle.
-      if (ev.newState === 'thinking') {
-        resetIdleWithWarmDownRecovery();
-      }
       // Start ack on EOU detection (thinking state) — skip when TTS is
       // disabled since there's no point playing a chime if the user wants
       // silence (TASK-030).
@@ -452,9 +365,6 @@ export default defineAgent({
     let currentUserSegmentId: string | null = null;
 
     session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (ev) => {
-      // Reset idle timer on any user speech (recovers from warm-down if active)
-      resetIdleWithWarmDownRecovery();
-
       if (ev.isFinal) {
         logger.info({ transcript: ev.transcript }, 'User input (final)');
       }
@@ -588,35 +498,8 @@ export default defineAgent({
       participantIdentity: participant.identity,
     });
     const isE2e = (ctx.room.name ?? '').startsWith('e2e-');
-    // Settle window: on wake-up, ctx.waitForParticipant() resolves immediately
-    // (the client was already in the room), but the client's ParticipantConnectedEvent
-    // handler takes ~37ms+ to fire, call _sendTtsMode(), and have the data channel
-    // message processed here.  The SDK captures audioOutput synchronously inside
-    // _pipelineReplyTaskImpl — before the first await — so calling generateReply()
-    // before the tts-mode:off command arrives causes the bootstrap response to play
-    // audio even when TTS is disabled.  200ms is well above the observed 37ms window
-    // and has no perceptible effect on UX (LLM TTFT is 300–800ms anyway). (BUG-001)
-    await new Promise<void>((resolve) => setTimeout(resolve, 200));
-    if (userMessageReceivedBeforeBootstrap) {
-      // A user text message already arrived during the settle window and
-      // triggered a generateReply() pipeline (s_1).  Sending the bootstrap
-      // now would start a concurrent s_2 stream that causes TranscriptManager
-      // to finalize s_1 before its LLM content arrives — silently dropping
-      // the first response.  Skip bootstrap: the user message carries the
-      // voice-conversation context via historyMode=latest anyway. (BUG-001)
-      logger.info({ room: ctx.room.name }, 'Bootstrap skipped — user message already in flight');
-    } else {
-      logger.info({ room: ctx.room.name, e2e: isE2e }, 'Sending bootstrap message');
-      session.generateReply({ userInput: bootstrapMsg });
-    }
-
-    // Start idle timer after bootstrap
-    if (!idleTimeout.disabled) {
-      idleTimeout.reset();
-      logger.info({ timeoutMs: idleConfig.timeoutMs, warningMs: idleConfig.warningMs, warmDownMs: idleConfig.warmDownMs }, 'Idle timeout enabled');
-    } else {
-      logger.info('Idle timeout disabled');
-    }
+    logger.info({ room: ctx.room.name, e2e: isE2e }, 'Sending bootstrap message');
+    session.generateReply({ userInput: bootstrapMsg });
 
     // -----------------------------------------------------------------------
     // Participant lifecycle — log disconnect/reconnect for observability.
@@ -638,7 +521,6 @@ export default defineAgent({
 
     ctx.addShutdownCallback(async () => {
       logger.info('Shutting down voice agent...');
-      idleTimeout.stop();
       await bgAudioPlayer?.close();
       await session.close();
       await shutdownTelemetry();
