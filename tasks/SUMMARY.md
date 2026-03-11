@@ -375,6 +375,23 @@ Multi-modal input: upload photos and make them available to OpenClaw for vision 
 - [ ] 004: Multi-Modal Session Context Support
 - [ ] 005: Voice-to-Vision Orchestration
 
+### 22. [Dual-Mode Architecture (Voice / Chat Split)](./22-dual-mode) 📋
+Split the single voice-agent pipeline into two distinct modes — **Voice Mode** (LiveKit agent, server-side STT/TTS) and **Chat Mode** (direct OpenClaw API, client-side STT/TTS). Text conversations bypass the voice agent entirely, eliminating the sleep/wake state management bugs and mic conflicts that dominate field testing. Client-side TTS is pluggable (native, Cartesia, Gemini).
+
+**Tasks:**
+- [ ] 042: OpenClaw Direct Client (Flutter) — HTTP/SSE client talking directly to Gateway
+- [ ] 043: Pluggable TTS Engine Abstraction — `TtsEngine` interface + native/Cartesia/Gemini impls
+- [ ] 044: Client-Side STT Integration — `speech_to_text` for native on-device recognition
+- [ ] 045: Chat Mode Streaming Pipeline — text → OpenClaw SSE → sentence buffer → TTS
+- [ ] 046: Mode Switch Controller — voice ↔ chat state machine with clean transitions
+- [ ] 047: Chat Mode Artifact Delivery — artifacts via SSE instead of data channel
+- [ ] 048: Unified Transcript Across Modes — seamless ChatTranscript for both modes
+- [ ] 049: Voice Pipeline Clean Teardown — proper WebRTC/audio session release on mode switch
+- [ ] 050: Migrate Text Input to Chat Mode — move Epic 17 text routing from data channel to direct API
+- [ ] 051: Chat Mode Health & Error Handling — health semantics without agent dependency
+
+**Depends on:** Epic 4 (Ganglia session keys), Epic 17 (Text Input), Epic 20 (Agent Dispatch)
+
 ## Development Path
 
 1. **Phase 1: Infrastructure** ✅
