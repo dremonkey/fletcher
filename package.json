@@ -5,7 +5,7 @@
   "description": "Voice-first bridge for OpenClaw using LiveKit",
   "repository": "dremonkey/openclaw-plugin-livekit",
   "license": "MIT",
-  "workspaces": ["packages/*", "apps/voice-agent"],
+  "workspaces": ["packages/*", "apps/voice-agent", "apps/relay"],
   "bun": {
     "install": {
       "linker": "isolated"

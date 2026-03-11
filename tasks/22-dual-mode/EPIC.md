@@ -1,6 +1,6 @@
 # Epic 22: Dual-Mode Architecture (Voice / Chat Split)
 
-**Goal:** Split the single voice-agent pipeline into two distinct operating modes — **Voice Mode** (LiveKit agent, server-side STT/TTS) and **Chat Mode** (direct OpenClaw API, client-side STT/TTS) — so that text conversations don't depend on the voice agent process or WebRTC connection.
+**Goal:** Split the single voice-agent pipeline into two distinct operating modes — **Voice Mode** (LiveKit agent, server-side STT/TTS) and **Chat Mode** (Fletcher Relay, client-side STT/TTS) — so that text conversations don't depend on the voice agent process.
 
 **Problem:** The current architecture routes all communication — voice and text — through the LiveKit voice agent via a data channel. This means:
 
@@ -15,63 +15,67 @@ Evidence: 10 of 14 bugs from the March 9–10 field testing sessions trace direc
 ```
 VOICE MODE                                    CHAT MODE
 ──────────                                    ─────────
-LiveKit Room (active)                         LiveKit Room (none / dormant)
+LiveKit Room (active, agent connected)        LiveKit Room (active, relay participant)
 Server STT (Deepgram)                         Client STT (native speech_to_text)
-Agent → Ganglia → OpenClaw                    Flutter → OpenClaw API (direct HTTP/SSE)
+Agent → Ganglia → OpenClaw                    Flutter → data channel → Relay → OpenClaw
 Server TTS (Piper/Google)                     Client TTS (pluggable: native / Cartesia / Gemini)
-Mic: WebRTC (MODE_IN_COMMUNICATION)           Mic: OS-native (MODE_NORMAL)
+Mic: WebRTC audio track (MODE_IN_COMM)        Mic: OS-native (MODE_NORMAL) — no audio track
 Agent sleep/wake: YES                         Agent sleep/wake: N/A
 ```
 
 Both modes share the same **OpenClaw Gateway session** (via session key) so conversation context, memory, and artifacts are continuous across mode switches.
 
+## Fletcher Relay — The Chat Mode Backend
+
+Chat mode is powered by the **Fletcher Relay** (`fletcher-relay`), a lightweight Bun service that joins LiveKit rooms as a **non-agent participant** using `@livekit/rtc-node`. It communicates with the Flutter app over the LiveKit data channel using JSON-RPC 2.0, and proxies requests to the local OpenClaw Gateway.
+
+**Why a relay participant instead of direct HTTP to OpenClaw?**
+
+| Concern | Direct HTTP/SSE | Relay via LiveKit data channel |
+|---|---|---|
+| Network resilience | TCP/SSE dies on WiFi→5G | ICE restart — survives network switches |
+| Flutter code reuse | New HTTP client needed | Already speaks data channel |
+| Backend flexibility | Hardcoded to OpenClaw | Pluggable (OpenClaw, Claude Agent SDK, etc.) |
+| Session management | Client-side (fragile) | Server-side in relay (survives reconnects) |
+| Server push | Needs polling or second channel | JSON-RPC notifications for free |
+| NAT traversal | Requires tunnel/Tailscale config | LiveKit handles STUN/TURN |
+
+**Economics:**
+- Voice agent session: ~$0.01/min (agent-minute billing)
+- Relay participant: ~$0.0005/min (participant-only)
+- 10-second text interaction via agent: $0.01 (1-min minimum). Via relay: ~$0.000167.
+- **Savings: ~60x for text interactions**
+
+**Relay lifecycle:**
+```
+1. Mobile requests token from token server
+2. Token server signals relay: "join room X"
+3. Relay joins LiveKit room as non-agent participant
+4. JSON-RPC messages flow over data channel
+5. No messages for ~5 min → relay disconnects
+6. Next interaction → relay rejoins
+```
+
+The relay runs locally alongside OpenClaw — it's part of the Fletcher product, not a cloud service. The installer bundles relay + LiveKit + token server + voice agent as one package. The user's only external dependency is their own OpenClaw instance.
+
+**Mutual exclusion:** When voice mode is active (agent connected), the relay is passive — it stays in the room but defers to the agent. When chat mode is active, the agent is absent or sleeping. Handoff is coordinated via room metadata or data channel signals.
+
 ## What This Eliminates
 
 | Bug cluster | Why it goes away |
 |---|---|
-| Mic release hacks (BUG-001/003 Mar 9, BUG-009 Mar 10) | No WebRTC in chat mode → OS mic is free |
+| Mic release hacks (BUG-001/003 Mar 9, BUG-009 Mar 10) | No audio tracks published in chat mode → OS mic is free |
 | TTS re-sync races (BUG-001 Mar 10, BUG-002 Mar 9) | Chat mode doesn't wake an agent |
-| Artifact clumping (BUG-004 Mar 10) | Chat mode associates artifacts with HTTP responses |
-| ICE cycling after idle (BUG-010 Mar 10) | No LiveKit room connection to degrade |
+| Artifact clumping (BUG-004 Mar 10) | Chat mode associates artifacts with relay responses |
+| ICE cycling after idle (BUG-010 Mar 10) | Relay participant doesn't trigger ICE instability |
 | Timer complexity (BUG-002/006/007 Mar 10) | Idle timer only runs in voice mode |
 | Degraded status confusion (BUG-003 Mar 10) | Chat mode has its own health concept |
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────┐
-│                   Flutter App                        │
-│                                                      │
-│  ┌──────────┐         ┌──────────┐                   │
-│  │ Voice    │         │ Chat     │                   │
-│  │ Mode     │         │ Mode     │                   │
-│  │          │         │          │                   │
-│  │ LiveKit  │         │ OpenClaw │                   │
-│  │ Service  │         │ Client   │                   │
-│  │ (exists) │         │ (new)    │                   │
-│  └────┬─────┘         └────┬─────┘                   │
-│       │                    │                         │
-│  ┌────┴─────┐         ┌───┴──────┐                   │
-│  │ Server   │         │ Client   │                   │
-│  │ STT/TTS  │         │ STT/TTS  │                   │
-│  └────┬─────┘         └────┬─────┘                   │
-│       │                    │                         │
-│  ┌────┴────────────────────┴─────┐                   │
-│  │      Unified Transcript       │                   │
-│  │      (ChatTranscript)         │                   │
-│  └───────────────────────────────┘                   │
-│                                                      │
-│  ┌───────────────────────────────┐                   │
-│  │      Mode Switch Controller   │                   │
-│  │   voice ←→ chat transitions   │                   │
-│  └───────────────────────────────┘                   │
-└──────────────────────┬──────────────────────────────┘
-                       │
-            ┌──────────┴──────────┐
-            │  OpenClaw Gateway   │
-            │  (shared session)   │
-            └─────────────────────┘
-```
+![Dual-Mode Architecture](./dual-mode-architecture.png)
+
+> Source: [`dual-mode-architecture.excalidraw`](./dual-mode-architecture.excalidraw) — open in [excalidraw.com](https://excalidraw.com) to edit.
 
 ## Status
 
@@ -79,10 +83,12 @@ Both modes share the same **OpenClaw Gateway session** (via session key) so conv
 
 ## Tasks
 
-### 042: OpenClaw Direct Client (Flutter)
-Build a Dart HTTP client that talks directly to the OpenClaw Gateway's OpenAI-compatible completions API (`/v1/chat/completions` or `/v1/responses`). Supports SSE streaming for token-by-token delivery. Uses the same session key as the voice agent (via `resolveSessionKey()` logic) so both modes share conversation context.
+### 042: Relay Integration for Chat Mode (Flutter)
+Wire the Flutter app to communicate with the Fletcher Relay via JSON-RPC 2.0 over the LiveKit data channel. The app already subscribes to `ganglia-events` data channel — add a parallel `relay` topic (or reuse the existing channel with message type routing). Implement the client-side JSON-RPC methods: `session/new`, `session/message`, `session/resume`, `session/cancel`.
 
-This is the core of chat mode — replaces the LiveKit data channel → agent → Ganglia → OpenClaw path with Flutter → OpenClaw directly.
+This replaces the current text path (data channel → voice agent → Ganglia → OpenClaw) with data channel → relay → OpenClaw.
+
+**Depends on:** fletcher-relay project (relay-websocket epic)
 
 **Status:** [ ]
 
@@ -94,7 +100,7 @@ Define a `TtsEngine` interface in Dart with implementations:
 - **CartesiaTtsEngine** — REST/WebSocket API → audio bytes → `just_audio` playback (40ms TTFA)
 - **GeminiTtsEngine** — Google GenAI SDK with audio response modality
 
-The interface: `speak(String text)`, `stop()`, `state` stream. Sentence-level streaming: as OpenClaw SSE chunks arrive, buffer into sentences, feed each to the active engine.
+The interface: `speak(String text)`, `stop()`, `state` stream. Sentence-level streaming: as relay streams text deltas via `session/update`, buffer into sentences, feed each to the active engine.
 
 Engine selection via user setting (persisted in SharedPreferences).
 
@@ -105,16 +111,16 @@ Engine selection via user setting (persisted in SharedPreferences).
 ### 044: Client-Side STT Integration
 Add `speech_to_text` package for native on-device speech recognition in chat mode. STT output fills the text input field (user can review/edit before sending). This replaces the server-side Deepgram STT that runs through LiveKit.
 
-Key: native STT uses `MODE_NORMAL` on Android — no mic conflict with WebRTC.
+Key: native STT uses `MODE_NORMAL` on Android — no mic conflict with WebRTC. No audio track is published in chat mode.
 
 **Status:** [ ]
 
 ---
 
 ### 045: Chat Mode Streaming Pipeline
-Wire the full chat mode pipeline: text input (typed or native STT) → OpenClaw Direct Client (042) → SSE stream → sentence buffer → TtsEngine (043) → audio out. Simultaneously render streamed text in ChatTranscript as it arrives.
+Wire the full chat mode pipeline: text input (typed or native STT) → relay JSON-RPC (`session/message`) → `session/update` stream → sentence buffer → TtsEngine (043) → audio out. Simultaneously render streamed text in ChatTranscript as it arrives.
 
-Handle: interruption (user starts typing while TTS is speaking), error recovery (Gateway timeout → retry or surface error), empty responses.
+Handle: interruption (user starts typing while TTS is speaking), error recovery (relay timeout → surface error), empty responses.
 
 **Status:** [ ]
 
@@ -122,17 +128,18 @@ Handle: interruption (user starts typing while TTS is speaking), error recovery 
 
 ### 046: Mode Switch Controller
 State machine managing transitions between voice mode and chat mode:
-- **Voice → Chat:** tear down LiveKit audio tracks, release WebRTC audio session, stop agent idle timer. If agent is connected, let it sleep naturally (don't force-disconnect). Switch transcript source to direct client.
-- **Chat → Voice:** dispatch agent (reuse Epic 20 dispatch flow), wait for agent connect, hand off to LiveKit pipeline. Stop client-side TTS.
+- **Voice → Chat:** stop publishing audio track (not just mute — `removePublishedTrack`), release WebRTC audio session to `MODE_NORMAL`, stop agent idle timer. Agent sleeps naturally or is explicitly released. Relay becomes active participant for text routing.
+- **Chat → Voice:** dispatch agent (reuse Epic 20 dispatch flow), publish audio track, wait for agent connect, hand off to LiveKit voice pipeline. Relay goes passive (defers to agent). Stop client-side TTS.
 - **Persist mode across app restarts** (SharedPreferences).
 - **Handle in-flight responses** during switch: let current response finish in its original mode before switching.
+- **Coordinate with relay** via room metadata or data channel signals so relay knows whether to handle messages or defer to agent.
 
 **Status:** [ ]
 
 ---
 
 ### 047: Chat Mode Artifact Delivery
-Artifacts in voice mode arrive via the `ganglia-events` data channel. In chat mode, artifacts need to come from the OpenClaw SSE stream (tool call results, code blocks, etc.) and be rendered in the same ChatTranscript. Ensure `_groupArtifactsByMessage` works with both artifact sources.
+Artifacts in voice mode arrive via the `ganglia-events` data channel from the agent. In chat mode, artifacts arrive from the relay via JSON-RPC `session/update` notifications (with `type: "artifact"`). Ensure `_groupArtifactsByMessage` works with both artifact sources — artifacts should render inline below their originating message regardless of which mode produced them.
 
 **Status:** [ ]
 
@@ -141,7 +148,7 @@ Artifacts in voice mode arrive via the `ganglia-events` data channel. In chat mo
 ### 048: Unified Transcript Across Modes
 Ensure ChatTranscript seamlessly merges messages from both modes. A user might start in voice mode, switch to chat, then switch back — the transcript should be one continuous thread. Messages need a `source` tag (voice/chat) for debugging but should render identically.
 
-Session key continuity: both modes must use the same OpenClaw session so the LLM sees the full conversation history regardless of which mode produced each message.
+Session key continuity: both modes must use the same OpenClaw session (via `SessionKey`) so the LLM sees the full conversation history regardless of which mode produced each message. The relay uses the same `resolveSessionKey()` logic as Ganglia.
 
 **Status:** [ ]
 
@@ -151,24 +158,26 @@ Session key continuity: both modes must use the same OpenClaw session so the LLM
 When switching from voice to chat mode, perform a clean shutdown of the voice pipeline:
 - Unpublish audio track (not just mute — full `removePublishedTrack`)
 - Release Android `AudioManager` to `MODE_NORMAL`
-- Optionally disconnect from LiveKit room entirely (or keep connection dormant for fast re-entry)
-- Clear stale state: `_lastAgentSegmentId`, reconnection flags, idle timer
+- Keep LiveKit room connection alive (relay still needs the data channel)
+- Clear stale voice state: `_lastAgentSegmentId`, reconnection flags, idle timer
 
-This directly addresses the root cause of BUG-001/003 (Mar 9) and BUG-009 (Mar 10).
+This directly addresses the root cause of BUG-001/003 (Mar 9) and BUG-009 (Mar 10). Unlike the current architecture, the room stays connected for the relay — only the audio track and agent are torn down.
 
 **Status:** [ ]
 
 ---
 
-### 050: Migrate Text Input from Data Channel to Chat Mode
-The current text input (Epic 17) routes typed messages through the LiveKit data channel to the voice agent. Migrate this to use the OpenClaw Direct Client (042) instead, so text input works without an active agent process. The data channel path remains as a fallback when in voice mode and the agent is connected.
+### 050: Migrate Text Input from Agent to Relay
+The current text input (Epic 17) routes typed messages through the LiveKit data channel to the voice agent. Migrate this to route through the relay instead via JSON-RPC `session/message`. Text input always goes through chat mode — even if the agent happens to be connected, text messages are handled by the relay, not the agent. This ensures text works regardless of agent state.
 
 **Status:** [ ]
 
 ---
 
 ### 051: Chat Mode Health & Error Handling
-Define health semantics for chat mode: network reachability to OpenClaw Gateway, SSE stream health, TTS engine status. Update HealthService to show appropriate status (no more "Degraded" when there's simply no agent — chat mode doesn't need one).
+Define health semantics for chat mode: relay participant presence in room, relay ↔ OpenClaw connectivity (via JSON-RPC heartbeat or health method), TTS engine status. Update HealthService to show appropriate status — when in chat mode, agent absence is normal, not "Degraded."
+
+Add relay-specific error surfaces: "Relay disconnected," "OpenClaw unreachable," "TTS engine error." These replace the voice-mode-centric health indicators.
 
 Addresses BUG-003 (Mar 10) — system status during agent sleep.
 
@@ -179,39 +188,57 @@ Addresses BUG-003 (Mar 10) — system status during agent sleep.
 | Concern | Voice Mode | Chat Mode |
 |---|---|---|
 | Input | Server STT (Deepgram via LiveKit) | Native STT (`speech_to_text`) or keyboard |
-| LLM routing | Agent → Ganglia → OpenClaw | Flutter → OpenClaw API (direct) |
+| LLM routing | Agent → Ganglia → OpenClaw | Flutter → data channel → Relay → OpenClaw |
 | Output | Server TTS (Piper/Google via agent) | Client TTS (pluggable engine) |
-| LiveKit room | Active, agent connected | None or dormant |
-| Agent process | Running, sleep/wake managed | Not needed |
-| Mic ownership | WebRTC (`MODE_IN_COMMUNICATION`) | OS-native (`MODE_NORMAL`) |
-| Idle management | Agent sleep timer (Epic 20) | None (no server resources) |
-| Cost when idle | $0.0005/min (room connection only) | $0 (no room) |
-| Artifacts | Data channel (`ganglia-events`) | SSE stream from OpenClaw |
+| LiveKit room | Active, agent + relay in room | Active, relay only in room |
+| Agent process | Running, sleep/wake managed | Absent or sleeping |
+| Relay process | Passive (defers to agent) | Active (handles all text) |
+| Mic ownership | WebRTC audio track (`MODE_IN_COMMUNICATION`) | OS-native (`MODE_NORMAL`) — no audio track |
+| Idle management | Agent sleep timer (Epic 20) | Relay idle timeout (~5 min) |
+| Cost when active | ~$0.01/min (agent) + ~$0.001/min (participants) | ~$0.001/min (participants only) |
+| Artifacts | Data channel (`ganglia-events`) from agent | JSON-RPC from relay |
 | Latency (first response) | STT + LLM + TTS (~1.5-3s) | LLM TTFT + client TTS (~0.5-1.5s) |
 
 ## Key Decisions
 
-- **Session continuity via session key.** Both modes use the same `SessionKey` (Epic 4, spec 08) so OpenClaw maintains one conversation thread.
+- **Relay is the chat mode backend.** The Flutter app does not talk to OpenClaw directly. All chat mode communication goes through the relay via LiveKit data channel, getting ICE resilience and session management for free.
+- **Relay is part of the Fletcher product.** It ships alongside the voice agent, LiveKit server, and token server as one installable package. It is not a separate product or optional add-on.
+- **Session continuity via session key.** Both the relay and the voice agent use the same `SessionKey` (Epic 4, spec 08) so OpenClaw maintains one conversation thread.
 - **Client-side TTS is pluggable.** Start with `flutter_tts` (free/offline). Add cloud engines (Cartesia, Gemini) as separate implementations behind the same interface.
-- **Text input defaults to chat mode.** When user taps the mic to switch to text, they're in chat mode — no agent needed.
+- **Text input defaults to chat mode.** When user taps the mic to switch to text, they're in chat mode — relay handles it.
 - **Voice mode is opt-in.** User explicitly activates voice (unmute / tap mic). This dispatches the agent.
-- **LiveKit room lifecycle TBD.** Open question: keep room dormant in chat mode for fast voice re-entry, or disconnect entirely for zero cost? Needs benchmarking of dispatch latency.
+- **Mutual exclusion.** Agent and relay don't both handle messages simultaneously. When the agent is active, the relay is passive. Handoff coordinated via room metadata.
+- **LiveKit room stays connected across modes.** The room is the shared transport layer. Voice mode publishes audio tracks into it. Chat mode uses only the data channel. Switching modes doesn't require disconnecting/reconnecting the room.
+
+## Business Model Alignment
+
+This architecture enables a natural tiered product:
+
+- **Free tier (Chat Mode):** Relay participant handles text, native STT/TTS. Cost: fractions of a penny per interaction. Rock-solid — no agent state management, no sleep/wake bugs.
+- **Premium tier (Voice Mode):** Full STT/TTS/VAD pipeline via transient voice agent. Higher per-minute cost justified by real-time voice interaction. Could support longer/persistent agent sessions for paying users.
+- **The product is the whole stack.** Fletcher = app + relay + voice agent + LiveKit, packaged as one installer. User brings their own OpenClaw. QR code pairing (Epic 7) makes setup a 5-minute experience.
 
 ## Dependencies
 
+- **Fletcher Relay** (`apps/relay`) — the relay service itself (see `apps/relay/tasks/relay-websocket/EPIC.md`)
 - **Epic 4 (Ganglia)** — session key routing for shared context
+- **Epic 7 (Sovereign Pairing)** — QR code setup, token server signals relay to join rooms
 - **Epic 17 (Text Input)** — existing text input UI to migrate
 - **Epic 20 (Cost Optimization)** — agent dispatch/sleep mechanics
 - **Epic 3 (Flutter App)** — mobile client foundation
 
 ## Anti-Goals
 
-- **No hybrid pipeline.** A message is either routed through the agent (voice mode) or directly to OpenClaw (chat mode). Never both simultaneously.
+- **No direct HTTP to OpenClaw from the app.** All LLM communication goes through either the agent (voice) or the relay (chat). The app never talks to OpenClaw directly.
+- **No hybrid pipeline.** A message is routed through the agent OR the relay. Never both simultaneously.
 - **No server-side TTS in chat mode.** The whole point is to eliminate the agent dependency for text conversations.
 - **No breaking voice mode.** Voice mode continues to work exactly as today. This epic adds chat mode alongside it.
+- **Fletcher does not install or manage OpenClaw.** It connects to the user's existing instance. Fletcher is the remote, not the TV.
 
 ## References
 
+- [Fletcher Relay architecture](../../apps/relay/docs/architecture.md)
+- [Fletcher Relay epic](../../apps/relay/tasks/relay-websocket/EPIC.md)
 - [Bug log: March 9 field test](../../docs/field-tests/20260309-buglog.md)
 - [Bug log: March 10 field test](../../docs/field-tests/20260310-buglog.md)
 - [flutter_tts](https://pub.dev/packages/flutter_tts) — platform-native TTS

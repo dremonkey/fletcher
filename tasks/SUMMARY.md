@@ -376,21 +376,21 @@ Multi-modal input: upload photos and make them available to OpenClaw for vision 
 - [ ] 005: Voice-to-Vision Orchestration
 
 ### 22. [Dual-Mode Architecture (Voice / Chat Split)](./22-dual-mode) 📋
-Split the single voice-agent pipeline into two distinct modes — **Voice Mode** (LiveKit agent, server-side STT/TTS) and **Chat Mode** (direct OpenClaw API, client-side STT/TTS). Text conversations bypass the voice agent entirely, eliminating the sleep/wake state management bugs and mic conflicts that dominate field testing. Client-side TTS is pluggable (native, Cartesia, Gemini).
+Split the single voice-agent pipeline into two distinct modes — **Voice Mode** (LiveKit agent, server-side STT/TTS) and **Chat Mode** (Fletcher Relay as lightweight LiveKit participant, client-side STT/TTS). Chat mode routes text through the relay via LiveKit data channel (JSON-RPC 2.0), getting ICE resilience and session management for free. Voice mode is unchanged. Both share the same OpenClaw session. Client-side TTS is pluggable (native, Cartesia, Gemini). Enables free/premium tier split: chat (pennies) vs voice (dollars).
 
 **Tasks:**
-- [ ] 042: OpenClaw Direct Client (Flutter) — HTTP/SSE client talking directly to Gateway
+- [ ] 042: Relay Integration for Chat Mode (Flutter) — JSON-RPC client over LiveKit data channel
 - [ ] 043: Pluggable TTS Engine Abstraction — `TtsEngine` interface + native/Cartesia/Gemini impls
 - [ ] 044: Client-Side STT Integration — `speech_to_text` for native on-device recognition
-- [ ] 045: Chat Mode Streaming Pipeline — text → OpenClaw SSE → sentence buffer → TTS
+- [ ] 045: Chat Mode Streaming Pipeline — JSON-RPC → sentence buffer → pluggable TTS
 - [ ] 046: Mode Switch Controller — voice ↔ chat state machine with clean transitions
-- [ ] 047: Chat Mode Artifact Delivery — artifacts via SSE instead of data channel
+- [ ] 047: Chat Mode Artifact Delivery — artifacts via JSON-RPC from relay
 - [ ] 048: Unified Transcript Across Modes — seamless ChatTranscript for both modes
-- [ ] 049: Voice Pipeline Clean Teardown — proper WebRTC/audio session release on mode switch
-- [ ] 050: Migrate Text Input to Chat Mode — move Epic 17 text routing from data channel to direct API
-- [ ] 051: Chat Mode Health & Error Handling — health semantics without agent dependency
+- [ ] 049: Voice Pipeline Clean Teardown — unpublish audio track, release mic, keep room alive for relay
+- [ ] 050: Migrate Text Input from Agent to Relay — text always routes through relay, not agent
+- [ ] 051: Chat Mode Health & Error Handling — relay presence, OpenClaw reachability, TTS engine status
 
-**Depends on:** Epic 4 (Ganglia session keys), Epic 17 (Text Input), Epic 20 (Agent Dispatch)
+**Depends on:** Epic 4 (Ganglia session keys), Epic 7 (Sovereign Pairing), Epic 17 (Text Input), Epic 20 (Agent Dispatch)
 
 ## Development Path
 
