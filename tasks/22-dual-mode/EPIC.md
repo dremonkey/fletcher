@@ -88,7 +88,7 @@ Wire the Flutter app to communicate with the Fletcher Relay via JSON-RPC 2.0 ove
 
 This replaces the current text path (data channel → voice agent → Ganglia → OpenClaw) with data channel → relay → OpenClaw.
 
-**Depends on:** fletcher-relay project (relay-websocket epic)
+**Depends on:** fletcher-relay project (relay-mvp epic)
 
 **Status:** [ ]
 
@@ -220,7 +220,7 @@ This architecture enables a natural tiered product:
 
 ## Dependencies
 
-- **Fletcher Relay** (`apps/relay`) — the relay service itself (see `apps/relay/tasks/relay-websocket/EPIC.md`)
+- **Fletcher Relay** (`apps/relay`) — the relay service itself (see `apps/relay/tasks/relay-mvp/`)
 - **Epic 4 (Ganglia)** — session key routing for shared context
 - **Epic 7 (Sovereign Pairing)** — QR code setup, token server signals relay to join rooms
 - **Epic 17 (Text Input)** — existing text input UI to migrate
@@ -238,7 +238,7 @@ This architecture enables a natural tiered product:
 ## References
 
 - [Fletcher Relay architecture](../../apps/relay/docs/architecture.md)
-- [Fletcher Relay epic](../../apps/relay/tasks/relay-websocket/EPIC.md)
+- [Fletcher Relay epic](../../apps/relay/tasks/relay-mvp/)
 - [Bug log: March 9 field test](../../docs/field-tests/20260309-buglog.md)
 - [Bug log: March 10 field test](../../docs/field-tests/20260310-buglog.md)
 - [flutter_tts](https://pub.dev/packages/flutter_tts) — platform-native TTS

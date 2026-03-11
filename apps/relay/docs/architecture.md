@@ -1,4 +1,4 @@
-# Claude Relay — Architecture
+# Fletcher Relay — Architecture
 
 ## Problem
 
@@ -8,7 +8,7 @@ Fletcher uses `livekit-agent` for voice. It works well for voice but the billing
 - Minimum billing unit: **1 minute per session**
 - A 10-second text interaction costs the same as a 60-second voice session
 
-The goal is a text (and eventually richer) interaction path that bypasses the agent framework entirely.
+The goal is a text interaction path that bypasses the agent framework entirely.
 
 ## Transport Decision: LiveKit Non-Agent Participant
 
@@ -64,35 +64,64 @@ For a 2-minute text interaction the savings narrow to ~10x. Voice sessions remai
 
 ## Architecture
 
-The relay is the **single gateway** to all AI backends. Both the voice and text paths route through it:
+The relay is an **ACP client** that bridges the LiveKit data channel to an ACP agent (OpenClaw). The voice agent is a separate ACP client that connects to the same ACP agent independently.
 
 ```
-                    ┌─────────────────────────────────────────┐
-                    │             Claude Relay (Bun)           │
-                    │                                          │
-Mobile ──WebRTC──▶  │  LiveKit participant  ←─ text sessions  │
-(data channel)      │                                          │  ──▶ OpenClaw
-                    │  HTTP (completions)   ←─ voice sessions  │  ──▶ Claude Agent SDK
-livekit-agent ────▶ │  (Ganglia calls here)                   │
-                    │                                          │
-                    └─────────────────────────────────────────┘
+TEXT PATH (Chat Mode)
+─────────────────────
+Mobile ──data channel──▶ Relay (Bun, LiveKit participant)
+                              │
+                              │ ACP (stdio or WebSocket)
+                              ▼
+                         OpenClaw (ACP agent)
+
+VOICE PATH (Voice Mode)
+───────────────────────
+Mobile ──audio track──▶ livekit-agent (STT/TTS/VAD)
+                              │
+                              │ ACP (stdio or WebSocket)
+                              ▼
+                         OpenClaw (ACP agent)
 ```
 
-**Text path:** Mobile connects to a LiveKit room. The relay joins the same room as a non-agent participant. JSON-RPC 2.0 flows over the data channel.
+Both paths connect to OpenClaw as ACP clients. Both use the same `session_key` (via `_meta` in `session/new`) so OpenClaw maintains one conversation thread regardless of which mode produced each message.
 
-**Voice path:** `livekit-agent` continues to run (handling STT/TTS/VAD). Ganglia, currently pointing at OpenClaw directly, is redirected to call the relay's HTTP endpoint instead. The relay forwards to the configured backend. Ganglia requires no protocol change — the relay exposes the same OpenAI-compatible completions interface OpenClaw does.
+**Key insight:** The relay and voice agent are both disposable ACP clients. All conversation state lives in OpenClaw. If the relay disconnects, no state is lost. If the voice agent dies and LiveKit dispatches a new one, no state is lost. OpenClaw resumes the conversation based on session key.
 
-The relay is a Bun process running on the same host as the AI backend. It is not deployed on LiveKit Cloud infrastructure — it is a self-hosted process that connects to LiveKit as a client.
+### What the relay does
 
-**Why route voice through the relay too:**
-- Single place to manage backend switching (`RELAY_BACKEND`)
-- Single place for session management and routing logic
-- The richer stream protocol (background task push, richer events) becomes available to voice sessions too, not just text
-- Ganglia can eventually be updated to use the richer protocol instead of bare completions
+1. **Joins LiveKit rooms** as a non-agent participant (signaled by token server)
+2. **Manages the ACP session** — `initialize` + `session/new` with routing metadata
+3. **Forwards ACP messages** between data channel and OpenClaw:
+   - Mobile sends `session/prompt` → relay adds `sessionId`, forwards to OpenClaw
+   - OpenClaw sends `session/update` → relay forwards to mobile over data channel
+   - Mobile sends `session/cancel` → relay forwards to OpenClaw
+4. **Idle management** — disconnects from room after ~5 min of inactivity
+5. **Health endpoints** — HTTP `/health` for monitoring
+
+### What the relay does NOT do
+
+- Parse or translate SSE streams (ACP handles streaming natively)
+- Maintain conversation history (OpenClaw holds it)
+- Define its own protocol (uses ACP)
+- Route voice traffic (voice agent has its own ACP connection)
+
+## Protocol: ACP over LiveKit Data Channel
+
+The data channel carries **ACP JSON-RPC 2.0 messages** on the `"relay"` topic. See `data-channel-protocol.md` for the exact message formats and `acp-transport.md` for the full ACP spec.
+
+The relay handles ACP lifecycle internally:
+- `initialize` — relay sends on connect to OpenClaw
+- `session/new` — relay sends with `_meta.session_key` for routing
+
+The mobile sends/receives the subset it needs:
+- `session/prompt` — send user message (relay adds `sessionId`)
+- `session/cancel` — cancel in-flight request
+- `session/update` — receive streaming content chunks (forwarded from OpenClaw)
 
 ## Relay Lifecycle
 
-The relay does not maintain a permanent LiveKit room connection. It connects on demand and disconnects when idle — the same pattern as livekit-agent dispatch, without using the agent framework.
+The relay does not maintain a permanent LiveKit room connection. It connects on demand and disconnects when idle.
 
 ```
 1. Mobile requests token from token server
@@ -101,17 +130,17 @@ The relay does not maintain a permanent LiveKit room connection. It connects on 
         ▼
 2. Relay joins LiveKit room as participant
         │
-        │  Data channel established
+        │  Relay connects to OpenClaw via ACP (initialize + session/new)
         ▼
-3. Session active — JSON-RPC messages over data channel
+3. Session active — ACP messages forwarded over data channel
         │
         │  No messages for ~5 minutes
         ▼
-4. Relay disconnects, room closes
+4. Relay disconnects from room + ACP session
         │
         │  Mobile reconnects → token request → relay rejoins
         ▼
-5. Repeat
+5. Repeat (fresh ACP session, same session_key → same conversation)
 ```
 
 **Trigger mechanism:** The token request is the natural trigger. The token server (already an HTTP service on the same host) signals the relay to join the target room as a side effect of issuing the token. This requires no new infrastructure — the relay exposes a local HTTP endpoint that the token server calls.
@@ -120,65 +149,53 @@ The relay does not maintain a permanent LiveKit room connection. It connects on 
 
 **Cost implication:** Relay participant minutes only tick during active sessions. Zero relay cost between sessions.
 
-## Protocol
+## Session Routing
 
-JSON-RPC 2.0 messages sent over the LiveKit data channel (same protocol designed for the WebSocket approach — transport-agnostic).
+Both the relay and voice agent route to the same OpenClaw conversation via `_meta.session_key` in `session/new`:
 
-### Client → Relay
+```jsonc
+// Relay → OpenClaw
+{
+  "method": "session/new",
+  "params": {
+    "cwd": "/",
+    "mcpServers": [],
+    "_meta": {
+      "session_key": { "type": "owner", "key": "alice" },
+      "room_name": "room_abc",
+      "participant_identity": "alice"
+    }
+  }
+}
+```
 
-| Method | Params | Description |
+Each relay lifecycle gets a fresh ACP session ID, but OpenClaw maps it to the same conversation based on `_meta.session_key`. This mirrors how the voice agent works — disposable ACP sessions, persistent conversations.
+
+## Mode Coordination
+
+The relay and voice agent share LiveKit rooms but never both handle LLM requests simultaneously. Room metadata (`mode: "voice" | "chat" | "idle"`) coordinates handoffs. See `room-metadata-schema.md` for the full state machine and handoff protocols.
+
+## ACP Transport Options
+
+The relay can connect to OpenClaw via two ACP transports:
+
+| Transport | Config | Use case |
 |---|---|---|
-| `session/new` | `{ prompt }` | Start a new conversation |
-| `session/message` | `{ sessionId, content }` | Send message to running session |
-| `session/resume` | `{ sessionId, prompt }` | Resume after reconnect |
-| `session/cancel` | `{ sessionId }` | Cancel running task |
-| `session/list` | — | List active sessions |
+| **stdio** | `ACP_TRANSPORT=stdio ACP_COMMAND=openclaw` | Local: relay spawns OpenClaw as subprocess |
+| **WebSocket** | `ACP_TRANSPORT=websocket ACP_URL=wss://...` | Remote: relay connects to hosted OpenClaw |
 
-### Relay → Client
-
-| Method | Params | Description |
-|---|---|---|
-| `session/update` | `{ sessionId, type, content }` | Streaming text delta |
-| `session/complete` | `{ sessionId, result }` | Task completed |
-| `session/error` | `{ sessionId, error }` | Error |
-| `session/push` | `{ sessionId, type, payload }` | Background task completion pushed to client |
-
-The `session/push` notification is the key addition over the completions API — it allows the relay to push results from long-running background tasks when they complete, without the client having to poll.
-
-## Background Task Delivery
-
-When the mobile app is backgrounded:
-
-- **Android:** The foreground service already running for voice keeps the LiveKit connection alive. The data channel stays open. `session/push` is delivered normally.
-- **iOS:** iOS suspends the app. The LiveKit connection dies. Push notifications (FCM/APNs) are required to wake the app; on resume it reconnects and the relay delivers buffered events.
-
-The relay buffers completed task events for reconnecting clients for a configurable window (default: 30 minutes).
-
-## Backend Abstraction
-
-The relay is transport, not backend. It bridges the LiveKit data channel to whichever AI backend is configured via `RELAY_BACKEND`:
-
-| Value | Backend | Use case |
-|---|---|---|
-| `openclaw` | OpenClaw Gateway (HTTP) | Self-hosted, multi-user reasoning engine |
-| `claude` | Claude Agent SDK | Direct Anthropic API, full agentic tool use |
-
-Both backends expose the same interface to the relay's session manager — the JSON-RPC protocol is identical regardless of which backend is active. This mirrors the Ganglia pattern in the voice pipeline (`GANGLIA_TYPE=openclaw` vs `GANGLIA_TYPE=nanoclaw`).
-
-Adding a new backend means implementing the backend interface; no changes to transport, session management, or protocol.
+For the Fletcher product (local-first), stdio is the default — the relay spawns OpenClaw directly. WebSocket enables future cloud deployment without changing the relay.
 
 ## Relation to Voice Path
 
 ```
-Before:
-  Voice:  Mobile → LiveKit → livekit-agent (Ganglia → OpenClaw directly)
+Before (HTTP/SSE):
+  Voice:  Mobile → LiveKit → livekit-agent → Ganglia → HTTP/SSE → OpenClaw
   Text:   (not supported)
 
-After:
-  Voice:  Mobile → LiveKit → livekit-agent (Ganglia → Relay → backend)
-  Text:   Mobile → LiveKit → Relay (participant) → backend
+After (ACP):
+  Voice:  Mobile → LiveKit → livekit-agent → ACP → OpenClaw
+  Text:   Mobile → LiveKit → Relay (participant) → ACP → OpenClaw
 ```
 
-`livekit-agent` continues to own STT, TTS, and VAD — the parts that justify its cost for voice. The relay takes over the LLM backend connection only. Ganglia is redirected from calling OpenClaw directly to calling the relay's completions-compatible HTTP endpoint. This is a one-line config change to `OPENCLAW_GATEWAY_URL` (or equivalent).
-
-Both paths share the relay's session management and backend abstraction. A voice session and a text session for the same user map to the same session in the relay, preserving conversation context across modalities.
+Both paths use ACP. Both share session context via session key. The relay doesn't proxy voice — the voice agent has its own ACP connection. This eliminates the coupling between text and voice paths that caused the sleep/wake bugs documented in the March 9-10 field tests.
