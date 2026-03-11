@@ -64,6 +64,7 @@ const REQUIRED_ENV = [
 ] as const;
 
 const ttsProvider = (process.env.TTS_PROVIDER ?? 'piper') as TTSProvider;
+const BRAIN_MAX_WAIT_MS = parseInt(process.env.FLETCHER_BRAIN_MAX_WAIT_MS ?? '60000', 10);
 
 // Skip env validation for download-files (runs during Docker build without env)
 if (!process.argv.includes('download-files')) {
@@ -153,6 +154,14 @@ export default defineAgent({
     };
 
     let session: voice.AgentSession;
+    let brainTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
+
+    const clearBrainTimeout = () => {
+      if (brainTimeoutHandle) {
+        clearTimeout(brainTimeoutHandle);
+        brainTimeoutHandle = null;
+      }
+    };
 
     // -----------------------------------------------------------------------
     // Acknowledgment sound — plays a looping chime while the brain is
@@ -341,6 +350,26 @@ export default defineAgent({
 
     session.on(voice.AgentSessionEventTypes.AgentStateChanged, (ev) => {
       logger.info({ from: ev.oldState, to: ev.newState }, 'Agent state changed');
+
+      // Brain maxWait timeout (BUG-008/005): start countdown on thinking,
+      // cancel when any content arrives (state transitions away from thinking).
+      if (ev.newState === 'thinking' && BRAIN_MAX_WAIT_MS > 0) {
+        clearBrainTimeout();
+        brainTimeoutHandle = setTimeout(() => {
+          logger.warn({ maxWaitMs: BRAIN_MAX_WAIT_MS }, 'Brain maxWait exceeded — aborting LLM stream');
+          session.interrupt();
+          publishEvent({
+            type: 'artifact',
+            artifact_type: 'error',
+            title: 'Brain Timed Out',
+            message: 'The response took too long. Please try again.',
+          });
+          brainTimeoutHandle = null;
+        }, BRAIN_MAX_WAIT_MS);
+      } else if (ev.oldState === 'thinking') {
+        clearBrainTimeout();
+      }
+
       // Start ack on EOU detection (thinking state) — skip when TTS is
       // disabled since there's no point playing a chime if the user wants
       // silence (TASK-030).
@@ -534,6 +563,7 @@ export default defineAgent({
 
     ctx.addShutdownCallback(async () => {
       logger.info('Shutting down voice agent...');
+      clearBrainTimeout();
       await bgAudioPlayer?.close();
       await session.close();
       await shutdownTelemetry();

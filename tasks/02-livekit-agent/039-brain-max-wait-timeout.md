@@ -1,7 +1,7 @@
 # Task 039: Brain maxWait Timeout
 
 **Epic:** 02 — LiveKit Agent
-**Status:** Open
+**Status:** Implemented — Option B (setTimeout abort in agent.ts)
 **Priority:** Medium
 **Origin:** Field test BUG-008 (2026-03-10)
 
@@ -26,15 +26,15 @@ cancelled and the user should receive a clear error artifact so they know to ret
 
 ## Acceptance Criteria
 
-- [ ] New env var `FLETCHER_BRAIN_MAX_WAIT_MS` (default: `60000`, `0` = disabled)
-- [ ] When agent enters `thinking`, a `maxWait` countdown starts
-- [ ] If the first LLM token arrives before `maxWait`, the countdown is cancelled (no-op)
-- [ ] If `maxWait` expires with no tokens received:
+- [x] New env var `FLETCHER_BRAIN_MAX_WAIT_MS` (default: `60000`, `0` = disabled)
+- [x] When agent enters `thinking`, a `maxWait` countdown starts
+- [x] If the first LLM token arrives before `maxWait`, the countdown is cancelled (no-op)
+- [x] If `maxWait` expires with no tokens received:
   - Cancel / abort the pending LLM stream
   - Publish an error artifact to the client: `"Brain timed out — please try again"`
   - Return agent to `listening` state
-- [ ] Server logs a warning: `"Brain maxWait exceeded — aborting LLM stream"`
-- [ ] The agent remains usable after a timeout (next user input works normally)
+- [x] Server logs a warning: `"Brain maxWait exceeded — aborting LLM stream"`
+- [x] The agent remains usable after a timeout (next user input works normally)
 
 ## Implementation Options
 

@@ -1,7 +1,7 @@
 # Task 041: Fix SDK ICE Reconnect Loop After Agent Idle Disconnect
 
 **Epic:** 09 — Connectivity / Connection Resilience
-**Status:** Open — RCA Complete
+**Status:** Implemented — all 5 fixes applied
 **Priority:** High
 **Origin:** Field test BUG-010 (2026-03-10)
 
@@ -606,10 +606,10 @@ Fix 5 is cosmetic cleanup.
 
 ## Acceptance Criteria
 
-- [ ] After agent idle disconnect, no repeated ICE drop/reconnect cycles
-- [ ] Only one set of `SDK reconnect attempt N/10` events per disconnect event
-- [ ] UI clears "Reconnecting…" banner within 2s of `SDK reconnected successfully`
-- [ ] Agent dispatch re-fires correctly after coincident ICE reconnect + agent departure
+- [x] After agent idle disconnect, no repeated ICE drop/reconnect cycles
+- [x] Only one set of `SDK reconnect attempt N/10` events per disconnect event
+- [x] UI clears "Reconnecting…" banner within 2s of `SDK reconnected successfully`
+- [x] Agent dispatch re-fires correctly after coincident ICE reconnect + agent departure
 
 ---
 

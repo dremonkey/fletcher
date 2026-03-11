@@ -1,7 +1,7 @@
 # Task 040: Guard Audio Track Restart When User is Muted
 
 **Epic:** 03 — Flutter App
-**Status:** Open
+**Status:** Implemented
 **Priority:** Medium
 **Origin:** Field test BUG-009 (2026-03-10)
 
@@ -374,15 +374,15 @@ actually being refreshed.
 
 ## Acceptance Criteria
 
-- [ ] `_refreshAudioTrack()` returns early when `_isMuted == true`, logging:
+- [x] `_refreshAudioTrack()` returns early when `_isMuted == true`, logging:
       `[Fletcher] Device change while muted — skipping audio track restart (BUG-009)`
-- [ ] `_isRefreshingAudio` is NOT set to `true` during a muted skip (no 1-second lock held)
-- [ ] `_pendingDeviceChange` field exists and is set to `true` when a skip occurs
-- [ ] On unmute, log appears: `[Fletcher] Applying deferred device change refresh after unmute (BUG-009)` (if a device change occurred while muted), and `_pendingDeviceChange` is cleared
-- [ ] When unmuted and no device change occurred while muted, log does NOT appear and `_pendingDeviceChange` is false
-- [ ] Tester can use Android keyboard dictation during network handoffs while muted
-- [ ] No regression: when unmuted, device changes still trigger `restartTrack()` as before
-- [ ] No regression: BT audio routing works correctly after mute→unmute cycle following a BT device switch
+- [x] `_isRefreshingAudio` is NOT set to `true` during a muted skip (no 1-second lock held)
+- [x] `_pendingDeviceChange` field exists and is set to `true` when a skip occurs
+- [x] On unmute, log appears: `[Fletcher] Applying deferred device change refresh after unmute (BUG-009)` (if a device change occurred while muted), and `_pendingDeviceChange` is cleared
+- [x] When unmuted and no device change occurred while muted, log does NOT appear and `_pendingDeviceChange` is false
+- [x] Tester can use Android keyboard dictation during network handoffs while muted
+- [x] No regression: when unmuted, device changes still trigger `restartTrack()` as before
+- [x] No regression: BT audio routing works correctly after mute→unmute cycle following a BT device switch
 
 ---
 

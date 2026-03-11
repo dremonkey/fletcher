@@ -71,6 +71,7 @@ class LiveKitService extends ChangeNotifier {
   StreamSubscription<List<MediaDevice>>? _deviceChangeSub;
   Timer? _deviceChangeDebounce;
   bool _isRefreshingAudio = false;
+  bool _pendingDeviceChange = false;  // BUG-009: device changed while muted; refresh on unmute
 
   // Network connectivity subscription
   StreamSubscription<bool>? _connectivitySub;
@@ -85,6 +86,7 @@ class LiveKitService extends ChangeNotifier {
 
   // Room reconnection state (sleep/disconnect recovery)
   bool _reconnecting = false;
+  int _lastLoggedReconnectAttempt = 0;
   ReconnectScheduler _reconnectScheduler = ReconnectScheduler();
 
   // Connectivity-driven reconnect: waits for network restore when offline
@@ -437,6 +439,7 @@ class LiveKitService extends ChangeNotifier {
     // before firing RoomDisconnectedEvent. Show feedback during that window.
     _listener?.on<RoomReconnectingEvent>((_) {
       debugPrint('[Fletcher] SDK reconnecting...');
+      _reconnecting = true;  // BUG-010: align flag with status for all reconnect paths
       // Start the budget clock NOW — not when the SDK gives up. The server's
       // departure_timeout counts from the first disconnect, so the app's
       // budget must too. begin() is idempotent (won't reset if already started).
@@ -465,16 +468,22 @@ class LiveKitService extends ChangeNotifier {
       // reset if already started). We use this event rather than
       // RoomReconnectingEvent because the SDK doesn't always fire that event.
       _reconnectScheduler.begin();
-      debugPrint(
-        '[Fletcher] SDK reconnect attempt ${event.attempt}/${event.maxAttemptsRetry} '
-        '(next retry in ${event.nextRetryDelaysInMs}ms)',
-      );
+      // Deduplicate: SDK may emit attempt=1 twice when both peer connections
+      // fail simultaneously (BUG-010). Only log each attempt number once.
+      if (event.attempt != _lastLoggedReconnectAttempt) {
+        _lastLoggedReconnectAttempt = event.attempt;
+        debugPrint(
+          '[Fletcher] SDK reconnect attempt ${event.attempt}/${event.maxAttemptsRetry} '
+          '(next retry in ${event.nextRetryDelaysInMs}ms)',
+        );
+      }
     });
 
     _listener?.on<RoomReconnectedEvent>((_) async {
       debugPrint('[Fletcher] SDK reconnected successfully');
       _reconnectScheduler.reset();
       _reconnecting = false;
+      _lastLoggedReconnectAttempt = 0;
       healthService.updateRoomConnected(connected: true);
       // Emit room reconnected system event (task 020)
       final roomName = _currentRoomName ?? 'room';
@@ -513,16 +522,21 @@ class LiveKitService extends ChangeNotifier {
         _reconnectBuffer = null;
       }
 
-      // After reconnection, refresh audio track to restore BT routing.
-      // Network transitions (WiFi→cellular) tear down the old audio session,
-      // causing Android to fall back to speaker. restartTrack() re-establishes
-      // the correct audio route (BT SCO if headset is connected). (BUG-021)
-      _refreshAudioTrack();
+      // After reconnection, refresh audio track to restore BT routing, but
+      // only when an agent is present. If the room is empty (post-idle), skip
+      // the refresh — restartTrack() would trigger a device-change event that
+      // starts another ICE renegotiation cycle (BUG-010).
+      final agentPresent = _room!.remoteParticipants.values
+          .any((p) => p.kind == ParticipantKind.AGENT);
+      if (agentPresent) {
+        _refreshAudioTrack();
+      }
     });
 
     _listener?.on<RoomDisconnectedEvent>((event) async {
       final reason = event.reason ?? DisconnectReason.unknown;
       debugPrint('[Fletcher] Disconnected: $reason');
+      _lastLoggedReconnectAttempt = 0;
       healthService.updateAgentPresent(present: false);
       // Emit room disconnected system event (task 020)
       _emitSystemEvent(SystemEvent(
@@ -978,6 +992,16 @@ class LiveKitService extends ChangeNotifier {
 
   Future<void> _refreshAudioTrack() async {
     if (_isRefreshingAudio || _localParticipant == null) return;
+
+    // BUG-009: Skip track restart entirely when muted. The mic is unpublished;
+    // there is no track to restart and running the refresh would hold
+    // _isRefreshingAudio for ~1s, silently dropping any subsequent device events.
+    if (_isMuted) {
+      debugPrint('[Fletcher] Device change while muted — skipping audio track restart (BUG-009)');
+      _pendingDeviceChange = true;
+      return;
+    }
+
     _isRefreshingAudio = true;
 
     debugPrint('[Fletcher] Audio device changed — refreshing audio track');
@@ -991,7 +1015,7 @@ class LiveKitService extends ChangeNotifier {
       // unpublishing — the agent session stays alive.
       final publication = _localParticipant!.audioTrackPublications.firstOrNull;
       final track = publication?.track;
-      if (track != null && !_isMuted) {
+      if (track != null) {
         await track.restartTrack();
         debugPrint('[Fletcher] Audio track restarted successfully');
       }
@@ -999,6 +1023,14 @@ class LiveKitService extends ChangeNotifier {
       debugPrint('[Fletcher] Audio track refresh failed: $e');
     } finally {
       _isRefreshingAudio = false;
+      // Suppress device-change events for 5s after restartTrack() completes —
+      // getUserMedia() internally fires devicechange on Android, which would
+      // loop back into another restartTrack() call (BUG-010).
+      _deviceChangeDebounce?.cancel();
+      _deviceChangeDebounce = Timer(const Duration(seconds: 5), () {
+        // No-op: exhausts the debounce window so _onDeviceChange
+        // cannot fire a new refresh for 5 seconds.
+      });
     }
   }
 
@@ -1085,9 +1117,12 @@ class LiveKitService extends ChangeNotifier {
 
     if (_isMuted) {
       newStatus = ConversationStatus.muted;
-    } else if (_state.status == ConversationStatus.error ||
-        _state.status == ConversationStatus.reconnecting) {
-      // Keep error/reconnecting state
+    } else if (_state.status == ConversationStatus.error) {
+      // Keep error state (requires explicit user action to clear)
+    } else if (_state.status == ConversationStatus.reconnecting && _reconnecting) {
+      // Keep reconnecting state only while a reconnect is actually in progress.
+      // If _reconnecting was cleared by RoomReconnectedEvent but the status
+      // wasn't yet updated (race), let the normal audio-level logic take over. (BUG-010)
     } else if (aiLevel > 0.05) {
       newStatus = ConversationStatus.aiSpeaking;
       // Agent is speaking — stop thinking spinner
@@ -1166,13 +1201,26 @@ class LiveKitService extends ChangeNotifier {
       // dispatch immediately for a ~300-500ms head start before audio-level
       // speech detection kicks in. (Epic 20, Task 010)
       if (agentPresenceService.enabled &&
-          agentPresenceService.state == AgentPresenceState.agentAbsent) {
+          agentPresenceService.state == AgentPresenceState.agentAbsent &&
+          !_reconnecting &&
+          _state.status != ConversationStatus.reconnecting) {
         debugPrint('[Fletcher] Unmute while agent absent — triggering dispatch');
         agentPresenceService.onSpeechDetected();
+      } else if (agentPresenceService.enabled &&
+          agentPresenceService.state == AgentPresenceState.agentAbsent &&
+          (_reconnecting || _state.status == ConversationStatus.reconnecting)) {
+        debugPrint('[Fletcher] Unmute while agent absent — deferring dispatch until reconnected (BUG-010)');
       }
       // Republish a fresh audio track — setMicrophoneEnabled(true) creates
       // a new LocalAudioTrack and publishes it to the PeerConnection.
       await _localParticipant?.setMicrophoneEnabled(true);
+      // BUG-009: If a device change fired while muted, the new track just published
+      // via setMicrophoneEnabled(true) already picked up the current device
+      // (getUserMedia returns the active device). Clear the flag.
+      if (_pendingDeviceChange) {
+        debugPrint('[Fletcher] Applying deferred device change refresh after unmute (BUG-009)');
+        _pendingDeviceChange = false;
+      }
     }
     debugPrint('[Fletcher] Mic ${_isMuted ? "stopped" : "started"}');
   }
