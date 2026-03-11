@@ -7,6 +7,7 @@ COPY package.json bun.lock ./
 COPY patches/ patches/
 COPY packages/livekit-agent-ganglia/package.json packages/livekit-agent-ganglia/
 COPY packages/tui/package.json packages/tui/
+COPY apps/relay/package.json apps/relay/
 COPY apps/voice-agent/package.json apps/voice-agent/
 RUN bun install --frozen-lockfile
 
