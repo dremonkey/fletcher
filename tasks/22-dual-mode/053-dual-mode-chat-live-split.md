@@ -1,7 +1,7 @@
 # Task 053: Dual-Mode Architecture — Chat / Live Split
 
 **Epic:** 22 — Dual-Mode Architecture
-**Status:** [ ]
+**Status:** [~]
 **Depends on:** 052 (Relay LLM Wrapper)
 
 ## Goal
@@ -45,8 +45,8 @@ The split:
 
 ## Acceptance criteria
 
-- [ ] Text messages no longer route through voice agent
-- [ ] Chat mode sends text via relay JSON-RPC (`session/message`)
-- [ ] Live mode uses voice agent as before (no regression)
-- [ ] Client can switch between modes
-- [ ] Both modes share the same OpenClaw session (session key continuity)
+- [~] Text messages no longer route through voice agent (chat mode routes via relay; voice mode still uses agent — text_message handler not yet removed from agent.ts)
+- [x] Chat mode sends text via relay JSON-RPC (`session/prompt`)
+- [x] Live mode uses voice agent as before (no regression)
+- [x] Client can switch between modes (mic button: muted = chat, unmuted = voice)
+- [ ] Both modes share the same OpenClaw session (session key continuity — needs field verification)

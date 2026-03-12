@@ -1,7 +1,7 @@
 # Task 054: Mobile ACP Client (JSON-RPC over Data Channel)
 
 **Epic:** 22 — Dual-Mode Architecture
-**Status:** [ ]
+**Status:** [~]
 **Depends on:** 053 (Dual-Mode Split)
 
 ## Goal
@@ -222,14 +222,14 @@ User types "Hello"
 
 ## Acceptance criteria
 
-- [ ] JSON-RPC 2.0 codec with request/notification/response types
-- [ ] `AcpClient` service sends `session/prompt`, receives streamed `session/update`, handles `session/cancel`
-- [ ] Request ID correlation — responses matched to their originating request
-- [ ] Unknown `update.kind` values ignored gracefully
-- [ ] `content_chunk` text deltas render in ChatTranscript in real time
-- [ ] Prompt completion finalizes agent message
-- [ ] Error responses surfaced in UI (inline error card)
-- [ ] Relay-specific errors handled: `-32003` (voice mode), `-32010` (ACP lost), `-32011` (not ready)
-- [ ] Thinking spinner between prompt send and first content chunk
-- [ ] `session/cancel` sent on user interruption (typing during stream, cancel tap)
-- [ ] Unit tests: JSON-RPC encode/decode, request correlation, update routing, error handling
+- [x] JSON-RPC 2.0 codec with request/notification/response types
+- [x] `AcpClient` service sends `session/prompt`, receives streamed `session/update`, handles `session/cancel`
+- [x] Request ID correlation — responses matched to their originating request
+- [x] Unknown `update.kind` values ignored gracefully
+- [x] `content_chunk` text deltas render in ChatTranscript in real time
+- [x] Prompt completion finalizes agent message
+- [~] Error responses surfaced in UI (system event, not inline card yet)
+- [x] Relay-specific errors handled: `-32003` (voice mode), `-32010` (ACP lost), `-32011` (not ready)
+- [x] Thinking spinner between prompt send and first content chunk
+- [~] `session/cancel` sent on user interruption (cancel method exists; not wired to UI cancel button yet)
+- [x] Unit tests: JSON-RPC encode/decode, request correlation, update routing, error handling (30 tests)
