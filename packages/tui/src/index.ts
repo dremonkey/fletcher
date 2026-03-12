@@ -31,7 +31,7 @@ while (true) {
   const action = await p.select({
     message: "What would you like to do?",
     options: [
-      { value: "start", label: "Start dev services", hint: "LiveKit + voice agent + optional mobile deploy" },
+      { value: "start", label: "Start dev services", hint: "LiveKit + voice agent + relay + optional mobile deploy" },
       { value: "config", label: "Manage configuration", hint: "view and edit environment variables" },
       { value: "skills", label: "Install Claude Code skills", hint: "symlink skills -> .claude/commands/" },
       { value: "deploy", label: "Deploy to mobile device", hint: "build APK and push to emulator/device" },

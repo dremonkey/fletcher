@@ -1,7 +1,7 @@
 import * as p from "@clack/prompts";
 import { spawn, type Subprocess } from "bun";
 import { createHash } from "crypto";
-import { existsSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { ROOT, env } from "./env";
 import { DEFAULT_ROOM } from "./audit";
@@ -184,6 +184,7 @@ async function waitForVoiceAgentRegistration(): Promise<void> {
 
 const RELAY_PORT = 7890;
 const RELAY_URL = `http://127.0.0.1:${RELAY_PORT}`;
+const LOGS_DIR = join(ROOT, "logs");
 
 /**
  * Start the Fletcher Relay as a Bun child process.
@@ -200,13 +201,18 @@ async function startRelay(): Promise<void> {
     return;
   }
 
+  mkdirSync(LOGS_DIR, { recursive: true });
+  const date = new Date().toISOString().slice(0, 10);
+  const logPath = join(LOGS_DIR, `relay-${date}.log`);
+  const logFd = openSync(logPath, "a");
+
   const s = p.spinner();
   s.start("Starting relay");
 
   const relayProc = spawn(["bun", "run", join(ROOT, "apps/relay/src/index.ts")], {
     env: { ...process.env, RELAY_HTTP_PORT: String(RELAY_PORT) },
-    stdout: "ignore",
-    stderr: "ignore",
+    stdout: logFd,
+    stderr: logFd,
   });
   children.push(relayProc);
 
@@ -226,7 +232,7 @@ async function startRelay(): Promise<void> {
     return;
   }
 
-  s.stop("Relay started");
+  s.stop(`Relay started → tail -f ${logPath}`);
 }
 
 export async function startServices(): Promise<void> {
