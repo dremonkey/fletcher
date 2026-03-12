@@ -9,6 +9,9 @@ import { AcpClient } from "../acp/client";
 import type { RoomManager } from "../livekit/room-manager";
 import type { SessionUpdateParams } from "../acp/types";
 import { INTERNAL_ERROR } from "../rpc/errors";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("relay-bridge");
 
 // ---------------------------------------------------------------------------
 // Types
@@ -49,21 +52,24 @@ export class RelayBridge {
    * 4. Register ACP update handler to forward to mobile
    */
   async start(): Promise<void> {
+    const { roomName } = this.options;
+
     // 1. Initialize ACP
     await this.acpClient.initialize();
 
     // 2. Create session
     const result = await this.acpClient.sessionNew({
       _meta: {
-        room_name: this.options.roomName,
+        room_name: roomName,
       },
     });
     this.sessionId = result.sessionId;
+    log.info({ event: "acp_initialized", roomName, sessionId: this.sessionId });
 
     // 3. Register data handler for mobile -> ACP forwarding
     this.options.roomManager.onDataReceived(
-      (roomName, data, participantIdentity) => {
-        if (roomName !== this.options.roomName) return;
+      (rn, data, participantIdentity) => {
+        if (rn !== roomName) return;
         this.handleMobileMessage(data, participantIdentity);
       },
     );
@@ -78,6 +84,7 @@ export class RelayBridge {
     });
 
     this.started = true;
+    log.info({ event: "room_joined", roomName });
   }
 
   /**
@@ -130,6 +137,7 @@ export class RelayBridge {
           });
         })
         .catch((err: Error) => {
+          log.error({ event: "acp_error", roomName: this.options.roomName, error: err.message });
           this.forwardToMobile({
             jsonrpc: "2.0",
             id: msg.id,

@@ -14,17 +14,24 @@ const bridgeManager = new BridgeManager(
   (process.env.ACP_ARGS ?? "").split(" ").filter(Boolean),
 );
 
+// Start idle room cleanup timer
+bridgeManager.startIdleTimer(
+  Number(process.env.RELAY_IDLE_TIMEOUT_MS ?? 300000), // 5 minutes
+);
+
 const server = Bun.serve({
-  port: Number(process.env.PORT ?? 3000),
-  fetch: handleHttpRequest,
+  hostname: "127.0.0.1",
+  port: Number(process.env.RELAY_HTTP_PORT ?? process.env.PORT ?? 7890),
+  fetch: (req) => handleHttpRequest(req, { bridgeManager, roomManager }),
 });
 
-console.log(`Fletcher Relay listening on port ${server.port}`);
+console.log(`Fletcher Relay listening on ${server.hostname}:${server.port}`);
 
 // Graceful shutdown
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, async () => {
     console.log("\nShutting down...");
+    bridgeManager.stopIdleTimer();
     await bridgeManager.shutdownAll();
     server.stop();
     process.exit(0);

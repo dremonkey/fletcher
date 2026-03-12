@@ -6,6 +6,9 @@
 
 import { RelayBridge } from "./relay-bridge";
 import type { RoomManager } from "../livekit/room-manager";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("bridge-manager");
 
 // ---------------------------------------------------------------------------
 // BridgeManager
@@ -13,6 +16,7 @@ import type { RoomManager } from "../livekit/room-manager";
 
 export class BridgeManager {
   private bridges = new Map<string, RelayBridge>();
+  private idleTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private roomManager: RoomManager,
@@ -40,6 +44,7 @@ export class BridgeManager {
 
     this.bridges.set(roomName, bridge);
     await bridge.start();
+    log.info({ event: "room_added", roomName });
   }
 
   /**
@@ -52,6 +57,14 @@ export class BridgeManager {
     await bridge.stop();
     this.bridges.delete(roomName);
     await this.roomManager.leaveRoom(roomName);
+    log.info({ event: "room_removed", roomName });
+  }
+
+  /**
+   * Check if a room already has a bridge.
+   */
+  hasRoom(roomName: string): boolean {
+    return this.bridges.has(roomName);
   }
 
   /**
@@ -80,5 +93,56 @@ export class BridgeManager {
     );
     await Promise.all(stops);
     await this.roomManager.disconnectAll();
+  }
+
+  // -------------------------------------------------------------------------
+  // Idle timeout
+  // -------------------------------------------------------------------------
+
+  /**
+   * Start a periodic timer that checks for idle rooms and removes them.
+   *
+   * @param timeoutMs  - A room is idle if lastActivity is older than this.
+   * @param intervalMs - How often to check (defaults to 60 seconds).
+   */
+  startIdleTimer(timeoutMs: number, intervalMs: number = 60_000): void {
+    this.stopIdleTimer();
+
+    this.idleTimer = setInterval(() => {
+      this.checkIdleRooms(timeoutMs);
+    }, intervalMs);
+
+    // Allow the process to exit even if the timer is running
+    if (this.idleTimer && typeof this.idleTimer === "object" && "unref" in this.idleTimer) {
+      (this.idleTimer as NodeJS.Timeout).unref();
+    }
+  }
+
+  /**
+   * Stop the idle timer.
+   */
+  stopIdleTimer(): void {
+    if (this.idleTimer !== null) {
+      clearInterval(this.idleTimer);
+      this.idleTimer = null;
+    }
+  }
+
+  /**
+   * Check for idle rooms and remove them. Exposed for testing.
+   */
+  async checkIdleRooms(timeoutMs: number): Promise<void> {
+    const now = Date.now();
+    const connections = this.roomManager.getActiveRooms();
+
+    const removals: Promise<void>[] = [];
+
+    for (const conn of connections) {
+      if (now - conn.lastActivity > timeoutMs) {
+        removals.push(this.removeRoom(conn.roomName));
+      }
+    }
+
+    await Promise.all(removals);
   }
 }
