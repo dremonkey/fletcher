@@ -1,6 +1,9 @@
 import { handleHttpRequest } from "./http/routes";
 import { RoomManager } from "./livekit/room-manager";
 import { BridgeManager } from "./bridge/bridge-manager";
+import { createLogger } from "./utils/logger";
+
+const log = createLogger("relay");
 
 const roomManager = new RoomManager({
   livekitUrl: process.env.LIVEKIT_URL ?? "ws://localhost:7880",
@@ -28,12 +31,12 @@ const server = Bun.serve({
   fetch: (req) => handleHttpRequest(req, { bridgeManager, roomManager, acpCommand, acpArgs }),
 });
 
-console.log(`Fletcher Relay listening on ${server.hostname}:${server.port}`);
+log.info({ hostname: server.hostname, port: server.port }, "Fletcher Relay listening");
 
 // Graceful shutdown
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, async () => {
-    console.log("\nShutting down...");
+    log.info("Shutting down...");
     bridgeManager.stopIdleTimer();
     await bridgeManager.shutdownAll();
     server.stop();

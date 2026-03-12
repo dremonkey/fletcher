@@ -1,32 +1,31 @@
 /**
- * Minimal structured JSON logger.
+ * Pino-based structured logger.
  *
- * Outputs one JSON line per log call to stdout/stderr.
- * No dependencies — just JSON.stringify to console.
+ * JSON output in production, pretty-printed in local dev.
+ * Set LOG_LEVEL env var to control verbosity (default: "info").
  */
 
-export interface Logger {
-  info(data: Record<string, unknown>): void;
-  warn(data: Record<string, unknown>): void;
-  error(data: Record<string, unknown>): void;
-}
+import pino from "pino";
 
+const isLocalDev =
+  process.env.NODE_ENV !== "production" && !process.env.CI;
+
+export const rootLogger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  ...(isLocalDev
+    ? { transport: { target: "pino-pretty", options: { colorize: true } } }
+    : {}),
+});
+
+export type Logger = pino.Logger;
+
+/**
+ * Create a child logger scoped to a component.
+ *
+ * Usage:
+ *   const log = createLogger("relay-bridge");
+ *   log.info({ event: "room_joined", roomName }, "joined room");
+ */
 export function createLogger(component: string): Logger {
-  return {
-    info(data) {
-      console.log(
-        JSON.stringify({ level: "info", component, ts: Date.now(), ...data }),
-      );
-    },
-    warn(data) {
-      console.warn(
-        JSON.stringify({ level: "warn", component, ts: Date.now(), ...data }),
-      );
-    },
-    error(data) {
-      console.error(
-        JSON.stringify({ level: "error", component, ts: Date.now(), ...data }),
-      );
-    },
-  };
+  return rootLogger.child({ component });
 }
