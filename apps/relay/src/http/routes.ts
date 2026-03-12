@@ -1,8 +1,10 @@
+import type { WebhookReceiver } from "livekit-server-sdk";
 import type { BridgeManager } from "../bridge/bridge-manager";
 import type { RoomManager } from "../livekit/room-manager";
 import { AcpClient } from "../acp/client";
 import type { SessionUpdateParams } from "../acp/types";
 import { rootLogger, type Logger } from "../utils/logger";
+import { createWebhookHandler } from "./webhook";
 
 const startTime = Date.now();
 
@@ -14,6 +16,7 @@ export interface RouteContext {
   roomManager: RoomManager;
   acpCommand: string;
   acpArgs: string[];
+  webhookReceiver: WebhookReceiver;
 }
 
 export async function handleHttpRequest(
@@ -48,6 +51,16 @@ export async function handleHttpRequest(
   // POST /relay/prompt — CLI test endpoint (bypasses LiveKit)
   if (url.pathname === "/relay/prompt" && req.method === "POST") {
     return handleRelayPrompt(req, ctx);
+  }
+
+  // POST /webhooks/livekit — LiveKit server webhook (auto-join on participant_joined)
+  if (url.pathname === "/webhooks/livekit" && req.method === "POST") {
+    const handler = createWebhookHandler(
+      ctx.webhookReceiver,
+      ctx.bridgeManager,
+      rootLogger.child({ component: "webhook" }),
+    );
+    return handler(req);
   }
 
   return Response.json({ error: "Not found" }, { status: 404 });

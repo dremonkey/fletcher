@@ -35,6 +35,12 @@ function createMockRoomManager(rooms: RoomConnection[] = []) {
   } as unknown as RoomManager;
 }
 
+function createMockWebhookReceiver() {
+  return {
+    receive: async () => ({ event: "room_started" }),
+  };
+}
+
 function createCtx(
   existingRooms: Set<string> = new Set(),
   roomConnections: RoomConnection[] = [],
@@ -44,6 +50,7 @@ function createCtx(
     roomManager: createMockRoomManager(roomConnections),
     acpCommand: "bun",
     acpArgs: [],
+    webhookReceiver: createMockWebhookReceiver() as any,
   };
 }
 
@@ -100,7 +107,7 @@ describe("GET /health", () => {
       { roomName: "room-b", joinedAt: 1500, lastActivity: 2500, room: {} as any },
     ];
     const ctx: RouteContext = {
-      acpCommand: "bun", acpArgs: [],
+      acpCommand: "bun", acpArgs: [], webhookReceiver: createMockWebhookReceiver() as any,
       bridgeManager: createMockBridgeManager(new Set(["room-a", "room-b"])),
       roomManager: createMockRoomManager(roomConnections),
     };
@@ -189,7 +196,7 @@ describe("POST /relay/join", () => {
 
   test("addRoom failure returns 500", async () => {
     const failingCtx: RouteContext = {
-      acpCommand: "bun", acpArgs: [],
+      acpCommand: "bun", acpArgs: [], webhookReceiver: createMockWebhookReceiver() as any,
       bridgeManager: {
         hasRoom: () => false,
         addRoom: async () => {
@@ -224,7 +231,7 @@ describe("GET /rooms", () => {
     ];
 
     const ctx: RouteContext = {
-      acpCommand: "bun", acpArgs: [],
+      acpCommand: "bun", acpArgs: [], webhookReceiver: createMockWebhookReceiver() as any,
       bridgeManager: {
         ...createMockBridgeManager(new Set(["room-abc"])),
         getBridge(name: string) {
@@ -268,7 +275,7 @@ describe("GET /rooms", () => {
     ];
 
     const ctx: RouteContext = {
-      acpCommand: "bun", acpArgs: [],
+      acpCommand: "bun", acpArgs: [], webhookReceiver: createMockWebhookReceiver() as any,
       bridgeManager: {
         ...createMockBridgeManager(new Set(["room-xyz"])),
         getBridge(name: string) {
@@ -295,7 +302,7 @@ describe("GET /rooms", () => {
     ];
 
     const ctx: RouteContext = {
-      acpCommand: "bun", acpArgs: [],
+      acpCommand: "bun", acpArgs: [], webhookReceiver: createMockWebhookReceiver() as any,
       bridgeManager: createMockBridgeManager(),
       roomManager: createMockRoomManager(roomConnections),
     };
@@ -315,7 +322,7 @@ describe("GET /rooms", () => {
     ];
 
     const ctx: RouteContext = {
-      acpCommand: "bun", acpArgs: [],
+      acpCommand: "bun", acpArgs: [], webhookReceiver: createMockWebhookReceiver() as any,
       bridgeManager: {
         ...createMockBridgeManager(new Set(["room-a", "room-b"])),
         getBridge(name: string) {

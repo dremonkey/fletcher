@@ -9,5 +9,9 @@ rtc:
   use_external_ip: true
 room:
   departure_timeout: 120 # 2 minutes — must match DEPARTURE_TIMEOUT_S in apps/mobile/.env (BUG-015)
+webhook:
+  urls:
+    - http://localhost:7890/webhooks/livekit
+  api_key: devkey
 logging:
   level: info

@@ -1,6 +1,6 @@
 # Fletcher Relay
 
-Thin ACP bridge for Fletcher. Joins LiveKit rooms as a non-agent participant, forwards JSON-RPC messages between mobile (data channel) and an ACP agent subprocess (stdio). The relay is a transparent bridge — it doesn't interpret content, just forwards.
+Thin ACP bridge for Fletcher. Auto-joins LiveKit rooms via webhook when a participant connects, forwards JSON-RPC messages between mobile (data channel) and an ACP agent subprocess (stdio). The relay is a transparent bridge — it doesn't interpret content, just forwards.
 
 Part of the Fletcher monorepo (`apps/relay`). See `docs/architecture.md` for the full design rationale.
 
@@ -38,7 +38,8 @@ RELAY_IDLE_TIMEOUT_MS=300000   # Idle room timeout (5 minutes)
 - `src/acp/types.ts` — ACP protocol types
 - `src/bridge/relay-bridge.ts` — Wires data channel ↔ ACP (per-room)
 - `src/bridge/bridge-manager.ts` — Manages multiple bridges, idle timeout
-- `src/http/routes.ts` — HTTP endpoints (`/health`, `/rooms`, `/relay/join`, `/relay/prompt`)
+- `src/http/routes.ts` — HTTP endpoints (`/health`, `/rooms`, `/relay/join`, `/relay/prompt`, `/webhooks/livekit`)
+- `src/http/webhook.ts` — LiveKit webhook handler (auto-joins rooms on `participant_joined`)
 - `src/rpc/types.ts` — JSON-RPC 2.0 type definitions
 - `src/rpc/errors.ts` — Error code constants
 - `src/utils/logger.ts` — Structured JSON logging

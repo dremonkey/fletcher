@@ -380,7 +380,7 @@ Mobile                 Agent                 Room Metadata
 **Steps:**
 
 1. **Mobile sends `session/new` request on `relay` data channel**
-2. **Relay joins room** (signaled by token server)
+2. **Relay joins room** (auto-joined via LiveKit webhook)
 3. **Relay checks metadata (`mode === "idle"`)**
 4. **Relay sets `mode = "chat"`**
 5. **Agent NOT in room** (will join later if user switches to voice)
@@ -521,17 +521,19 @@ function validateMetadata(metadata: any): boolean {
 - When `mode === "chat"` and no messages for 5 minutes:
   1. Relay sets `mode = "idle"`
   2. Relay disconnects from room
-  3. Next chat request → token server signals relay to rejoin
+  3. Next chat request → user rejoins room → webhook triggers relay rejoin
 
 **Agent Idle Timeout (Epic 20):**
 - When `mode === "voice"` and no voice activity for 5 minutes:
   1. Agent sends `agent_idle_warning` on `ganglia-events` data channel
   2. After 30s grace period → Agent sets `mode = "idle"` and disconnects
 
-### For Task R-012 (Token Server Signal)
+### For Task R-012 (Webhook Auto-Join)
 
-**Token Server Responsibilities:**
-- On token request for new room → signal relay to join (POST `/relay/join`)
+**Relay is self-driving via LiveKit webhooks:**
+- LiveKit sends `participant_joined` webhook → relay auto-joins the room
+- No token server signaling needed — the relay watches LiveKit directly
+- `POST /relay/join` still exists as a manual override for debugging/testing
 - Relay joins room, checks metadata, waits for first message before setting `mode = "chat"`
 
 ---

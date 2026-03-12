@@ -1,3 +1,4 @@
+import { WebhookReceiver } from "livekit-server-sdk";
 import { handleHttpRequest } from "./http/routes";
 import { RoomManager } from "./livekit/room-manager";
 import { BridgeManager } from "./bridge/bridge-manager";
@@ -5,11 +6,16 @@ import { createLogger } from "./utils/logger";
 
 const log = createLogger("relay");
 
+const apiKey = process.env.LIVEKIT_API_KEY ?? "devkey";
+const apiSecret = process.env.LIVEKIT_API_SECRET ?? "secret";
+
 const roomManager = new RoomManager({
   livekitUrl: process.env.LIVEKIT_URL ?? "ws://localhost:7880",
-  apiKey: process.env.LIVEKIT_API_KEY ?? "devkey",
-  apiSecret: process.env.LIVEKIT_API_SECRET ?? "secret",
+  apiKey,
+  apiSecret,
 });
+
+const webhookReceiver = new WebhookReceiver(apiKey, apiSecret);
 
 const acpCommand = process.env.ACP_COMMAND ?? "openclaw";
 const acpArgs = (process.env.ACP_ARGS ?? "acp").split(" ").filter(Boolean);
@@ -28,7 +34,7 @@ bridgeManager.startIdleTimer(
 const server = Bun.serve({
   hostname: "127.0.0.1",
   port: Number(process.env.RELAY_HTTP_PORT ?? process.env.PORT ?? 7890),
-  fetch: (req) => handleHttpRequest(req, { bridgeManager, roomManager, acpCommand, acpArgs }),
+  fetch: (req) => handleHttpRequest(req, { bridgeManager, roomManager, acpCommand, acpArgs, webhookReceiver }),
 });
 
 log.info({ hostname: server.hostname, port: server.port }, "Fletcher Relay listening");

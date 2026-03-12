@@ -90,7 +90,7 @@ Both paths connect to OpenClaw as ACP clients. Both use the same `session_key` (
 
 ### What the relay does
 
-1. **Joins LiveKit rooms** as a non-agent participant (signaled by token server)
+1. **Joins LiveKit rooms** as a non-agent participant (auto-joined via LiveKit webhook on `participant_joined`)
 2. **Manages the ACP session** — `initialize` + `session/new` with routing metadata
 3. **Forwards ACP messages** between data channel and OpenClaw:
    - Mobile sends `session/prompt` → relay adds `sessionId`, forwards to OpenClaw
@@ -124,11 +124,11 @@ The mobile sends/receives the subset it needs:
 The relay does not maintain a permanent LiveKit room connection. It connects on demand and disconnects when idle.
 
 ```
-1. Mobile requests token from token server
+1. Participant joins LiveKit room
         │
-        │  Token server signals relay: "join room X"
+        │  LiveKit fires participant_joined webhook → relay receives it
         ▼
-2. Relay joins LiveKit room as participant
+2. Relay auto-joins the room as a non-agent participant
         │
         │  Relay connects to OpenClaw via ACP (initialize + session/new)
         ▼
@@ -138,16 +138,43 @@ The relay does not maintain a permanent LiveKit room connection. It connects on 
         ▼
 4. Relay disconnects from room + ACP session
         │
-        │  Mobile reconnects → token request → relay rejoins
+        │  User rejoins room → webhook triggers relay rejoin
         ▼
 5. Repeat (fresh ACP session, same session_key → same conversation)
 ```
 
-**Trigger mechanism:** The token request is the natural trigger. The token server (already an HTTP service on the same host) signals the relay to join the target room as a side effect of issuing the token. This requires no new infrastructure — the relay exposes a local HTTP endpoint that the token server calls.
+**Trigger mechanism:** The relay is self-driving via LiveKit webhooks. LiveKit sends a `participant_joined` event to `POST /webhooks/livekit` whenever a participant connects. The relay filters out its own joins (`relay-*` identity) and agent participants, then calls `addRoom()` for standard participants. No token server signaling needed.
 
-**Idle disconnect:** The relay tracks last-message time per room. After a configurable idle timeout (~5 minutes), it disconnects from the room. The next token request restarts the cycle.
+**Manual override:** `POST /relay/join` still exists for debugging and testing — it calls the same `addRoom()` path.
+
+**Idle disconnect:** The relay tracks last-message time per room. After a configurable idle timeout (~5 minutes), it disconnects from the room. The next participant join webhook restarts the cycle.
 
 **Cost implication:** Relay participant minutes only tick during active sessions. Zero relay cost between sessions.
+
+### Cloud Deployment (future — only needed for hosted version)
+
+The current webhook approach assumes a single relay instance receiving all events from a local LiveKit server. This works for the local-first setup but does not scale to LiveKit Cloud with multiple relays.
+
+**Problem:** LiveKit webhook config is server-wide — every URL in the list receives every room event. With N relays, all N would try to join the same room. LiveKit Cloud provides a project (shared server pool), not individual server instances you can pair 1:1 with relays.
+
+**Solution: Webhook dispatcher pattern**
+
+```
+LiveKit Cloud
+    │
+    │  participant_joined webhook (all room events)
+    ▼
+Dispatcher Service (stateless router)
+    │
+    │  Selects correct relay (round-robin, region, load)
+    │  POST /relay/join { roomName }
+    ▼
+Relay Instance N
+```
+
+The dispatcher is a thin stateless service that receives all LiveKit webhooks, selects the appropriate relay for each room, and signals it via `POST /relay/join` — the same endpoint used today for manual/debug joins. Individual relays would not run their own webhook handlers in this setup.
+
+**Not needed now.** Fletcher is local-first — single LiveKit server, single relay, direct webhook. The dispatcher only becomes necessary if/when we deploy a hosted multi-tenant version on LiveKit Cloud.
 
 ## Session Routing
 
