@@ -86,11 +86,27 @@ export class RelayBridge {
     );
 
     // 4. Register ACP -> mobile forwarding
+    // Translate OpenClaw's singular `update` object into the mobile protocol's
+    // `updates` array format. Only content chunks are forwarded — other
+    // session update types (available_commands_update, etc.) are dropped.
     this.acpClient.onUpdate((params: SessionUpdateParams) => {
+      this.log.debug({ event: "acp_update_received", params }, "← acp session/update");
+
+      const { update } = params;
+      if (update.sessionUpdate !== "agent_message_chunk") {
+        this.log.debug({ kind: update.sessionUpdate }, "acp update: not a content chunk, dropping");
+        return;
+      }
+
+      const chunk = update as import("../acp/types").AgentMessageChunk;
       this.forwardToMobile({
         jsonrpc: "2.0",
         method: "session/update",
-        params,
+        params: {
+          updates: [
+            { kind: "content_chunk", content: chunk.content },
+          ],
+        },
       });
     });
 
@@ -139,6 +155,8 @@ export class RelayBridge {
       (msg.params?.requestId as string) ?? crypto.randomUUID();
     const reqLog = this.log.child({ correlationId });
 
+    this.log.debug({ event: "mobile_message_received", msg }, "← mobile");
+
     if (msg.method === "session/prompt") {
       reqLog.info({ event: "mobile_prompt_received" });
 
@@ -175,6 +193,8 @@ export class RelayBridge {
    */
   private forwardToMobile(msg: object): void {
     if (!this.started) return;
+
+    this.log.debug({ event: "forward_to_mobile", msg }, "→ mobile");
 
     this.options.roomManager
       .sendToRoom(this.options.roomName, msg)

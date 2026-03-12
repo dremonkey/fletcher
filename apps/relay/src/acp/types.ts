@@ -101,14 +101,31 @@ export interface SessionCancelParams {
 
 // ---------------------------------------------------------------------------
 // Update (notification from agent)
+//
+// OpenClaw ACP sends session/update with a singular `update` field
+// (not the `updates` array that the relay protocol exposes to mobile).
 // ---------------------------------------------------------------------------
 
-export interface Update {
-  kind: string;
-  content?: ContentPart;
-  [key: string]: unknown;
+/** Discriminated union tag for OpenClaw session update payloads. */
+export type SessionUpdateKind =
+  | "agent_message_chunk"
+  | "available_commands_update"
+  | string; // forward-compatible
+
+export interface AgentMessageChunk {
+  sessionUpdate: "agent_message_chunk";
+  content: ContentPart;
 }
 
+export interface AvailableCommandsUpdate {
+  sessionUpdate: "available_commands_update";
+  availableCommands: unknown[];
+}
+
+export type OpenClawUpdate = AgentMessageChunk | AvailableCommandsUpdate | { sessionUpdate: string; [key: string]: unknown };
+
+/** Raw params from OpenClaw's session/update notification. */
 export interface SessionUpdateParams {
-  updates: Update[];
+  sessionId: string;
+  update: OpenClawUpdate;
 }

@@ -266,13 +266,18 @@ export class AcpClient {
 
   /** Parse a JSON-RPC line and route it. */
   private handleLine(line: string): void {
+    this.log.debug({ raw: line }, "acp raw stdout");
+
     let msg: Record<string, unknown>;
     try {
       msg = JSON.parse(line);
     } catch {
       // Not valid JSON — ignore (could be debug output)
+      this.log.debug({ raw: line }, "acp stdout non-JSON (ignored)");
       return;
     }
+
+    this.log.debug({ msg }, "acp parsed message");
 
     // Is it a response? (has `id` and either `result` or `error`)
     if ("id" in msg && ("result" in msg || "error" in msg)) {
