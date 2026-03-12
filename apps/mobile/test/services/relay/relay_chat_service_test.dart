@@ -10,6 +10,27 @@ void main() {
     return Uint8List.fromList(utf8.encode(jsonEncode(json)));
   }
 
+  /// A `session/update` notification with an `agent_message_chunk` update.
+  /// Uses the real ACP wire format: singular `update` object.
+  Map<String, dynamic> contentChunk(String text, {String sessionId = 'sess_abc'}) => {
+        'jsonrpc': '2.0',
+        'method': 'session/update',
+        'params': {
+          'sessionId': sessionId,
+          'update': {
+            'sessionUpdate': 'agent_message_chunk',
+            'content': {'type': 'text', 'text': text},
+          },
+        },
+      };
+
+  /// A `session/prompt` result (closes the in-flight request).
+  Map<String, dynamic> promptResult(int id, {String stopReason = 'end_turn'}) => {
+        'jsonrpc': '2.0',
+        'id': id,
+        'result': {'stopReason': stopReason},
+      };
+
   late RelayChatService service;
   late List<Uint8List> published;
 
@@ -38,18 +59,10 @@ void main() {
     });
 
     test('increments request ID', () {
-      // First prompt — send and complete
       final stream1 = service.sendPrompt('First');
-      // Complete it so we can send another
-      service.handleMessage(encode({
-        'jsonrpc': '2.0',
-        'id': 1,
-        'result': {'stopReason': 'completed'},
-      }));
-      // Drain the stream
+      service.handleMessage(encode(promptResult(1)));
       stream1.drain<void>();
 
-      // Second prompt
       service.sendPrompt('Second');
       expect(published, hasLength(2));
 
@@ -64,14 +77,8 @@ void main() {
       service.sendPrompt('Test');
       expect(service.isBusy, isTrue);
 
-      // Complete the prompt
-      service.handleMessage(encode({
-        'jsonrpc': '2.0',
-        'id': 1,
-        'result': {'stopReason': 'completed'},
-      }));
+      service.handleMessage(encode(promptResult(1)));
 
-      // Give the stream controller time to close
       expectLater(
         Future.delayed(Duration.zero, () => service.isBusy),
         completion(isFalse),
@@ -80,46 +87,16 @@ void main() {
   });
 
   group('streaming response', () {
-    test('emits content deltas from session/update', () async {
+    test('emits content deltas from session/update (ACP wire format)', () async {
       final events = <RelayChatEvent>[];
       final stream = service.sendPrompt('Hi');
       stream.listen(events.add);
 
-      // Simulate streamed chunks
-      service.handleMessage(encode({
-        'jsonrpc': '2.0',
-        'method': 'session/update',
-        'params': {
-          'updates': [
-            {
-              'kind': 'content_chunk',
-              'content': {'type': 'text', 'text': 'Hello'},
-            },
-          ],
-        },
-      }));
+      // ACP sends one notification per chunk — singular update object
+      service.handleMessage(encode(contentChunk('Hello')));
+      service.handleMessage(encode(contentChunk(' world')));
+      service.handleMessage(encode(promptResult(1)));
 
-      service.handleMessage(encode({
-        'jsonrpc': '2.0',
-        'method': 'session/update',
-        'params': {
-          'updates': [
-            {
-              'kind': 'content_chunk',
-              'content': {'type': 'text', 'text': ' world'},
-            },
-          ],
-        },
-      }));
-
-      // Complete
-      service.handleMessage(encode({
-        'jsonrpc': '2.0',
-        'id': 1,
-        'result': {'stopReason': 'completed'},
-      }));
-
-      // Wait for stream to close
       await Future<void>.delayed(Duration.zero);
 
       expect(events, hasLength(3));
@@ -128,10 +105,40 @@ void main() {
       expect(events[1], isA<RelayContentDelta>());
       expect((events[1] as RelayContentDelta).text, ' world');
       expect(events[2], isA<RelayPromptComplete>());
-      expect((events[2] as RelayPromptComplete).stopReason, 'completed');
+      expect((events[2] as RelayPromptComplete).stopReason, 'end_turn');
     });
 
-    test('emits multiple updates from a single notification', () async {
+    test('ignores available_commands_update (non-content)', () async {
+      final events = <RelayChatEvent>[];
+      final stream = service.sendPrompt('Hi');
+      stream.listen(events.add);
+
+      // OpenClaw emits this immediately after session/new — must be ignored
+      service.handleMessage(encode({
+        'jsonrpc': '2.0',
+        'method': 'session/update',
+        'params': {
+          'sessionId': 'sess_abc',
+          'update': {
+            'sessionUpdate': 'available_commands_update',
+            'availableCommands': [
+              {'name': 'help', 'description': 'Show help.'},
+              {'name': 'stop', 'description': 'Stop the current run.'},
+            ],
+          },
+        },
+      }));
+      service.handleMessage(encode(contentChunk('actual response')));
+      service.handleMessage(encode(promptResult(1)));
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(events, hasLength(2));
+      expect((events[0] as RelayContentDelta).text, 'actual response');
+      expect(events[1], isA<RelayPromptComplete>());
+    });
+
+    test('ignores plan updates (non-content)', () async {
       final events = <RelayChatEvent>[];
       final stream = service.sendPrompt('Hi');
       stream.listen(events.add);
@@ -140,33 +147,27 @@ void main() {
         'jsonrpc': '2.0',
         'method': 'session/update',
         'params': {
-          'updates': [
-            {
-              'kind': 'content_chunk',
-              'content': {'type': 'text', 'text': 'A'},
+          'sessionId': 'sess_abc',
+          'update': {
+            'sessionUpdate': 'plan',
+            'plan': {
+              'tasks': [
+                {'id': '1', 'title': 'Think', 'status': 'in_progress'},
+              ],
             },
-            {
-              'kind': 'content_chunk',
-              'content': {'type': 'text', 'text': 'B'},
-            },
-          ],
+          },
         },
       }));
-
-      service.handleMessage(encode({
-        'jsonrpc': '2.0',
-        'id': 1,
-        'result': {'stopReason': 'completed'},
-      }));
+      service.handleMessage(encode(contentChunk('done')));
+      service.handleMessage(encode(promptResult(1)));
 
       await Future<void>.delayed(Duration.zero);
 
-      expect(events, hasLength(3));
-      expect((events[0] as RelayContentDelta).text, 'A');
-      expect((events[1] as RelayContentDelta).text, 'B');
+      expect(events, hasLength(2));
+      expect((events[0] as RelayContentDelta).text, 'done');
     });
 
-    test('ignores unknown update kinds gracefully', () async {
+    test('ignores tool_call and tool_call_update (non-content)', () async {
       final events = <RelayChatEvent>[];
       final stream = service.sendPrompt('Hi');
       stream.listen(events.add);
@@ -175,30 +176,79 @@ void main() {
         'jsonrpc': '2.0',
         'method': 'session/update',
         'params': {
-          'updates': [
-            {'kind': 'future_feature', 'data': 'something'},
-            {
-              'kind': 'content_chunk',
-              'content': {'type': 'text', 'text': 'kept'},
-            },
-          ],
+          'sessionId': 'sess_abc',
+          'update': {
+            'sessionUpdate': 'tool_call',
+            'id': 'tool_1',
+            'title': 'Read file',
+            'input': {'path': '/tmp/foo'},
+          },
         },
       }));
-
       service.handleMessage(encode({
         'jsonrpc': '2.0',
-        'id': 1,
-        'result': {'stopReason': 'completed'},
+        'method': 'session/update',
+        'params': {
+          'sessionId': 'sess_abc',
+          'update': {
+            'sessionUpdate': 'tool_call_update',
+            'id': 'tool_1',
+            'status': 'completed',
+            'content': [
+              {'type': 'text', 'text': 'file contents'},
+            ],
+          },
+        },
       }));
+      service.handleMessage(encode(contentChunk('summary')));
+      service.handleMessage(encode(promptResult(1)));
 
       await Future<void>.delayed(Duration.zero);
 
-      // Only content_chunk + complete — unknown kind skipped
+      expect(events, hasLength(2));
+      expect((events[0] as RelayContentDelta).text, 'summary');
+    });
+
+    test('ignores unknown future sessionUpdate kinds (forward compat)', () async {
+      final events = <RelayChatEvent>[];
+      final stream = service.sendPrompt('Hi');
+      stream.listen(events.add);
+
+      service.handleMessage(encode({
+        'jsonrpc': '2.0',
+        'method': 'session/update',
+        'params': {
+          'sessionId': 'sess_abc',
+          'update': {
+            'sessionUpdate': 'some_future_kind_v2',
+            'data': {'foo': 'bar'},
+          },
+        },
+      }));
+      service.handleMessage(encode(contentChunk('kept')));
+      service.handleMessage(encode(promptResult(1)));
+
+      await Future<void>.delayed(Duration.zero);
+
       expect(events, hasLength(2));
       expect((events[0] as RelayContentDelta).text, 'kept');
     });
 
-    test('ignores empty text in content_chunk', () async {
+    test('ignores empty text in agent_message_chunk', () async {
+      final events = <RelayChatEvent>[];
+      final stream = service.sendPrompt('Hi');
+      stream.listen(events.add);
+
+      service.handleMessage(encode(contentChunk('')));
+      service.handleMessage(encode(promptResult(1)));
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(events, hasLength(1));
+      expect(events[0], isA<RelayPromptComplete>());
+    });
+
+    test('ignores agent_message_chunk with non-text content', () async {
       final events = <RelayChatEvent>[];
       final stream = service.sendPrompt('Hi');
       stream.listen(events.add);
@@ -207,24 +257,17 @@ void main() {
         'jsonrpc': '2.0',
         'method': 'session/update',
         'params': {
-          'updates': [
-            {
-              'kind': 'content_chunk',
-              'content': {'type': 'text', 'text': ''},
-            },
-          ],
+          'sessionId': 'sess_abc',
+          'update': {
+            'sessionUpdate': 'agent_message_chunk',
+            'content': {'type': 'image', 'mimeType': 'image/png', 'data': 'abc='},
+          },
         },
       }));
-
-      service.handleMessage(encode({
-        'jsonrpc': '2.0',
-        'id': 1,
-        'result': {'stopReason': 'completed'},
-      }));
+      service.handleMessage(encode(promptResult(1)));
 
       await Future<void>.delayed(Duration.zero);
 
-      // Only complete — empty chunk skipped
       expect(events, hasLength(1));
       expect(events[0], isA<RelayPromptComplete>());
     });
@@ -259,24 +302,13 @@ void main() {
       final stream = service.sendPrompt('Hi');
       stream.listen(events.add);
 
-      // Send response with wrong ID
-      service.handleMessage(encode({
-        'jsonrpc': '2.0',
-        'id': 999,
-        'result': {'stopReason': 'completed'},
-      }));
+      service.handleMessage(encode(promptResult(999)));
 
-      // Stream should still be open (no events)
       await Future<void>.delayed(Duration.zero);
       expect(events, isEmpty);
       expect(service.isBusy, isTrue);
 
-      // Correct response closes it
-      service.handleMessage(encode({
-        'jsonrpc': '2.0',
-        'id': 1,
-        'result': {'stopReason': 'completed'},
-      }));
+      service.handleMessage(encode(promptResult(1)));
 
       await Future<void>.delayed(Duration.zero);
       expect(events, hasLength(1));
@@ -287,7 +319,6 @@ void main() {
       final stream = service.sendPrompt('Hi');
       stream.listen(events.add);
 
-      // Various malformed inputs — none should crash
       service.handleMessage(Uint8List.fromList(utf8.encode('not json')));
       service.handleMessage(Uint8List.fromList(utf8.encode('{}')));
       service.handleMessage(Uint8List.fromList(utf8.encode('[]')));
@@ -301,7 +332,7 @@ void main() {
   group('cancelPrompt', () {
     test('sends session/cancel notification', () {
       service.sendPrompt('Hi');
-      published.clear(); // clear the prompt
+      published.clear();
 
       service.cancelPrompt();
 
@@ -309,7 +340,7 @@ void main() {
       final json = jsonDecode(utf8.decode(published.first));
       expect(json['jsonrpc'], '2.0');
       expect(json['method'], 'session/cancel');
-      expect(json.containsKey('id'), isFalse); // notification, no ID
+      expect(json.containsKey('id'), isFalse);
     });
 
     test('does nothing when no prompt in-flight', () {
@@ -323,13 +354,7 @@ void main() {
       stream.listen(events.add);
 
       service.cancelPrompt();
-
-      // Relay responds with cancelled
-      service.handleMessage(encode({
-        'jsonrpc': '2.0',
-        'id': 1,
-        'result': {'stopReason': 'cancelled'},
-      }));
+      service.handleMessage(encode(promptResult(1, stopReason: 'cancelled')));
 
       await Future<void>.delayed(Duration.zero);
 
@@ -359,19 +384,7 @@ void main() {
   group('session/update without active stream', () {
     test('ignores updates when no prompt is in-flight', () {
       // Should not crash
-      service.handleMessage(encode({
-        'jsonrpc': '2.0',
-        'method': 'session/update',
-        'params': {
-          'updates': [
-            {
-              'kind': 'content_chunk',
-              'content': {'type': 'text', 'text': 'orphan'},
-            },
-          ],
-        },
-      }));
-      // No assertion — just verifying it doesn't throw
+      service.handleMessage(encode(contentChunk('orphan')));
     });
   });
 }

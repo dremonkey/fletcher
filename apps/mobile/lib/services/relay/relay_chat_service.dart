@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'acp_update_parser.dart';
 import 'json_rpc.dart';
 
 // ---------------------------------------------------------------------------
@@ -148,19 +149,11 @@ class RelayChatService {
   // -------------------------------------------------------------------------
 
   void _handleSessionUpdate(Map<String, dynamic> params) {
-    final updates = params['updates'] as List<dynamic>? ?? [];
-    for (final update in updates) {
-      if (update is! Map<String, dynamic>) continue;
-      final kind = update['kind'] as String?;
-
-      if (kind == 'content_chunk') {
-        final text = (update['content'] as Map?)?['text'] as String? ?? '';
-        if (text.isNotEmpty) {
-          _activeStream?.add(RelayContentDelta(text));
-        }
-      }
-      // Unknown kinds are silently ignored — forward compatible.
+    final update = AcpUpdateParser.parse(params);
+    if (update is AcpTextDelta && update.text.isNotEmpty) {
+      _activeStream?.add(RelayContentDelta(update.text));
     }
+    // Non-content updates and null (malformed) are silently ignored.
   }
 
   void _handlePromptResult(JsonRpcResponse response) {
