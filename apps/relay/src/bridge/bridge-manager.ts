@@ -6,9 +6,7 @@
 
 import { RelayBridge } from "./relay-bridge";
 import type { RoomManager } from "../livekit/room-manager";
-import { createLogger } from "../utils/logger";
-
-const log = createLogger("bridge-manager");
+import { rootLogger, type Logger } from "../utils/logger";
 
 // ---------------------------------------------------------------------------
 // BridgeManager
@@ -17,12 +15,16 @@ const log = createLogger("bridge-manager");
 export class BridgeManager {
   private bridges = new Map<string, RelayBridge>();
   private idleTimer: ReturnType<typeof setInterval> | null = null;
+  private log: Logger;
 
   constructor(
     private roomManager: RoomManager,
     private acpCommand: string,
     private acpArgs: string[],
-  ) {}
+    logger?: Logger,
+  ) {
+    this.log = logger ?? rootLogger.child({ component: "bridge-manager" });
+  }
 
   /**
    * Create a bridge for a room: join the room, then start the bridge.
@@ -34,17 +36,18 @@ export class BridgeManager {
     // Join the LiveKit room first
     await this.roomManager.joinRoom(roomName);
 
-    // Create and start the bridge
+    // Create and start the bridge with a room-scoped logger
     const bridge = new RelayBridge({
       roomName,
       roomManager: this.roomManager,
       acpCommand: this.acpCommand,
       acpArgs: this.acpArgs,
+      logger: this.log.child({ component: "relay-bridge", roomName }),
     });
 
     this.bridges.set(roomName, bridge);
     await bridge.start();
-    log.info({ event: "room_added", roomName });
+    this.log.info({ event: "room_added", roomName });
   }
 
   /**
@@ -57,7 +60,7 @@ export class BridgeManager {
     await bridge.stop();
     this.bridges.delete(roomName);
     await this.roomManager.leaveRoom(roomName);
-    log.info({ event: "room_removed", roomName });
+    this.log.info({ event: "room_removed", roomName });
   }
 
   /**

@@ -10,6 +10,7 @@ import type {
   JsonRpcNotification,
   JsonRpcResponse,
 } from "../rpc/types";
+import type { Logger } from "../utils/logger";
 
 // Re-export JSON-RPC types for convenience
 export type { JsonRpcRequest, JsonRpcNotification, JsonRpcResponse };
@@ -26,6 +27,8 @@ export interface AcpClientOptions {
   args?: string[];
   /** Additional environment variables for the subprocess. */
   env?: Record<string, string>;
+  /** Optional logger for structured logging. Defaults to silent if not provided. */
+  logger?: Logger;
 }
 
 // ---------------------------------------------------------------------------

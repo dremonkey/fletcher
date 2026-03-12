@@ -9,9 +9,7 @@ import { AcpClient } from "../acp/client";
 import type { RoomManager } from "../livekit/room-manager";
 import type { SessionUpdateParams } from "../acp/types";
 import { INTERNAL_ERROR } from "../rpc/errors";
-import { createLogger } from "../utils/logger";
-
-const log = createLogger("relay-bridge");
+import { rootLogger, type Logger } from "../utils/logger";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -22,6 +20,8 @@ export interface RelayBridgeOptions {
   roomManager: RoomManager;
   acpCommand: string;
   acpArgs?: string[];
+  /** Optional logger — defaults to rootLogger.child({ component: "relay-bridge", roomName }). */
+  logger?: Logger;
 }
 
 // ---------------------------------------------------------------------------
@@ -30,10 +30,14 @@ export interface RelayBridgeOptions {
 
 export class RelayBridge {
   private acpClient: AcpClient;
+  private log: Logger;
   private sessionId: string | null = null;
   private started = false;
 
   constructor(private options: RelayBridgeOptions) {
+    this.log = options.logger ??
+      rootLogger.child({ component: "relay-bridge", roomName: options.roomName });
+
     this.acpClient = new AcpClient({
       command: options.acpCommand,
       args: [
@@ -41,6 +45,7 @@ export class RelayBridge {
         "--session",
         `agent:main:relay:${options.roomName}`,
       ],
+      logger: this.log.child({ component: "acp" }),
     });
   }
 
@@ -70,7 +75,7 @@ export class RelayBridge {
       },
     });
     this.sessionId = result.sessionId;
-    log.info({ event: "acp_initialized", roomName, sessionId: this.sessionId });
+    this.log.info({ event: "acp_initialized", sessionId: this.sessionId });
 
     // 3. Register data handler for mobile -> ACP forwarding
     this.options.roomManager.onDataReceived(
@@ -90,7 +95,7 @@ export class RelayBridge {
     });
 
     this.started = true;
-    log.info({ event: "room_joined", roomName });
+    this.log.info({ event: "bridge_started" });
   }
 
   /**
@@ -129,13 +134,21 @@ export class RelayBridge {
       params?: Record<string, unknown>;
     };
 
+    // Extract requestId from params for correlation, or generate one
+    const correlationId =
+      (msg.params?.requestId as string) ?? crypto.randomUUID();
+    const reqLog = this.log.child({ correlationId });
+
     if (msg.method === "session/prompt") {
+      reqLog.info({ event: "mobile_prompt_received" });
+
       // Enrich: inject sessionId
       const params = { ...msg.params, sessionId: this.sessionId };
 
       this.acpClient
         .sessionPrompt(params as any)
         .then((result) => {
+          reqLog.info({ event: "mobile_prompt_responded", stopReason: (result as any).stopReason });
           this.forwardToMobile({
             jsonrpc: "2.0",
             id: msg.id,
@@ -143,7 +156,7 @@ export class RelayBridge {
           });
         })
         .catch((err: Error) => {
-          log.error({ event: "acp_error", roomName: this.options.roomName, error: err.message });
+          reqLog.error({ event: "acp_error", error: err.message });
           this.forwardToMobile({
             jsonrpc: "2.0",
             id: msg.id,
@@ -151,6 +164,7 @@ export class RelayBridge {
           });
         });
     } else if (msg.method === "session/cancel") {
+      reqLog.info({ event: "session_cancel" });
       this.acpClient.sessionCancel(msg.params as any);
     }
     // Unknown methods: silently ignore (future extensibility)

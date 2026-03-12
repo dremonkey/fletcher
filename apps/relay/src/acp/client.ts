@@ -17,6 +17,8 @@ import type {
   SessionUpdateParams,
 } from "./types";
 import type { JsonRpcResponse } from "../rpc/types";
+import type { Logger } from "../utils/logger";
+import pino from "pino";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,12 +31,16 @@ interface PendingRequest {
 
 type UpdateHandler = (params: SessionUpdateParams) => void;
 
+/** Silent logger used when no logger is provided. */
+const noopLogger = pino({ level: "silent" });
+
 // ---------------------------------------------------------------------------
 // AcpClient
 // ---------------------------------------------------------------------------
 
 export class AcpClient {
   private options: AcpClientOptions;
+  private log: Logger;
   private proc: ReturnType<typeof Bun.spawn> | null = null;
   private nextId = 1;
   private pendingRequests = new Map<number, PendingRequest>();
@@ -43,6 +49,7 @@ export class AcpClient {
 
   constructor(options: AcpClientOptions) {
     this.options = options;
+    this.log = options.logger ?? noopLogger;
   }
 
   // -------------------------------------------------------------------------
@@ -83,6 +90,7 @@ export class AcpClient {
    * 3. Send `initialized` notification
    */
   async initialize(): Promise<InitializeResult> {
+    this.log.info({ event: "acp_spawn" }, "spawning ACP subprocess");
     this.spawn();
 
     const params: InitializeParams = {
@@ -99,6 +107,7 @@ export class AcpClient {
     // Send `initialized` notification (no id — it's a notification)
     this.sendNotification("initialized");
 
+    this.log.info({ event: "acp_initialized" }, "ACP initialized");
     return result;
   }
 
@@ -110,6 +119,8 @@ export class AcpClient {
    */
   async shutdown(): Promise<void> {
     if (!this.proc) return;
+
+    this.log.info({ event: "acp_shutdown" }, "shutting down ACP subprocess");
 
     try {
       this.sendNotification("exit");
@@ -135,16 +146,22 @@ export class AcpClient {
   // -------------------------------------------------------------------------
 
   async sessionNew(params: SessionNewParams): Promise<SessionNewResult> {
-    return (await this.request("session/new", params)) as SessionNewResult;
+    this.log.info({ event: "session_new" }, "creating ACP session");
+    const result = (await this.request("session/new", params)) as SessionNewResult;
+    this.log.info({ event: "session_new_result", sessionId: result.sessionId }, "ACP session created");
+    return result;
   }
 
   async sessionPrompt(
     params: SessionPromptParams,
   ): Promise<SessionPromptResult> {
-    return (await this.request(
+    this.log.info({ event: "session_prompt", sessionId: params.sessionId }, "sending prompt");
+    const result = (await this.request(
       "session/prompt",
       params,
     )) as SessionPromptResult;
+    this.log.info({ event: "session_prompt_result", stopReason: result.stopReason }, "prompt completed");
+    return result;
   }
 
   /**

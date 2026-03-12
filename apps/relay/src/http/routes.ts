@@ -2,6 +2,7 @@ import type { BridgeManager } from "../bridge/bridge-manager";
 import type { RoomManager } from "../livekit/room-manager";
 import { AcpClient } from "../acp/client";
 import type { SessionUpdateParams } from "../acp/types";
+import { rootLogger, type Logger } from "../utils/logger";
 
 const startTime = Date.now();
 
@@ -41,7 +42,7 @@ export async function handleHttpRequest(
 
   // POST /relay/join — token server signals relay to join a room
   if (url.pathname === "/relay/join" && req.method === "POST") {
-    return handleRelayJoin(req, ctx.bridgeManager);
+    return handleRelayJoin(req, ctx);
   }
 
   // POST /relay/prompt — CLI test endpoint (bypasses LiveKit)
@@ -79,7 +80,7 @@ function handleGetRooms(ctx: RouteContext): Response {
 
 async function handleRelayJoin(
   req: Request,
-  bridgeManager: BridgeManager,
+  ctx: RouteContext,
 ): Promise<Response> {
   let body: unknown;
   try {
@@ -98,7 +99,7 @@ async function handleRelayJoin(
     );
   }
 
-  const { roomName } = body as { roomName?: string };
+  const { roomName, requestId } = body as { roomName?: string; requestId?: string };
 
   if (!roomName || typeof roomName !== "string") {
     return Response.json(
@@ -107,8 +108,13 @@ async function handleRelayJoin(
     );
   }
 
+  const correlationId = requestId ?? crypto.randomUUID();
+  const log = rootLogger.child({ component: "http", correlationId, roomName });
+  log.info({ event: "relay_join_received" });
+
   // Check if already joined
-  if (bridgeManager.hasRoom(roomName)) {
+  if (ctx.bridgeManager.hasRoom(roomName)) {
+    log.info({ event: "relay_join_already_joined" });
     return Response.json({
       status: "already_joined",
       roomName,
@@ -116,13 +122,15 @@ async function handleRelayJoin(
   }
 
   try {
-    await bridgeManager.addRoom(roomName);
+    await ctx.bridgeManager.addRoom(roomName);
+    log.info({ event: "relay_join_success" });
     return Response.json({
       status: "joined",
       roomName,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
+    log.error({ event: "relay_join_error", error: message });
     return Response.json(
       { error: `Failed to join room: ${message}` },
       { status: 500 },
@@ -145,7 +153,7 @@ async function handleRelayPrompt(
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { text } = (body as { text?: string }) ?? {};
+  const { text, requestId } = (body as { text?: string; requestId?: string }) ?? {};
   if (!text || typeof text !== "string") {
     return Response.json(
       { error: 'Missing required field: text (e.g. {"text":"hello"})' },
@@ -153,9 +161,14 @@ async function handleRelayPrompt(
     );
   }
 
+  const correlationId = requestId ?? crypto.randomUUID();
+  const log = rootLogger.child({ component: "http", correlationId });
+  log.info({ event: "relay_prompt_received", text });
+
   const client = new AcpClient({
     command: ctx.acpCommand,
     args: [...ctx.acpArgs, "--session", "agent:main:relay-test"],
+    logger: log.child({ component: "acp" }),
   });
 
   const updates: unknown[] = [];
@@ -185,6 +198,7 @@ async function handleRelayPrompt(
     // 5. Shutdown
     await client.shutdown();
 
+    log.info({ event: "relay_prompt_success", sessionId: session.sessionId });
     return Response.json({
       sessionId: session.sessionId,
       result,
@@ -193,6 +207,7 @@ async function handleRelayPrompt(
   } catch (err) {
     try { await client.shutdown(); } catch { /* already dead */ }
     const message = err instanceof Error ? err.message : "Unknown error";
+    log.error({ event: "relay_prompt_error", error: message });
     return Response.json(
       { error: `ACP error: ${message}` },
       { status: 500 },
