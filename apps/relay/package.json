@@ -10,6 +10,8 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.71"
+    "@anthropic-ai/claude-agent-sdk": "^0.2.71",
+    "@livekit/rtc-node": "^0.13.24",
+    "livekit-server-sdk": "^2.15.0"
   }
 }
