@@ -9,6 +9,7 @@ import '../models/conversation_state.dart';
 import '../models/system_event.dart';
 import 'agent_dispatch_service.dart';
 import 'agent_presence_service.dart';
+import 'relay/relay_chat_service.dart';
 import 'connectivity_service.dart';
 import 'disconnect_reason.dart' as dr;
 import 'health_service.dart';
@@ -106,6 +107,13 @@ class LiveKitService extends ChangeNotifier {
   // Queued text messages sent while agent was absent (Epic 20).
   // Flushed when the agent connects.
   final List<String> _pendingTextMessages = [];
+
+  // Relay chat service for chat-mode text conversations (Epic 22).
+  // Created lazily when room connects; disposed on disconnect.
+  RelayChatService? _relayChatService;
+
+  // Accumulated text for the in-progress agent message from relay (chat mode).
+  String _relayAgentMessageText = '';
 
   // Speech detection via audio levels when agent is absent (Epic 20).
   // Counts consecutive frames above threshold to confirm speech.
@@ -356,6 +364,7 @@ class LiveKitService extends ChangeNotifier {
 
       debugPrint('[Fletcher] Connected to room');
       _localParticipant = _room!.localParticipant;
+      _initRelayChatService();
 
       // Update ROOM event to success with room name (task 020)
       final roomDisplayName = _currentRoomName ?? 'room';
@@ -771,9 +780,14 @@ class LiveKitService extends ChangeNotifier {
   // Ganglia data channel handling
   // ---------------------------------------------------------------------------
 
-  /// Handles data received from the voice agent via data channel
+  /// Handles data received from the voice agent or relay via data channel.
   void _handleDataReceived(DataReceivedEvent event) {
-    // Only process ganglia-events topic
+    // Route by topic: ganglia-events (voice agent) or relay (chat mode)
+    if (event.topic == 'relay') {
+      _relayChatService?.handleMessage(event.data);
+      return;
+    }
+
     if (event.topic != 'ganglia-events') return;
 
     try {
@@ -1283,21 +1297,23 @@ class LiveKitService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Send a text message through the LiveKit data channel.
+  /// Send a text message through the appropriate channel.
   ///
-  /// The message is sent as a `text_message` event on the `ganglia-events`
-  /// topic, keeping it within the existing voice session. The user's message
-  /// is also added to the local transcript immediately (optimistic update).
+  /// **Chat mode** (muted): routes via relay JSON-RPC (`session/prompt`
+  /// on `"relay"` topic). Response streams back as `session/update` chunks.
+  ///
+  /// **Voice mode** (unmuted): routes via `ganglia-events` to the voice
+  /// agent, which injects it into the AgentSession (existing path).
+  ///
+  /// The user's message is added to the local transcript immediately
+  /// (optimistic update) regardless of mode.
   Future<void> sendTextMessage(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
 
-    debugPrint('[Fletcher] Sending text message: ${trimmed.length} chars');
+    debugPrint('[Fletcher] Sending text message: ${trimmed.length} chars (mode=${_isMuted ? "chat" : "voice"})');
 
-    // Trigger agent dispatch if agent is absent (Epic 20)
-    agentPresenceService.onTextMessageSent();
-
-    // Optimistic: add to local transcript immediately
+    // Optimistic: add user message to local transcript immediately
     final entry = TranscriptEntry(
       id: 'text-${DateTime.now().millisecondsSinceEpoch}',
       role: TranscriptRole.user,
@@ -1309,7 +1325,6 @@ class LiveKitService extends ChangeNotifier {
 
     final updatedTranscript = List<TranscriptEntry>.from(_state.transcript)
       ..add(entry);
-    // Trim to max entries
     if (updatedTranscript.length > _maxTranscriptEntries) {
       updatedTranscript.removeRange(
         0,
@@ -1318,8 +1333,16 @@ class LiveKitService extends ChangeNotifier {
     }
     _updateState(transcript: updatedTranscript);
 
-    // If agent is absent/dispatching, queue the message for delivery
-    // once the agent connects. Otherwise send immediately.
+    // --- Chat mode: route through relay ---
+    if (_isMuted) {
+      await _sendViaRelay(trimmed);
+      return;
+    }
+
+    // --- Voice mode: route through agent (existing path) ---
+    // Trigger agent dispatch if agent is absent (Epic 20)
+    agentPresenceService.onTextMessageSent();
+
     final agentState = agentPresenceService.state;
     if (agentPresenceService.enabled &&
         (agentState == AgentPresenceState.agentAbsent ||
@@ -1345,6 +1368,122 @@ class LiveKitService extends ChangeNotifier {
       });
     }
     _pendingTextMessages.clear();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Relay chat mode (Epic 22 — dual-mode architecture)
+  // ---------------------------------------------------------------------------
+
+  /// Check whether a relay participant (identity starting with `relay-`)
+  /// is present in the current room.
+  bool get _hasRelayParticipant {
+    if (_room == null) return false;
+    return _room!.remoteParticipants.values
+        .any((p) => p.identity.startsWith('relay-'));
+  }
+
+  /// Initialize the relay chat service. Called once when the room connects.
+  void _initRelayChatService() {
+    _relayChatService = RelayChatService(
+      publish: (data) async {
+        final participant = _localParticipant;
+        if (participant == null) return;
+        await participant.publishData(data, reliable: true, topic: 'relay');
+      },
+    );
+  }
+
+  /// Send user text through the relay (chat mode).
+  ///
+  /// Checks relay presence, starts streaming, and routes events into
+  /// the transcript. Shows thinking indicator while waiting for first chunk.
+  Future<void> _sendViaRelay(String text) async {
+    final relay = _relayChatService;
+    if (relay == null) {
+      debugPrint('[Relay] Service not initialized');
+      return;
+    }
+
+    if (!_hasRelayParticipant) {
+      debugPrint('[Relay] No relay participant in room — cannot send');
+      _emitSystemEvent(SystemEvent(
+        id: 'relay-absent-${DateTime.now().millisecondsSinceEpoch}',
+        type: SystemEventType.agent,
+        status: SystemEventStatus.error,
+        message: 'Relay not connected — try again',
+        timestamp: DateTime.now(),
+        prefix: '▸',
+      ));
+      return;
+    }
+
+    if (relay.isBusy) {
+      debugPrint('[Relay] Prompt already in-flight — cancelling previous');
+      relay.cancelPrompt();
+      // Wait a tick for the cancel to propagate before sending new prompt
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+
+    // Create placeholder agent message for streaming
+    final messageId = 'relay-${DateTime.now().millisecondsSinceEpoch}';
+
+    _relayAgentMessageText = '';
+
+    // Show thinking indicator
+    _updateState(isAgentThinking: true);
+
+    final stream = relay.sendPrompt(text);
+    await for (final event in stream) {
+      switch (event) {
+        case RelayContentDelta(:final text):
+          _relayAgentMessageText += text;
+          _upsertTranscript(
+            segmentId: messageId,
+            role: TranscriptRole.agent,
+            text: _relayAgentMessageText,
+            isFinal: false,
+          );
+          // Hide thinking after first content arrives
+          if (_state.isAgentThinking) {
+            _updateState(isAgentThinking: false);
+          }
+
+        case RelayPromptComplete():
+          _upsertTranscript(
+            segmentId: messageId,
+            role: TranscriptRole.agent,
+            text: _relayAgentMessageText,
+            isFinal: true,
+          );
+          _updateState(isAgentThinking: false);
+
+          _relayAgentMessageText = '';
+
+        case RelayPromptError(:final code, :final message):
+          debugPrint('[Relay] Prompt error: $code $message');
+          _updateState(isAgentThinking: false);
+          _emitSystemEvent(SystemEvent(
+            id: 'relay-error-${DateTime.now().millisecondsSinceEpoch}',
+            type: SystemEventType.agent,
+            status: SystemEventStatus.error,
+            message: _relayErrorMessage(code, message),
+            timestamp: DateTime.now(),
+            prefix: '▸',
+          ));
+
+          _relayAgentMessageText = '';
+      }
+    }
+  }
+
+  /// Map relay error codes to user-facing messages.
+  String _relayErrorMessage(int code, String message) {
+    return switch (code) {
+      -32003 => 'Voice mode active — switch to voice',
+      -32010 => 'Backend unavailable — retrying...',
+      -32011 => 'Relay starting up — try again',
+      _ => 'Error: $message',
+    };
   }
 
   void _updateState({
@@ -1704,6 +1843,9 @@ class LiveKitService extends ChangeNotifier {
     _connectivitySub = null;
     _networkRestoreSub?.cancel();
     _networkRestoreSub = null;
+    _relayChatService?.dispose();
+    _relayChatService = null;
+    _relayAgentMessageText = '';
     _room?.unregisterTextStreamHandler('lk.transcription');
     _listener?.dispose();
     await _room?.disconnect();
