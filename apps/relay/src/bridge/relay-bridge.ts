@@ -36,7 +36,11 @@ export class RelayBridge {
   constructor(private options: RelayBridgeOptions) {
     this.acpClient = new AcpClient({
       command: options.acpCommand,
-      args: options.acpArgs,
+      args: [
+        ...(options.acpArgs ?? []),
+        "--session",
+        `agent:main:relay:${options.roomName}`,
+      ],
     });
   }
 

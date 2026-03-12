@@ -155,7 +155,7 @@ async function handleRelayPrompt(
 
   const client = new AcpClient({
     command: ctx.acpCommand,
-    args: ctx.acpArgs,
+    args: [...ctx.acpArgs, "--session", "agent:main:relay-test"],
   });
 
   const updates: unknown[] = [];

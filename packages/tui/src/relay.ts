@@ -88,10 +88,8 @@ export async function testRelay(): Promise<void> {
     const body = (await res.json()) as {
       error?: string;
       sessionId?: string;
-      stopReason?: string;
-      updates?: Array<{
-        updates?: Array<{ kind?: string; content?: { text?: string } }>;
-      }>;
+      result?: { stopReason?: string };
+      updates?: unknown[];
     };
 
     if (body.error) {
@@ -100,17 +98,27 @@ export async function testRelay(): Promise<void> {
       return;
     }
 
-    // Extract text from updates
+    // Extract text from updates (ACP format: session/update notifications)
     const chunks: string[] = [];
-    for (const update of body.updates ?? []) {
-      for (const u of update.updates ?? []) {
-        if (u.content?.text) chunks.push(u.content.text);
+    for (const raw of body.updates ?? []) {
+      const u = raw as Record<string, unknown>;
+      // ACP: { update: { content: { type: "text", text } } }
+      const update = u.update as Record<string, unknown> | undefined;
+      if (update?.content) {
+        const c = update.content as { type?: string; text?: string };
+        if (c?.type === "text" && c?.text) chunks.push(c.text);
+      }
+      // Mock format: { updates: [{ content: { text } }] }
+      const updates = u.updates as Array<Record<string, unknown>> | undefined;
+      for (const item of updates ?? []) {
+        const c = item.content as { text?: string } | undefined;
+        if (c?.text) chunks.push(c.text);
       }
     }
 
     s2.stop("Response received");
     p.log.success(chunks.join("") || "(empty response)");
-    p.log.info(`Session: ${body.sessionId}  Stop: ${body.stopReason}`);
+    p.log.info(`Session: ${body.sessionId}  Stop: ${body.result?.stopReason ?? "unknown"}`);
   } catch (err) {
     s2.stop("Request failed");
     p.log.error(err instanceof Error ? err.message : String(err));
