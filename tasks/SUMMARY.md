@@ -389,6 +389,9 @@ Split the single voice-agent pipeline into two distinct modes — **Voice Mode**
 - [ ] 049: Voice Pipeline Clean Teardown — unpublish audio track, release mic, keep room alive for relay
 - [ ] 050: Migrate Text Input from Agent to Relay — text always routes through relay, not agent
 - [ ] 051: Chat Mode Health & Error Handling — relay presence, OpenClaw reachability, TTS engine status
+- [ ] 052: Relay LLM Wrapper for Ganglia — JSON-RPC LLM backend routing through relay instead of direct completions API
+- [ ] 053: Dual-Mode Chat/Live Split — disable text-through-agent; chat via relay, live via voice-agent; no TTS in chat initially
+- [ ] 054: Mobile ACP Client — JSON-RPC 2.0 codec + ACP client over `"relay"` data channel (`session/prompt`, `session/update`, `session/cancel`)
 
 **Depends on:** Epic 4 (Ganglia session keys), Epic 7 (Sovereign Pairing), Epic 17 (Text Input), Epic 20 (Agent Dispatch)
 

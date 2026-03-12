@@ -183,6 +183,33 @@ Addresses BUG-003 (Mar 10) — system status during agent sleep.
 
 **Status:** [ ]
 
+---
+
+### 052: Relay LLM Wrapper for Ganglia
+Create a new `LLM` backend in `livekit-agent-ganglia` that routes completions through the Fletcher Relay's JSON-RPC protocol (`session/message`) instead of calling the OpenClaw completions API directly. Maps streamed `session/update` responses back to `LLMStream`-compatible events. Shares `SessionKey` logic for conversation continuity.
+
+**Status:** [ ]
+
+---
+
+### 053: Dual-Mode Chat / Live Split
+Implement two distinct operating modes: **Chat mode** (text via relay participant on `"relay"` topic) and **Live mode** (voice via voice-agent, unchanged). Disable the current path that sends text messages through the voice agent (`text_message` on `ganglia-events`). Text exclusively routes through the relay in chat mode. Chat mode does not support TTS initially — text responses render in transcript only. TTS will be enabled later (independent of livekit-agent).
+
+**Depends on:** 052
+
+**Status:** [ ]
+
+---
+
+### 054: Mobile ACP Client (JSON-RPC over Data Channel)
+Implement a full ACP client in the Flutter app that speaks JSON-RPC 2.0 over the `"relay"` data channel topic. The relay is a transparent passthrough — mobile speaks ACP directly. Methods: `session/prompt` (send text, receive streamed `session/update` notifications with `content_chunk` deltas), `session/cancel` (interrupt in-flight requests). Handle relay-specific errors (`-32003` voice mode active, `-32010` ACP lost, `-32011` session not ready). JSON-RPC codec, request ID correlation, and UI integration (streaming text into ChatTranscript, thinking spinner, error cards).
+
+**Depends on:** 053
+
+**Status:** [ ]
+
+---
+
 ## Mode Comparison
 
 | Concern | Voice Mode | Chat Mode |
