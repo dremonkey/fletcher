@@ -17,13 +17,13 @@ VOICE MODE                                    CHAT MODE
 ──────────                                    ─────────
 LiveKit Room (active, agent connected)        LiveKit Room (active, relay participant)
 Server STT (Deepgram)                         Client STT (native speech_to_text)
-Agent → Ganglia → OpenClaw                    Flutter → data channel → Relay → OpenClaw
+Agent → Ganglia → ACP → OpenClaw              Flutter → data channel → Relay → ACP → OpenClaw
 Server TTS (Piper/Google)                     Client TTS (pluggable: native / Cartesia / Gemini)
 Mic: WebRTC audio track (MODE_IN_COMM)        Mic: OS-native (MODE_NORMAL) — no audio track
 Agent sleep/wake: YES                         Agent sleep/wake: N/A
 ```
 
-Both modes share the same **OpenClaw Gateway session** (via session key) so conversation context, memory, and artifacts are continuous across mode switches.
+Both modes use **ACP (Agent Communication Protocol)** to talk to OpenClaw — not the OpenClaw HTTP/SSE completions API. Both share the same **OpenClaw Gateway session** (via `session_key` in ACP `session/new` `_meta`) so conversation context, memory, and artifacts are continuous across mode switches.
 
 ## Fletcher Relay — The Chat Mode Backend
 
@@ -60,6 +60,32 @@ The relay runs locally alongside OpenClaw — it's part of the Fletcher product,
 
 **Mutual exclusion:** When voice mode is active (agent connected), the relay is passive — it stays in the room but defers to the agent. When chat mode is active, the agent is absent or sleeping. Handoff is coordinated via room metadata or data channel signals.
 
+## ACP as the Unified Protocol
+
+Both modes connect to OpenClaw via **ACP (Agent Communication Protocol)** — a full-duplex JSON-RPC 2.0 protocol over stdio or WebSocket. The current ganglia transport (HTTP POST to `/v1/chat/completions` + SSE streaming) is **half-duplex** and cannot support:
+
+1. **Push from backend mid-turn** — inject context, cancel a response, or redirect while the agent is speaking
+2. **Real-time event streaming** — observe pipeline state (STT, EOU, TTS, tool calls) without polling
+3. **Multi-modal coordination** — e.g., a tool call result that the voice agent should incorporate immediately, not on the next turn boundary
+
+ACP solves all three. Both the relay and the voice agent are **independent, disposable ACP clients** — each spawns its own ACP subprocess (or connects via WebSocket) and manages its own session lifecycle. All conversation state lives in OpenClaw, keyed by `session_key`.
+
+```
+CHAT MODE                              VOICE MODE
+─────────                              ──────────
+Mobile                                 Mobile
+  │ data channel ("relay" topic)         │ WebRTC audio track
+  ▼                                      ▼
+Relay (Bun, non-agent participant)     livekit-agent (STT/TTS/VAD)
+  │ ACP (stdio)                          │ ACP (stdio or WebSocket)
+  ▼                                      ▼
+OpenClaw (ACP agent)                   OpenClaw (ACP agent)
+  │                                      │
+  └──── same session_key ────────────────┘
+```
+
+The relay's ACP client is **already implemented** (`apps/relay/src/acp/client.ts`). The voice agent's ACP backend (`GANGLIA_TYPE=acp`) replaces the current HTTP/SSE transport in ganglia — see task 052 and the full spec at `apps/relay/docs/acp-transport.md`.
+
 ## What This Eliminates
 
 | Bug cluster | Why it goes away |
@@ -79,7 +105,7 @@ The relay runs locally alongside OpenClaw — it's part of the Fletcher product,
 
 ## Status
 
-**Epic Status:** 📋 BACKLOG
+**Epic Status:** [~] IN PROGRESS
 
 ## Tasks
 
@@ -185,8 +211,8 @@ Addresses BUG-003 (Mar 10) — system status during agent sleep.
 
 ---
 
-### 052: Relay LLM Wrapper for Ganglia
-Create a new `LLM` backend in `livekit-agent-ganglia` that routes completions through the Fletcher Relay's JSON-RPC protocol (`session/message`) instead of calling the OpenClaw completions API directly. Maps streamed `session/update` responses back to `LLMStream`-compatible events. Shares `SessionKey` logic for conversation continuity.
+### 052: ACP Backend for Ganglia (`GANGLIA_TYPE=acp`)
+Create a new `LLM` backend in `livekit-agent-ganglia` that connects to OpenClaw via ACP (Agent Communication Protocol) instead of the current HTTP/SSE completions API. Spawns an ACP subprocess (stdio) or connects via WebSocket, performs the `initialize` → `session/new` handshake, and maps `session/prompt` → `session/update` streams back to `LLMStream`-compatible events. This replaces the half-duplex HTTP transport with full-duplex ACP, enabling mid-turn push, real-time events, and multi-modal coordination. See full spec: `apps/relay/docs/acp-transport.md`.
 
 **Status:** [ ]
 
@@ -197,7 +223,7 @@ Implement two distinct operating modes: **Chat mode** (text via relay participan
 
 **Depends on:** 052
 
-**Status:** [ ]
+**Status:** [~] (chat/live routing works; text_message handler not yet removed from agent.ts; session key continuity needs field verification)
 
 ---
 
@@ -206,7 +232,7 @@ Implement a full ACP client in the Flutter app that speaks JSON-RPC 2.0 over the
 
 **Depends on:** 053
 
-**Status:** [ ]
+**Status:** [~] (JSON-RPC codec, ACP client, streaming, error handling done; cancel not wired to UI button; errors surface as system events not inline cards)
 
 ---
 
@@ -215,7 +241,7 @@ Implement a full ACP client in the Flutter app that speaks JSON-RPC 2.0 over the
 | Concern | Voice Mode | Chat Mode |
 |---|---|---|
 | Input | Server STT (Deepgram via LiveKit) | Native STT (`speech_to_text`) or keyboard |
-| LLM routing | Agent → Ganglia → OpenClaw | Flutter → data channel → Relay → OpenClaw |
+| LLM routing | Agent → Ganglia → ACP → OpenClaw | Flutter → data channel → Relay → ACP → OpenClaw |
 | Output | Server TTS (Piper/Google via agent) | Client TTS (pluggable engine) |
 | LiveKit room | Active, agent + relay in room | Active, relay only in room |
 | Agent process | Running, sleep/wake managed | Absent or sleeping |
@@ -230,7 +256,8 @@ Implement a full ACP client in the Flutter app that speaks JSON-RPC 2.0 over the
 
 - **Relay is the chat mode backend.** The Flutter app does not talk to OpenClaw directly. All chat mode communication goes through the relay via LiveKit data channel, getting ICE resilience and session management for free.
 - **Relay is part of the Fletcher product.** It ships alongside the voice agent, LiveKit server, and token server as one installable package. It is not a separate product or optional add-on.
-- **Session continuity via session key.** Both the relay and the voice agent use the same `SessionKey` (Epic 4, spec 08) so OpenClaw maintains one conversation thread.
+- **ACP replaces HTTP/SSE for both modes.** The OpenClaw completions API (`/v1/chat/completions`) is half-duplex and cannot support mid-turn push, real-time events, or multi-modal coordination. Both the relay (chat) and voice agent (live) connect to OpenClaw as independent ACP clients using full-duplex JSON-RPC 2.0. See `apps/relay/docs/acp-transport.md` for the full spec.
+- **Session continuity via session key.** Both the relay and the voice agent use the same `SessionKey` (via `_meta` in ACP `session/new`) so OpenClaw maintains one conversation thread.
 - **Client-side TTS is pluggable.** Start with `flutter_tts` (free/offline). Add cloud engines (Cartesia, Gemini) as separate implementations behind the same interface.
 - **Text input defaults to chat mode.** When user taps the mic to switch to text, they're in chat mode — relay handles it.
 - **Voice mode is opt-in.** User explicitly activates voice (unmute / tap mic). This dispatches the agent.
