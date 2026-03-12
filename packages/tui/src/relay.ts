@@ -1,0 +1,122 @@
+import * as p from "@clack/prompts";
+import { spawn, which } from "bun";
+import { join } from "path";
+import { ROOT, env, cancelled } from "./env";
+
+const RELAY_DIR = join(ROOT, "apps", "relay");
+const MOCK_ACPX = join(RELAY_DIR, "test", "mock-acpx.ts");
+
+function resolveAcpBackend(): { command: string; args: string; label: string } {
+  const explicit = env("ACP_COMMAND");
+  if (explicit) {
+    return { command: explicit, args: env("ACP_ARGS") ?? "", label: explicit };
+  }
+  if (which("acpx")) {
+    return { command: "acpx", args: "", label: "acpx" };
+  }
+  return { command: "bun", args: MOCK_ACPX, label: "mock-acpx" };
+}
+
+export async function testRelay(): Promise<void> {
+  const backend = resolveAcpBackend();
+
+  p.log.info(`ACP backend: ${backend.label}`);
+
+  const message = await p.text({
+    message: "Message to send:",
+    placeholder: "hello",
+    defaultValue: "hello",
+  });
+  if (p.isCancel(message)) cancelled();
+
+  const port = env("RELAY_HTTP_PORT") ?? "7891";
+  const url = `http://127.0.0.1:${port}`;
+
+  // Check if relay is already running
+  const alreadyRunning = await fetch(`${url}/health`)
+    .then(() => true)
+    .catch(() => false);
+
+  let relayProc: ReturnType<typeof spawn> | null = null;
+
+  if (!alreadyRunning) {
+    const s = p.spinner();
+    s.start("Starting relay");
+
+    relayProc = spawn(["bun", "run", join(RELAY_DIR, "src/index.ts")], {
+      env: {
+        ...process.env,
+        ACP_COMMAND: backend.command,
+        ACP_ARGS: backend.args,
+        RELAY_HTTP_PORT: port,
+      },
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+
+    // Wait for ready
+    let ready = false;
+    for (let i = 0; i < 30; i++) {
+      await Bun.sleep(200);
+      ready = await fetch(`${url}/health`)
+        .then(() => true)
+        .catch(() => false);
+      if (ready) break;
+    }
+
+    if (!ready) {
+      s.stop("Relay failed to start");
+      relayProc.kill();
+      return;
+    }
+    s.stop("Relay started");
+  } else {
+    p.log.info("Relay already running");
+  }
+
+  // Send prompt
+  const s2 = p.spinner();
+  s2.start(`Sending: "${message}"`);
+
+  try {
+    const res = await fetch(`${url}/relay/prompt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: message }),
+    });
+
+    const body = (await res.json()) as {
+      error?: string;
+      sessionId?: string;
+      stopReason?: string;
+      updates?: Array<{
+        updates?: Array<{ kind?: string; content?: { text?: string } }>;
+      }>;
+    };
+
+    if (body.error) {
+      s2.stop("Error");
+      p.log.error(body.error);
+      return;
+    }
+
+    // Extract text from updates
+    const chunks: string[] = [];
+    for (const update of body.updates ?? []) {
+      for (const u of update.updates ?? []) {
+        if (u.content?.text) chunks.push(u.content.text);
+      }
+    }
+
+    s2.stop("Response received");
+    p.log.success(chunks.join("") || "(empty response)");
+    p.log.info(`Session: ${body.sessionId}  Stop: ${body.stopReason}`);
+  } catch (err) {
+    s2.stop("Request failed");
+    p.log.error(err instanceof Error ? err.message : String(err));
+  } finally {
+    if (relayProc) {
+      relayProc.kill();
+    }
+  }
+}
