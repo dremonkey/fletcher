@@ -5,18 +5,39 @@
  * Usage:
  *   bun run relay:test "hello"
  *   bun run relay:test                    # defaults to "hello"
- *   ACP_COMMAND=acpx bun run relay:test "hello"   # use real ACPX
  *
- * Starts the relay automatically if not already running.
- * Uses mock-acpx by default (set ACP_COMMAND for real backend).
+ * Auto-detects backend: uses acpx if installed, otherwise mock-acpx.
+ * Override with ACP_COMMAND env var if needed.
  */
 
 import path from "path";
+import { which } from "bun";
 
 const text = process.argv[2] ?? "hello";
 const port = process.env.RELAY_HTTP_PORT ?? "7891";
 const url = `http://127.0.0.1:${port}`;
 const relayDir = path.resolve(import.meta.dir, "../apps/relay");
+
+/** Resolve ACP command: explicit env > acpx on PATH > mock */
+function resolveAcpBackend(): { command: string; args: string; label: string } {
+  if (process.env.ACP_COMMAND) {
+    return {
+      command: process.env.ACP_COMMAND,
+      args: process.env.ACP_ARGS ?? "",
+      label: process.env.ACP_COMMAND,
+    };
+  }
+
+  if (which("acpx")) {
+    return { command: "acpx", args: "", label: "acpx" };
+  }
+
+  return {
+    command: "bun",
+    args: path.join(relayDir, "test/mock-acpx.ts"),
+    label: "mock-acpx (install acpx for real backend)",
+  };
+}
 
 // Check if relay is already running
 const isRunning = await fetch(`${url}/health`)
@@ -26,19 +47,15 @@ const isRunning = await fetch(`${url}/health`)
 let relayProc: ReturnType<typeof Bun.spawn> | null = null;
 
 if (!isRunning) {
-  const acpCommand = process.env.ACP_COMMAND ?? "bun";
-  const acpArgs =
-    process.env.ACP_ARGS ?? path.join(relayDir, "test/mock-acpx.ts");
+  const backend = resolveAcpBackend();
 
-  console.log(
-    `Starting relay (ACP_COMMAND=${acpCommand} ACP_ARGS=${acpArgs})...`,
-  );
+  console.log(`Starting relay (backend: ${backend.label})...`);
 
   relayProc = Bun.spawn(["bun", "run", path.join(relayDir, "src/index.ts")], {
     env: {
       ...process.env,
-      ACP_COMMAND: acpCommand,
-      ACP_ARGS: acpArgs,
+      ACP_COMMAND: backend.command,
+      ACP_ARGS: backend.args,
       RELAY_HTTP_PORT: port,
     },
     stdout: "inherit",
