@@ -106,11 +106,17 @@ tasks/
 **IMPORTANT — Keep SUMMARY.md in sync:** When updating any task file status (marking items `[x]`, `[~]`, or `[ ]`), also update `tasks/SUMMARY.md` to reflect the change. The SUMMARY is the single source of truth for project-wide progress and must match the individual task files.
 
 ## Logging Standards
-- **No bare `console.*`** in library packages. Use structured logging instead.
+- **No bare `console.*`** in any package or app. Use structured logging instead.
+- **All Bun servers** (relay, voice-agent, etc.) must use **`pino`** with **`pino-pretty`** for local dev:
+  - JSON output in production (`NODE_ENV=production`).
+  - Pretty-printed, colorized output for local dev (auto-detected when `NODE_ENV` is not `production` and `CI` is not set).
+  - Control verbosity via `LOG_LEVEL` env var (default: `"info"`).
+  - Create child loggers per component: `const log = createLogger("my-component")`.
+  - `pino` and `pino-pretty` are workspace-level dependencies in the root `package.json` catalog.
 - **Two-tier logging** in `livekit-agent-ganglia`:
   - **`debug` library** (`dbg.*`): Verbose trace-level output for development. Enable with `DEBUG=ganglia:*` or specific namespaces (e.g., `DEBUG=ganglia:openclaw:stream`). Namespaces: `ganglia:factory`, `ganglia:openclaw:stream`, `ganglia:openclaw:client`, `ganglia:nanoclaw:stream`, `ganglia:nanoclaw:client`.
   - **Injected `logger`**: Production-level logging (info/warn/error) via a `Logger` interface. Accepts any console-compatible logger (pino, winston, console). Defaults to silent `noopLogger` when not provided.
-- **In apps** (e.g., `voice-agent`): Use `pino` with `pino-pretty` transport for local dev. Pass the logger into ganglia via `createGangliaFromEnv({ logger })`.
+- **In apps** (e.g., `voice-agent`, `relay`): Use `pino` with `pino-pretty` transport for local dev. Pass the logger into ganglia via `createGangliaFromEnv({ logger })`.
 - **`LLMStream` subclasses** (e.g., `OpenClawChatStream`): Use `this.logger` (inherited from `@livekit/agents` `LLMStream`) for error-level logs. Use `dbg.*` for verbose tracing.
 - **What goes where:**
   - `dbg.*`: Request/response details, chunk counts, instanceof checks, session metadata — anything useful for debugging but noisy in production.
