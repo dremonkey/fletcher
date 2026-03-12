@@ -95,13 +95,13 @@ async function waitForAgentRegistration(timeoutMs: number = 30_000): Promise<boo
 }
 
 /**
- * Compute a truncated SHA-256 over all files matching {@link VOICE_AGENT_SOURCES}.
+ * Compute a truncated SHA-256 over all files matching the given glob patterns.
  * Both relative path and file contents are fed into the hash so that renames
  * and content changes are both detected.
  */
-function computeSourceHash(): string {
+function computeSourceHash(sources: string[]): string {
   const hash = createHash("sha256");
-  for (const pattern of VOICE_AGENT_SOURCES) {
+  for (const pattern of sources) {
     const glob = new Bun.Glob(pattern);
     const files = [...glob.scanSync({ cwd: ROOT, absolute: true })].sort();
     for (const file of files) {
@@ -135,50 +135,108 @@ function isLocalLiveKit(): boolean {
   return url.includes("localhost") || url.includes("127.0.0.1");
 }
 
-export async function startServices(): Promise<void> {
-  if (isLocalLiveKit()) {
-    // Pull upstream images (at most once per 24h)
-    if (shouldPullImages()) {
-      await runStep("Pulling upstream images", [
-        "docker", "compose", "pull", "--ignore-buildable",
-      ]);
-      writeFileSync(PULL_MARKER_FILE, String(Date.now()));
-    }
-
-    // Rebuild voice-agent image if source files changed (build only, don't start yet)
-    const currentHash = computeSourceHash();
-    const storedHash = existsSync(BUILD_HASH_FILE)
-      ? readFileSync(BUILD_HASH_FILE, "utf-8").trim()
-      : null;
-    if (storedHash !== currentHash) {
-      p.log.info(`Voice-agent source changed (${storedHash?.slice(0, 8) ?? "no prior build"} → ${currentHash.slice(0, 8)})`);
-      await runStep("Building voice-agent image", [
-        "docker", "compose", "build", "voice-agent",
-      ]);
-      writeFileSync(BUILD_HASH_FILE, currentHash);
-    } else {
-      p.log.info(`Voice-agent image up to date (${currentHash.slice(0, 8)})`);
-    }
-
-    // Start all services — docker-compose handles dependency ordering:
-    //   livekit (healthcheck: port 7880) → voice-agent, token-server
-    //   piper (started) → voice-agent
-    await runStep("Starting services (LiveKit, Piper, token server, voice agent)", [
-      "docker", "compose", "up", "-d", "voice-agent", "token-server",
+/** Pull upstream Docker images (at most once per 24h). */
+async function pullUpstreamImages(): Promise<void> {
+  if (shouldPullImages()) {
+    await runStep("Pulling upstream images", [
+      "docker", "compose", "pull", "--ignore-buildable",
     ]);
+    writeFileSync(PULL_MARKER_FILE, String(Date.now()));
+  }
+}
 
-    // Wait for agent to register with LiveKit
-    const s1 = p.spinner();
-    s1.start("Waiting for voice agent to register");
-    const agentReady = await waitForAgentRegistration();
-    if (!agentReady) {
-      s1.stop("Voice agent failed to register within 30s");
-      p.log.warn("Agent may not have connected — check `docker compose logs voice-agent`");
-    } else {
-      s1.stop("Voice agent registered");
-    }
+/** Rebuild voice-agent Docker image if source files changed. */
+async function buildVoiceAgentIfNeeded(): Promise<void> {
+  const currentHash = computeSourceHash(VOICE_AGENT_SOURCES);
+  const storedHash = existsSync(BUILD_HASH_FILE)
+    ? readFileSync(BUILD_HASH_FILE, "utf-8").trim()
+    : null;
+  if (storedHash !== currentHash) {
+    p.log.info(`Voice-agent source changed (${storedHash?.slice(0, 8) ?? "no prior build"} → ${currentHash.slice(0, 8)})`);
+    await runStep("Building voice-agent image", [
+      "docker", "compose", "build", "voice-agent",
+    ]);
+    writeFileSync(BUILD_HASH_FILE, currentHash);
+  } else {
+    p.log.info(`Voice-agent image up to date (${currentHash.slice(0, 8)})`);
+  }
+}
+
+/** Start Docker services (LiveKit, Piper, token server, voice agent). */
+async function startDockerServices(): Promise<void> {
+  await runStep("Starting services (LiveKit, Piper, token server, voice agent)", [
+    "docker", "compose", "up", "-d", "voice-agent", "token-server",
+  ]);
+}
+
+/** Wait for the voice agent to register with LiveKit. */
+async function waitForVoiceAgentRegistration(): Promise<void> {
+  const s1 = p.spinner();
+  s1.start("Waiting for voice agent to register");
+  const agentReady = await waitForAgentRegistration();
+  if (!agentReady) {
+    s1.stop("Voice agent failed to register within 30s");
+    p.log.warn("Agent may not have connected — check `docker compose logs voice-agent`");
+  } else {
+    s1.stop("Voice agent registered");
+  }
+}
+
+const RELAY_PORT = 7890;
+const RELAY_URL = `http://127.0.0.1:${RELAY_PORT}`;
+
+/**
+ * Start the Fletcher Relay as a Bun child process.
+ * Skips if already running. Non-fatal on failure (voice still works without relay).
+ */
+async function startRelay(): Promise<void> {
+  // Check if relay is already running
+  const alreadyRunning = await fetch(`${RELAY_URL}/health`)
+    .then(() => true)
+    .catch(() => false);
+
+  if (alreadyRunning) {
+    p.log.info("Relay already running");
+    return;
   }
 
+  const s = p.spinner();
+  s.start("Starting relay");
+
+  const relayProc = spawn(["bun", "run", join(ROOT, "apps/relay/src/index.ts")], {
+    env: { ...process.env, RELAY_HTTP_PORT: String(RELAY_PORT) },
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+  children.push(relayProc);
+
+  // Poll /health up to 30 times (200ms intervals = 6s max)
+  let ready = false;
+  for (let i = 0; i < 30; i++) {
+    await Bun.sleep(200);
+    ready = await fetch(`${RELAY_URL}/health`)
+      .then(() => true)
+      .catch(() => false);
+    if (ready) break;
+  }
+
+  if (!ready) {
+    s.stop("Relay failed to start");
+    p.log.warn("Relay not responding — chat mode may be unavailable");
+    return;
+  }
+
+  s.stop("Relay started");
+}
+
+export async function startServices(): Promise<void> {
+  if (isLocalLiveKit()) {
+    await pullUpstreamImages();
+    await buildVoiceAgentIfNeeded();
+    await startDockerServices();
+    await waitForVoiceAgentRegistration();
+  }
+  await startRelay();
 }
 
 /**
