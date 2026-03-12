@@ -392,6 +392,20 @@ Split the single voice-agent pipeline into two distinct modes — **Voice Mode**
 
 **Depends on:** Epic 4 (Ganglia session keys), Epic 7 (Sovereign Pairing), Epic 17 (Text Input), Epic 20 (Agent Dispatch)
 
+### 23. [Relay Native Rewrite](./23-relay-native-rewrite) 📋
+Rewrite the Fletcher Relay from TypeScript/Bun to Go or Rust, producing a single static binary for easy distribution. Eliminates the Bun + node_modules runtime dependency.
+
+**Tasks:**
+- [ ] 001: Language selection spike (Go vs Rust — LiveKit data channel + subprocess prototype)
+- [ ] 002: Core HTTP server + health endpoint
+- [ ] 003: LiveKit room join + data channel pub/sub
+- [ ] 004: ACP subprocess management (stdin/stdout JSON-RPC)
+- [ ] 005: Bridge wiring (data channel <-> ACP per room)
+- [ ] 006: Webhook handler (`participant_joined` auto-join)
+- [ ] 007: Idle room cleanup + graceful shutdown
+- [ ] 008: Build & distribution (cross-compile, release binaries)
+- [ ] 009: Integration test against existing Flutter app + OpenClaw
+
 ## Development Path
 
 1. **Phase 1: Infrastructure** ✅
