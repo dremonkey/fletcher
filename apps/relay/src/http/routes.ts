@@ -1,5 +1,7 @@
 import type { BridgeManager } from "../bridge/bridge-manager";
 import type { RoomManager } from "../livekit/room-manager";
+import { AcpClient } from "../acp/client";
+import type { SessionUpdateParams } from "../acp/types";
 
 const startTime = Date.now();
 
@@ -9,6 +11,8 @@ const startTime = Date.now();
 export interface RouteContext {
   bridgeManager: BridgeManager;
   roomManager: RoomManager;
+  acpCommand: string;
+  acpArgs: string[];
 }
 
 export async function handleHttpRequest(
@@ -38,6 +42,11 @@ export async function handleHttpRequest(
   // POST /relay/join — token server signals relay to join a room
   if (url.pathname === "/relay/join" && req.method === "POST") {
     return handleRelayJoin(req, ctx.bridgeManager);
+  }
+
+  // POST /relay/prompt — CLI test endpoint (bypasses LiveKit)
+  if (url.pathname === "/relay/prompt" && req.method === "POST") {
+    return handleRelayPrompt(req, ctx);
   }
 
   return Response.json({ error: "Not found" }, { status: 404 });
@@ -116,6 +125,74 @@ async function handleRelayJoin(
     const message = err instanceof Error ? err.message : "Unknown error";
     return Response.json(
       { error: `Failed to join room: ${message}` },
+      { status: 500 },
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// POST /relay/prompt — CLI test endpoint (no LiveKit needed)
+// ---------------------------------------------------------------------------
+
+async function handleRelayPrompt(
+  req: Request,
+  ctx: RouteContext,
+): Promise<Response> {
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const { text } = (body as { text?: string }) ?? {};
+  if (!text || typeof text !== "string") {
+    return Response.json(
+      { error: 'Missing required field: text (e.g. {"text":"hello"})' },
+      { status: 400 },
+    );
+  }
+
+  const client = new AcpClient({
+    command: ctx.acpCommand,
+    args: ctx.acpArgs,
+  });
+
+  const updates: SessionUpdateParams[] = [];
+
+  try {
+    // 1. Initialize ACP
+    await client.initialize();
+
+    // 2. Create session
+    const session = await client.sessionNew({
+      _meta: { room_name: "cli-test" },
+    });
+
+    // 3. Collect streaming updates
+    client.onUpdate((params) => {
+      updates.push(params);
+    });
+
+    // 4. Send prompt
+    const result = await client.sessionPrompt({
+      sessionId: session.sessionId,
+      prompt: [{ type: "text", text }],
+    });
+
+    // 5. Shutdown
+    await client.shutdown();
+
+    return Response.json({
+      sessionId: session.sessionId,
+      stopReason: result.stopReason,
+      updates,
+    });
+  } catch (err) {
+    try { await client.shutdown(); } catch { /* already dead */ }
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return Response.json(
+      { error: `ACP error: ${message}` },
       { status: 500 },
     );
   }

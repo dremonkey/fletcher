@@ -42,6 +42,8 @@ function createCtx(
   return {
     bridgeManager: createMockBridgeManager(existingRooms),
     roomManager: createMockRoomManager(roomConnections),
+    acpCommand: "bun",
+    acpArgs: [],
   };
 }
 
@@ -98,6 +100,7 @@ describe("GET /health", () => {
       { roomName: "room-b", joinedAt: 1500, lastActivity: 2500, room: {} as any },
     ];
     const ctx: RouteContext = {
+      acpCommand: "bun", acpArgs: [],
       bridgeManager: createMockBridgeManager(new Set(["room-a", "room-b"])),
       roomManager: createMockRoomManager(roomConnections),
     };
@@ -186,6 +189,7 @@ describe("POST /relay/join", () => {
 
   test("addRoom failure returns 500", async () => {
     const failingCtx: RouteContext = {
+      acpCommand: "bun", acpArgs: [],
       bridgeManager: {
         hasRoom: () => false,
         addRoom: async () => {
@@ -220,6 +224,7 @@ describe("GET /rooms", () => {
     ];
 
     const ctx: RouteContext = {
+      acpCommand: "bun", acpArgs: [],
       bridgeManager: {
         ...createMockBridgeManager(new Set(["room-abc"])),
         getBridge(name: string) {
@@ -263,6 +268,7 @@ describe("GET /rooms", () => {
     ];
 
     const ctx: RouteContext = {
+      acpCommand: "bun", acpArgs: [],
       bridgeManager: {
         ...createMockBridgeManager(new Set(["room-xyz"])),
         getBridge(name: string) {
@@ -289,6 +295,7 @@ describe("GET /rooms", () => {
     ];
 
     const ctx: RouteContext = {
+      acpCommand: "bun", acpArgs: [],
       bridgeManager: createMockBridgeManager(),
       roomManager: createMockRoomManager(roomConnections),
     };
@@ -308,6 +315,7 @@ describe("GET /rooms", () => {
     ];
 
     const ctx: RouteContext = {
+      acpCommand: "bun", acpArgs: [],
       bridgeManager: {
         ...createMockBridgeManager(new Set(["room-a", "room-b"])),
         getBridge(name: string) {

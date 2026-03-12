@@ -26,6 +26,7 @@
     "agent:dev": "bun run scripts/run-agent.ts",
     "voice:dev": "bun run apps/voice-agent/src/agent.ts dev",
     "voice:connect": "bun run apps/voice-agent/src/agent.ts connect",
+    "relay:test": "bun run scripts/relay-test.ts",
     "dev": "bun run packages/tui/src/cli.ts tui",
     "skills:install": "bun run packages/tui/src/install-skills.ts",
     "postinstall": "ln -sf ../../packages/tui/src/cli.ts node_modules/.bin/fletcher"

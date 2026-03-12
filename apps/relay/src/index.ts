@@ -8,10 +8,13 @@ const roomManager = new RoomManager({
   apiSecret: process.env.LIVEKIT_API_SECRET ?? "secret",
 });
 
+const acpCommand = process.env.ACP_COMMAND ?? "acpx";
+const acpArgs = (process.env.ACP_ARGS ?? "").split(" ").filter(Boolean);
+
 const bridgeManager = new BridgeManager(
   roomManager,
-  process.env.ACP_COMMAND ?? "acpx",
-  (process.env.ACP_ARGS ?? "").split(" ").filter(Boolean),
+  acpCommand,
+  acpArgs,
 );
 
 // Start idle room cleanup timer
@@ -22,7 +25,7 @@ bridgeManager.startIdleTimer(
 const server = Bun.serve({
   hostname: "127.0.0.1",
   port: Number(process.env.RELAY_HTTP_PORT ?? process.env.PORT ?? 7890),
-  fetch: (req) => handleHttpRequest(req, { bridgeManager, roomManager }),
+  fetch: (req) => handleHttpRequest(req, { bridgeManager, roomManager, acpCommand, acpArgs }),
 });
 
 console.log(`Fletcher Relay listening on ${server.hostname}:${server.port}`);
