@@ -59,6 +59,8 @@ export class RelayBridge {
 
     // 2. Create session
     const result = await this.acpClient.sessionNew({
+      cwd: process.cwd(),
+      mcpServers: [],
       _meta: {
         room_name: roomName,
       },

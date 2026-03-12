@@ -28,8 +28,8 @@ function resolveAcpBackend(): { command: string; args: string; label: string } {
     };
   }
 
-  if (which("acpx")) {
-    return { command: "acpx", args: "", label: "acpx" };
+  if (which("openclaw")) {
+    return { command: "openclaw", args: "acp", label: "openclaw acp" };
   }
 
   return {
@@ -97,10 +97,8 @@ try {
   const body = (await res.json()) as {
     error?: string;
     sessionId?: string;
-    stopReason?: string;
-    updates?: Array<{
-      updates?: Array<{ kind?: string; content?: { text?: string } }>;
-    }>;
+    result?: { stopReason?: string };
+    updates?: unknown[];
   };
 
   if (body.error) {
@@ -108,17 +106,33 @@ try {
     process.exit(1);
   }
 
-  // Extract and display text from updates
-  for (const update of body.updates ?? []) {
-    for (const u of update.updates ?? []) {
-      if (u.content?.text) {
-        process.stdout.write(u.content.text);
+  // Extract text from updates (format varies by backend)
+  const texts: string[] = [];
+  for (const raw of body.updates ?? []) {
+    const u = raw as Record<string, unknown>;
+    // ACP standard: { update: { content: [{ type: "text", text }] } }
+    const update = u.update as Record<string, unknown> | undefined;
+    if (update?.content) {
+      const blocks = Array.isArray(update.content) ? update.content : [update.content];
+      for (const b of blocks) {
+        if (b?.type === "text" && b?.text) texts.push(b.text);
       }
     }
+    // Mock format: { updates: [{ content: { text } }] }
+    const updates = u.updates as Array<Record<string, unknown>> | undefined;
+    for (const item of updates ?? []) {
+      const c = item.content as { text?: string } | undefined;
+      if (c?.text) texts.push(c.text);
+    }
   }
-  console.log();
+
+  if (texts.length > 0) {
+    console.log(texts.join(""));
+  } else {
+    console.log("(no content returned)");
+  }
   console.log(`\nSession: ${body.sessionId}`);
-  console.log(`Stop reason: ${body.stopReason}`);
+  console.log(`Stop reason: ${body.result?.stopReason ?? "unknown"}`);
 } finally {
   if (relayProc) {
     relayProc.kill();

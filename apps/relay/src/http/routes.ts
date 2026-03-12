@@ -158,20 +158,22 @@ async function handleRelayPrompt(
     args: ctx.acpArgs,
   });
 
-  const updates: SessionUpdateParams[] = [];
+  const updates: unknown[] = [];
 
   try {
-    // 1. Initialize ACP
-    await client.initialize();
-
-    // 2. Create session
-    const session = await client.sessionNew({
-      _meta: { room_name: "cli-test" },
-    });
-
-    // 3. Collect streaming updates
+    // 1. Collect streaming updates (register early — before any ACP calls)
     client.onUpdate((params) => {
       updates.push(params);
+    });
+
+    // 2. Initialize ACP
+    await client.initialize();
+
+    // 3. Create session
+    const session = await client.sessionNew({
+      cwd: process.cwd(),
+      mcpServers: [],
+      _meta: { room_name: "cli-test" },
     });
 
     // 4. Send prompt
@@ -185,7 +187,7 @@ async function handleRelayPrompt(
 
     return Response.json({
       sessionId: session.sessionId,
-      stopReason: result.stopReason,
+      result,
       updates,
     });
   } catch (err) {

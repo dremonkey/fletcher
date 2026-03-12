@@ -11,8 +11,8 @@ function resolveAcpBackend(): { command: string; args: string; label: string } {
   if (explicit) {
     return { command: explicit, args: env("ACP_ARGS") ?? "", label: explicit };
   }
-  if (which("acpx")) {
-    return { command: "acpx", args: "", label: "acpx" };
+  if (which("openclaw")) {
+    return { command: "openclaw", args: "acp", label: "openclaw acp" };
   }
   return { command: "bun", args: MOCK_ACPX, label: "mock-acpx" };
 }

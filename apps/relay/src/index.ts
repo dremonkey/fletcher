@@ -8,8 +8,8 @@ const roomManager = new RoomManager({
   apiSecret: process.env.LIVEKIT_API_SECRET ?? "secret",
 });
 
-const acpCommand = process.env.ACP_COMMAND ?? "acpx";
-const acpArgs = (process.env.ACP_ARGS ?? "").split(" ").filter(Boolean);
+const acpCommand = process.env.ACP_COMMAND ?? "openclaw";
+const acpArgs = (process.env.ACP_ARGS ?? "acp").split(" ").filter(Boolean);
 
 const bridgeManager = new BridgeManager(
   roomManager,

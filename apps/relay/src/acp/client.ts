@@ -86,6 +86,7 @@ export class AcpClient {
     this.spawn();
 
     const params: InitializeParams = {
+      protocolVersion: 1,
       clientInfo: { name: "fletcher-relay", version: "0.1.0" },
       capabilities: {},
     };

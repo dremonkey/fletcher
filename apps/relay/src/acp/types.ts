@@ -38,6 +38,7 @@ export interface ClientInfo {
 }
 
 export interface InitializeParams {
+  protocolVersion: number;
   clientInfo: ClientInfo;
   capabilities: Record<string, unknown>;
 }
