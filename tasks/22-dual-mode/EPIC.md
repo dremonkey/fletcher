@@ -292,9 +292,12 @@ This architecture enables a natural tiered product:
 ## References
 
 - [Fletcher Relay architecture](../../apps/relay/docs/architecture.md)
+- [ACP transport spec](../../apps/relay/docs/acp-transport.md) — full wire format, OpenClaw specifics, voice extensions
 - [Fletcher Relay epic](../../apps/relay/tasks/relay-mvp/)
 - [Bug log: March 9 field test](../../docs/field-tests/20260309-buglog.md)
 - [Bug log: March 10 field test](../../docs/field-tests/20260310-buglog.md)
+- [Bug log: March 12 field test](../../docs/field-tests/20260312-buglog.md) — BUG-001: ACP schema mismatch (confirmed OpenClaw wire format)
+- [ACP official spec](https://agentclientprotocol.com/protocol/overview.md)
 - [flutter_tts](https://pub.dev/packages/flutter_tts) — platform-native TTS
 - [speech_to_text](https://pub.dev/packages/speech_to_text) — platform-native STT
 - [Cartesia TTS API](https://cartesia.ai/product/python-text-to-speech-api-tts) — 40ms TTFA cloud TTS

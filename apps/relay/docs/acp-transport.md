@@ -1,8 +1,9 @@
 # ACP-Based Full-Duplex Voice Agent Transport
 
-**Status:** Draft
-**Date:** 2026-03-09
+**Status:** Active (chat mode live; voice ACP pending task 052)
+**Updated:** 2026-03-12 (field test — confirmed OpenClaw wire format)
 **Scope:** Voice agent ↔ LLM backend transport via Agent Client Protocol (ACP)
+**Spec:** [agentclientprotocol.com](https://agentclientprotocol.com/protocol/overview.md)
 
 ## Problem
 
@@ -99,12 +100,13 @@ Voice agent spawns or connects to the ACP agent, negotiates capabilities.
 // Voice Agent → ACP Agent
 {
   "jsonrpc": "2.0",
-  "id": 1,
+  "id": 0,
   "method": "initialize",
   "params": {
     "protocolVersion": 1,
     "clientInfo": {
       "name": "fletcher-voice-agent",
+      "title": "Fletcher Voice Agent",
       "version": "1.0.0"
     },
     "clientCapabilities": {
@@ -119,21 +121,32 @@ The voice agent advertises **no filesystem or terminal access** — it's a headl
 
 ```jsonc
 // ACP Agent → Voice Agent
+// (OpenClaw actual response, verified 2026-03-12)
 {
   "jsonrpc": "2.0",
-  "id": 1,
+  "id": 0,
   "result": {
     "protocolVersion": 1,
-    "agentInfo": {
-      "name": "openclaw",
-      "version": "2.0.0"
-    },
     "agentCapabilities": {
-      "promptCapabilities": { "audio": false, "image": false },
-      "sessionCapabilities": {}
-    }
+      "loadSession": true,
+      "promptCapabilities": { "image": true, "audio": false, "embeddedContext": true },
+      "mcpCapabilities": { "http": false, "sse": false },
+      "sessionCapabilities": { "list": {} }
+    },
+    "agentInfo": {
+      "name": "openclaw-acp",
+      "title": "OpenClaw ACP Gateway",
+      "version": "2026.3.1"
+    },
+    "authMethods": []
   }
 }
+```
+
+After receiving the `initialize` response, the client **MUST** send an `initialized` notification (no `id`):
+
+```jsonc
+{ "jsonrpc": "2.0", "method": "initialized" }
 ```
 
 #### 2. Create Session
@@ -142,9 +155,11 @@ Each voice agent lifecycle creates a fresh ACP session. Session routing metadata
 
 ```jsonc
 // Voice Agent → ACP Agent
+// Standard ACP fields: cwd, mcpServers
+// _meta is an ACP extension field — used here to pass routing metadata to OpenClaw
 {
   "jsonrpc": "2.0",
-  "id": 2,
+  "id": 1,
   "method": "session/new",
   "params": {
     "cwd": "/",
@@ -160,7 +175,7 @@ Each voice agent lifecycle creates a fresh ACP session. Session routing metadata
 }
 ```
 
-The `_meta.session_key` is the critical routing field. The ACP agent uses it to resume Alice's ongoing conversation — even though the ACP session itself is brand new.
+The `_meta` field is the ACP-standard extension point for arbitrary metadata (all protocol types support `_meta`). OpenClaw uses `_meta.session_key` to resume the correct persistent conversation even though the ACP session itself is brand new.
 
 ```jsonc
 // ACP Agent → Voice Agent
@@ -194,20 +209,23 @@ Each voice turn maps to `session/prompt`. The user's STT transcript becomes the 
 
 #### 4. Streaming Response
 
-The ACP agent streams `session/update` notifications with `ContentChunk` updates. Each chunk maps to a `ChatChunk` for the LiveKit `LLMStream`.
+The ACP agent streams `session/update` notifications as the response is generated. Each notification carries a **single `update` object** (not an array) with a `sessionUpdate` discriminator field.
+
+> **Important:** The params shape is `{ sessionId, update: {} }` — singular `update`, not `updates[]`.
+> This was confirmed against the [official ACP spec](https://agentclientprotocol.com/protocol/prompt-turn.md)
+> and verified against OpenClaw in the 2026-03-12 Fletcher field test (BUG-001).
 
 ```jsonc
-// ACP Agent → Voice Agent (notification, repeated)
+// ACP Agent → Voice Agent (notification, one per chunk)
 {
   "jsonrpc": "2.0",
   "method": "session/update",
   "params": {
-    "updates": [
-      {
-        "kind": "content_chunk",
-        "content": { "type": "text", "text": "The weather is" }
-      }
-    ]
+    "sessionId": "sess_abc123",
+    "update": {
+      "sessionUpdate": "agent_message_chunk",
+      "content": { "type": "text", "text": "The weather is" }
+    }
   }
 }
 ```
@@ -218,15 +236,26 @@ The ACP agent streams `session/update` notifications with `ContentChunk` updates
   "jsonrpc": "2.0",
   "method": "session/update",
   "params": {
-    "updates": [
-      {
-        "kind": "content_chunk",
-        "content": { "type": "text", "text": " sunny and 72°F." }
-      }
-    ]
+    "sessionId": "sess_abc123",
+    "update": {
+      "sessionUpdate": "agent_message_chunk",
+      "content": { "type": "text", "text": " sunny and 72°F." }
+    }
   }
 }
 ```
+
+#### Known `sessionUpdate` kinds
+
+| `sessionUpdate` | When emitted | Key fields |
+|-----------------|--------------|------------|
+| `agent_message_chunk` | During response streaming | `content: ContentBlock` (usually `{ type: "text", text }`) |
+| `available_commands_update` | On `session/new` and when slash commands change | `availableCommands: { name, description, input? }[]` |
+| `plan` | When agent creates/updates a task plan | `plan: { tasks: { id, title, status }[] }` |
+| `tool_call` | When agent invokes a tool | `id, title, input` |
+| `tool_call_update` | As tool execution progresses | `id, status: "in_progress" \| "completed", content?` |
+
+Only `agent_message_chunk` carries response text for the user. The relay filters and only forwards this kind to mobile; all others are dropped.
 
 #### 5. Turn Complete
 
@@ -260,9 +289,14 @@ The agent finishes in-flight work and responds to the pending `session/prompt` w
 
 ### Voice-Specific ACP Extensions
 
-ACP's `ExtRequest` / `ExtNotification` mechanism allows custom methods. These cover capabilities that standard ACP (designed for editors) doesn't address.
+The ACP spec reserves method names with a leading `_` for custom extensions (e.g. `_namespace/method`). We use the `_fletcher` namespace for voice-specific methods:
 
-#### `x/voice/inject` (ACP Agent → Voice Agent, ExtRequest)
+> **Note on naming:** The ACP spec uses `_` prefix for extensions (see
+> [extensibility spec](https://agentclientprotocol.com/protocol/extensibility.md)).
+> These methods were originally prototyped as `x/voice/*` — rename to `_fletcher/voice/*`
+> before shipping task 052.
+
+#### `_fletcher/voice/inject` (ACP Agent → Voice Agent, request)
 
 The key duplex capability. The ACP agent (OpenClaw or Claude Code) pushes an instruction to the voice agent at any time — not in response to a prompt.
 
@@ -270,7 +304,7 @@ The key duplex capability. The ACP agent (OpenClaw or Claude Code) pushes an ins
 {
   "jsonrpc": "2.0",
   "id": "inject_1",
-  "method": "x/voice/inject",
+  "method": "_fletcher/voice/inject",
   "params": {
     "action": "say",
     "text": "By the way, your package has been delivered.",
@@ -296,14 +330,14 @@ Voice agent responds with success/failure:
 }
 ```
 
-#### `x/voice/event` (Voice Agent → ACP Agent, ExtNotification)
+#### `_fletcher/voice/event` (Voice Agent → ACP Agent, notification)
 
 Voice agent pushes real-time pipeline events. These have no equivalent in standard ACP.
 
 ```jsonc
 {
   "jsonrpc": "2.0",
-  "method": "x/voice/event",
+  "method": "_fletcher/voice/event",
   "params": {
     "type": "user_transcript",
     "data": {
@@ -464,20 +498,21 @@ class AcpChatStream extends LLMStream {
   async run(): Promise<void> {
     const userText = this.extractLatestUserMessage();
 
-    // Listen for streaming content chunks via session/update notifications
+    // Listen for streaming content chunks via session/update notifications.
+    // params shape: { sessionId, update: { sessionUpdate: string, ... } }
+    // — singular `update` object per the ACP spec and confirmed against OpenClaw.
     const unsubscribe = this.acp.onNotification('session/update', (params) => {
-      for (const update of params.updates) {
-        if (update.kind === 'content_chunk' && update.content.type === 'text') {
-          this.queue.put({
-            id: this.sessionId,
-            delta: {
-              role: 'assistant',
-              content: update.content.text,
-            },
-          });
-        }
-        // TODO: map tool_call updates to FunctionCall chunks
+      const { update } = params;
+      if (update.sessionUpdate === 'agent_message_chunk' && update.content?.type === 'text') {
+        this.queue.put({
+          id: this.sessionId,
+          delta: {
+            role: 'assistant',
+            content: update.content.text,
+          },
+        });
       }
+      // Other kinds: available_commands_update, plan, tool_call, tool_call_update — not yet handled
     });
 
     try {
