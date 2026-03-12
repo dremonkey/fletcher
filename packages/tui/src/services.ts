@@ -259,7 +259,32 @@ export async function generateToken(): Promise<void> {
 let shuttingDown = false;
 
 /**
- * Synchronous cleanup: SIGTERM children → docker compose down → SIGKILL stragglers.
+ * Kill whatever process is currently listening on `port`.
+ * Handles the case where the relay was started outside the TUI (or restarted
+ * manually), so its PID is not in `children[]`.
+ *
+ * Uses `ss -tlnp` (iproute2) to find LISTEN sockets on the port and extracts
+ * PIDs from the `pid=NNN` tokens in the output.  Sends SIGTERM; SIGKILL
+ * stragglers are handled by the caller if needed.
+ */
+function killPortHolder(port: number): void {
+  try {
+    const result = Bun.spawnSync(["ss", "-tlnp", `sport = :${port}`], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (result.exitCode !== 0) return;
+    const output = result.stdout.toString();
+    for (const match of output.matchAll(/pid=(\d+)/g)) {
+      try {
+        process.kill(parseInt(match[1], 10), "SIGTERM");
+      } catch {}
+    }
+  } catch {}
+}
+
+/**
+ * Synchronous cleanup: SIGTERM children → kill relay port → docker compose down → SIGKILL stragglers.
  *
  * Must be synchronous (uses Bun.spawnSync) so it completes before the process
  * exits — an async handler races with the main flow when child processes die
@@ -278,6 +303,10 @@ function cleanup(): void {
         child.kill("SIGTERM");
       } catch {}
     }
+
+    // Kill whatever is on the relay port — handles relays started outside the
+    // TUI or restarted manually (their PIDs are not in children[]).
+    killPortHolder(RELAY_PORT);
 
     Bun.spawnSync(["docker", "compose", "down"], {
       cwd: ROOT,
