@@ -1,34 +1,53 @@
 # Fletcher Relay
 
-Unified AI gateway for Fletcher. Bridges both the text path (mobile → LiveKit data channel) and the voice path (livekit-agent → Ganglia) to a swappable backend. Connects to LiveKit as a non-agent participant for text sessions; exposes an OpenAI-compatible HTTP endpoint for voice sessions via Ganglia.
+Thin ACP bridge for Fletcher. Joins LiveKit rooms as a non-agent participant, forwards JSON-RPC messages between mobile (data channel) and an ACP agent subprocess (stdio). The relay is a transparent bridge — it doesn't interpret content, just forwards.
 
-Part of the Fletcher monorepo (`apps/relay`). See `docs/architecture.md` for the full design rationale and `tasks/22-dual-mode/EPIC.md` (repo root) for the dual-mode architecture epic.
+Part of the Fletcher monorepo (`apps/relay`). See `docs/architecture.md` for the full design rationale.
 
 ## Tech Stack
 
 - **Runtime:** Bun
 - **Language:** TypeScript (strict mode)
-- **Protocol:** JSON-RPC 2.0 over LiveKit data channel (WebRTC)
-- **Transport:** `@livekit/rtc-node` (non-agent participant)
-- **Backend:** Swappable via `RELAY_BACKEND` — `openclaw` (OpenClaw Gateway) or `claude` (Claude Agent SDK)
+- **Protocol:** ACP (Agent Client Protocol) — JSON-RPC 2.0
+- **Transport:** `@livekit/rtc-node` (non-agent participant) ↔ stdio (ACPX subprocess)
+- **Backend:** Any ACP-compatible agent via `ACP_COMMAND` (e.g., ACPX → OpenClaw, Claude Code)
 
 ## Commands
 
-- `bun run src/index.ts` — Start the server (default port 3000)
+- `bun run src/index.ts` — Start the relay (default port 7890, localhost only)
 - `bun test` — Run tests
 - `tsc --noEmit` — Type check without emitting
 
+## Environment
+
+```bash
+LIVEKIT_URL=ws://localhost:7880
+LIVEKIT_API_KEY=devkey
+LIVEKIT_API_SECRET=secret
+ACP_COMMAND=acpx              # Command to spawn ACP agent
+ACP_ARGS=                     # Optional args (space-separated)
+RELAY_HTTP_PORT=7890           # HTTP server port (localhost only)
+RELAY_IDLE_TIMEOUT_MS=300000   # Idle room timeout (5 minutes)
+```
+
 ## Project Structure
 
-- `src/index.ts` — Entry point, Bun.serve() with WS + HTTP
-- `src/rpc/` — JSON-RPC types, errors, and dispatch handler
-- `src/session/` — Session manager, state types, agent bridge
-- `src/http/` — Health and status HTTP endpoints
-- `test/` — Integration tests
+- `src/index.ts` — Entry point, Bun.serve() HTTP only (no WebSocket)
+- `src/livekit/room-manager.ts` — LiveKit room connections, data channel pub/sub
+- `src/acp/client.ts` — ACP client over stdio (spawns subprocess)
+- `src/acp/types.ts` — ACP protocol types
+- `src/bridge/relay-bridge.ts` — Wires data channel ↔ ACP (per-room)
+- `src/bridge/bridge-manager.ts` — Manages multiple bridges, idle timeout
+- `src/http/routes.ts` — HTTP endpoints (`/health`, `/rooms`, `/relay/join`)
+- `src/rpc/types.ts` — JSON-RPC 2.0 type definitions
+- `src/rpc/errors.ts` — Error code constants
+- `src/utils/logger.ts` — Structured JSON logging
+- `test/mock-acpx.ts` — Mock ACP agent for testing
 
 ## Conventions
 
-- All WebSocket messages use JSON-RPC 2.0 format
-- Sessions are identified by short UUIDs (8 chars)
-- Agent SDK interactions are isolated in agent-bridge.ts
+- Data channel messages use ACP JSON-RPC 2.0 on topic `"relay"`
+- One ACP subprocess per room (each room gets its own session)
+- Tests colocated with source (e.g., `src/acp/client.spec.ts`)
+- Structured JSON logging via `createLogger(component)`
 - Commit often with descriptive messages

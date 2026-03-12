@@ -1,6 +1,6 @@
 # R-001: LiveKit Participant Manager
 
-**Status:** [ ] Not started
+**Status:** [x] Complete
 **Depends on:** Nothing
 **Blocks:** R-003
 

@@ -1,6 +1,6 @@
 # R-002: ACP Client over stdio
 
-**Status:** [ ] Not started
+**Status:** [x] Complete
 **Depends on:** Nothing (can be built and tested independently)
 **Blocks:** R-003
 

@@ -1,6 +1,6 @@
 # R-003: Data Channel ↔ ACP Bridge
 
-**Status:** [ ] Not started
+**Status:** [x] Complete
 **Depends on:** R-001 (LiveKit participant), R-002 (ACP client)
 **Blocks:** Nothing (this is the core relay functionality)
 

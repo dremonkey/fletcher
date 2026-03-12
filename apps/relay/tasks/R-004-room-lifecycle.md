@@ -1,6 +1,6 @@
 # R-004: Room Lifecycle
 
-**Status:** [ ] Not started
+**Status:** [x] Complete
 **Depends on:** R-001 (LiveKit participant)
 **Blocks:** Nothing
 
