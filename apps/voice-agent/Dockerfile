@@ -5,6 +5,7 @@ WORKDIR /app
 FROM base AS install
 COPY package.json bun.lock ./
 COPY patches/ patches/
+COPY packages/acp-client/package.json packages/acp-client/
 COPY packages/livekit-agent-ganglia/package.json packages/livekit-agent-ganglia/
 COPY packages/tui/package.json packages/tui/
 COPY apps/relay/package.json apps/relay/
@@ -14,6 +15,7 @@ RUN bun install --frozen-lockfile
 # Build ganglia (needed for workspace resolution)
 FROM install AS build
 COPY tsconfig.base.json ./
+COPY packages/acp-client/ packages/acp-client/
 COPY packages/livekit-agent-ganglia/ packages/livekit-agent-ganglia/
 COPY apps/voice-agent/ apps/voice-agent/
 COPY scripts/ scripts/

@@ -124,10 +124,10 @@ export class AcpLLM extends LLMBase implements GangliaLLM {
       args: this._config.args,
       env: this._config.env,
       logger: {
-        info: (obj, msg) => logger.info(msg ?? JSON.stringify(obj)),
-        warn: (obj, msg) => logger.warn(msg ?? JSON.stringify(obj)),
-        error: (obj, msg) => logger.error(msg ?? JSON.stringify(obj)),
-        debug: (obj, msg) => logger.debug(msg ?? JSON.stringify(obj)),
+        info: (obj: object, msg?: string) => logger.info(msg ?? JSON.stringify(obj)),
+        warn: (obj: object, msg?: string) => logger.warn(msg ?? JSON.stringify(obj)),
+        error: (obj: object, msg?: string) => logger.error(msg ?? JSON.stringify(obj)),
+        debug: (obj: object, msg?: string) => logger.debug(msg ?? JSON.stringify(obj)),
       },
     });
 

@@ -77,7 +77,11 @@ export class AcpChatStream extends LLMStream {
     // rejection becomes unhandled. Suppress it here — the error is already
     // propagated via the LLM "error" event. startSoon schedules a microtask,
     // so this override takes effect before mainTask is invoked.
+    // @ts-expect-error — mainTask is declared private in LLMStream .d.ts but
+    // is a plain class field at runtime; we need to wrap it to suppress
+    // unhandled rejections from startSoon().
     const _origMainTask = this.mainTask.bind(this);
+    // @ts-expect-error — same as above
     this.mainTask = () => _origMainTask().catch(() => {});
   }
 

@@ -5,7 +5,7 @@
  * via JSON-RPC 2.0 over newline-delimited stdio.
  */
 
-export { AcpClient } from "./client";
+export { AcpClient } from "./client.js";
 export type {
   AcpClientOptions,
   Logger,
@@ -27,11 +27,11 @@ export type {
   JsonRpcRequest,
   JsonRpcNotification,
   JsonRpcResponse,
-} from "./types";
+} from "./types.js";
 export {
   isRequest,
   makeResponse,
   makeErrorResponse,
   makeNotification,
-} from "./rpc";
-export type { JsonRpcError } from "./rpc";
+} from "./rpc.js";
+export type { JsonRpcError } from "./rpc.js";

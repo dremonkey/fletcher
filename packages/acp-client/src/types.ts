@@ -9,7 +9,7 @@ import type {
   JsonRpcRequest,
   JsonRpcNotification,
   JsonRpcResponse,
-} from "./rpc";
+} from "./rpc.js";
 
 // Re-export JSON-RPC types for convenience
 export type { JsonRpcRequest, JsonRpcNotification, JsonRpcResponse };

@@ -16,8 +16,8 @@ import type {
   SessionPromptResult,
   SessionCancelParams,
   SessionUpdateParams,
-} from "./types";
-import type { JsonRpcResponse } from "./rpc";
+} from "./types.js";
+import type { JsonRpcResponse } from "./rpc.js";
 
 // ---------------------------------------------------------------------------
 // Types
