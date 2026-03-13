@@ -18,6 +18,7 @@ import 'reconnect_scheduler.dart';
 import 'session_storage.dart';
 import 'token_service.dart';
 import 'url_resolver.dart';
+import '../utils/room_name_generator.dart';
 
 /// Max waveform samples (~30 samples at 100ms = 3s history)
 const _maxWaveformSamples = 30;
@@ -242,14 +243,14 @@ class LiveKitService extends ChangeNotifier {
     }
   }
 
-  /// Generate a unique room name: fletcher-<unix-millis>.
-  /// When E2E_TEST_MODE=true in .env, uses e2e-fletcher- prefix so the voice
-  /// agent detects automated tests and uses a minimal system prompt,
-  /// reducing token consumption. (TASK-022)
+  /// Generate a memorable two-word room name: `word1-word2`.
+  /// When E2E_TEST_MODE=true in .env, uses e2e- prefix so the voice agent
+  /// detects automated tests and uses a minimal system prompt, reducing token
+  /// consumption. (TASK-022, TASK-029)
   String _generateRoomName() {
     final isE2e = dotenv.env['E2E_TEST_MODE']?.toLowerCase() == 'true';
-    final prefix = isE2e ? 'e2e-fletcher' : 'fletcher';
-    return '$prefix-${DateTime.now().millisecondsSinceEpoch}';
+    final name = RoomNameGenerator.generate();
+    return isE2e ? 'e2e-$name' : name;
   }
 
   /// Create a new room and connect to it (used for recovery after budget exhaustion).
@@ -1472,6 +1473,40 @@ class LiveKitService extends ChangeNotifier {
           ));
 
           _relayAgentMessageText = '';
+
+        case RelayUsageUpdate(:final used, :final size):
+          _state = _state.copyWith(
+            diagnostics: _state.diagnostics.copyWith(
+              tokenUsed: used,
+              tokenSize: size,
+            ),
+          );
+          notifyListeners();
+
+        case RelayToolCallEvent(:final id, :final title, :final status):
+          if (status == null && title != null) {
+            // Tool call started
+            final toolCall = ToolCallInfo(
+              id: id,
+              name: title,
+              startedAt: DateTime.now(),
+            );
+            _state = _state.copyWith(
+              activeToolCalls: [..._state.activeToolCalls, toolCall],
+            );
+            notifyListeners();
+          } else if (status != null) {
+            // Tool call completed or errored — update existing entry
+            final updated = _state.activeToolCalls.map((tc) {
+              if (tc.id != id) return tc;
+              return tc.copyWith(
+                status: status,
+                duration: DateTime.now().difference(tc.startedAt),
+              );
+            }).toList();
+            _state = _state.copyWith(activeToolCalls: updated);
+            notifyListeners();
+          }
       }
     }
   }
