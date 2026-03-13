@@ -230,7 +230,7 @@ Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layou
 - [ ] 025: Fix UI State Desync — Agent Connection Status 📋 — diagnostics show `AGENT: --` despite active voice session; state update propagation + reconnection diagnostics refresh (BUG-010)
 - [x] 026: Portrait Orientation Lock ✅ — `SystemChrome.setPreferredOrientations` in main.dart
 - [ ] 027: Fix Arrow Loading Indicator Rendering 📋 — "box" artifact and missing chunky visual weight in ThinkingSpinner ([BUG-017](../docs/field-tests/20260307-buglog.md))
-- [ ] 029: Random Two-Word-Dash Room Names 📋 — human-readable room names instead of timestamps ([BUG-019](../docs/field-tests/20260307-buglog.md))
+- [x] 029: Random Two-Word-Dash Room Names ✅ — human-readable `adjective-noun` room names with E2E prefix support
 - [x] 030: Text-Only Response Mode ✅ — `[TTS: ON/OFF]` toggle via data channel; agent skips TTS natively via `setAudioEnabled()`; persisted across restarts
 - [x] 030: Split Header into Two-Column Layout ✅ — cyan user histogram (left) + TTS toggle (right); HeaderBar widget
 - [x] 031/032: TTS Toggle Component + Agent Wiring ✅ — "TTS OFF" button ↔ amber agent histogram; single-tap toggle; `tts-mode` data channel event; persisted via SessionStorage
@@ -240,8 +240,8 @@ Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layou
 - [ ] 036: TUI Theme Bundles (Solarized, Gruvbox, Nord) 📋 — implementation of classic terminal-inspired color palettes
 - [ ] 037: Deduplicate Agent System Events & Expandable Long Rows 📋 — remove duplicate Connected/Disconnected cards; fix "speak or text" copy; tap-to-expand long system event rows
 - [x] 038a: Fix Artifact Clump Regression After Agent Reconnect ✅ — `_lastAgentSegmentId` reset on disconnect; artifacts now correctly distributed across messages ([BUG-004](../docs/field-tests/20260310-buglog.md))
-- [ ] 038b: Verbose ACP Tool Feedback 📋 — enable verbose mode in ACP sessions; parse `tool_call`/`plan`/`reasoning` chunks; render inline collapsed tool blocks in chat
-- [ ] 058: Token Usage Display 📋 — parse `usage_update` ACP events; show token consumption in diagnostics bar; visual warnings at 75%/90% thresholds
+- [x] 038b: Verbose ACP Tool Feedback ✅ — verbose ACP mode; `tool_call`/`tool_call_update` parsing; inline ToolCallCard in chat transcript
+- [x] 058: Token Usage Display ✅ — `AcpUsageUpdate` parsing; `TOK: 35K / 1M` metric in DiagnosticsBar; color thresholds at 75%/90%
 **Retained:**
 - [x] 015: Single Audio Ack + Visual Spinner ✅ — Single-shot ack tone + SweepGradient spin on AmberOrb during thinking state
 - [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 done; Phase 3 (soft TTS fade) needs SDK support
@@ -392,7 +392,9 @@ Split the single voice-agent pipeline into two distinct modes — **Voice Mode**
 - [x] 059: Deferred Teardown on `participant_left` ✅ — 120s grace period survives network switches ([TEST-001](../docs/field-tests/20260312-buglog.md))
 
 **Open:**
-- [ ] 052: ACP Backend for Ganglia (`GANGLIA_TYPE=acp`) 📋 — voice-agent ACP transport replacing HTTP/SSE completions API
+- [x] 060: Extract Shared ACP Client ✅ — `packages/acp-client` shared package; unsubscribe support; generic Logger interface
+- [x] 061: AcpLLM Backend + Remove OpenClaw HTTP ✅ — `GANGLIA_TYPE=acp` default; lazy init; OpenClaw HTTP fully deleted
+- [x] 062: Voice Agent ACP Wiring ✅ — env validation updated; ACP defaults; OPENCLAW_API_KEY no longer required
 - [ ] 057: Relay-Side ACP Response Timeout 📋 — configurable timeout for hung ACP responses ([BUG-010](../docs/field-tests/20260312-buglog.md))
 
 **Backlog (deferred — chat mode MVP works without these):**

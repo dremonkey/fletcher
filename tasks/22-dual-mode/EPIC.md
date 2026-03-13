@@ -121,9 +121,15 @@ The relay service itself is fully built — see [Epic 24: WebRTC ACP Relay](../2
 - [x] [**056: Fix ACP Subprocess Leak**](./_closed/056-acp-subprocess-leak.md) — SIGKILL escalation after 3s SIGTERM grace period; process group kill.
 - [x] [**059: Deferred Teardown on `participant_left`**](./_closed/059-relay-deferred-teardown.md) — 120s grace period survives WiFi→cellular network switches.
 
+### Recently Completed ✅
+
+- [x] [**060: Extract Shared ACP Client**](./_closed/060-extract-acp-client.md) — `packages/acp-client` shared package with unsubscribe support and generic Logger interface. Relay imports updated.
+- [x] [**061: AcpLLM Backend + Remove OpenClaw HTTP**](./_closed/061-acp-llm-backend.md) — `GANGLIA_TYPE=acp` default backend. Lazy init on first `chat()`. OpenClaw HTTP/SSE fully deleted.
+- [x] [**062: Voice Agent ACP Wiring**](./_closed/062-voice-agent-acp-wiring.md) — ACP env vars, `OPENCLAW_API_KEY` no longer required for default backend.
+- [x] [**052: ACP Backend for Ganglia**](./_closed/052-relay-llm-wrapper.md) — Superseded by 060+061+062.
+
 ### In Progress 🔄
 
-- [~] [**052: ACP Backend for Ganglia**](./052-relay-llm-wrapper.md) — `GANGLIA_TYPE=acp` LLM backend. Not started. Needed for voice mode to use ACP instead of HTTP/SSE completions API.
 - [~] [**057: Relay-Side ACP Response Timeout**](./057-relay-acp-response-timeout.md) — Not started. Configurable timeout for hung ACP responses; mobile error surface; subprocess re-init.
 
 ### Also Implemented ✅
