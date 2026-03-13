@@ -52,11 +52,18 @@ log.info(
 const roomService = new RoomServiceClient(wsUrlToHttp(livekitUrl), apiKey, apiSecret);
 discoverAndRejoinRooms({ roomService, bridgeManager, logger: log });
 
+// Periodic room discovery: catch rooms missed by disconnect-recovery backoff
+bridgeManager.startDiscoveryTimer(
+  () => discoverAndRejoinRooms({ roomService, bridgeManager, logger: log }).then(() => {}),
+  Number(process.env.RELAY_DISCOVERY_INTERVAL_MS ?? 30_000),
+);
+
 // Graceful shutdown
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, async () => {
     log.info("Shutting down...");
     bridgeManager.stopIdleTimer();
+    bridgeManager.stopDiscoveryTimer();
     await bridgeManager.shutdownAll();
     server.stop();
     process.exit(0);

@@ -1,7 +1,7 @@
 import { describe, test, expect, mock, beforeEach } from "bun:test";
 import { RoomManager } from "./room-manager";
 import type { RoomConnection, RoomManagerOptions } from "./room-manager";
-import { RoomEvent } from "@livekit/rtc-node";
+import { RoomEvent, DisconnectReason } from "@livekit/rtc-node";
 
 // ---------------------------------------------------------------------------
 // Mock Room
@@ -354,5 +354,60 @@ describe("RoomManager", () => {
   test("touchRoom is a no-op for unknown rooms", () => {
     // Should not throw
     manager.touchRoom("nonexistent");
+  });
+
+  // -----------------------------------------------------------------------
+  // onRoomDisconnected
+  // -----------------------------------------------------------------------
+
+  test("Disconnected event removes room and invokes handler", async () => {
+    const disconnects: { room: string; reason: unknown }[] = [];
+    manager.onRoomDisconnected((room, reason) => {
+      disconnects.push({ room, reason });
+    });
+
+    await manager.joinRoom("test-room");
+    expect(manager.getRoom("test-room")).toBeDefined();
+
+    // Simulate unexpected disconnect
+    mockRoom._emit(RoomEvent.Disconnected, DisconnectReason.SERVER_SHUTDOWN);
+
+    expect(manager.getRoom("test-room")).toBeUndefined();
+    expect(disconnects).toHaveLength(1);
+    expect(disconnects[0].room).toBe("test-room");
+    expect(disconnects[0].reason).toBe(DisconnectReason.SERVER_SHUTDOWN);
+  });
+
+  test("Disconnected event after leaveRoom() is a no-op", async () => {
+    const disconnects: string[] = [];
+    manager.onRoomDisconnected((room) => {
+      disconnects.push(room);
+    });
+
+    await manager.joinRoom("test-room");
+    await manager.leaveRoom("test-room");
+
+    // Simulate a late Disconnected event (room already removed by leaveRoom)
+    mockRoom._emit(RoomEvent.Disconnected, DisconnectReason.CLIENT_INITIATED);
+
+    expect(disconnects).toHaveLength(0);
+  });
+
+  test("After disconnect, room can be re-joined", async () => {
+    await manager.joinRoom("test-room");
+
+    // Simulate unexpected disconnect
+    mockRoom._emit(RoomEvent.Disconnected, DisconnectReason.SERVER_SHUTDOWN);
+    expect(manager.getRoom("test-room")).toBeUndefined();
+
+    // Create a fresh mock for the rejoin
+    const freshMock = createMockRoom();
+    const freshManager = new RoomManager(
+      makeOptions({ roomFactory: () => freshMock as never }),
+    );
+
+    const conn = await freshManager.joinRoom("test-room");
+    expect(conn.roomName).toBe("test-room");
+    expect(freshManager.getRoom("test-room")).toBeDefined();
   });
 });

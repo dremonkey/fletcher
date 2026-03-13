@@ -1,4 +1,4 @@
-import { Room, RoomEvent, DataPacketKind } from "@livekit/rtc-node";
+import { Room, RoomEvent, DataPacketKind, DisconnectReason } from "@livekit/rtc-node";
 import { AccessToken } from "livekit-server-sdk";
 
 // ---------------------------------------------------------------------------
@@ -25,6 +25,14 @@ export type DataHandler = (
   participantIdentity: string,
 ) => void;
 
+/**
+ * Called when the relay is unexpectedly disconnected from a room.
+ */
+export type DisconnectHandler = (
+  roomName: string,
+  reason: DisconnectReason,
+) => void;
+
 /** Factory that creates Room instances. Override in tests to inject mocks. */
 export type RoomFactory = () => Room;
 
@@ -49,6 +57,7 @@ export interface RoomManagerOptions {
 export class RoomManager {
   private rooms = new Map<string, RoomConnection>();
   private dataHandlers: DataHandler[] = [];
+  private disconnectHandlers: DisconnectHandler[] = [];
   private createRoom: RoomFactory;
 
   constructor(private options: RoomManagerOptions) {
@@ -99,6 +108,15 @@ export class RoomManager {
       },
     );
 
+    // Detect unexpected disconnects (network glitch, server restart, etc.)
+    room.on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
+      if (!this.rooms.has(roomName)) return; // intentional leaveRoom() already cleaned up
+      this.rooms.delete(roomName);
+      for (const handler of this.disconnectHandlers) {
+        handler(roomName, reason ?? DisconnectReason.UNKNOWN_REASON);
+      }
+    });
+
     const now = Date.now();
     const conn: RoomConnection = {
       room,
@@ -118,8 +136,10 @@ export class RoomManager {
     const conn = this.rooms.get(roomName);
     if (!conn) return;
 
-    await conn.room.disconnect();
+    // Delete before disconnect so the Disconnected handler (skip logic) knows
+    // this was intentional and doesn't trigger reconnect.
     this.rooms.delete(roomName);
+    await conn.room.disconnect();
   }
 
   /**
@@ -161,6 +181,15 @@ export class RoomManager {
    */
   onDataReceived(handler: DataHandler): void {
     this.dataHandlers.push(handler);
+  }
+
+  /**
+   * Register a handler invoked when the relay is unexpectedly disconnected
+   * from a room (network glitch, server restart, etc.).
+   * Not called for intentional `leaveRoom()` / `disconnectAll()`.
+   */
+  onRoomDisconnected(handler: DisconnectHandler): void {
+    this.disconnectHandlers.push(handler);
   }
 
   /**

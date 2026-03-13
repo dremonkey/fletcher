@@ -14,14 +14,19 @@ import { rootLogger, type Logger } from "../utils/logger";
 
 export interface BridgeManagerOptions {
   departureGraceMs?: number;
+  rejoinMaxRetries?: number;
+  rejoinBaseDelayMs?: number;
 }
 
 export class BridgeManager {
   private bridges = new Map<string, RelayBridge>();
   private pendingTeardowns = new Map<string, Timer>();
   private idleTimer: ReturnType<typeof setInterval> | null = null;
+  private discoveryTimer: ReturnType<typeof setInterval> | null = null;
   private log: Logger;
   private departureGraceMs: number;
+  private rejoinMaxRetries: number;
+  private rejoinBaseDelayMs: number;
 
   constructor(
     private roomManager: RoomManager,
@@ -32,6 +37,12 @@ export class BridgeManager {
   ) {
     this.log = logger ?? rootLogger.child({ component: "bridge-manager" });
     this.departureGraceMs = options?.departureGraceMs ?? 120_000;
+    this.rejoinMaxRetries = options?.rejoinMaxRetries ?? 3;
+    this.rejoinBaseDelayMs = options?.rejoinBaseDelayMs ?? 1_000;
+
+    this.roomManager.onRoomDisconnected((roomName, reason) => {
+      this.handleRoomDisconnected(roomName, reason);
+    });
   }
 
   /**
@@ -163,6 +174,7 @@ export class BridgeManager {
       clearTimeout(timer);
     }
     this.pendingTeardowns.clear();
+    this.stopDiscoveryTimer();
 
     const stops = Array.from(this.bridges.entries()).map(
       async ([roomName, bridge]) => {
@@ -172,6 +184,98 @@ export class BridgeManager {
     );
     await Promise.all(stops);
     await this.roomManager.disconnectAll();
+  }
+
+  // -------------------------------------------------------------------------
+  // Disconnect recovery
+  // -------------------------------------------------------------------------
+
+  /**
+   * Handle an unexpected room disconnect: clean up stale bridge, then
+   * attempt to rejoin with exponential backoff.
+   */
+  private handleRoomDisconnected(roomName: string, reason: unknown): void {
+    this.log.warn(
+      { event: "room_disconnected", roomName, reason },
+      "Room disconnected unexpectedly, will attempt rejoin",
+    );
+
+    // Stop + delete the stale bridge (fire-and-forget)
+    const bridge = this.bridges.get(roomName);
+    if (bridge) {
+      this.bridges.delete(roomName);
+      bridge.stop().catch(() => {});
+    }
+
+    // Cancel any pending teardown for this room
+    this.cancelPendingTeardown(roomName);
+
+    this.rejoinWithBackoff(roomName, 0);
+  }
+
+  /**
+   * Attempt to rejoin a room with exponential backoff.
+   */
+  private rejoinWithBackoff(roomName: string, attempt: number): void {
+    if (attempt >= this.rejoinMaxRetries) {
+      this.log.error(
+        { event: "rejoin_failed", roomName, attempts: attempt },
+        "Giving up rejoin — periodic discovery will catch it",
+      );
+      return;
+    }
+
+    const delay = this.rejoinBaseDelayMs * Math.pow(2, attempt);
+    const timer = setTimeout(async () => {
+      try {
+        await this.addRoom(roomName);
+        this.log.info(
+          { event: "rejoin_success", roomName, attempt: attempt + 1 },
+          "Successfully rejoined room after disconnect",
+        );
+      } catch (err) {
+        this.log.warn(
+          { event: "rejoin_attempt_failed", roomName, attempt: attempt + 1, err },
+          "Rejoin attempt failed, retrying",
+        );
+        this.rejoinWithBackoff(roomName, attempt + 1);
+      }
+    }, delay);
+
+    if (timer && typeof timer === "object" && "unref" in timer) {
+      (timer as NodeJS.Timeout).unref();
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Periodic room discovery
+  // -------------------------------------------------------------------------
+
+  /**
+   * Start a periodic timer that calls `discoveryFn` to find and rejoin rooms.
+   */
+  startDiscoveryTimer(discoveryFn: () => Promise<void>, intervalMs: number = 30_000): void {
+    this.stopDiscoveryTimer();
+
+    this.discoveryTimer = setInterval(() => {
+      discoveryFn().catch((err) => {
+        this.log.warn({ event: "discovery_error", err }, "Periodic room discovery failed");
+      });
+    }, intervalMs);
+
+    if (this.discoveryTimer && typeof this.discoveryTimer === "object" && "unref" in this.discoveryTimer) {
+      (this.discoveryTimer as NodeJS.Timeout).unref();
+    }
+  }
+
+  /**
+   * Stop the periodic discovery timer.
+   */
+  stopDiscoveryTimer(): void {
+    if (this.discoveryTimer !== null) {
+      clearInterval(this.discoveryTimer);
+      this.discoveryTimer = null;
+    }
   }
 
   // -------------------------------------------------------------------------
