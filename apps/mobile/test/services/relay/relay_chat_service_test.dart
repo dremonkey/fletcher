@@ -167,7 +167,9 @@ void main() {
       expect((events[0] as RelayContentDelta).text, 'done');
     });
 
-    test('ignores tool_call and tool_call_update (non-content)', () async {
+    test('emits RelayToolCallEvent for tool_call and tool_call_update (verbose mode)', () async {
+      // Task 038: tool_call and tool_call_update now surface as RelayToolCallEvent
+      // instead of being silently ignored. This is the verbose mode path.
       final events = <RelayChatEvent>[];
       final stream = service.sendPrompt('Hi');
       stream.listen(events.add);
@@ -181,7 +183,7 @@ void main() {
             'sessionUpdate': 'tool_call',
             'id': 'tool_1',
             'title': 'Read file',
-            'input': {'path': '/tmp/foo'},
+            'input': '{"path": "/tmp/foo"}',
           },
         },
       }));
@@ -205,8 +207,55 @@ void main() {
 
       await Future<void>.delayed(Duration.zero);
 
-      expect(events, hasLength(2));
-      expect((events[0] as RelayContentDelta).text, 'summary');
+      // 2 tool call events + 1 content delta + 1 prompt complete = 4 total
+      expect(events, hasLength(4));
+
+      // First: tool call started (status null)
+      expect(events[0], isA<RelayToolCallEvent>());
+      final started = events[0] as RelayToolCallEvent;
+      expect(started.id, 'tool_1');
+      expect(started.title, 'Read file');
+      expect(started.status, isNull);
+
+      // Second: tool call completed
+      expect(events[1], isA<RelayToolCallEvent>());
+      final completed = events[1] as RelayToolCallEvent;
+      expect(completed.id, 'tool_1');
+      expect(completed.status, 'completed');
+      expect(completed.title, isNull);
+
+      // Third: content delta
+      expect(events[2], isA<RelayContentDelta>());
+      expect((events[2] as RelayContentDelta).text, 'summary');
+
+      // Fourth: prompt complete
+      expect(events[3], isA<RelayPromptComplete>());
+    });
+
+    test('tool_call with missing id emits nothing (malformed)', () async {
+      final events = <RelayChatEvent>[];
+      final stream = service.sendPrompt('Hi');
+      stream.listen(events.add);
+
+      service.handleMessage(encode({
+        'jsonrpc': '2.0',
+        'method': 'session/update',
+        'params': {
+          'sessionId': 'sess_abc',
+          'update': {
+            'sessionUpdate': 'tool_call',
+            // missing 'id' — malformed, parser returns null
+            'title': 'broken_tool',
+          },
+        },
+      }));
+      service.handleMessage(encode(promptResult(1)));
+
+      await Future<void>.delayed(Duration.zero);
+
+      // Only the prompt complete arrives; malformed tool_call is silently dropped
+      expect(events, hasLength(1));
+      expect(events[0], isA<RelayPromptComplete>());
     });
 
     test('ignores unknown future sessionUpdate kinds (forward compat)', () async {

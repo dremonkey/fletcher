@@ -11,6 +11,7 @@ import '../theme/tui_widgets.dart';
 import 'artifact_viewer.dart';
 import 'system_event_card.dart';
 import 'thinking_spinner.dart';
+import 'tool_call_card.dart';
 
 /// Primary chat transcript area displaying conversation messages.
 ///
@@ -39,7 +40,8 @@ class _ChatTranscriptState extends State<ChatTranscript> {
     widget.service.addListener(_onServiceChanged);
     _scrollController.addListener(_onScroll);
     _lastItemCount = widget.service.state.transcript.length +
-        widget.service.state.systemEvents.length;
+        widget.service.state.systemEvents.length +
+        widget.service.state.activeToolCalls.length;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
     });
@@ -65,8 +67,10 @@ class _ChatTranscriptState extends State<ChatTranscript> {
     if (!mounted) return;
     final state = widget.service.state;
     final thinkingCount = state.isAgentThinking ? 1 : 0;
-    final newCount =
-        state.transcript.length + state.systemEvents.length + thinkingCount;
+    final newCount = state.transcript.length +
+        state.systemEvents.length +
+        state.activeToolCalls.length +
+        thinkingCount;
     final hasNewItems = newCount > _lastItemCount;
     _lastItemCount = newCount;
     setState(() {});
@@ -198,6 +202,12 @@ class _ChatTranscriptState extends State<ChatTranscript> {
       }
     }
 
+    // Insert active tool call indicators before the thinking spinner.
+    // Tool calls appear inline between the user message and agent response.
+    for (final toolCall in state.activeToolCalls) {
+      items.add(_ChatItem.toolCall(toolCall));
+    }
+
     // Append thinking spinner as last item when agent is thinking
     if (state.isAgentThinking) {
       items.add(const _ChatItem.thinking());
@@ -242,6 +252,9 @@ class _ChatTranscriptState extends State<ChatTranscript> {
             child: ThinkingSpinner(),
           );
         }
+        if (item.isToolCall) {
+          return ToolCallCard(toolCall: item.toolCall!);
+        }
         return Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
           child: _TranscriptMessage(
@@ -262,11 +275,12 @@ class _TimestampedItem {
   const _TimestampedItem({required this.timestamp, required this.item});
 }
 
-/// Represents a message, system event, divider, or thinking spinner in the
-/// chat list.
+/// Represents a message, system event, divider, thinking spinner, or tool
+/// call indicator in the chat list.
 class _ChatItem {
   final TranscriptEntry? entry;
   final SystemEvent? systemEvent;
+  final ToolCallInfo? toolCall;
   final bool isDivider;
   final bool isThinking;
   final List<ArtifactEvent> artifacts;
@@ -274,27 +288,38 @@ class _ChatItem {
   const _ChatItem.message(this.entry, {this.artifacts = const []})
       : isDivider = false,
         isThinking = false,
-        systemEvent = null;
+        systemEvent = null,
+        toolCall = null;
   const _ChatItem.divider()
       : entry = null,
         isDivider = true,
         isThinking = false,
         systemEvent = null,
+        toolCall = null,
         artifacts = const [];
   const _ChatItem.systemEvent(this.systemEvent)
       : entry = null,
         isDivider = false,
         isThinking = false,
+        toolCall = null,
         artifacts = const [];
   const _ChatItem.thinking()
       : entry = null,
         isDivider = false,
         isThinking = true,
         systemEvent = null,
+        toolCall = null,
+        artifacts = const [];
+  const _ChatItem.toolCall(this.toolCall)
+      : entry = null,
+        isDivider = false,
+        isThinking = false,
+        systemEvent = null,
         artifacts = const [];
 
   bool get isMessage => entry != null;
   bool get isSystemEvent => systemEvent != null;
+  bool get isToolCall => toolCall != null;
 }
 
 /// A single transcript message rendered as a TuiCard.
