@@ -385,7 +385,6 @@ Split the single voice-agent pipeline into two distinct modes — **Voice Mode**
 **Implemented:**
 - [x] 042: Relay Integration for Chat Mode ✅ — superseded by 054
 - [x] 044: Client-Side STT ✅ — Removed (unnecessary — OS keyboard handles natively)
-- [x] 049: Voice Pipeline Clean Teardown ✅ — `removePublishedTrack()` on mute releases mic to `MODE_NORMAL`; needs field verification
 - [x] 050: Migrate Text Input from Agent to Relay ✅ — mode-aware routing: relay when muted, agent when unmuted
 - [~] 053: Dual-Mode Chat/Live Split 🔄 — relay routing works; agent `text_message` handler not yet removed; session key continuity needs field verification
 - [~] 054: Mobile ACP Client 🔄 — JSON-RPC codec + streaming + 30 unit tests; cancel UI + inline error cards remaining

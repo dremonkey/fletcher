@@ -130,7 +130,6 @@ The relay service itself is fully built — see [Epic 24: WebRTC ACP Relay](../2
 
 - [x] **042: Relay Integration for Chat Mode (Flutter)** — Superseded by 054. JSON-RPC codec, AcpClient, data channel wiring all done.
 - [x] **048: Unified Transcript Across Modes** — `MessageOrigin` enum (`voice`/`text`) on `TranscriptEntry`; messages merge chronologically. Session key sharing handles continuity — no separate work needed.
-- [x] **049: Voice Pipeline Clean Teardown** — `removePublishedTrack()` on mute releases mic to `MODE_NORMAL`; room stays alive for relay. Needs field verification.
 - [x] **050: Migrate Text Input from Agent to Relay** — `sendTextMessage()` routes via relay when muted, via agent when unmuted. Agent-side handler removal tracked in 053.
 - ~~**045: Chat Mode Streaming Pipeline**~~ — Removed. Composite of 043 (TTS) + 054 (relay streaming) + transcript rendering (already works). Not a real task.
 
