@@ -111,22 +111,25 @@ Relay enriches and forwards to OpenClaw:
 
 ### Relay → Mobile: `session/update` (notification)
 
-OpenClaw streams content chunks. Relay forwards them to mobile over the data channel.
+OpenClaw streams content chunks. The relay forwards them to mobile as-is (transparent passthrough — no parsing of `update` content).
+
+Each notification carries a **single `update` object** (not an array) with a `sessionUpdate` discriminator field. This matches the [official ACP spec](https://agentclientprotocol.com/protocol/prompt-turn.md) and was confirmed against OpenClaw in the March 2026 field test.
 
 ```json
 {
   "jsonrpc": "2.0",
   "method": "session/update",
   "params": {
-    "updates": [
-      {
-        "kind": "content_chunk",
-        "content": { "type": "text", "text": "The weather is" }
-      }
-    ]
+    "sessionId": "sess_abc123",
+    "update": {
+      "sessionUpdate": "agent_message_chunk",
+      "content": { "type": "text", "text": "The weather is" }
+    }
   }
 }
 ```
+
+Known `sessionUpdate` kinds: `agent_message_chunk`, `available_commands_update`, `plan`, `tool_call`, `tool_call_update`. Only `agent_message_chunk` carries response text for the user.
 
 These are JSON-RPC notifications (no `id` field) — the mobile doesn't respond to them.
 

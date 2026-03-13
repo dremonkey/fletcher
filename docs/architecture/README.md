@@ -26,6 +26,7 @@ Start with the system overview, then follow the links based on what you need to 
 |---------|------|---------|
 | `@knittt/livekit-agent-ganglia` | `packages/livekit-agent-ganglia/` | LLM bridge to OpenClaw/Nanoclaw |
 | `@fletcher/voice-agent` | `apps/voice-agent/` | Standalone LiveKit agent runner |
+| `@fletcher/relay` | `apps/relay/` | Text-mode ACP bridge (data channel ↔ OpenClaw) |
 | `@fletcher/tui` | `packages/tui/` | Developer TUI launcher |
 | Flutter app | `apps/mobile/` | Mobile voice client |
 
@@ -35,6 +36,7 @@ Start with the system overview, then follow the links based on what you need to 
 |------|---------|
 | 7880 | LiveKit (HTTP/WS) |
 | 7881 | LiveKit (RTC/TCP) |
+| 7890 | Relay HTTP (localhost only) |
 | 50000-60000 | LiveKit (WebRTC UDP) |
 | 18789 | OpenClaw/Nanoclaw Gateway |
 

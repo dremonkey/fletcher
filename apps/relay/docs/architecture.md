@@ -92,12 +92,12 @@ Both paths connect to OpenClaw as ACP clients. Both use the same `session_key` (
 
 1. **Joins LiveKit rooms** as a non-agent participant (auto-joined via LiveKit webhook on `participant_joined`)
 2. **Manages the ACP session** — `initialize` + `session/new` with routing metadata
-3. **Forwards ACP messages** between data channel and OpenClaw:
+3. **Transparent ACP forwarding** between data channel and OpenClaw:
    - Mobile sends `session/prompt` → relay adds `sessionId`, forwards to OpenClaw
-   - OpenClaw sends `session/update` → relay forwards to mobile over data channel
+   - OpenClaw sends `session/update` → relay forwards to mobile as-is (no parsing of `update` content)
    - Mobile sends `session/cancel` → relay forwards to OpenClaw
-4. **Idle management** — disconnects from room after ~5 min of inactivity
-5. **Health endpoints** — HTTP `/health` for monitoring
+4. **Idle management** — disconnects from room after configurable timeout (default 5 min, `RELAY_IDLE_TIMEOUT_MS`)
+5. **Health endpoints** — HTTP `/health`, `/rooms` for monitoring
 
 ### What the relay does NOT do
 
@@ -212,6 +212,28 @@ The relay can connect to OpenClaw via two ACP transports:
 | **WebSocket** | `ACP_TRANSPORT=websocket ACP_URL=wss://...` | Remote: relay connects to hosted OpenClaw |
 
 For the Fletcher product (local-first), stdio is the default — the relay spawns OpenClaw directly. WebSocket enables future cloud deployment without changing the relay.
+
+## Known Gaps (Session Resilience)
+
+Three session resilience gaps identified during BUG-002 field test investigation (March 2026). Tracked in `apps/relay/tasks/R-006` through `R-008`.
+
+### 1. No ACP recovery on subprocess death (R-006)
+
+If the ACP subprocess dies mid-session (crash, OOM, broken pipe), the bridge enters a zombie state: the LiveKit room stays connected, mobile messages arrive, but `acpClient.sessionPrompt()` throws. No recovery path exists — the room stays zombie until the idle timer fires.
+
+**Planned fix:** Detect subprocess exit, set a `needsReinit` flag, lazily re-initialize ACP on the next incoming mobile message. Also increase the default idle timeout from 5 minutes to 30 minutes.
+
+### 2. No cleanup on participant disconnect (R-007)
+
+The `participant_left` webhook event is not handled (`src/http/webhook.ts` only handles `participant_joined`). When the last human participant leaves, the ACP subprocess and LiveKit room connection stay alive until the idle timer fires — wasting resources for up to 5 minutes (or 30 minutes after R-006).
+
+**Planned fix:** Handle `participant_left` webhook, tear down the bridge when the last human participant leaves.
+
+### 3. Incoming messages don't reset idle timer (R-008)
+
+The idle timer only resets on **outbound** data (`sendToRoom()` sets `conn.lastActivity`). Incoming mobile messages (`session/prompt`, `session/cancel`) do not reset it. `RoomManager.touchRoom()` exists but is never called.
+
+**Planned fix:** Call `touchRoom()` at the top of `handleMobileMessage()` in `RelayBridge`.
 
 ## Relation to Voice Path
 

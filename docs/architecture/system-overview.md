@@ -49,6 +49,7 @@ fletcher/
 │   └── tui/                        # Developer TUI launcher
 ├── apps/
 │   ├── voice-agent/                # Voice agent entry point (Layer 1)
+│   ├── relay/                      # Text-mode ACP bridge (LiveKit data channel ↔ OpenClaw)
 │   └── mobile/                     # Flutter app (not in Bun workspace)
 ├── scripts/                        # Token generation, bootstrap, mobile helpers
 ├── docs/
@@ -84,6 +85,7 @@ flowchart TD
 **Key relationships:**
 - `voice-agent` is the entry point — it imports Ganglia and the LiveKit agent plugins directly
 - `ganglia` depends on `@livekit/agents` as a **peer dependency** to avoid duplicate installs
+- `relay` is independent — it connects to LiveKit via `@livekit/rtc-node` (non-agent participant) and to OpenClaw via ACP over stdio
 - `tui` has no code dependencies on other packages — it orchestrates via `docker compose` and shell commands
 
 ## Voice Agent (`apps/voice-agent`)
@@ -97,9 +99,17 @@ bun run apps/voice-agent/src/agent.ts connect   # Direct mode (joins specific ro
 
 The agent is packaged as a Docker container via `apps/voice-agent/Dockerfile`.
 
+## Relay (`apps/relay`)
+
+The relay is a **text-mode ACP bridge**: it joins LiveKit rooms as a non-agent participant, forwards ACP JSON-RPC 2.0 messages between the mobile client's data channel and an OpenClaw subprocess over stdio. This enables text conversations that bypass the voice agent's STT/TTS pipeline entirely, at ~60x lower cost per interaction.
+
+The relay is a transparent passthrough — it does not parse or transform message content. It handles ACP lifecycle (`initialize`, `session/new`) internally and forwards `session/prompt`, `session/update`, and `session/cancel` between mobile and OpenClaw.
+
+See `apps/relay/docs/architecture.md` for full design rationale, economics, and protocol details.
+
 ## Deployment Topology
 
-A typical development deployment runs three services on the same host using Docker Compose with host networking:
+A typical development deployment runs four services on the same host using Docker Compose with host networking:
 
 ```mermaid
 flowchart LR
@@ -110,6 +120,7 @@ flowchart LR
     subgraph "Dev Machine (host network)"
         LK["LiveKit Server<br/>:7880 WS / :7881 RTC<br/>:50000-60000 UDP"]
         VA["Voice Agent<br/>(Docker container)"]
+        RL["Relay<br/>:7890 (localhost)"]
         GW["OpenClaw Gateway<br/>:18789"]
     end
 
@@ -118,9 +129,12 @@ flowchart LR
         CT["Cartesia<br/>(TTS)"]
     end
 
-    APP <-->|"WebRTC"| LK
+    APP <-->|"WebRTC audio"| LK
+    APP <-->|"WebRTC data channel"| LK
     LK <-->|"Agent SDK"| VA
+    LK <-->|"rtc-node participant"| RL
     VA -->|"HTTP SSE"| GW
+    RL -->|"ACP stdio"| GW
     VA -->|"Streaming"| DG
     VA -->|"Streaming"| CT
 ```
@@ -136,14 +150,17 @@ The system is configured entirely through environment variables. See [Infrastruc
 
 | Variable | Used By | Purpose |
 |----------|---------|---------|
-| `LIVEKIT_URL` | Voice agent, mobile | LiveKit WebSocket URL |
-| `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | Voice agent, token gen | LiveKit authentication |
+| `LIVEKIT_URL` | Voice agent, relay, mobile | LiveKit WebSocket URL |
+| `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | Voice agent, relay, token gen | LiveKit authentication |
 | `GANGLIA_TYPE` | Voice agent | Backend selection: `openclaw` or `nanoclaw` |
 | `OPENCLAW_GATEWAY_URL` | Voice agent | Gateway HTTP endpoint |
 | `OPENCLAW_API_KEY` | Voice agent | Gateway authentication |
 | `DEEPGRAM_API_KEY` | Voice agent | Speech-to-text provider |
 | `CARTESIA_API_KEY` | Voice agent | Text-to-speech provider |
 | `FLETCHER_OWNER_IDENTITY` | Voice agent | Owner detection for session routing |
+| `ACP_COMMAND` / `ACP_ARGS` | Relay | ACP subprocess command (default: `openclaw acp`) |
+| `RELAY_HTTP_PORT` | Relay | HTTP server port (default: 7890, localhost only) |
+| `RELAY_IDLE_TIMEOUT_MS` | Relay | Idle room timeout (default: 5 min) |
 
 ## Related Documents
 
