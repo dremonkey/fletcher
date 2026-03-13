@@ -52,4 +52,5 @@ Fletcher's UI takes inspiration from **terminal user interfaces**, **8-bit hardw
 - ~~008: Collaborative Waveform~~ — absorbed into 017 (compact 8-bit waveform bar at top of chat-first layout)
 
 ### Completed (Voice Pipeline)
+- [ ] 038: Enable Verbose ACP Trace for Brutalist Tool-Feedback (force internal tool-calls to wire)
 - [~] 014: Human-Centric Interruption Handling — Phase 1 done (tuned sensitivity); Phase 3 (soft TTS fade) needs SDK support
