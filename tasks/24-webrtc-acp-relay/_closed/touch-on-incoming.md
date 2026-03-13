@@ -1,7 +1,7 @@
-# R-008: Reset Idle Timer on Incoming Mobile Messages
+# Reset Idle Timer on Incoming Mobile Messages
 
 **Status:** [x] Complete
-**Depends on:** R-004 (Room lifecycle)
+**Depends on:** room-lifecycle
 **Blocks:** Nothing
 
 ## Problem
@@ -10,7 +10,7 @@ The idle timer only resets when the relay **sends** data to mobile (via `sendToR
 
 `RoomManager.touchRoom()` exists (`room-manager.ts:180-185`) but nothing calls it.
 
-This means a conversation where the user sends many prompts but ACP responses are slow (or ACP is in a long thinking phase) could incorrectly idle-timeout. In practice this is unlikely with the current 5-minute timeout (ACP responds faster than that), but with the 30-minute timeout proposed in R-006, the gap becomes more relevant for sessions with long pauses between user inputs where ACP streaming updates happen to not flow.
+This means a conversation where the user sends many prompts but ACP responses are slow (or ACP is in a long thinking phase) could incorrectly idle-timeout. In practice this is unlikely with the current 5-minute timeout (ACP responds faster than that), but with the 30-minute timeout proposed in lazy-acp-reinit, the gap becomes more relevant for sessions with long pauses between user inputs where ACP streaming updates happen to not flow.
 
 ## Proposed Changes
 

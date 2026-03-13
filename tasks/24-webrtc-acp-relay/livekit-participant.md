@@ -1,8 +1,8 @@
-# R-001: LiveKit Participant Manager
+# LiveKit Participant Manager
 
 **Status:** [x] Complete
 **Depends on:** Nothing
-**Blocks:** R-003
+**Blocks:** data-channel-acp-bridge
 
 ## Objective
 
@@ -29,7 +29,7 @@ await room.connect(LIVEKIT_URL, token);
 room.on(RoomEvent.DataReceived, (data, participant, kind, topic) => {
   if (topic !== 'relay') return;
   const msg = JSON.parse(data.toString('utf-8'));
-  // forward to ACP client (R-003)
+  // forward to ACP client (data-channel-acp-bridge)
 });
 
 // Publish to data channel

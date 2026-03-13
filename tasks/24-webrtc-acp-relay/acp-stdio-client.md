@@ -1,8 +1,8 @@
-# R-002: ACP Client over stdio
+# ACP Client over stdio
 
 **Status:** [x] Complete
 **Depends on:** Nothing (can be built and tested independently)
-**Blocks:** R-003
+**Blocks:** data-channel-acp-bridge
 
 ## Objective
 

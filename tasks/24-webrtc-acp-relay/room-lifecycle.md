@@ -1,7 +1,7 @@
-# R-004: Room Lifecycle
+# Room Lifecycle
 
 **Status:** [x] Complete
-**Depends on:** R-001 (LiveKit participant)
+**Depends on:** livekit-participant
 **Blocks:** Nothing
 
 ## Objective

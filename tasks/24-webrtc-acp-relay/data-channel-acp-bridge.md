@@ -1,7 +1,7 @@
-# R-003: Data Channel ↔ ACP Bridge
+# Data Channel ↔ ACP Bridge
 
 **Status:** [x] Complete
-**Depends on:** R-001 (LiveKit participant), R-002 (ACP client)
+**Depends on:** livekit-participant, acp-stdio-client
 **Blocks:** Nothing (this is the core relay functionality)
 
 ## Objective
@@ -68,7 +68,7 @@ interface RoomBridge {
 }
 ```
 
-When a room is joined (via R-001):
+When a room is joined (via livekit-participant):
 1. Spawn ACPX subprocess
 2. Send `initialize`
 3. Send `session/new` with `_meta` derived from room name + participant identity
@@ -96,7 +96,7 @@ See `docs/room-metadata-schema.md` for mode coordination.
 
 - `src/rpc/handler.ts` — Remove custom method dispatch (session/new, session/message, etc.). Replace with ACP forwarding.
 - `src/session/manager.ts` — Simplify. The relay no longer manages conversation state (ACPX/OpenClaw does). The relay only tracks room → ACP session mappings.
-- `src/session/agent-bridge.ts` — Delete. Replaced by ACP client (R-002).
+- `src/session/agent-bridge.ts` — Delete. Replaced by ACP client (acp-stdio-client).
 - `src/session/types.ts` — Simplify. Remove AsyncInputChannel and session state machine.
 
 ## Acceptance criteria

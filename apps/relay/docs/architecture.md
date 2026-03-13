@@ -217,21 +217,21 @@ For the Fletcher product (local-first), stdio is the default — the relay spawn
 
 ## Known Gaps (Session Resilience)
 
-Session resilience gaps identified during field testing (March 2026). R-006/007/008 are resolved. R-009 (room discovery) is implemented.
+Session resilience gaps identified during field testing (March 2026). lazy-acp-reinit/participant-left-webhook/touch-on-incoming are resolved. rejoin-rooms-on-restart (room discovery) is implemented.
 
-### 1. No ACP recovery on subprocess death (R-006)
+### 1. No ACP recovery on subprocess death (lazy-acp-reinit)
 
 If the ACP subprocess dies mid-session (crash, OOM, broken pipe), the bridge enters a zombie state: the LiveKit room stays connected, mobile messages arrive, but `acpClient.sessionPrompt()` throws. No recovery path exists — the room stays zombie until the idle timer fires.
 
 **Planned fix:** Detect subprocess exit, set a `needsReinit` flag, lazily re-initialize ACP on the next incoming mobile message. Also increase the default idle timeout from 5 minutes to 30 minutes.
 
-### 2. No cleanup on participant disconnect (R-007)
+### 2. No cleanup on participant disconnect (participant-left-webhook)
 
-The `participant_left` webhook event is not handled (`src/http/webhook.ts` only handles `participant_joined`). When the last human participant leaves, the ACP subprocess and LiveKit room connection stay alive until the idle timer fires — wasting resources for up to 5 minutes (or 30 minutes after R-006).
+The `participant_left` webhook event is not handled (`src/http/webhook.ts` only handles `participant_joined`). When the last human participant leaves, the ACP subprocess and LiveKit room connection stay alive until the idle timer fires — wasting resources for up to 5 minutes (or 30 minutes after lazy-acp-reinit).
 
 **Planned fix:** Handle `participant_left` webhook, tear down the bridge when the last human participant leaves.
 
-### 3. Incoming messages don't reset idle timer (R-008)
+### 3. Incoming messages don't reset idle timer (touch-on-incoming)
 
 The idle timer only resets on **outbound** data (`sendToRoom()` sets `conn.lastActivity`). Incoming mobile messages (`session/prompt`, `session/cancel`) do not reset it. `RoomManager.touchRoom()` exists but is never called.
 

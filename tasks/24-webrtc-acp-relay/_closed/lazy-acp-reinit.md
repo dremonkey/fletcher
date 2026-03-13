@@ -1,7 +1,7 @@
-# R-006: Lazy ACP Re-init + Longer Idle Timeout
+# Lazy ACP Re-init + Longer Idle Timeout
 
 **Status:** [x] Complete
-**Depends on:** R-004 (Room lifecycle)
+**Depends on:** room-lifecycle
 **Blocks:** Nothing
 
 ## Problem
@@ -20,7 +20,7 @@ In `src/index.ts`, change the default from `300000` (5 min) to `1_800_000` (30 m
 Number(process.env.RELAY_IDLE_TIMEOUT_MS ?? 1_800_000), // 30 minutes
 ```
 
-Also update the `RELAY_IDLE_TIMEOUT_MS` documentation in the relay `CLAUDE.md` and `R-004-room-lifecycle.md`.
+Also update the `RELAY_IDLE_TIMEOUT_MS` documentation in the relay `CLAUDE.md` and `room-lifecycle.md`.
 
 ### 2. Detect ACP subprocess death
 

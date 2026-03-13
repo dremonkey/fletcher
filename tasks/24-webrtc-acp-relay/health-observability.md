@@ -1,7 +1,7 @@
-# R-005: Health & Observability
+# Health & Observability
 
 **Status:** [x] Complete
-**Depends on:** R-001 (LiveKit participant)
+**Depends on:** livekit-participant
 **Blocks:** Nothing
 
 ## Objective

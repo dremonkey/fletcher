@@ -1,4 +1,4 @@
-# R-009: Auto-Rejoin Rooms on Relay Restart
+# Auto-Rejoin Rooms on Relay Restart
 
 **Status:** [x] Complete
 **Priority:** High

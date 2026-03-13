@@ -1,12 +1,12 @@
-# R-007: Clean Up on Participant Disconnect
+# Clean Up on Participant Disconnect
 
 **Status:** [x] Complete
-**Depends on:** R-004 (Room lifecycle)
+**Depends on:** room-lifecycle
 **Blocks:** Nothing
 
 ## Problem
 
-When a mobile participant leaves a LiveKit room (app closed, network loss, explicit disconnect), the relay has no way to know. The `participant_left` webhook event is not handled — see `src/http/webhook.ts` which only handles `participant_joined`. The idle timer (currently 5 min, proposed 30 min in R-006) is the only cleanup path, meaning:
+When a mobile participant leaves a LiveKit room (app closed, network loss, explicit disconnect), the relay has no way to know. The `participant_left` webhook event is not handled — see `src/http/webhook.ts` which only handles `participant_joined`. The idle timer (currently 5 min, proposed 30 min in lazy-acp-reinit) is the only cleanup path, meaning:
 
 - The ACP subprocess stays alive unnecessarily
 - The relay holds a LiveKit room connection for up to 30 minutes after the user is gone

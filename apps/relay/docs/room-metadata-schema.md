@@ -515,7 +515,7 @@ function validateMetadata(metadata: any): boolean {
 
 ## Implementation Notes
 
-### For Task R-011 (Idle Timeout)
+### For Idle Timeout
 
 **Relay Idle Timeout:**
 - When `mode === "chat"` and no messages for 5 minutes:
@@ -528,7 +528,7 @@ function validateMetadata(metadata: any): boolean {
   1. Agent sends `agent_idle_warning` on `ganglia-events` data channel
   2. After 30s grace period → Agent sets `mode = "idle"` and disconnects
 
-### For Task R-012 (Webhook Auto-Join)
+### For Webhook Auto-Join
 
 **Relay is self-driving via LiveKit webhooks:**
 - LiveKit sends `participant_joined` webhook → relay auto-joins the room
@@ -594,4 +594,4 @@ function validateMetadata(metadata: any): boolean {
 - [x] Agent and relay both check metadata before every LLM request
 - [x] Metadata update events trigger passive state in non-active participant
 
-**Status:** Ready for implementation (Tasks R-011, R-012, voice agent updates)
+**Status:** Ready for implementation (idle timeout, webhook auto-join, voice agent updates)
