@@ -63,6 +63,35 @@ export function createWebhookHandler(
       }
     }
 
+    if (event.event === "participant_left") {
+      const participant = event.participant;
+
+      // Skip relay participants (our own disconnects)
+      if (participant?.identity?.startsWith("relay-")) {
+        log.debug({ identity: participant.identity }, "Ignoring relay participant leave");
+        return Response.json({ received: true });
+      }
+
+      // Skip agent participants
+      if (participant?.kind === 4) {
+        log.debug({ identity: participant.identity, kind: participant.kind }, "Ignoring agent participant leave");
+        return Response.json({ received: true });
+      }
+
+      const roomName = event.room?.name;
+      if (!roomName || !bridgeManager.hasRoom(roomName)) {
+        return Response.json({ received: true });
+      }
+
+      try {
+        await bridgeManager.removeRoom(roomName);
+        log.info({ roomName, identity: participant?.identity }, "Removed room after participant left");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        log.error({ roomName, error: message }, "Failed to remove room after participant left");
+      }
+    }
+
     return Response.json({ received: true });
   };
 }

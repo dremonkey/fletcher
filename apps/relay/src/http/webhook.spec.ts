@@ -9,6 +9,7 @@ import pino from "pino";
 
 function createMockBridgeManager(existingRooms: Set<string> = new Set()) {
   const addedRooms: string[] = [];
+  const removedRooms: string[] = [];
 
   return {
     hasRoom(roomName: string): boolean {
@@ -18,8 +19,13 @@ function createMockBridgeManager(existingRooms: Set<string> = new Set()) {
       addedRooms.push(roomName);
       existingRooms.add(roomName);
     },
+    async removeRoom(roomName: string): Promise<void> {
+      removedRooms.push(roomName);
+      existingRooms.delete(roomName);
+    },
     addedRooms,
-  } as unknown as BridgeManager & { addedRooms: string[] };
+    removedRooms,
+  } as unknown as BridgeManager & { addedRooms: string[]; removedRooms: string[] };
 }
 
 function createMockWebhookReceiver(eventToReturn: unknown) {
@@ -193,6 +199,94 @@ describe("webhook handler", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.received).toBe(true);
+    });
+  });
+
+  describe("participant_left from standard participant", () => {
+    test("calls removeRoom when room has a bridge", async () => {
+      const bridgeManager = createMockBridgeManager(new Set(["room-abc"]));
+      const receiver = createMockWebhookReceiver({
+        event: "participant_left",
+        room: { name: "room-abc" },
+        participant: { identity: "alice", kind: 0 },
+      });
+
+      const handler = createWebhookHandler(receiver as any, bridgeManager, silentLogger);
+      const res = await handler(makeWebhookRequest({}));
+
+      expect(res.status).toBe(200);
+      expect(bridgeManager.removedRooms).toEqual(["room-abc"]);
+    });
+
+    test("does not call removeRoom when room has no bridge", async () => {
+      const bridgeManager = createMockBridgeManager();
+      const receiver = createMockWebhookReceiver({
+        event: "participant_left",
+        room: { name: "room-abc" },
+        participant: { identity: "alice", kind: 0 },
+      });
+
+      const handler = createWebhookHandler(receiver as any, bridgeManager, silentLogger);
+      const res = await handler(makeWebhookRequest({}));
+
+      expect(res.status).toBe(200);
+      expect(bridgeManager.removedRooms).toEqual([]);
+    });
+  });
+
+  describe("participant_left from relay identity", () => {
+    test("does not call removeRoom", async () => {
+      const bridgeManager = createMockBridgeManager(new Set(["room-abc"]));
+      const receiver = createMockWebhookReceiver({
+        event: "participant_left",
+        room: { name: "room-abc" },
+        participant: { identity: "relay-room-abc", kind: 0 },
+      });
+
+      const handler = createWebhookHandler(receiver as any, bridgeManager, silentLogger);
+      const res = await handler(makeWebhookRequest({}));
+
+      expect(res.status).toBe(200);
+      expect(bridgeManager.removedRooms).toEqual([]);
+    });
+  });
+
+  describe("participant_left from agent participant", () => {
+    test("does not call removeRoom", async () => {
+      const bridgeManager = createMockBridgeManager(new Set(["room-abc"]));
+      const receiver = createMockWebhookReceiver({
+        event: "participant_left",
+        room: { name: "room-abc" },
+        participant: { identity: "agent-voice", kind: 4 },
+      });
+
+      const handler = createWebhookHandler(receiver as any, bridgeManager, silentLogger);
+      const res = await handler(makeWebhookRequest({}));
+
+      expect(res.status).toBe(200);
+      expect(bridgeManager.removedRooms).toEqual([]);
+    });
+  });
+
+  describe("participant_left removeRoom failure", () => {
+    test("returns 200 even when removeRoom throws", async () => {
+      const receiver = createMockWebhookReceiver({
+        event: "participant_left",
+        room: { name: "room-fail" },
+        participant: { identity: "alice", kind: 0 },
+      });
+
+      const failingBridgeManager = {
+        hasRoom: () => true,
+        removeRoom: async () => {
+          throw new Error("cleanup failed");
+        },
+      } as unknown as BridgeManager & { addedRooms: string[]; removedRooms: string[] };
+
+      const handler = createWebhookHandler(receiver as any, failingBridgeManager, silentLogger);
+      const res = await handler(makeWebhookRequest({}));
+
+      expect(res.status).toBe(200);
     });
   });
 
