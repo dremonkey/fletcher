@@ -40,11 +40,13 @@ shutdown.
 
 ## Checklist
 
-- [ ] Relay writes pidfile on startup
-- [ ] `cleanup()` reads pidfile and kills that PID if relay is not in `children`
-- [ ] Test: start relay manually, then run TUI, then Ctrl+C — relay dies
-- [ ] Test: start TUI, kill relay manually, restart relay manually, then Ctrl+C — new relay dies
-- [ ] Test: no relay running — cleanup does not error
+- [x] Relay writes pidfile on startup
+- [x] `cleanup()` reads pidfile and kills that PID if relay is not in `children`
+- [x] Test: start relay manually, then run TUI, then Ctrl+C — relay dies
+- [x] Test: start TUI, kill relay manually, restart relay manually, then Ctrl+C — new relay dies
+- [x] Test: no relay running — cleanup does not error
+
+**Status: Complete ✅**
 
 ## Related
 

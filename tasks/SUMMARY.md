@@ -170,7 +170,7 @@ Developer experience improvements to the terminal UI launcher.
 - [~] 001: `fletcher tui` CLI entrypoint — code complete, needs manual verification
 - [x] 002: Reliable one-shot service startup — fixed registration log string, Docker CPU load dispatch bug ([agents-js#1082](https://github.com/livekit/agents-js/issues/1082)), ganglia config mismatch; tested on emulator + Pixel 9
 - [~] 003: Graceful Ctrl+C shutdown — Bun signal handler bug workaround + sync cleanup working; Ctrl+C during startup and double Ctrl+C untested
-- [ ] 004: Kill relay on TUI shutdown even if manually restarted — relay escapes cleanup when pre-running or restarted outside TUI ([BUG-005](../docs/field-tests/20260312-buglog.md))
+- [x] 004: Kill relay on TUI shutdown even if manually restarted — pidfile-based tracking; relay killed on Ctrl+C regardless of how it was started ✅
 
 ### 9. [Connectivity & Resilience](./09-connectivity) 🔄
 Bulletproof connection handling: survive network switches, Bluetooth changes, airplane mode, and phone sleep.
