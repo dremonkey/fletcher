@@ -394,7 +394,7 @@ Split the single voice-agent pipeline into two distinct modes — **Voice Mode**
 - [ ] 052: Relay LLM Wrapper for Ganglia — JSON-RPC LLM backend routing through relay instead of direct completions API
 - [~] 053: Dual-Mode Chat/Live Split 🔄 — mic button as mode switch (muted=chat, unmuted=voice); relay routing implemented; agent text_message handler not yet removed
 - [~] 054: Mobile ACP Client 🔄 — JSON-RPC codec + RelayChatService + LiveKitService wiring done; 30 unit tests; cancel UI + inline error cards remaining
-- [ ] 055: Relay chunk-level debug logging — no chunk-level visibility in pipeline; needed to diagnose truncation ([BUG-006](../docs/field-tests/20260312-buglog.md))
+- [ ] 055: Serialize relay `forwardToMobile` calls — concurrent publishData race drops last chunk before result closes stream ([BUG-006](../docs/field-tests/20260312-buglog.md))
 
 **Depends on:** Epic 4 (Ganglia session keys), Epic 7 (Sovereign Pairing), Epic 17 (Text Input), Epic 20 (Agent Dispatch)
 
