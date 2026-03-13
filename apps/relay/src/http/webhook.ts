@@ -1,6 +1,7 @@
 import type { WebhookReceiver } from "livekit-server-sdk";
 import type { BridgeManager } from "../bridge/bridge-manager";
 import type { Logger } from "../utils/logger";
+import { isHumanParticipant } from "../livekit/participant-filter";
 
 /**
  * Creates an HTTP handler for LiveKit server webhooks.
@@ -30,16 +31,9 @@ export function createWebhookHandler(
     if (event.event === "participant_joined") {
       const participant = event.participant;
 
-      // Skip relay participants (our own joins)
-      if (participant?.identity?.startsWith("relay-")) {
-        log.debug({ identity: participant.identity }, "Ignoring relay participant");
-        return Response.json({ received: true });
-      }
-
-      // Skip agent participants (voice agent, not a human)
-      // ParticipantInfo_Kind.AGENT = 4
-      if (participant?.kind === 4) {
-        log.debug({ identity: participant.identity, kind: participant.kind }, "Ignoring agent participant");
+      // Skip non-human participants (relay instances, agents)
+      if (participant && !isHumanParticipant(participant)) {
+        log.debug({ identity: participant.identity, kind: participant.kind }, "Ignoring non-human participant");
         return Response.json({ received: true });
       }
 
@@ -66,15 +60,9 @@ export function createWebhookHandler(
     if (event.event === "participant_left") {
       const participant = event.participant;
 
-      // Skip relay participants (our own disconnects)
-      if (participant?.identity?.startsWith("relay-")) {
-        log.debug({ identity: participant.identity }, "Ignoring relay participant leave");
-        return Response.json({ received: true });
-      }
-
-      // Skip agent participants
-      if (participant?.kind === 4) {
-        log.debug({ identity: participant.identity, kind: participant.kind }, "Ignoring agent participant leave");
+      // Skip non-human participants (relay instances, agents)
+      if (participant && !isHumanParticipant(participant)) {
+        log.debug({ identity: participant.identity, kind: participant.kind }, "Ignoring non-human participant leave");
         return Response.json({ received: true });
       }
 

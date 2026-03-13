@@ -34,6 +34,8 @@ RELAY_IDLE_TIMEOUT_MS=1800000  # Idle room timeout (30 minutes)
 
 - `src/index.ts` — Entry point, Bun.serve() HTTP only (no WebSocket)
 - `src/livekit/room-manager.ts` — LiveKit room connections, data channel pub/sub
+- `src/livekit/participant-filter.ts` — Shared participant classification (human vs relay vs agent)
+- `src/livekit/room-discovery.ts` — Startup room discovery: auto-rejoin orphaned rooms
 - `src/acp/client.ts` — ACP client over stdio (spawns subprocess)
 - `src/acp/types.ts` — ACP protocol types
 - `src/bridge/relay-bridge.ts` — Wires data channel ↔ ACP (per-room)
@@ -43,6 +45,7 @@ RELAY_IDLE_TIMEOUT_MS=1800000  # Idle room timeout (30 minutes)
 - `src/rpc/types.ts` — JSON-RPC 2.0 type definitions
 - `src/rpc/errors.ts` — Error code constants
 - `src/utils/logger.ts` — Structured JSON logging
+- `src/utils/url.ts` — URL helpers (ws→http conversion for RoomServiceClient)
 - `test/mock-acpx.ts` — Mock ACP agent for testing
 
 ## Conventions

@@ -105,6 +105,8 @@ The relay is a **text-mode ACP bridge**: it joins LiveKit rooms as a non-agent p
 
 The relay is a transparent passthrough — it does not parse or transform message content. It handles ACP lifecycle (`initialize`, `session/new`) internally and forwards `session/prompt`, `session/update`, and `session/cancel` between mobile and OpenClaw.
 
+On startup, the relay auto-discovers LiveKit rooms with active human participants (via `RoomServiceClient`) and rejoins any that lack a relay — recovering from restarts without user intervention.
+
 See `apps/relay/docs/architecture.md` for full design rationale, economics, and protocol details.
 
 ## Deployment Topology

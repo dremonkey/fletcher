@@ -1,16 +1,19 @@
-import { WebhookReceiver } from "livekit-server-sdk";
+import { WebhookReceiver, RoomServiceClient } from "livekit-server-sdk";
 import { handleHttpRequest } from "./http/routes";
 import { RoomManager } from "./livekit/room-manager";
 import { BridgeManager } from "./bridge/bridge-manager";
+import { discoverAndRejoinRooms } from "./livekit/room-discovery";
+import { wsUrlToHttp } from "./utils/url";
 import { createLogger } from "./utils/logger";
 
 const log = createLogger("relay");
 
 const apiKey = process.env.LIVEKIT_API_KEY ?? "devkey";
 const apiSecret = process.env.LIVEKIT_API_SECRET ?? "secret";
+const livekitUrl = process.env.LIVEKIT_URL ?? "ws://localhost:7880";
 
 const roomManager = new RoomManager({
-  livekitUrl: process.env.LIVEKIT_URL ?? "ws://localhost:7880",
+  livekitUrl,
   apiKey,
   apiSecret,
 });
@@ -37,7 +40,14 @@ const server = Bun.serve({
   fetch: (req) => handleHttpRequest(req, { bridgeManager, roomManager, acpCommand, acpArgs, webhookReceiver }),
 });
 
-log.info({ hostname: server.hostname, port: server.port }, "Fletcher Relay listening");
+log.info(
+  { hostname: server.hostname, port: server.port, livekitUrl, acpCommand, acpArgs, pid: process.pid, logLevel: log.level },
+  "Fletcher Relay listening",
+);
+
+// Fire-and-forget: discover rooms with orphaned human participants and rejoin
+const roomService = new RoomServiceClient(wsUrlToHttp(livekitUrl), apiKey, apiSecret);
+discoverAndRejoinRooms({ roomService, bridgeManager, logger: log });
 
 // Graceful shutdown
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

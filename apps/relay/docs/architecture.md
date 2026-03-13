@@ -145,6 +145,8 @@ The relay does not maintain a permanent LiveKit room connection. It connects on 
 
 **Trigger mechanism:** The relay is self-driving via LiveKit webhooks. LiveKit sends a `participant_joined` event to `POST /webhooks/livekit` whenever a participant connects. The relay filters out its own joins (`relay-*` identity) and agent participants, then calls `addRoom()` for standard participants. No token server signaling needed.
 
+**Startup recovery:** On startup, the relay queries LiveKit's `RoomServiceClient` to discover rooms with active human participants but no relay. It auto-joins any orphaned rooms, recovering from restarts without requiring users to leave and rejoin. This runs as fire-and-forget after the HTTP server starts — the server is immediately ready for webhooks while discovery runs async. LiveKit is the source of truth; no persistence files needed.
+
 **Manual override:** `POST /relay/join` still exists for debugging and testing — it calls the same `addRoom()` path.
 
 **Idle disconnect:** The relay tracks last-message time per room. After a configurable idle timeout (~5 minutes), it disconnects from the room. The next participant join webhook restarts the cycle.
@@ -215,7 +217,7 @@ For the Fletcher product (local-first), stdio is the default — the relay spawn
 
 ## Known Gaps (Session Resilience)
 
-Three session resilience gaps identified during BUG-002 field test investigation (March 2026). Tracked in `apps/relay/tasks/R-006` through `R-008`.
+Session resilience gaps identified during field testing (March 2026). R-006/007/008 are resolved. R-009 (room discovery) is implemented.
 
 ### 1. No ACP recovery on subprocess death (R-006)
 
