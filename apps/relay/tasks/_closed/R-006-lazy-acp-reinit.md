@@ -1,6 +1,6 @@
 # R-006: Lazy ACP Re-init + Longer Idle Timeout
 
-**Status:** [ ] Not started
+**Status:** [x] Complete
 **Depends on:** R-004 (Room lifecycle)
 **Blocks:** Nothing
 

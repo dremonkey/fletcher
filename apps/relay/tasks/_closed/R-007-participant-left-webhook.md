@@ -1,6 +1,6 @@
 # R-007: Clean Up on Participant Disconnect
 
-**Status:** [ ] Not started
+**Status:** [x] Complete
 **Depends on:** R-004 (Room lifecycle)
 **Blocks:** Nothing
 
