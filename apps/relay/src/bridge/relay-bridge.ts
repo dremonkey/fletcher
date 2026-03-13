@@ -35,6 +35,8 @@ export class RelayBridge {
   private started = false;
   private needsReinit = false;
   private reinitializing: Promise<void> | null = null;
+  /** Serializes all forwardToMobile calls so chunks always arrive before the result. */
+  private sendQueue: Promise<void> = Promise.resolve();
 
   constructor(private options: RelayBridgeOptions) {
     this.log = options.logger ??
@@ -237,10 +239,12 @@ export class RelayBridge {
 
     this.log.debug({ event: "forward_to_mobile", msg }, "→ mobile");
 
-    this.options.roomManager
-      .sendToRoom(this.options.roomName, msg)
-      .catch(() => {
-        // Room may have disconnected — swallow errors
-      });
+    this.sendQueue = this.sendQueue.then(() =>
+      this.options.roomManager
+        .sendToRoom(this.options.roomName, msg)
+        .catch(() => {
+          // Room may have disconnected — swallow errors
+        })
+    );
   }
 }

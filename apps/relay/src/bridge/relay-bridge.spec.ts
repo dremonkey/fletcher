@@ -285,6 +285,61 @@ describe("RelayBridge", () => {
     expect(mockRm.touchRoom).toHaveBeenCalledWith(ROOM_NAME);
   });
 
+  test("session/update chunk arrives before session/prompt result even when sendToRoom is slow", async () => {
+    // Regression test for BUG-006: forwardToMobile was fire-and-forget, so
+    // two concurrent publishData calls could deliver the result before the last
+    // chunk, causing the mobile to null _activeStream and silently drop the chunk.
+    //
+    // Fix: sendQueue serializes all forwardToMobile calls via a Promise chain.
+
+    const deliveryOrder: string[] = [];
+    let firstCallResolve!: () => void;
+    const firstCallSettled = new Promise<void>((r) => (firstCallResolve = r));
+
+    // First sendToRoom call (the chunk) is artificially slow.
+    // Without the fix, the result would overtake it.
+    let callCount = 0;
+    mockRm.sendToRoom = mock(async (_roomName: string, msg: object) => {
+      callCount++;
+      const m = msg as Record<string, unknown>;
+      if (callCount === 1) {
+        // Slow first call: 80ms delay
+        await new Promise<void>((r) => setTimeout(r, 80));
+        deliveryOrder.push("chunk");
+        firstCallResolve();
+      } else if ("result" in m) {
+        deliveryOrder.push("result");
+      } else {
+        deliveryOrder.push("other");
+      }
+    });
+
+    bridge = createBridge(mockRm);
+    await bridge.start();
+
+    mockRm.simulateData(
+      ROOM_NAME,
+      {
+        jsonrpc: "2.0",
+        id: 99,
+        method: "session/prompt",
+        params: { prompt: [{ type: "text", text: "race test" }] },
+      },
+      "mobile-user",
+    );
+
+    // Wait for both sends to complete
+    await firstCallSettled;
+    await tick(150);
+
+    // Chunk must always arrive before result
+    const chunkIdx = deliveryOrder.indexOf("chunk");
+    const resultIdx = deliveryOrder.indexOf("result");
+    expect(chunkIdx).toBeGreaterThanOrEqual(0);
+    expect(resultIdx).toBeGreaterThanOrEqual(0);
+    expect(chunkIdx).toBeLessThan(resultIdx);
+  });
+
   test("non-object data is ignored", async () => {
     bridge = createBridge(mockRm);
     await bridge.start();
