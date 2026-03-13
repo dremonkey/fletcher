@@ -101,5 +101,5 @@ This ensures every artifact gets a `messageId` on arrival, so `_groupArtifactsBy
 
 **Date:** 2026-03-13
 **Priority:** Medium
-**Status:** Not started
+**Status:** Complete ✅
 **Field test:** [BUG-012](../../docs/field-tests/20260313-buglog.md)

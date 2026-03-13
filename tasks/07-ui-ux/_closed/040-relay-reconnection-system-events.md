@@ -95,5 +95,5 @@ _listener?.on<ParticipantDisconnectedEvent>((event) {
 
 **Date:** 2026-03-13
 **Priority:** Low
-**Status:** Not started
+**Status:** Complete ✅
 **Field test:** [BUG-016](../../docs/field-tests/20260313-buglog.md)
