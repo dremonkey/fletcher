@@ -338,13 +338,20 @@ for await (const chunk of Bun.stdin.stream()) {
     });
 
     try {
+      // LLMStream routes errors via the LLM "error" event, not through the
+      // async iterator (which always closes cleanly). Capture via listener.
+      const errorPromise = new Promise<Error>((resolve) => {
+        slowLlm.once('error', (event: { error: Error }) => resolve(event.error));
+      });
+
       const stream = slowLlm.chat({
         chatCtx: makeChatCtx('Will timeout'),
         connOptions: { maxRetry: 0, retryIntervalMs: 0, timeoutMs: 500 },
       });
 
-      // The stream's run() should reject with a timeout error
-      await expect(collectChunks(stream)).rejects.toThrow('timed out after 200ms');
+      await collectChunks(stream);
+      const error = await errorPromise;
+      expect(error.message).toContain('timed out after 200ms');
     } finally {
       await slowLlm.aclose();
     }
@@ -358,12 +365,18 @@ for await (const chunk of Bun.stdin.stream()) {
     });
 
     try {
+      const errorPromise = new Promise<Error>((resolve) => {
+        crashingLlm.once('error', (event: { error: Error }) => resolve(event.error));
+      });
+
       const stream = crashingLlm.chat({
         chatCtx: makeChatCtx('Crash test'),
         connOptions: { maxRetry: 0, retryIntervalMs: 0, timeoutMs: 5_000 },
       });
 
-      await expect(collectChunks(stream)).rejects.toThrow();
+      await collectChunks(stream);
+      const error = await errorPromise;
+      expect(error).toBeInstanceOf(Error);
     } finally {
       await crashingLlm.aclose();
     }
@@ -401,12 +414,18 @@ for await (const chunk of Bun.stdin.stream()) {
     });
 
     try {
+      const errorPromise = new Promise<Error>((resolve) => {
+        errorLlm.once('error', (event: { error: Error }) => resolve(event.error));
+      });
+
       const stream = errorLlm.chat({
         chatCtx: makeChatCtx('Error test'),
         connOptions: { maxRetry: 0, retryIntervalMs: 0, timeoutMs: 5_000 },
       });
 
-      await expect(collectChunks(stream)).rejects.toThrow('JSON-RPC error');
+      await collectChunks(stream);
+      const error = await errorPromise;
+      expect(error.message).toContain('JSON-RPC error');
     } finally {
       await errorLlm.aclose();
     }

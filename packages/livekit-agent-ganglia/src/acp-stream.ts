@@ -71,6 +71,14 @@ export class AcpChatStream extends LLMStream {
     this._onPondering = onPondering;
     this._onContent = onContent;
     this._promptTimeoutMs = promptTimeoutMs;
+
+    // LLMStream.startSoon(() => this.mainTask().finally(...)) discards the
+    // returned promise. When _mainTaskImpl re-throws after emitError(), the
+    // rejection becomes unhandled. Suppress it here — the error is already
+    // propagated via the LLM "error" event. startSoon schedules a microtask,
+    // so this override takes effect before mainTask is invoked.
+    const _origMainTask = this.mainTask.bind(this);
+    this.mainTask = () => _origMainTask().catch(() => {});
   }
 
   protected async run(): Promise<void> {
