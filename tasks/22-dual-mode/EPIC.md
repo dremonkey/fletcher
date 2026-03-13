@@ -134,12 +134,12 @@ Engine selection via user setting (persisted in SharedPreferences).
 
 ---
 
-### 044: Client-Side STT Integration
+### 044: Client-Side STT Integration (REMOVED)
 Add `speech_to_text` package for native on-device speech recognition in chat mode. STT output fills the text input field (user can review/edit before sending). This replaces the server-side Deepgram STT that runs through LiveKit.
 
 Key: native STT uses `MODE_NORMAL` on Android — no mic conflict with WebRTC. No audio track is published in chat mode.
 
-**Status:** [ ]
+**Status:** [X] (Unnecessary - handled natively by OS keyboard/platform)
 
 ---
 
