@@ -239,7 +239,9 @@ Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layou
 - [ ] 035: Per-Participant Audio Stream Wiring 📋 — AnalyserNode per participant; connect to SpeakingRing + inline histogram
 - [ ] 036: TUI Theme Bundles (Solarized, Gruvbox, Nord) 📋 — implementation of classic terminal-inspired color palettes
 - [ ] 037: Deduplicate Agent System Events & Expandable Long Rows 📋 — remove duplicate Connected/Disconnected cards; fix "speak or text" copy; tap-to-expand long system event rows
-- [x] 038: Fix Artifact Clump Regression After Agent Reconnect ✅ — `_lastAgentSegmentId` reset on disconnect; artifacts now correctly distributed across messages ([BUG-004](../docs/field-tests/20260310-buglog.md))
+- [x] 038a: Fix Artifact Clump Regression After Agent Reconnect ✅ — `_lastAgentSegmentId` reset on disconnect; artifacts now correctly distributed across messages ([BUG-004](../docs/field-tests/20260310-buglog.md))
+- [ ] 038b: Verbose ACP Tool Feedback 📋 — enable verbose mode in ACP sessions; parse `tool_call`/`plan`/`reasoning` chunks; render inline collapsed tool blocks in chat
+- [ ] 058: Token Usage Display 📋 — parse `usage_update` ACP events; show token consumption in diagnostics bar; visual warnings at 75%/90% thresholds
 **Retained:**
 - [x] 015: Single Audio Ack + Visual Spinner ✅ — Single-shot ack tone + SweepGradient spin on AmberOrb during thinking state
 - [~] 014: Human-Centric Interruption Handling 🔄 — Phase 1 done; Phase 3 (soft TTS fade) needs SDK support
@@ -395,6 +397,8 @@ Split the single voice-agent pipeline into two distinct modes — **Voice Mode**
 - [~] 053: Dual-Mode Chat/Live Split 🔄 — mic button as mode switch (muted=chat, unmuted=voice); relay routing implemented; agent text_message handler not yet removed
 - [~] 054: Mobile ACP Client 🔄 — JSON-RPC codec + RelayChatService + LiveKitService wiring done; 30 unit tests; cancel UI + inline error cards remaining
 - [x] 055: Serialize relay `forwardToMobile` calls — sendQueue Promise chain; chunk always arrives before result ✅
+- [ ] 056: Fix ACP Subprocess Leak 📋 — `proc.kill()` sends SIGTERM but openclaw ignores it; escalate to SIGKILL, kill process group, verify exit ([BUG-009](../docs/field-tests/20260312-buglog.md))
+- [ ] 057: Relay-Side ACP Response Timeout 📋 — add configurable timeout to `AcpClient.request()`; surface error to mobile on timeout; mark subprocess for re-init ([BUG-010](../docs/field-tests/20260312-buglog.md))
 
 **Depends on:** Epic 4 (Ganglia session keys), Epic 7 (Sovereign Pairing), Epic 17 (Text Input), Epic 20 (Agent Dispatch)
 

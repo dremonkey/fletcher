@@ -13,8 +13,10 @@ Force the OpenClaw ACP session into `verbose` mode so that internal tool calls a
 - [ ] **Relay:** Update the `AcpClient` to request `verbose: true` (or the equivalent thinking-level) during `session/new` or via a `/debug` command immediately after creation.
 - [ ] **Relay:** Ensure `acp_update_received` logging in the Relay correctly identifies and logs these new chunk types (`plan`, `tool_call`, `reasoning`).
 - [ ] **Mobile:** Update `AcpUpdateParser` to recognize `tool_call` and `plan` updates.
-- [ ] **Mobile:** Implement a "System Trace" or "Tool Pulse" indicator in the Brutalist UI that renders these updates (or at least blinks an LED when they arrive).
-- [ ] **Filter-Friendly:** Ensure the text-only chat bubble *ignores* these verbose chunks so the primary transcript remains clean, while the "Status Bar" or "Diagnostics Panel" reflects the live tool-use.
+- [ ] **Mobile:** Render tool calls **inline** in the chat transcript — show tool name, status, and duration.
+- [ ] **Mobile:** Tool call blocks should be **collapsed by default** into a single compact row (e.g., `▸ memory_search (2.3s)`) so they don't take over the screen. Tap to expand for details (arguments, results).
+- [ ] **Mobile:** Multiple sequential tool calls should group into a single collapsible block (e.g., `▸ 3 tool calls (4.1s)`).
+- [ ] **Filter-Friendly:** Ensure the text-only chat bubble *ignores* these verbose chunks so the primary transcript remains clean, while tool call blocks appear as distinct inline elements between text messages.
 
 ## Technical Notes
 - OpenClaw's ACP `session/new` params or the `/think` / `/verbose` commands are the entry points.
