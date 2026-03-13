@@ -138,8 +138,8 @@ The relay service itself is fully built — see [Epic 24: WebRTC ACP Relay](../2
 
 Deferred — chat mode MVP works without these.
 
-- [ ] **043: Pluggable TTS Engine Abstraction** — `TtsEngine` interface with NativeTTS/Cartesia/Gemini implementations. Sentence-level streaming from relay text deltas. (Inline spec only.)
-- [ ] **046: Mode Switch Controller** — Formal state machine for voice↔chat transitions. Agent dispatch/release coordination, in-flight response handling, persist mode across restarts. Includes mode-aware health semantics (051): relay health check in `HealthService`, relay "connected" indicator, agent absence is normal in chat mode. Basic toggle exists (`removePublishedTrack` on mute) but no formal state machine. (Inline spec only.)
+- [ ] [**043: Pluggable TTS Engine Abstraction**](./043-pluggable-tts-engine.md) — `TtsEngine` interface with NativeTTS/Cartesia/Gemini implementations. Sentence buffer for relay text deltas.
+- [ ] [**046: Mode Switch Controller**](./046-mode-switch-controller.md) — Formal state machine for voice↔chat transitions. Agent dispatch/release coordination, in-flight response handling, mode-aware health semantics (absorbs 051). Basic toggle exists but no formal state machine.
 - [ ] [**047: Chat Mode Artifact Delivery**](./047-chat-mode-artifact-delivery.md) — Artifacts via JSON-RPC `session/update` from relay. Currently voice-mode only via `ganglia-events`; relay sends no artifact events.
 
 ---
