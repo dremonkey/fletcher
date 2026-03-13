@@ -403,6 +403,22 @@ Split the single voice-agent pipeline into two distinct modes — **Voice Mode**
 
 **Depends on:** Epic 4 (Ganglia session keys), Epic 7 (Sovereign Pairing), Epic 17 (Text Input), Epic 20 (Agent Dispatch)
 
+### 24. [WebRTC ACP Relay](./24-webrtc-acp-relay) ✅
+Lightweight LiveKit participant that bridges mobile data channel messages to ACP agent subprocesses over stdio. Enables text-mode conversations without the voice pipeline. Foundation for dual-mode architecture (Epic 22).
+
+**Tasks:**
+- [x] LiveKit Participant — `@livekit/rtc-node` room participant replacing raw WebSocket
+- [x] ACP stdio Client — subprocess JSON-RPC 2.0 over stdin/stdout
+- [x] Data Channel ↔ ACP Bridge — opaque message forwarding with sessionId injection
+- [x] Room Lifecycle — join-on-demand, idle timeout, graceful shutdown
+- [x] Participant Left Webhook — teardown on last human departure
+- [x] Reset Idle Timer on Incoming — `touchRoom()` on mobile messages
+- [x] Lazy ACP Re-init — recover from subprocess crash on next message
+- [x] Rejoin Rooms on Restart — auto-discover orphaned rooms via LiveKit API
+- [x] Health & Observability — `/health`, `/rooms`, pino structured logging
+
+**Depends on:** Epic 4 (Ganglia session keys)
+
 ### 23. [Relay Native Rewrite](./23-relay-native-rewrite) 📋
 Rewrite the Fletcher Relay from TypeScript/Bun to Go or Rust, producing a single static binary for easy distribution. Eliminates the Bun + node_modules runtime dependency.
 
