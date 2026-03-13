@@ -397,9 +397,8 @@ Split the single voice-agent pipeline into two distinct modes — **Voice Mode**
 
 **Backlog (deferred — chat mode MVP works without these):**
 - [ ] 043: Pluggable TTS Engine Abstraction — `TtsEngine` interface + native/Cartesia/Gemini impls
-- [ ] 046: Mode Switch Controller — formal voice ↔ chat state machine (basic toggle exists)
+- [ ] 046: Mode Switch Controller — formal voice ↔ chat state machine + mode-aware health (absorbs 051)
 - [ ] 047: Chat Mode Artifact Delivery — artifacts via JSON-RPC from relay (currently voice-mode only)
-- [~] 051: Chat Mode Health & Error Handling — error codes + system events done; relay health check in HealthService missing
 
 **Depends on:** Epic 4 (Ganglia session keys), Epic 17 (Text Input), Epic 20 (Agent Dispatch), Epic 24 (Relay)
 
