@@ -9,7 +9,8 @@
 The voice-agent currently spawns its own ACP subprocess (`GANGLIA_TYPE=acp`) to talk to OpenClaw. This works but has two drawbacks:
 
 1. **Docker image bloat** — the voice-agent container must bundle `acp-client`, Python, and the OpenClaw CLI just to run a subprocess.
-2. **Cloud deployment barrier** — in a cloud or multi-tenant setup, every voice-agent pod needs local access to an OpenClaw process. Routing through the relay (which already manages ACP subprocesses) eliminates this requirement.
+2. **OpenClaw volume mount** — the voice-agent Docker service mounts the host OpenClaw directory so the ACP subprocess can access it. This is a tight coupling that makes the voice-agent non-portable and impossible to run on a different machine from OpenClaw.
+3. **Cloud deployment barrier** — in a cloud or multi-tenant setup, every voice-agent pod needs local access to an OpenClaw process. Routing through the relay (which already manages ACP subprocesses) eliminates this requirement.
 
 ## Solution
 
@@ -120,9 +121,12 @@ Wire `GANGLIA_TYPE=relay` in the voice-agent, passing the LiveKit room to `Relay
 ### Phase 4: Cleanup & Deployment
 
 - [ ] Remove `acp-client` dependency from voice-agent Dockerfile (when relay backend is default)
-- [ ] Update `docker-compose.yml` — voice-agent no longer needs ACP env vars
+- [ ] Remove OpenClaw volume mount from voice-agent in `docker-compose.yml` — the voice-agent no longer needs direct filesystem access to OpenClaw
+- [ ] Remove ACP-related env vars from voice-agent service in `docker-compose.yml` (`ACP_AGENT_CMD`, `ACP_AGENT_ARGS`, `OPENCLAW_DIR`, etc.)
 - [ ] Update `.env.example` with `GANGLIA_TYPE=relay` option
+- [ ] Remove any OpenClaw/Python dependencies from voice-agent `package.json` or install scripts
 - [ ] Field test: verify latency overhead of relay hop is acceptable (<50ms added)
+- [ ] Verify voice-agent Docker image size reduction after removing OpenClaw dependencies
 
 ## Latency Considerations
 
