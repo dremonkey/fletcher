@@ -383,27 +383,25 @@ Multi-modal input: upload photos and make them available to OpenClaw for vision 
 Split the single voice-agent pipeline into two distinct modes — **Voice Mode** (LiveKit agent, server-side STT/TTS) and **Chat Mode** (Fletcher Relay as lightweight LiveKit participant, client-side STT/TTS). Chat mode routes text through the relay via LiveKit data channel (JSON-RPC 2.0), getting ICE resilience and session management for free. Voice mode is unchanged. Both share the same OpenClaw session. Relay infrastructure complete ([Epic 24](./24-webrtc-acp-relay)). Chat mode MVP working (053+054). Full vision (TTS, mode switch, artifact delivery) in backlog.
 
 **Implemented:**
+- [x] 042: Relay Integration for Chat Mode ✅ — superseded by 054
 - [x] 044: Client-Side STT ✅ — Removed (unnecessary — OS keyboard handles natively)
-- [~] 053: Dual-Mode Chat/Live Split 🔄 — mic button as mode switch (muted=chat, unmuted=voice); relay routing implemented; agent `text_message` handler not yet removed; session key continuity needs field verification
-- [~] 054: Mobile ACP Client 🔄 — JSON-RPC codec + RelayChatService + LiveKitService wiring done; 30 unit tests; cancel UI + inline error cards remaining
-- [x] 055: Serialize relay `forwardToMobile` calls ✅ — sendQueue Promise chain; chunk always arrives before result
-- [x] 056: Fix ACP Subprocess Leak ✅ — SIGKILL escalation after 3s SIGTERM grace period; process group kill ([BUG-009](../docs/field-tests/20260312-buglog.md))
-- [x] 059: Deferred Teardown on `participant_left` ✅ — 120s grace period survives WiFi→cellular network switches ([TEST-001](../docs/field-tests/20260312-buglog.md))
+- [x] 049: Voice Pipeline Clean Teardown ✅ — `removePublishedTrack()` on mute releases mic to `MODE_NORMAL`; needs field verification
+- [x] 050: Migrate Text Input from Agent to Relay ✅ — mode-aware routing: relay when muted, agent when unmuted
+- [~] 053: Dual-Mode Chat/Live Split 🔄 — relay routing works; agent `text_message` handler not yet removed; session key continuity needs field verification
+- [~] 054: Mobile ACP Client 🔄 — JSON-RPC codec + streaming + 30 unit tests; cancel UI + inline error cards remaining
+- [x] 055: Serialize relay `forwardToMobile` calls ✅ — sendQueue Promise chain
+- [x] 056: Fix ACP Subprocess Leak ✅ — SIGKILL escalation + process group kill ([BUG-009](../docs/field-tests/20260312-buglog.md))
+- [x] 059: Deferred Teardown on `participant_left` ✅ — 120s grace period survives network switches ([TEST-001](../docs/field-tests/20260312-buglog.md))
 
 **Open:**
 - [ ] 052: ACP Backend for Ganglia (`GANGLIA_TYPE=acp`) 📋 — voice-agent ACP transport replacing HTTP/SSE completions API
-- [ ] 057: Relay-Side ACP Response Timeout 📋 — configurable timeout for hung ACP responses; mobile error surface ([BUG-010](../docs/field-tests/20260312-buglog.md))
+- [ ] 057: Relay-Side ACP Response Timeout 📋 — configurable timeout for hung ACP responses ([BUG-010](../docs/field-tests/20260312-buglog.md))
 
-**Backlog (full dual-mode vision):**
-- [ ] 042: Relay Integration for Chat Mode — superseded by 054
+**Backlog (deferred — chat mode MVP works without these):**
 - [ ] 043: Pluggable TTS Engine Abstraction — `TtsEngine` interface + native/Cartesia/Gemini impls
-- [ ] 045: Chat Mode Streaming Pipeline — text → relay → sentence buffer → TtsEngine → audio
-- [ ] 046: Mode Switch Controller — voice ↔ chat state machine with clean transitions
-- [ ] 047: Chat Mode Artifact Delivery — artifacts via JSON-RPC from relay
-- [ ] 048: Unified Transcript Across Modes — seamless ChatTranscript for both modes
-- [ ] 049: Voice Pipeline Clean Teardown — unpublish audio track, release mic, keep room alive
-- [ ] 050: Migrate Text Input from Agent to Relay — text always routes through relay
-- [ ] 051: Chat Mode Health & Error Handling — relay-specific health semantics
+- [ ] 046: Mode Switch Controller — formal voice ↔ chat state machine (basic toggle exists)
+- [ ] 047: Chat Mode Artifact Delivery — artifacts via JSON-RPC from relay (currently voice-mode only)
+- [~] 051: Chat Mode Health & Error Handling — error codes + system events done; relay health check in HealthService missing
 
 **Depends on:** Epic 4 (Ganglia session keys), Epic 17 (Text Input), Epic 20 (Agent Dispatch), Epic 24 (Relay)
 

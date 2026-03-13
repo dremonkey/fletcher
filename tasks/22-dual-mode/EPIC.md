@@ -126,19 +126,22 @@ The relay service itself is fully built — see [Epic 24: WebRTC ACP Relay](../2
 - [~] [**052: ACP Backend for Ganglia**](./052-relay-llm-wrapper.md) — `GANGLIA_TYPE=acp` LLM backend. Not started. Needed for voice mode to use ACP instead of HTTP/SSE completions API.
 - [~] [**057: Relay-Side ACP Response Timeout**](./057-relay-acp-response-timeout.md) — Not started. Configurable timeout for hung ACP responses; mobile error surface; subprocess re-init.
 
+### Also Implemented ✅
+
+- [x] **042: Relay Integration for Chat Mode (Flutter)** — Superseded by 054. JSON-RPC codec, AcpClient, data channel wiring all done.
+- [x] **048: Unified Transcript Across Modes** — `MessageOrigin` enum (`voice`/`text`) on `TranscriptEntry`; messages merge chronologically. Session key sharing handles continuity — no separate work needed.
+- [x] **049: Voice Pipeline Clean Teardown** — `removePublishedTrack()` on mute releases mic to `MODE_NORMAL`; room stays alive for relay. Needs field verification.
+- [x] **050: Migrate Text Input from Agent to Relay** — `sendTextMessage()` routes via relay when muted, via agent when unmuted. Agent-side handler removal tracked in 053.
+- ~~**045: Chat Mode Streaming Pipeline**~~ — Removed. Composite of 043 (TTS) + 054 (relay streaming) + transcript rendering (already works). Not a real task.
+
 ### Backlog 📋
 
-These tasks complete the full dual-mode vision. Currently deferred — chat mode works for text without them.
+Deferred — chat mode MVP works without these.
 
-- [ ] **042: Relay Integration for Chat Mode (Flutter)** — Superseded by 054 (Mobile ACP Client). Remaining work tracked there.
-- [ ] **043: Pluggable TTS Engine Abstraction** — `TtsEngine` interface with NativeTTS/Cartesia/Gemini implementations. Sentence-level streaming from relay text deltas.
-- [ ] **045: Chat Mode Streaming Pipeline** — Full pipeline: text input → relay JSON-RPC → sentence buffer → TtsEngine → audio out.
-- [ ] **046: Mode Switch Controller** — State machine for voice↔chat transitions. Audio track teardown/publish, agent dispatch/release, in-flight response handling.
-- [ ] **047: Chat Mode Artifact Delivery** — Artifacts via JSON-RPC `session/update` from relay (currently voice-mode only via `ganglia-events`).
-- [ ] **048: Unified Transcript Across Modes** — Seamless merge of voice and chat messages. Session key continuity verification.
-- [ ] **049: Voice Pipeline Clean Teardown** — `removePublishedTrack`, release `MODE_NORMAL`, keep room alive for relay. Root fix for BUG-001/003/009.
-- [ ] **050: Migrate Text Input from Agent to Relay** — Text always routes through relay, never agent. Partly done via 053.
-- [ ] **051: Chat Mode Health & Error Handling** — Relay-specific health semantics. Agent absence is normal in chat mode.
+- [ ] **043: Pluggable TTS Engine Abstraction** — `TtsEngine` interface with NativeTTS/Cartesia/Gemini implementations. Sentence-level streaming from relay text deltas. (Inline spec only.)
+- [ ] **046: Mode Switch Controller** — Formal state machine for voice↔chat transitions. Agent dispatch/release coordination, in-flight response handling, persist mode across restarts. Basic toggle exists (`removePublishedTrack` on mute) but no formal state machine. (Inline spec only.)
+- [ ] [**047: Chat Mode Artifact Delivery**](./047-chat-mode-artifact-delivery.md) — Artifacts via JSON-RPC `session/update` from relay. Currently voice-mode only via `ganglia-events`; relay sends no artifact events.
+- [~] **051: Chat Mode Health & Error Handling** — Error codes (`-32003`, `-32010`, `-32011`) and system events implemented. Missing: relay-specific health check in `HealthService`, relay "connected" indicator in UI. (Inline spec only.)
 
 ---
 
