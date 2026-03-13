@@ -29,7 +29,13 @@ The agent plugin (Ganglia) is the bridge between LiveKit's voice pipeline and th
 
 ### Phase 5: Relay-Mediated LLM
 
-- [ ] **064: Relay-Mediated LLM Backend** — Add `GANGLIA_TYPE=relay` backend that routes LLM requests through the Fletcher Relay via LiveKit data channel (`voice-acp` topic), eliminating the need for an ACP subprocess in the voice-agent container. Enables cloud deployment without bundling OpenClaw in the agent image.
+- [ ] **064: Relay-Mediated LLM Backend** — Parent design doc. Routes LLM requests through the Fletcher Relay via LiveKit data channel (`voice-acp` topic).
+  - [ ] **064a: RoomManager Multi-Topic Support** — Generalize RoomManager for per-topic handler registration and publish.
+  - [ ] **064b: RelayBridge Voice-ACP Handler** — Extend RelayBridge to handle `voice-acp` messages with shared AcpClient and route-to-originator.
+  - [ ] **064c: Ganglia RelayLLM Backend** — `RelayLLM` + `RelayChatStream` with pluggable transport abstraction.
+  - [ ] **064d: Voice-Agent Wiring** — Wire `GANGLIA_TYPE=relay` in agent.ts, pass room to factory.
+  - [ ] **064e: Relay Cleanup & Deployment** — (Deferred) Remove ACP deps from Dockerfile/Compose after field validation.
+  - [ ] **064f: Remove ACP Backend** — (Deferred) Delete AcpLLM/AcpChatStream after relay is production default.
 
 ## Status Summary
 

@@ -26,7 +26,26 @@ PROPOSED (GANGLIA_TYPE=relay):
 
 Both the voice-agent and the relay are already in the same LiveKit room. The relay already bridges data channel messages to ACP for chat mode. This extends that to voice mode.
 
-## Phases
+## Implementation Sub-Tasks
+
+This design doc is broken into implementable sub-tasks:
+
+- **[064a: RoomManager Multi-Topic Support](064a-relay-room-manager.md)** — Generalize RoomManager for per-topic handlers
+- **[064b: RelayBridge Voice-ACP Handler](064b-relay-bridge-voice-acp.md)** — Relay-side voice-acp message handling
+- **[064c: Ganglia RelayLLM Backend](064c-ganglia-relay-backend.md)** — RelayLLM + RelayChatStream + factory
+- **[064d: Voice-Agent Wiring](064d-voice-agent-wiring.md)** — Wire GANGLIA_TYPE=relay in agent.ts
+- **[064e: Relay Cleanup & Deployment](064e-relay-cleanup.md)** — (Deferred) Docker/Compose cleanup
+- **[064f: Remove ACP Backend](064f-remove-acp-backend.md)** — (Deferred) Delete AcpLLM/AcpChatStream
+
+### Key Architecture Decisions
+
+1. **Shared AcpClient** — voice-acp and chat-mode share one AcpClient per room. ACP serializes prompts.
+2. **Route to originator** — ACP updates go back to the topic that initiated the request. No mid-stream re-routing.
+3. **Pluggable transport** — RelayChatStream uses a StreamTransport interface, decoupling orchestration from delivery.
+4. **Fail fast** — RelayLLM throws if no relay participant in room. No auto-fallback.
+5. **Large payload filter** — Relay drops data channel messages >15KB with warning log. No chunking protocol.
+
+## Phases (Original Design)
 
 ### Phase 1: Relay-Side `voice-acp` Data Channel Handler
 
