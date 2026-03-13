@@ -77,86 +77,11 @@ describe('isGangliaAvailable', () => {
   });
 });
 
-describe('createGangliaFromEnv historyMode defaults', () => {
-  it('openclaw defaults to historyMode "latest"', async () => {
-    await import('./llm.js');
-    // Ensure GANGLIA_TYPE is openclaw
-    const origType = process.env.GANGLIA_TYPE;
-    const origHistoryMode = process.env.GANGLIA_HISTORY_MODE;
-    process.env.GANGLIA_TYPE = 'openclaw';
-    delete process.env.GANGLIA_HISTORY_MODE;
-
-    const { createGangliaFromEnv } = await import('./factory.js');
-    const llm = await createGangliaFromEnv();
-
-    // Access the private _historyMode field
-    expect((llm as any)._historyMode).toBe('latest');
-
-    // Restore env
-    if (origType !== undefined) process.env.GANGLIA_TYPE = origType;
-    else delete process.env.GANGLIA_TYPE;
-    if (origHistoryMode !== undefined) process.env.GANGLIA_HISTORY_MODE = origHistoryMode;
-  });
-
-  it('nanoclaw defaults to historyMode "full"', async () => {
-    await import('./nanoclaw.js');
-    const origType = process.env.GANGLIA_TYPE;
-    const origHistoryMode = process.env.GANGLIA_HISTORY_MODE;
-    process.env.GANGLIA_TYPE = 'nanoclaw';
-    delete process.env.GANGLIA_HISTORY_MODE;
-
-    const { createGangliaFromEnv } = await import('./factory.js');
-    const llm = await createGangliaFromEnv();
-
-    expect((llm as any)._historyMode).toBe('full');
-
-    // Restore env
-    if (origType !== undefined) process.env.GANGLIA_TYPE = origType;
-    else delete process.env.GANGLIA_TYPE;
-    if (origHistoryMode !== undefined) process.env.GANGLIA_HISTORY_MODE = origHistoryMode;
-  });
-
-  it('opts.historyMode overrides default', async () => {
-    await import('./llm.js');
-    const origType = process.env.GANGLIA_TYPE;
-    const origHistoryMode = process.env.GANGLIA_HISTORY_MODE;
-    process.env.GANGLIA_TYPE = 'openclaw';
-    delete process.env.GANGLIA_HISTORY_MODE;
-
-    const { createGangliaFromEnv } = await import('./factory.js');
-    const llm = await createGangliaFromEnv({ historyMode: 'full' });
-
-    expect((llm as any)._historyMode).toBe('full');
-
-    if (origType !== undefined) process.env.GANGLIA_TYPE = origType;
-    else delete process.env.GANGLIA_TYPE;
-    if (origHistoryMode !== undefined) process.env.GANGLIA_HISTORY_MODE = origHistoryMode;
-  });
-
-  it('GANGLIA_HISTORY_MODE env var overrides backend default', async () => {
-    await import('./llm.js');
-    const origType = process.env.GANGLIA_TYPE;
-    const origHistoryMode = process.env.GANGLIA_HISTORY_MODE;
-    process.env.GANGLIA_TYPE = 'openclaw';
-    process.env.GANGLIA_HISTORY_MODE = 'full';
-
-    const { createGangliaFromEnv } = await import('./factory.js');
-    const llm = await createGangliaFromEnv();
-
-    expect((llm as any)._historyMode).toBe('full');
-
-    if (origType !== undefined) process.env.GANGLIA_TYPE = origType;
-    else delete process.env.GANGLIA_TYPE;
-    if (origHistoryMode !== undefined) process.env.GANGLIA_HISTORY_MODE = origHistoryMode;
-    else delete process.env.GANGLIA_HISTORY_MODE;
-  });
-});
-
 describe('Backend Registration', () => {
-  it('openclaw backend is registered after import', async () => {
-    // Import the llm module to trigger registration
-    await import('./llm.js');
-    expect(isGangliaAvailable('openclaw')).toBe(true);
+  it('acp backend is registered after import', async () => {
+    // Import the acp-llm module to trigger registration
+    await import('./acp-llm.js');
+    expect(isGangliaAvailable('acp')).toBe(true);
   });
 
   it('nanoclaw backend is registered after import', async () => {
@@ -169,24 +94,29 @@ describe('Backend Registration', () => {
     // Import from index to ensure both are loaded
     const ganglia = await import('./index.js');
 
-    expect(ganglia.isGangliaAvailable('openclaw')).toBe(true);
+    expect(ganglia.isGangliaAvailable('acp')).toBe(true);
     expect(ganglia.isGangliaAvailable('nanoclaw')).toBe(true);
-    expect(ganglia.getRegisteredTypes()).toContain('openclaw');
+    expect(ganglia.getRegisteredTypes()).toContain('acp');
     expect(ganglia.getRegisteredTypes()).toContain('nanoclaw');
   });
 
-  it('createGanglia works for openclaw', async () => {
-    await import('./llm.js');
+  it('openclaw type is no longer available', async () => {
+    await import('./index.js');
+    expect(isGangliaAvailable('openclaw')).toBe(false);
+  });
+
+  it('createGanglia works for acp', async () => {
+    await import('./acp-llm.js');
     const llm = await createGanglia({
-      type: 'openclaw',
-      openclaw: {
-        baseUrl: 'http://localhost:8080',
-        apiKey: 'test-token',
+      type: 'acp',
+      acp: {
+        command: 'bun',
+        args: ['--version'],
       },
     });
 
-    expect(llm.gangliaType()).toBe('openclaw');
-    expect(llm.label()).toBe('openclaw');
+    expect(llm.gangliaType()).toBe('acp');
+    expect(llm.label()).toBe('acp');
   });
 
   it('createGanglia works for nanoclaw', async () => {
@@ -200,5 +130,70 @@ describe('Backend Registration', () => {
 
     expect(llm.gangliaType()).toBe('nanoclaw');
     expect(llm.label()).toBe('nanoclaw');
+  });
+
+  it('createGanglia throws Unknown ganglia type for openclaw', async () => {
+    await expect(
+      createGanglia({ type: 'openclaw' as any, openclaw: {} } as any),
+    ).rejects.toThrow('Unknown ganglia type: openclaw');
+  });
+});
+
+describe('createGangliaFromEnv', () => {
+  it('defaults to acp when GANGLIA_TYPE not set', async () => {
+    await import('./acp-llm.js');
+    const origType = process.env.GANGLIA_TYPE;
+    const origBrainType = process.env.BRAIN_TYPE;
+    delete process.env.GANGLIA_TYPE;
+    delete process.env.BRAIN_TYPE;
+
+    const { createGangliaFromEnv } = await import('./factory.js');
+    const llm = await createGangliaFromEnv();
+
+    expect(llm.gangliaType()).toBe('acp');
+
+    // Restore env
+    if (origType !== undefined) process.env.GANGLIA_TYPE = origType;
+    if (origBrainType !== undefined) process.env.BRAIN_TYPE = origBrainType;
+  });
+
+  it('creates acp when GANGLIA_TYPE=acp', async () => {
+    await import('./acp-llm.js');
+    const origType = process.env.GANGLIA_TYPE;
+    process.env.GANGLIA_TYPE = 'acp';
+
+    const { createGangliaFromEnv } = await import('./factory.js');
+    const llm = await createGangliaFromEnv();
+
+    expect(llm.gangliaType()).toBe('acp');
+
+    if (origType !== undefined) process.env.GANGLIA_TYPE = origType;
+    else delete process.env.GANGLIA_TYPE;
+  });
+
+  it('creates nanoclaw when GANGLIA_TYPE=nanoclaw', async () => {
+    await import('./nanoclaw.js');
+    const origType = process.env.GANGLIA_TYPE;
+    process.env.GANGLIA_TYPE = 'nanoclaw';
+
+    const { createGangliaFromEnv } = await import('./factory.js');
+    const llm = await createGangliaFromEnv();
+
+    expect(llm.gangliaType()).toBe('nanoclaw');
+
+    if (origType !== undefined) process.env.GANGLIA_TYPE = origType;
+    else delete process.env.GANGLIA_TYPE;
+  });
+
+  it('throws for GANGLIA_TYPE=openclaw', async () => {
+    await import('./index.js');
+    const origType = process.env.GANGLIA_TYPE;
+    process.env.GANGLIA_TYPE = 'openclaw';
+
+    const { createGangliaFromEnv } = await import('./factory.js');
+    await expect(createGangliaFromEnv()).rejects.toThrow('Unknown GANGLIA_TYPE: openclaw');
+
+    if (origType !== undefined) process.env.GANGLIA_TYPE = origType;
+    else delete process.env.GANGLIA_TYPE;
   });
 });

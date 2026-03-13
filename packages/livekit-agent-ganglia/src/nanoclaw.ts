@@ -6,7 +6,7 @@ import { NanoclawClient } from './nanoclaw-client.js';
 import type {
   OpenClawMessage,
   OpenClawToolCallDelta,
-} from './types/index.js';
+} from './types/nanoclaw.js';
 import { dbg } from './logger.js';
 
 // Re-export types from @livekit/agents

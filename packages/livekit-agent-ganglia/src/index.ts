@@ -1,16 +1,16 @@
 /**
  * Livekit Agent Ganglia
  *
- * A unified LiveKit Agents LLM plugin supporting OpenClaw and Nanoclaw backends.
+ * A unified LiveKit Agents LLM plugin supporting ACP and Nanoclaw backends.
  *
  * @example
  * ```typescript
- * import { createGanglia, createGangliaFromEnv, OpenClawLLM, NanoclawLLM } from '@knittt/livekit-agent-ganglia';
+ * import { createGanglia, createGangliaFromEnv, AcpLLM, NanoclawLLM } from '@knittt/livekit-agent-ganglia';
  *
- * // From explicit config (OpenClaw)
+ * // From explicit config (ACP — default)
  * const llm = await createGanglia({
- *   type: 'openclaw',
- *   openclaw: { baseUrl: 'http://localhost:8080', apiKey: '...' },
+ *   type: 'acp',
+ *   acp: { command: 'openclaw', args: ['acp'] },
  * });
  *
  * // From explicit config (Nanoclaw)
@@ -19,11 +19,11 @@
  *   nanoclaw: { url: 'http://localhost:18789' },
  * });
  *
- * // From environment variables (GANGLIA_TYPE=openclaw|nanoclaw)
+ * // From environment variables (GANGLIA_TYPE=acp|nanoclaw)
  * const llm = await createGangliaFromEnv();
  *
  * // Direct instantiation
- * const openclawLlm = new OpenClawLLM({ baseUrl: 'http://localhost:8080' });
+ * const acpLlm = new AcpLLM({ command: 'openclaw', args: ['acp'] });
  * const nanoclawLlm = new NanoclawLLM({ url: 'http://localhost:18789' });
  * ```
  */
@@ -36,7 +36,7 @@ export type {
   GangliaConfig,
   GangliaSessionInfo,
   GangliaType,
-  OpenClawConfig as GangliaOpenClawConfig,
+  AcpConfig as GangliaAcpConfig,
   NanoclawConfig as GangliaNanoclawConfig,
   ConfigFor,
 } from './ganglia-types.js';
@@ -105,25 +105,10 @@ export {
   type SessionRoutingConfig,
 } from './session-routing.js';
 
-// OpenClaw Implementation
-import { OpenClawLLM } from './llm.js';
-export { OpenClawLLM };
-export { extractSessionFromContext } from './llm.js';
-export { OpenClawClient, generateSessionId, buildSessionHeaders, buildMetadataHeaders, applySessionKey } from './client.js';
-export { convertMessagesToInput } from './llm.js';
-export * from './types/index.js';
-export type {
-  OpenResponsesEventType,
-  OpenResponsesEvent,
-  OpenClawRespondOptions,
-  InputItem,
-  OutputTextDeltaData,
-  OutputTextDoneData,
-  ResponseCreatedData,
-  ResponseCompletedData,
-  ResponseFailedData,
-} from './types/openresponses.js';
-export { OpenResponsesError, RateLimitError } from './types/openresponses.js';
+// ACP Implementation
+import { AcpLLM } from './acp-llm.js';
+export { AcpLLM };
+export type { AcpConfig } from './ganglia-types.js';
 
 // Nanoclaw Implementation
 import { NanoclawLLM } from './nanoclaw.js';
@@ -133,10 +118,10 @@ export { NanoclawClient, generateChannelJid, sessionKeyToChannel } from './nanoc
 export type { NanoclawChatOptions } from './nanoclaw-client.js';
 
 /**
- * OpenClaw LLM namespace
+ * ACP LLM namespace (default backend)
  */
-export const openclaw = {
-  LLM: OpenClawLLM,
+export const acp = {
+  LLM: AcpLLM,
 };
 
 /**
@@ -146,4 +131,4 @@ export const nanoclaw = {
   LLM: NanoclawLLM,
 };
 
-export default openclaw;
+export default acp;

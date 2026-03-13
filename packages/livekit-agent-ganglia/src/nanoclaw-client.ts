@@ -1,5 +1,5 @@
 import type { GangliaSessionInfo, NanoclawConfig } from './ganglia-types.js';
-import type { OpenClawMessage, OpenClawChatResponse } from './types/index.js';
+import type { OpenClawMessage, OpenClawChatResponse } from './types/nanoclaw.js';
 import type { SessionKey } from './session-routing.js';
 import { type Logger, noopLogger, dbg } from './logger.js';
 

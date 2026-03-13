@@ -24,26 +24,26 @@ export interface GangliaSessionInfo {
 }
 
 /**
- * OpenClaw backend configuration.
+ * ACP backend configuration.
+ *
+ * Connects to an OpenClaw ACP agent subprocess via JSON-RPC 2.0 over stdio.
+ * This is the default backend (GANGLIA_TYPE=acp).
  */
-export interface OpenClawConfig {
-  /** Gateway base URL (default: http://localhost:8080) */
-  baseUrl: string;
-  /** API key for authentication */
-  apiKey: string;
-  /** Optional logger for production-level logging (defaults to silent) */
+export interface AcpConfig {
+  /** ACP subprocess command (e.g., "openclaw"). */
+  command: string;
+  /** ACP subprocess arguments (e.g., ["acp"]). */
+  args?: string[];
+  /** Additional environment variables for the subprocess. */
+  env?: Record<string, string>;
+  /** Prompt timeout in ms (default: 120000). Override via ACP_PROMPT_TIMEOUT_MS env var. */
+  promptTimeoutMs?: number;
+  /** Optional logger for production-level logging (defaults to silent). */
   logger?: import('./logger.js').Logger;
-  /** Callback for pondering status phrases while waiting for LLM first token. */
+  /** Callback emitted while waiting for first content token. Called with null when content starts. */
   onPondering?: (phrase: string | null, streamId: string) => void;
-  /** Callback for each content chunk from the LLM stream. */
+  /** Callback emitted for each content-bearing chunk from the ACP stream. */
   onContent?: (delta: string, fullText: string, streamId: string) => void;
-  /** Controls how much conversation history to send. Default: 'latest' */
-  historyMode?: 'full' | 'latest';
-  /**
-   * When true, use the OpenResponses `/v1/responses` endpoint instead of
-   * Chat Completions `/v1/chat/completions`. Default: false.
-   */
-  useOpenResponses?: boolean;
 }
 
 /**
@@ -65,7 +65,7 @@ export interface NanoclawConfig {
  * Use `type` to determine which backend to instantiate.
  */
 export type GangliaConfig =
-  | { type: 'openclaw'; openclaw: OpenClawConfig; logger?: import('./logger.js').Logger }
+  | { type: 'acp'; acp: AcpConfig; logger?: import('./logger.js').Logger }
   | { type: 'nanoclaw'; nanoclaw: NanoclawConfig; logger?: import('./logger.js').Logger };
 
 /**
