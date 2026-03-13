@@ -2,7 +2,7 @@
 /**
  * Voice agent using @livekit/agents with ganglia LLM backend.
  *
- * A pure STT/TTS + Ganglia bridge — the LLM backend (OpenClaw/Nanoclaw)
+ * A pure STT/TTS + Ganglia bridge — the LLM backend (ACP/Nanoclaw)
  * handles all conversation logic, tools, and prompting.
  *
  * Usage:
@@ -13,8 +13,7 @@
  *   LIVEKIT_URL - LiveKit server URL
  *   LIVEKIT_API_KEY - LiveKit API key
  *   LIVEKIT_API_SECRET - LiveKit API secret
- *   GANGLIA_TYPE - Backend type: 'openclaw' or 'nanoclaw'
- *   OPENCLAW_API_KEY - OpenClaw API key (if using openclaw)
+ *   GANGLIA_TYPE - Backend type: 'acp' (default) or 'nanoclaw'
  *   FLETCHER_OWNER_IDENTITY - Participant identity of the owner (for session routing)
  *   DEEPGRAM_API_KEY - Deepgram API key for STT
  *   TTS_PROVIDER - TTS backend: 'elevenlabs' | 'google' | 'piper' (default)
@@ -24,6 +23,15 @@
  *   FLETCHER_ACK_SOUND - Acknowledgment sound on EOU: path to audio file, 'builtin' (default), or 'disabled'
  *   PIPER_URL - Piper TTS sidecar URL for local fallback (e.g. 'http://localhost:5000')
  *   PIPER_VOICE - Piper voice name (default: sidecar default)
+ *
+ * ACP backend env vars (when GANGLIA_TYPE=acp, which is the default):
+ *   ACP_COMMAND - Command to spawn as ACP subprocess (default: 'openclaw')
+ *   ACP_ARGS - Comma-separated arguments to pass to ACP subprocess (default: 'acp')
+ *   ACP_PROMPT_TIMEOUT_MS - Timeout in ms waiting for ACP response (default: 120000)
+ *
+ * Nanoclaw backend env vars (when GANGLIA_TYPE=nanoclaw):
+ *   NANOCLAW_URL - Nanoclaw server URL (default: 'http://localhost:18789')
+ *   NANOCLAW_CHANNEL_PREFIX - Channel prefix (default: 'lk')
  */
 
 import { defineAgent, cli, ServerOptions, tts, type JobContext, type JobProcess } from '@livekit/agents';
@@ -86,12 +94,9 @@ if (!process.argv.includes('download-files')) {
     process.exit(1);
   }
 
-  // Ganglia-specific validation
-  const gangliaType = process.env.GANGLIA_TYPE ?? 'openclaw';
-  if (gangliaType === 'openclaw' && !process.env.OPENCLAW_API_KEY) {
-    logger.fatal('GANGLIA_TYPE=openclaw requires OPENCLAW_API_KEY');
-    process.exit(1);
-  }
+  // ACP is the default backend — no API key required from the voice agent.
+  // The ACP subprocess (e.g. openclaw) handles its own authentication.
+  const gangliaType = process.env.GANGLIA_TYPE ?? 'acp';
 
   logger.info({
     livekitUrl: process.env.LIVEKIT_URL,

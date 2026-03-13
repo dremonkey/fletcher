@@ -54,8 +54,11 @@ services:
       - ./heap-snapshots:/tmp/heap-snapshots
     environment:
       LIVEKIT_URL: ws://localhost:7880
-      OPENCLAW_GATEWAY_URL: http://localhost:18789
       PIPER_URL: http://localhost:5000
+      # ACP backend (default): spawns openclaw as a subprocess via JSON-RPC 2.0 over stdio.
+      # ACP_COMMAND: openclaw   # command to spawn (default)
+      # ACP_ARGS: acp           # comma-separated args (default)
+      # ACP_PROMPT_TIMEOUT_MS: 120000  # prompt timeout in ms (default)
       DEBUG: ganglia:*
       LOG_LEVEL: debug
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
