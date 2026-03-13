@@ -1,10 +1,12 @@
 import * as p from "@clack/prompts";
 import { spawn, which } from "bun";
 import { join } from "path";
+import { mkdirSync, openSync, closeSync } from "fs";
 import { ROOT, env, cancelled } from "./env";
 
 const RELAY_DIR = join(ROOT, "apps", "relay");
 const MOCK_ACPX = join(RELAY_DIR, "test", "mock-acpx.ts");
+const LOGS_DIR = join(ROOT, "logs");
 
 function resolveAcpBackend(): { command: string; args: string; label: string } {
   const explicit = env("ACP_COMMAND");
@@ -38,10 +40,15 @@ export async function testRelay(): Promise<void> {
     .catch(() => false);
 
   let relayProc: ReturnType<typeof spawn> | null = null;
+  let logFd: number | null = null;
 
   if (!alreadyRunning) {
     const s = p.spinner();
     s.start("Starting relay");
+
+    mkdirSync(LOGS_DIR, { recursive: true });
+    const logFile = join(LOGS_DIR, `relay-test-${new Date().toISOString().slice(0, 10)}.log`);
+    logFd = openSync(logFile, "a");
 
     relayProc = spawn(["bun", "run", join(RELAY_DIR, "src/index.ts")], {
       env: {
@@ -49,10 +56,13 @@ export async function testRelay(): Promise<void> {
         ACP_COMMAND: backend.command,
         ACP_ARGS: backend.args,
         RELAY_HTTP_PORT: port,
+        LOG_LEVEL: "debug",
       },
-      stdout: "ignore",
-      stderr: "ignore",
+      stdout: logFd,
+      stderr: logFd,
     });
+
+    p.log.info(`Relay logs → ${logFile}`);
 
     // Wait for ready
     let ready = false;
@@ -125,6 +135,9 @@ export async function testRelay(): Promise<void> {
   } finally {
     if (relayProc) {
       relayProc.kill();
+    }
+    if (logFd !== null) {
+      closeSync(logFd);
     }
   }
 }

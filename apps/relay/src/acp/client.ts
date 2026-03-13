@@ -78,8 +78,13 @@ export class AcpClient {
     // Start reading stdout lines
     this.readLoopPromise = this.readLoop();
 
-    // Handle subprocess exit
-    this.proc.exited.then((code) => {
+    // Handle subprocess exit — wait for readLoop to drain stdout before
+    // rejecting pending requests, so responses written just before exit
+    // are not silently dropped.
+    this.proc.exited.then(async (code) => {
+      this.log.info({ event: "acp_exited", exitCode: code }, "ACP subprocess exited, draining stdout");
+      await this.readLoopPromise;
+      this.log.info({ event: "acp_drained", pendingCount: this.pendingRequests.size }, "stdout drained");
       this.rejectAllPending(new Error("ACP subprocess exited"));
       this.proc = null;
       for (const handler of this.exitHandlers) {
@@ -270,12 +275,18 @@ export class AcpClient {
         }
       }
 
+      // Flush any remaining bytes from the TextDecoder
+      const trailing = decoder.decode();
+      if (trailing) {
+        buffer += trailing;
+      }
+
       // Process any remaining data in the buffer
       if (buffer.trim()) {
         this.handleLine(buffer);
       }
-    } catch {
-      // Stream closed or errored — subprocess is dying
+    } catch (err) {
+      this.log.warn({ event: "readloop_error", error: (err as Error).message }, "stdout read error");
     }
   }
 
