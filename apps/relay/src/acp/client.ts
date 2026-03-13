@@ -124,13 +124,15 @@ export class AcpClient {
   /**
    * Gracefully shut down:
    * 1. Send `exit` notification
-   * 2. Kill the subprocess
-   * 3. Clean up pending requests
+   * 2. SIGTERM the subprocess
+   * 3. Wait up to 3s for exit, then escalate to SIGKILL on process group
+   * 4. Clean up pending requests
    */
   async shutdown(): Promise<void> {
     if (!this.proc) return;
 
-    this.log.info({ event: "acp_shutdown" }, "shutting down ACP subprocess");
+    const pid = this.proc.pid;
+    this.log.info({ event: "acp_shutdown", pid }, "shutting down ACP subprocess");
 
     try {
       this.sendNotification("exit");
@@ -138,14 +140,41 @@ export class AcpClient {
       // Process may already be dead
     }
 
-    // Give the process a moment to exit gracefully, then kill
     const proc = this.proc;
     this.proc = null;
 
+    // Phase 1: SIGTERM
     try {
       proc.kill();
     } catch {
       // Already dead
+    }
+
+    // Phase 2: Wait up to 3s for graceful exit
+    const exited = await Promise.race([
+      proc.exited.then(() => true),
+      new Promise<false>((r) => setTimeout(() => r(false), 3000)),
+    ]);
+
+    if (!exited) {
+      // Phase 3: Escalate to SIGKILL on the process group to catch children
+      this.log.warn({ event: "acp_sigkill", pid }, "SIGTERM ignored — escalating to SIGKILL");
+      try {
+        process.kill(-pid, "SIGKILL");
+      } catch {
+        // Process group kill failed — try direct SIGKILL
+        try {
+          proc.kill(9);
+        } catch {
+          // Already dead
+        }
+      }
+
+      // Wait briefly for SIGKILL to take effect
+      await Promise.race([
+        proc.exited,
+        new Promise<void>((r) => setTimeout(r, 1000)),
+      ]);
     }
 
     this.rejectAllPending(new Error("ACP client shut down"));

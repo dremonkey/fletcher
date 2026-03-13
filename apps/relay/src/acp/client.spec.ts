@@ -134,4 +134,73 @@ describe("AcpClient", () => {
     // Shutdown should not throw
     await client.shutdown();
   });
+
+  test("shutdown() escalates to SIGKILL when process ignores SIGTERM", async () => {
+    // Spawn a process that traps SIGTERM and stays alive
+    client = new AcpClient({
+      command: "bun",
+      args: [
+        "-e",
+        `
+        // Handle SIGTERM — ignore it
+        process.on("SIGTERM", () => {});
+        // Respond to initialize so the client can proceed
+        const decoder = new TextDecoder();
+        for await (const chunk of Bun.stdin.stream()) {
+          for (const line of decoder.decode(chunk).split("\\n").filter(Boolean)) {
+            const msg = JSON.parse(line);
+            if (msg.method === "initialize") {
+              console.log(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { capabilities: {} } }));
+            }
+          }
+        }
+        `,
+      ],
+    });
+
+    await client.initialize();
+
+    // shutdown should complete (escalate to SIGKILL) within ~4s
+    const start = Date.now();
+    await client.shutdown();
+    const elapsed = Date.now() - start;
+
+    // Should have waited ~3s for SIGTERM grace period, then SIGKILL'd
+    expect(elapsed).toBeGreaterThanOrEqual(2500);
+    expect(elapsed).toBeLessThan(6000);
+
+    // Process should be dead
+    expect(client.isAlive).toBe(false);
+  });
+
+  test("shutdown() kills child processes via process group", async () => {
+    // Spawn a process that forks a child, both ignore SIGTERM
+    client = new AcpClient({
+      command: "bun",
+      args: [
+        "-e",
+        `
+        process.on("SIGTERM", () => {});
+        // Spawn a child that also ignores SIGTERM
+        const child = Bun.spawn(["sleep", "300"], { stdout: "ignore", stderr: "ignore" });
+        // Respond to initialize
+        const decoder = new TextDecoder();
+        for await (const chunk of Bun.stdin.stream()) {
+          for (const line of decoder.decode(chunk).split("\\n").filter(Boolean)) {
+            const msg = JSON.parse(line);
+            if (msg.method === "initialize") {
+              console.log(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { capabilities: {} } }));
+            }
+          }
+        }
+        `,
+      ],
+    });
+
+    await client.initialize();
+    await client.shutdown();
+
+    // Process should be dead after SIGKILL escalation
+    expect(client.isAlive).toBe(false);
+  });
 });

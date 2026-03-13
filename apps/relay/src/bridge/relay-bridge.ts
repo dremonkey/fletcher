@@ -156,6 +156,10 @@ export class RelayBridge {
     const { roomName } = this.options;
     this.log.info({ event: "acp_reinit" }, "Re-initializing ACP after subprocess death");
 
+    // Defensively kill the old process before spawning a new one
+    // (shutdown is a no-op if proc is already null)
+    await this.acpClient.shutdown();
+
     await this.acpClient.initialize();
 
     const result = await this.acpClient.sessionNew({
