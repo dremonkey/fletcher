@@ -397,7 +397,7 @@ Split the single voice-agent pipeline into two distinct modes — **Voice Mode**
 - [~] 053: Dual-Mode Chat/Live Split 🔄 — mic button as mode switch (muted=chat, unmuted=voice); relay routing implemented; agent text_message handler not yet removed
 - [~] 054: Mobile ACP Client 🔄 — JSON-RPC codec + RelayChatService + LiveKitService wiring done; 30 unit tests; cancel UI + inline error cards remaining
 - [x] 055: Serialize relay `forwardToMobile` calls — sendQueue Promise chain; chunk always arrives before result ✅
-- [ ] 056: Fix ACP Subprocess Leak 📋 — `proc.kill()` sends SIGTERM but openclaw ignores it; escalate to SIGKILL, kill process group, verify exit ([BUG-009](../docs/field-tests/20260312-buglog.md))
+- [x] 056: Fix ACP Subprocess Leak ✅ — SIGKILL escalation after 3s SIGTERM grace period; process group kill for children; defensive shutdown in doReinit(); 2 new tests ([BUG-009](../docs/field-tests/20260312-buglog.md))
 - [ ] 057: Relay-Side ACP Response Timeout 📋 — add configurable timeout to `AcpClient.request()`; surface error to mobile on timeout; mark subprocess for re-init ([BUG-010](../docs/field-tests/20260312-buglog.md))
 
 **Depends on:** Epic 4 (Ganglia session keys), Epic 7 (Sovereign Pairing), Epic 17 (Text Input), Epic 20 (Agent Dispatch)
