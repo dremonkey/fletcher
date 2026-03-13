@@ -7,6 +7,9 @@ import 'dart:math';
 ///
 /// Word lists contain 100+ entries each, giving 10,000+ unique combinations
 /// — sufficient for single-user usage without collision detection.
+///
+/// Sprinkled with obscure references to classic NES-era Nintendo games
+/// (Zelda, Mario, Metroid, Kid Icarus, etc.) for extra flavor.
 abstract final class RoomNameGenerator {
   static final _random = Random();
 
@@ -26,6 +29,12 @@ abstract final class RoomNameGenerator {
     'rust', 'sage', 'salt', 'sandy', 'sharp', 'silent', 'silver',
     'slate', 'sleek', 'solar', 'stark', 'steel', 'stone', 'storm',
     'swift', 'tawny', 'thorn', 'timber', 'vast', 'velvet', 'wild',
+    // NES-era Nintendo flavor
+    'hyrule', 'warp', 'lakitu', 'varia', 'tanooki', 'moblin',
+    'gerudo', 'koopa', 'ridley', 'brinstar', 'subcon', 'zebes',
+    'palutena', 'starman', 'hammer', 'peahat', 'buzzy', 'blooper',
+    'lanmola', 'pols', 'podoboo', 'lynel', 'armos', 'gibdo',
+    'chozo', 'kraid', 'wizzrobe', 'stalfos', 'zora', 'dodongo',
   ];
 
   static const _nouns = [
@@ -44,6 +53,12 @@ abstract final class RoomNameGenerator {
     'ridge', 'river', 'rook', 'shard', 'shell', 'shield', 'shore',
     'spark', 'spire', 'spring', 'spur', 'stone', 'summit', 'sword',
     'tide', 'torch', 'tower', 'trail', 'vale', 'vault', 'well',
+    // NES-era Nintendo flavor
+    'triforce', 'ocarina', 'rupee', 'hookshot', 'bobomb', 'warpzone',
+    'fireflower', 'mushroom', 'boomerang', 'dungeon', 'morphball',
+    'screw', 'piranha', 'goomba', 'thwomp', 'whistle', 'raft',
+    'canoe', 'flute', 'hammer', 'ladder', 'potion', 'cucco',
+    'chalice', 'scepter', 'gauntlet', 'tunic', 'pendant', 'relic',
   ];
 
   /// Returns the adjective word list (exposed for testing).
