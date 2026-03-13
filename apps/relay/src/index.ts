@@ -28,7 +28,7 @@ const bridgeManager = new BridgeManager(
 
 // Start idle room cleanup timer
 bridgeManager.startIdleTimer(
-  Number(process.env.RELAY_IDLE_TIMEOUT_MS ?? 300000), // 5 minutes
+  Number(process.env.RELAY_IDLE_TIMEOUT_MS ?? 1_800_000), // 30 minutes
 );
 
 const server = Bun.serve({

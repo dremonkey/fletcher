@@ -33,6 +33,8 @@ export class RelayBridge {
   private log: Logger;
   private sessionId: string | null = null;
   private started = false;
+  private needsReinit = false;
+  private reinitializing: Promise<void> | null = null;
 
   constructor(private options: RelayBridgeOptions) {
     this.log = options.logger ??
@@ -91,6 +93,15 @@ export class RelayBridge {
       this.forwardToMobile({ jsonrpc: "2.0", method: "session/update", params });
     });
 
+    // 5. Detect unexpected ACP subprocess death for lazy re-init
+    this.acpClient.onExit((code) => {
+      if (this.started) {
+        this.log.warn({ event: "acp_died", exitCode: code }, "ACP subprocess died — will re-init on next message");
+        this.needsReinit = true;
+        this.sessionId = null;
+      }
+    });
+
     this.started = true;
     this.log.info({ event: "bridge_started" });
   }
@@ -111,6 +122,51 @@ export class RelayBridge {
   /** The ACP session ID, or null if not yet started. */
   getSessionId(): string | null {
     return this.sessionId;
+  }
+
+  /** Whether the ACP subprocess needs re-initialization. */
+  get isAcpDead(): boolean {
+    return this.needsReinit;
+  }
+
+  /**
+   * Lazy re-init: if the ACP subprocess died, spawn a new one and create
+   * a fresh session. Coalesces concurrent calls — only one re-init runs.
+   */
+  private async ensureAcp(): Promise<void> {
+    if (!this.needsReinit) return;
+
+    // Coalesce concurrent re-init attempts
+    if (this.reinitializing) {
+      await this.reinitializing;
+      return;
+    }
+
+    this.reinitializing = this.doReinit();
+    try {
+      await this.reinitializing;
+    } finally {
+      this.reinitializing = null;
+    }
+  }
+
+  private async doReinit(): Promise<void> {
+    const { roomName } = this.options;
+    this.log.info({ event: "acp_reinit" }, "Re-initializing ACP after subprocess death");
+
+    await this.acpClient.initialize();
+
+    const result = await this.acpClient.sessionNew({
+      cwd: process.cwd(),
+      mcpServers: [],
+      _meta: {
+        room_name: roomName,
+      },
+    });
+
+    this.sessionId = result.sessionId;
+    this.needsReinit = false;
+    this.log.info({ event: "acp_reinit_complete", sessionId: this.sessionId }, "ACP re-initialized");
   }
 
   // -------------------------------------------------------------------------
@@ -144,11 +200,12 @@ export class RelayBridge {
     if (msg.method === "session/prompt") {
       reqLog.info({ event: "mobile_prompt_received" });
 
-      // Enrich: inject sessionId
-      const params = { ...msg.params, sessionId: this.sessionId };
-
-      this.acpClient
-        .sessionPrompt(params as any)
+      // Lazy re-init if ACP subprocess died, then send prompt
+      this.ensureAcp()
+        .then(() => {
+          const params = { ...msg.params, sessionId: this.sessionId };
+          return this.acpClient.sessionPrompt(params as any);
+        })
         .then((result) => {
           reqLog.info({ event: "mobile_prompt_responded", stopReason: (result as any).stopReason });
           this.forwardToMobile({

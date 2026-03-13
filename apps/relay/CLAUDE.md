@@ -27,7 +27,7 @@ LIVEKIT_API_SECRET=secret
 ACP_COMMAND=openclaw           # Command to spawn ACP agent (default: openclaw)
 ACP_ARGS=acp                   # Args for ACP_COMMAND (default: acp). --session is added automatically.
 RELAY_HTTP_PORT=7890           # HTTP server port (localhost only)
-RELAY_IDLE_TIMEOUT_MS=300000   # Idle room timeout (5 minutes)
+RELAY_IDLE_TIMEOUT_MS=1800000  # Idle room timeout (30 minutes)
 ```
 
 ## Project Structure

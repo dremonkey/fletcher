@@ -30,6 +30,7 @@ interface PendingRequest {
 }
 
 type UpdateHandler = (params: SessionUpdateParams) => void;
+type ExitHandler = (code: number | null) => void;
 
 /** Silent logger used when no logger is provided. */
 const noopLogger = pino({ level: "silent" });
@@ -45,6 +46,7 @@ export class AcpClient {
   private nextId = 1;
   private pendingRequests = new Map<number, PendingRequest>();
   private updateHandlers: UpdateHandler[] = [];
+  private exitHandlers: ExitHandler[] = [];
   private readLoopPromise: Promise<void> | null = null;
 
   constructor(options: AcpClientOptions) {
@@ -77,9 +79,12 @@ export class AcpClient {
     this.readLoopPromise = this.readLoop();
 
     // Handle subprocess exit
-    this.proc.exited.then(() => {
+    this.proc.exited.then((code) => {
       this.rejectAllPending(new Error("ACP subprocess exited"));
       this.proc = null;
+      for (const handler of this.exitHandlers) {
+        handler(code ?? null);
+      }
     });
   }
 
@@ -179,6 +184,16 @@ export class AcpClient {
   /** Register a handler for session/update notifications from the agent. */
   onUpdate(handler: UpdateHandler): void {
     this.updateHandlers.push(handler);
+  }
+
+  /** Register a handler for when the ACP subprocess exits unexpectedly. */
+  onExit(handler: ExitHandler): void {
+    this.exitHandlers.push(handler);
+  }
+
+  /** Whether the subprocess is currently alive. */
+  get isAlive(): boolean {
+    return this.proc !== null;
   }
 
   // -------------------------------------------------------------------------
