@@ -13,7 +13,7 @@ export interface RoomConnection {
 }
 
 /**
- * Called when a data-channel message arrives on the "relay" topic.
+ * Called when a data-channel message arrives on a registered topic.
  *
  * @param roomName  - Which room the data came from
  * @param data      - Parsed JSON payload
@@ -52,11 +52,13 @@ export interface RoomManagerOptions {
  * Manages LiveKit room connections for the relay.
  *
  * The relay joins rooms as a non-agent participant (`relay-<roomName>`) and
- * communicates exclusively via the data channel on topic `"relay"`.
+ * communicates via the data channel. Handlers can be registered per-topic
+ * so that multiple data channel topics (e.g. "relay", "voice-acp") can be
+ * handled independently.
  */
 export class RoomManager {
   private rooms = new Map<string, RoomConnection>();
-  private dataHandlers: DataHandler[] = [];
+  private topicHandlers = new Map<string, DataHandler[]>();
   private disconnectHandlers: DisconnectHandler[] = [];
   private createRoom: RoomFactory;
 
@@ -82,7 +84,7 @@ export class RoomManager {
     const token = await this.generateToken(roomName);
     await room.connect(this.options.livekitUrl, token);
 
-    // Subscribe to data channel messages on the "relay" topic
+    // Subscribe to data channel messages and dispatch by topic
     room.on(
       RoomEvent.DataReceived,
       (
@@ -91,7 +93,9 @@ export class RoomManager {
         _kind?: DataPacketKind,
         topic?: string,
       ) => {
-        if (topic !== "relay") return;
+        if (!topic) return;
+        const handlers = this.topicHandlers.get(topic);
+        if (!handlers?.length) return;
 
         let parsed: unknown;
         try {
@@ -102,7 +106,7 @@ export class RoomManager {
         }
 
         const identity = participant?.identity ?? "unknown";
-        for (const handler of this.dataHandlers) {
+        for (const handler of handlers) {
           handler(roomName, parsed, identity);
         }
       },
@@ -158,9 +162,18 @@ export class RoomManager {
 
   /**
    * Publish a JSON message to a room's data channel on the "relay" topic.
+   * Convenience wrapper for `sendToRoomOnTopic(roomName, "relay", msg)`.
    * Throws if not currently in the specified room.
    */
   async sendToRoom(roomName: string, msg: object): Promise<void> {
+    return this.sendToRoomOnTopic(roomName, "relay", msg);
+  }
+
+  /**
+   * Publish a JSON message to a room's data channel on the specified topic.
+   * Throws if not currently in the specified room.
+   */
+  async sendToRoomOnTopic(roomName: string, topic: string, msg: object): Promise<void> {
     const conn = this.rooms.get(roomName);
     if (!conn) {
       throw new Error(`Not connected to room: ${roomName}`);
@@ -169,18 +182,23 @@ export class RoomManager {
     const data = Buffer.from(JSON.stringify(msg));
     await conn.room.localParticipant!.publishData(data, {
       reliable: true,
-      topic: "relay",
+      topic,
     });
 
     conn.lastActivity = Date.now();
   }
 
   /**
-   * Register a handler that is invoked whenever a "relay" topic data message
-   * arrives in any joined room.
+   * Register a handler that is invoked whenever a data message on the given
+   * topic arrives in any joined room.
    */
-  onDataReceived(handler: DataHandler): void {
-    this.dataHandlers.push(handler);
+  onDataReceived(topic: string, handler: DataHandler): void {
+    const handlers = this.topicHandlers.get(topic);
+    if (handlers) {
+      handlers.push(handler);
+    } else {
+      this.topicHandlers.set(topic, [handler]);
+    }
   }
 
   /**

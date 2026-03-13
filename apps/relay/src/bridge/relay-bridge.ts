@@ -35,8 +35,10 @@ export class RelayBridge {
   private started = false;
   private needsReinit = false;
   private reinitializing: Promise<void> | null = null;
-  /** Serializes all forwardToMobile calls so chunks always arrive before the result. */
+  /** Serializes all forwardToMobile/forwardToVoiceAgent calls so chunks always arrive before the result. */
   private sendQueue: Promise<void> = Promise.resolve();
+  /** Which data channel topic owns the active ACP request. null = idle. */
+  private activeRequestSource: "relay" | "voice-acp" | null = null;
 
   constructor(private options: RelayBridgeOptions) {
     this.log = options.logger ??
@@ -84,16 +86,30 @@ export class RelayBridge {
 
     // 3. Register data handler for mobile -> ACP forwarding
     this.options.roomManager.onDataReceived(
+      "relay",
       (rn, data, participantIdentity) => {
         if (rn !== roomName) return;
         this.handleMobileMessage(data, participantIdentity);
       },
     );
 
-    // 4. Register ACP -> mobile forwarding (transparent passthrough)
+    // 3b. Register data handler for voice-agent -> ACP forwarding
+    this.options.roomManager.onDataReceived(
+      "voice-acp",
+      (rn, data, participantIdentity) => {
+        if (rn !== roomName) return;
+        this.handleVoiceAcpMessage(data, participantIdentity);
+      },
+    );
+
+    // 4. Register ACP update handler — route to the topic that owns the active request
     this.acpClient.onUpdate((params: SessionUpdateParams) => {
       this.log.debug({ event: "acp_update_received", params }, "← acp session/update");
-      this.forwardToMobile({ jsonrpc: "2.0", method: "session/update", params });
+      if (this.activeRequestSource === "voice-acp") {
+        this.forwardToVoiceAgent({ jsonrpc: "2.0", method: "session/update", params });
+      } else {
+        this.forwardToMobile({ jsonrpc: "2.0", method: "session/update", params });
+      }
     });
 
     // 5. Detect unexpected ACP subprocess death for lazy re-init
@@ -207,6 +223,7 @@ export class RelayBridge {
 
     if (msg.method === "session/prompt") {
       reqLog.info({ event: "mobile_prompt_received" });
+      this.activeRequestSource = "relay";
 
       // Lazy re-init if ACP subprocess died, then send prompt
       this.ensureAcp()
@@ -216,6 +233,7 @@ export class RelayBridge {
         })
         .then((result) => {
           reqLog.info({ event: "mobile_prompt_responded", stopReason: (result as any).stopReason });
+          this.activeRequestSource = null;
           this.forwardToMobile({
             jsonrpc: "2.0",
             id: msg.id,
@@ -224,6 +242,7 @@ export class RelayBridge {
         })
         .catch((err: Error) => {
           reqLog.error({ event: "acp_error", error: err.message });
+          this.activeRequestSource = null;
           this.forwardToMobile({
             jsonrpc: "2.0",
             id: msg.id,
@@ -235,6 +254,97 @@ export class RelayBridge {
       this.acpClient.sessionCancel(msg.params as any);
     }
     // Unknown methods: silently ignore (future extensibility)
+  }
+
+  /**
+   * Handle an incoming data channel message from the voice-agent on the "voice-acp" topic.
+   * Routes to the appropriate ACP method, mirroring handleMobileMessage().
+   */
+  private handleVoiceAcpMessage(data: unknown, _participantIdentity: string): void {
+    if (typeof data !== "object" || data === null) return;
+
+    const msg = data as {
+      jsonrpc?: string;
+      id?: number | string;
+      method?: string;
+      params?: Record<string, unknown>;
+    };
+
+    const correlationId =
+      (msg.params?.requestId as string) ?? crypto.randomUUID();
+    const reqLog = this.log.child({ correlationId, source: "voice-acp" });
+
+    this.log.debug({ event: "voice_acp_message_received", msg }, "← voice-acp");
+
+    if (msg.method === "session/message") {
+      reqLog.info({ event: "voice_acp_prompt_received" });
+      this.activeRequestSource = "voice-acp";
+
+      // Lazy re-init if ACP subprocess died, then send prompt
+      this.ensureAcp()
+        .then(() => {
+          const params = { ...msg.params, sessionId: this.sessionId };
+          return this.acpClient.sessionPrompt(params as any);
+        })
+        .then((result) => {
+          reqLog.info({ event: "voice_acp_prompt_responded", stopReason: (result as any).stopReason });
+          this.activeRequestSource = null;
+          this.forwardToVoiceAgent({
+            jsonrpc: "2.0",
+            id: msg.id,
+            result,
+          });
+        })
+        .catch((err: Error) => {
+          reqLog.error({ event: "acp_error", error: err.message });
+          this.activeRequestSource = null;
+          this.forwardToVoiceAgent({
+            jsonrpc: "2.0",
+            id: msg.id,
+            error: { code: INTERNAL_ERROR, message: err.message },
+          });
+        });
+    } else if (msg.method === "session/cancel") {
+      reqLog.info({ event: "session_cancel" });
+      this.acpClient.sessionCancel(msg.params as any);
+    }
+    // Unknown methods: silently ignore (future extensibility)
+  }
+
+  /**
+   * Forward a JSON-RPC message to the voice-agent via the "voice-acp" data channel topic.
+   * Filters out payloads exceeding the ~15KB practical data channel limit.
+   */
+  private forwardToVoiceAgent(msg: object): void {
+    if (!this.started) return;
+
+    const json = JSON.stringify(msg);
+
+    // Filter large payloads — data channel has ~15KB practical limit.
+    // Tool call results may exceed this. Log and drop rather than crash.
+    const MAX_PAYLOAD_BYTES = 15_000;
+    if (json.length > MAX_PAYLOAD_BYTES) {
+      this.log.warn(
+        {
+          event: "voice_acp_payload_too_large",
+          sizeBytes: json.length,
+          maxBytes: MAX_PAYLOAD_BYTES,
+          method: (msg as any).method,
+        },
+        `Dropping voice-acp message: ${json.length} bytes exceeds ${MAX_PAYLOAD_BYTES} limit`,
+      );
+      return;
+    }
+
+    this.log.debug({ event: "forward_to_voice_agent", msg }, "→ voice-acp");
+
+    this.sendQueue = this.sendQueue.then(() =>
+      this.options.roomManager
+        .sendToRoomOnTopic(this.options.roomName, "voice-acp", msg)
+        .catch(() => {
+          // Room may have disconnected — swallow errors
+        })
+    );
   }
 
   /**

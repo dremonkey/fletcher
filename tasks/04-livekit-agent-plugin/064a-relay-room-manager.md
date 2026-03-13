@@ -1,7 +1,7 @@
 # Task 064a: RoomManager Multi-Topic Support
 
 **Epic:** 04 — Ganglia / Brain Plugin
-**Status:** [ ]
+**Status:** [x]
 **Depends on:** none
 **Blocks:** 064b, 064d
 
@@ -117,14 +117,14 @@ Keep `sendToRoom()` as a convenience that delegates to `sendToRoomOnTopic(roomNa
 
 ## Acceptance criteria
 
-- [ ] `onDataReceived(topic, handler)` registers a handler for a specific topic
-- [ ] `DataReceived` events are dispatched only to handlers registered for that topic
-- [ ] `sendToRoomOnTopic(roomName, topic, msg)` publishes on the specified topic
-- [ ] `sendToRoom(roomName, msg)` still works as before (convenience for "relay" topic)
-- [ ] Existing `RelayBridge` caller updated to `onDataReceived("relay", handler)`
-- [ ] **Test T1:** Register handler for "voice-acp", fire DataReceived with matching topic → handler called
-- [ ] **Test T2:** Register handler for "voice-acp", fire DataReceived with "relay" topic → handler NOT called
-- [ ] **Test T3:** `sendToRoomOnTopic` calls `publishData` with correct topic parameter
+- [x] `onDataReceived(topic, handler)` registers a handler for a specific topic
+- [x] `DataReceived` events are dispatched only to handlers registered for that topic
+- [x] `sendToRoomOnTopic(roomName, topic, msg)` publishes on the specified topic
+- [x] `sendToRoom(roomName, msg)` still works as before (convenience for "relay" topic)
+- [x] Existing `RelayBridge` caller updated to `onDataReceived("relay", handler)`
+- [x] **Test T1:** Register handler for "voice-acp", fire DataReceived with matching topic → handler called
+- [x] **Test T2:** Register handler for "voice-acp", fire DataReceived with "relay" topic → handler NOT called
+- [x] **Test T3:** `sendToRoomOnTopic` calls `publishData` with correct topic parameter
 
 <!--
 Status key:

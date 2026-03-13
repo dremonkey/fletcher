@@ -92,10 +92,10 @@ A unified LLM plugin (`@knittt/livekit-agent-ganglia`) that bridges LiveKit agen
 - [ ] 008: Fix Zombie Agent on Disconnect 📋 — ensure agent disconnects from room when AgentSession dies or user leaves ([BUG-020](../docs/field-tests/20260302-buglog.md))
 - [ ] 016: Explicit Turn Cancellation & Lane Management 📋 — use AbortController to unlock OpenClaw session lanes after network drops
 - [ ] 064: Relay-Mediated LLM Backend 📋 — `GANGLIA_TYPE=relay` routes voice LLM through relay via data channel; eliminates ACP subprocess in voice-agent container ([task](./04-livekit-agent-plugin/064-relay-llm-backend.md))
-  - [ ] 064a: RoomManager Multi-Topic Support
-  - [ ] 064b: RelayBridge Voice-ACP Handler
-  - [ ] 064c: Ganglia RelayLLM Backend
-  - [ ] 064d: Voice-Agent Wiring
+  - [x] 064a: RoomManager Multi-Topic Support
+  - [x] 064b: RelayBridge Voice-ACP Handler
+  - [x] 064c: Ganglia RelayLLM Backend
+  - [x] 064d: Voice-Agent Wiring
   - [ ] 064e: Relay Cleanup & Deployment (deferred)
   - [ ] 064f: Remove ACP Backend (deferred)
 

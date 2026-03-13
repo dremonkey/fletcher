@@ -1,7 +1,7 @@
 # Task 064b: RelayBridge Voice-ACP Handler
 
 **Epic:** 04 — Ganglia / Brain Plugin
-**Status:** [ ]
+**Status:** [x]
 **Depends on:** 064a
 **Blocks:** 064d
 

@@ -13,7 +13,7 @@
  *   LIVEKIT_URL - LiveKit server URL
  *   LIVEKIT_API_KEY - LiveKit API key
  *   LIVEKIT_API_SECRET - LiveKit API secret
- *   GANGLIA_TYPE - Backend type: 'acp' (default) or 'nanoclaw'
+ *   GANGLIA_TYPE - Backend type: 'acp' (default), 'relay', or 'nanoclaw'
  *   FLETCHER_OWNER_IDENTITY - Participant identity of the owner (for session routing)
  *   DEEPGRAM_API_KEY - Deepgram API key for STT
  *   TTS_PROVIDER - TTS backend: 'elevenlabs' | 'google' | 'piper' (default)
@@ -28,6 +28,9 @@
  *   ACP_COMMAND - Command to spawn as ACP subprocess (default: 'openclaw')
  *   ACP_ARGS - Comma-separated arguments to pass to ACP subprocess (default: 'acp')
  *   ACP_PROMPT_TIMEOUT_MS - Timeout in ms waiting for ACP response (default: 120000)
+ *
+ * Relay backend env vars (when GANGLIA_TYPE=relay):
+ *   (No additional env vars required — uses the LiveKit room connection directly.)
  *
  * Nanoclaw backend env vars (when GANGLIA_TYPE=nanoclaw):
  *   NANOCLAW_URL - Nanoclaw server URL (default: 'http://localhost:18789')
@@ -206,6 +209,7 @@ export default defineAgent({
 
     const gangliaLlm = await createGangliaFromEnv({
       logger,
+      room: ctx.room,  // Used by GANGLIA_TYPE=relay; ignored by other backends
       onPondering: (phrase, streamId) => transcriptMgr.onPondering(phrase, streamId),
       onContent: (delta, fullText, streamId) => transcriptMgr.onContent(delta, fullText, streamId),
     });

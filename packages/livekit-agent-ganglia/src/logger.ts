@@ -33,4 +33,6 @@ export const dbg = {
   openresponses: Debug('ganglia:openclaw:openresponses'),
   nanoclawStream: Debug('ganglia:nanoclaw:stream'),
   nanoclawClient: Debug('ganglia:nanoclaw:client'),
+  relayStream: Debug('ganglia:relay:stream'),
+  relayClient: Debug('ganglia:relay:client'),
 };

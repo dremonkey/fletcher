@@ -38,6 +38,8 @@ export type {
   GangliaType,
   AcpConfig as GangliaAcpConfig,
   NanoclawConfig as GangliaNanoclawConfig,
+  RelayConfig as GangliaRelayConfig,
+  RelayRoom as GangliaRelayRoom,
   ConfigFor,
 } from './ganglia-types.js';
 
@@ -117,6 +119,12 @@ export { extractNanoclawSession } from './nanoclaw.js';
 export { NanoclawClient, generateChannelJid, sessionKeyToChannel } from './nanoclaw-client.js';
 export type { NanoclawChatOptions } from './nanoclaw-client.js';
 
+// Relay Implementation
+import { RelayLLM } from './relay-llm.js';
+export { RelayLLM };
+export type { RelayConfig } from './ganglia-types.js';
+export { DataChannelTransport, VOICE_ACP_TOPIC, type StreamTransport } from './relay-transport.js';
+
 /**
  * ACP LLM namespace (default backend)
  */
@@ -129,6 +137,13 @@ export const acp = {
  */
 export const nanoclaw = {
   LLM: NanoclawLLM,
+};
+
+/**
+ * Relay LLM namespace
+ */
+export const relay = {
+  LLM: RelayLLM,
 };
 
 export default acp;

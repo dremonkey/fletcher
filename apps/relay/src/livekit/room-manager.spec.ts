@@ -220,7 +220,7 @@ describe("RoomManager", () => {
   test("onDataReceived handler fires for relay topic", async () => {
     const received: { room: string; data: unknown; identity: string }[] = [];
 
-    manager.onDataReceived((room, data, identity) => {
+    manager.onDataReceived("relay", (room, data, identity) => {
       received.push({ room, data, identity });
     });
 
@@ -247,7 +247,7 @@ describe("RoomManager", () => {
   test("onDataReceived ignores non-relay topics", async () => {
     const received: unknown[] = [];
 
-    manager.onDataReceived((_room, data) => {
+    manager.onDataReceived("relay", (_room, data) => {
       received.push(data);
     });
 
@@ -268,7 +268,7 @@ describe("RoomManager", () => {
   test("onDataReceived ignores malformed JSON", async () => {
     const received: unknown[] = [];
 
-    manager.onDataReceived((_room, data) => {
+    manager.onDataReceived("relay", (_room, data) => {
       received.push(data);
     });
 
@@ -289,7 +289,7 @@ describe("RoomManager", () => {
   test("onDataReceived uses 'unknown' when participant is undefined", async () => {
     const received: { identity: string }[] = [];
 
-    manager.onDataReceived((_room, _data, identity) => {
+    manager.onDataReceived("relay", (_room, _data, identity) => {
       received.push({ identity });
     });
 
@@ -306,6 +306,104 @@ describe("RoomManager", () => {
 
     expect(received).toHaveLength(1);
     expect(received[0].identity).toBe("unknown");
+  });
+
+  // -----------------------------------------------------------------------
+  // Multi-topic support (Task 064a)
+  // -----------------------------------------------------------------------
+
+  test("T1: handler registered for 'voice-acp' fires when DataReceived has matching topic", async () => {
+    // Register handler for "voice-acp" topic
+    const received: { room: string; data: unknown; identity: string }[] = [];
+    manager.onDataReceived("voice-acp", (room, data, identity) => {
+      received.push({ room, data, identity });
+    });
+
+    await manager.joinRoom("test-room");
+
+    const payload = new TextEncoder().encode(JSON.stringify({ type: "acp-init" }));
+    mockRoom._emit(
+      RoomEvent.DataReceived,
+      payload,
+      { identity: "voice-agent" },
+      undefined,
+      "voice-acp",
+    );
+
+    expect(received).toHaveLength(1);
+    expect(received[0].room).toBe("test-room");
+    expect(received[0].data).toEqual({ type: "acp-init" });
+    expect(received[0].identity).toBe("voice-agent");
+  });
+
+  test("T2: handler registered for 'voice-acp' is NOT called when DataReceived topic is 'relay'", async () => {
+    // Register handler only for "voice-acp"
+    const received: unknown[] = [];
+    manager.onDataReceived("voice-acp", (_room, data) => {
+      received.push(data);
+    });
+
+    await manager.joinRoom("test-room");
+
+    const payload = new TextEncoder().encode(JSON.stringify({ type: "relay-msg" }));
+    mockRoom._emit(
+      RoomEvent.DataReceived,
+      payload,
+      { identity: "mobile-user" },
+      undefined,
+      "relay", // different topic — handler should not fire
+    );
+
+    expect(received).toHaveLength(0);
+  });
+
+  test("T3: sendToRoomOnTopic calls publishData with the specified topic", async () => {
+    await manager.joinRoom("test-room");
+
+    const payload = { type: "acp-response", data: 99 };
+    await manager.sendToRoomOnTopic("test-room", "voice-acp", payload);
+
+    expect(mockRoom._mocks.publishData).toHaveBeenCalledTimes(1);
+
+    const [data, opts] = mockRoom._mocks.publishData.mock.calls[0] as unknown as [
+      Buffer,
+      { reliable: boolean; topic: string },
+    ];
+    expect(JSON.parse(data.toString("utf-8"))).toEqual(payload);
+    expect(opts.reliable).toBe(true);
+    expect(opts.topic).toBe("voice-acp");
+  });
+
+  test("sendToRoomOnTopic throws for unknown room", async () => {
+    await expect(
+      manager.sendToRoomOnTopic("nonexistent", "voice-acp", { x: 1 }),
+    ).rejects.toThrow("Not connected to room: nonexistent");
+  });
+
+  test("multiple topics can be registered independently", async () => {
+    const relayReceived: unknown[] = [];
+    const acpReceived: unknown[] = [];
+
+    manager.onDataReceived("relay", (_room, data) => {
+      relayReceived.push(data);
+    });
+    manager.onDataReceived("voice-acp", (_room, data) => {
+      acpReceived.push(data);
+    });
+
+    await manager.joinRoom("test-room");
+
+    const payload = new TextEncoder().encode(JSON.stringify({ msg: "hello" }));
+
+    // Fire on "relay" topic — only relay handler fires
+    mockRoom._emit(RoomEvent.DataReceived, payload, { identity: "user" }, undefined, "relay");
+    expect(relayReceived).toHaveLength(1);
+    expect(acpReceived).toHaveLength(0);
+
+    // Fire on "voice-acp" topic — only acp handler fires
+    mockRoom._emit(RoomEvent.DataReceived, payload, { identity: "agent" }, undefined, "voice-acp");
+    expect(relayReceived).toHaveLength(1);
+    expect(acpReceived).toHaveLength(1);
   });
 
   // -----------------------------------------------------------------------

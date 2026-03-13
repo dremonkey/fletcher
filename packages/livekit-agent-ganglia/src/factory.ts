@@ -6,7 +6,7 @@
  */
 
 import type { llm } from '@livekit/agents';
-import type { GangliaConfig, GangliaSessionInfo } from './ganglia-types.js';
+import type { GangliaConfig, GangliaSessionInfo, RelayRoom } from './ganglia-types.js';
 import type { SessionKey } from './session-routing.js';
 import { type Logger, noopLogger, dbg } from './logger.js';
 
@@ -108,6 +108,11 @@ export function isGangliaAvailable(type: string): boolean {
  */
 export async function createGangliaFromEnv(opts?: {
   logger?: Logger;
+  /**
+   * LiveKit Room reference — required when GANGLIA_TYPE=relay.
+   * Pass `ctx.room` from your voice-agent prewarm/entrypoint.
+   */
+  room?: RelayRoom;
   /** Callback for pondering status phrases while waiting for LLM first token. */
   onPondering?: (phrase: string | null, streamId: string) => void;
   /** Callback for each content chunk from the LLM stream. */
@@ -144,6 +149,26 @@ export async function createGangliaFromEnv(opts?: {
         command,
         args,
         promptTimeoutMs,
+        logger,
+        onPondering: opts?.onPondering,
+        onContent: opts?.onContent,
+      },
+    });
+  }
+
+  if (type === 'relay') {
+    if (!opts?.room) {
+      throw new Error(
+        'GANGLIA_TYPE=relay requires a room in opts. ' +
+          'Pass { room: ctx.room } to createGangliaFromEnv().',
+      );
+    }
+    dbg.factory('creating relay: room=%s', (opts.room as any)?.name ?? '(unknown)');
+    logger.info('Creating ganglia backend: relay');
+    return createGanglia({
+      type: 'relay',
+      relay: {
+        room: opts.room,
         logger,
         onPondering: opts?.onPondering,
         onContent: opts?.onContent,

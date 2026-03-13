@@ -1,7 +1,7 @@
 # Task 064d: Voice-Agent Relay Wiring
 
 **Epic:** 04 — Ganglia / Brain Plugin
-**Status:** [ ]
+**Status:** [x]
 **Depends on:** 064b, 064c
 **Blocks:** 064e
 

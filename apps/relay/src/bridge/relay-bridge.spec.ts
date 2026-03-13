@@ -8,28 +8,35 @@ import type { RoomManager, DataHandler } from "../livekit/room-manager";
 // ---------------------------------------------------------------------------
 
 interface MockRoomManager {
-  onDataReceived: (handler: DataHandler) => void;
+  onDataReceived: (topic: string, handler: DataHandler) => void;
   sendToRoom: ReturnType<typeof mock>;
+  sendToRoomOnTopic: ReturnType<typeof mock>;
   joinRoom: ReturnType<typeof mock>;
   leaveRoom: ReturnType<typeof mock>;
   disconnectAll: ReturnType<typeof mock>;
   getRoom: ReturnType<typeof mock>;
   getActiveRooms: ReturnType<typeof mock>;
   touchRoom: ReturnType<typeof mock>;
-  dataHandlers: DataHandler[];
-  /** Simulate a mobile message arriving on the data channel. */
-  simulateData: (roomName: string, data: unknown, identity: string) => void;
+  topicHandlers: Map<string, DataHandler[]>;
+  /** Simulate a mobile message arriving on the data channel for a given topic. */
+  simulateData: (roomName: string, data: unknown, identity: string, topic?: string) => void;
 }
 
 function createMockRoomManager(): MockRoomManager {
-  const dataHandlers: DataHandler[] = [];
+  const topicHandlers = new Map<string, DataHandler[]>();
 
   return {
-    dataHandlers,
-    onDataReceived: (handler: DataHandler) => {
-      dataHandlers.push(handler);
+    topicHandlers,
+    onDataReceived: (topic: string, handler: DataHandler) => {
+      const handlers = topicHandlers.get(topic);
+      if (handlers) {
+        handlers.push(handler);
+      } else {
+        topicHandlers.set(topic, [handler]);
+      }
     },
     sendToRoom: mock(async (_roomName: string, _msg: object) => {}),
+    sendToRoomOnTopic: mock(async (_roomName: string, _topic: string, _msg: object) => {}),
     joinRoom: mock(async (_roomName: string) => ({
       room: {},
       roomName: _roomName,
@@ -41,8 +48,9 @@ function createMockRoomManager(): MockRoomManager {
     getRoom: mock((_roomName: string) => undefined),
     getActiveRooms: mock(() => []),
     touchRoom: mock((_roomName: string) => {}),
-    simulateData(roomName: string, data: unknown, identity: string) {
-      for (const handler of dataHandlers) {
+    simulateData(roomName: string, data: unknown, identity: string, topic = "relay") {
+      const handlers = topicHandlers.get(topic) ?? [];
+      for (const handler of handlers) {
         handler(roomName, data, identity);
       }
     },
@@ -350,6 +358,179 @@ describe("RelayBridge", () => {
       mockRm.simulateData(ROOM_NAME, null, "mobile-user");
       mockRm.simulateData(ROOM_NAME, 42, "mobile-user");
     }).not.toThrow();
+  });
+
+  // -------------------------------------------------------------------------
+  // T4: voice-acp session/message → sessionPrompt() called
+  // -------------------------------------------------------------------------
+  test("T4: voice-acp session/message is forwarded to ACP with sessionId injected", async () => {
+    bridge = createBridge(mockRm);
+    await bridge.start();
+
+    // Simulate voice-agent sending session/message on voice-acp topic
+    mockRm.simulateData(
+      ROOM_NAME,
+      {
+        jsonrpc: "2.0",
+        id: 10,
+        method: "session/message",
+        params: {
+          prompt: [{ type: "text", text: "Voice prompt" }],
+        },
+      },
+      "voice-agent",
+      "voice-acp",
+    );
+
+    // Wait for the async ACP round-trip
+    await tick(200);
+
+    // The result should be forwarded back via sendToRoomOnTopic on "voice-acp"
+    expect(mockRm.sendToRoomOnTopic).toHaveBeenCalled();
+
+    const calls = mockRm.sendToRoomOnTopic.mock.calls;
+    const responseCalls = calls.filter(
+      (c: unknown[]) => {
+        const msg = c[2] as Record<string, unknown>;
+        return msg.id === 10 && "result" in msg;
+      },
+    );
+    expect(responseCalls.length).toBe(1);
+
+    const [roomName, topic, response] = responseCalls[0] as [string, string, Record<string, unknown>];
+    expect(roomName).toBe(ROOM_NAME);
+    expect(topic).toBe("voice-acp");
+    expect(response.jsonrpc).toBe("2.0");
+    expect(response.id).toBe(10);
+    expect(response.result).toEqual({ stopReason: "completed" });
+  });
+
+  // -------------------------------------------------------------------------
+  // T5: voice-acp session/cancel → sessionCancel() called
+  // -------------------------------------------------------------------------
+  test("T5: voice-acp session/cancel is forwarded to ACP", async () => {
+    bridge = createBridge(mockRm);
+    await bridge.start();
+
+    // session/cancel is a notification — should not throw
+    expect(() => {
+      mockRm.simulateData(
+        ROOM_NAME,
+        {
+          jsonrpc: "2.0",
+          method: "session/cancel",
+          params: { sessionId: bridge.getSessionId() },
+        },
+        "voice-agent",
+        "voice-acp",
+      );
+    }).not.toThrow();
+
+    // No response should be sent for a cancel notification
+    await tick(100);
+    // sendToRoomOnTopic should not have been called (no response for cancel)
+    const calls = mockRm.sendToRoomOnTopic.mock.calls;
+    expect(calls.length).toBe(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // T6: ACP update during voice-acp request → sent on voice-acp topic (not relay)
+  // -------------------------------------------------------------------------
+  test("T6: ACP session/update notifications are routed to voice-acp topic when voice-acp initiated the request", async () => {
+    bridge = createBridge(mockRm);
+    await bridge.start();
+
+    // Simulate voice-agent sending session/message on voice-acp topic
+    mockRm.simulateData(
+      ROOM_NAME,
+      {
+        jsonrpc: "2.0",
+        id: 20,
+        method: "session/message",
+        params: {
+          prompt: [{ type: "text", text: "Voice update test" }],
+        },
+      },
+      "voice-agent",
+      "voice-acp",
+    );
+
+    await tick(200);
+
+    // ACP update notifications should go to voice-acp topic via sendToRoomOnTopic
+    const topicCalls = mockRm.sendToRoomOnTopic.mock.calls;
+    const updateCalls = topicCalls.filter(
+      (c: unknown[]) => {
+        const msg = c[2] as Record<string, unknown>;
+        return msg.method === "session/update";
+      },
+    );
+    expect(updateCalls.length).toBeGreaterThanOrEqual(1);
+
+    const [, updateTopic, notification] = updateCalls[0] as [string, string, Record<string, unknown>];
+    expect(updateTopic).toBe("voice-acp");
+    expect(notification.jsonrpc).toBe("2.0");
+    expect(notification.method).toBe("session/update");
+
+    // Updates should NOT have been sent on the relay topic (sendToRoom)
+    const relayCalls = mockRm.sendToRoom.mock.calls;
+    const relayUpdateCalls = relayCalls.filter(
+      (c: unknown[]) => {
+        const msg = c[1] as Record<string, unknown>;
+        return msg.method === "session/update";
+      },
+    );
+    expect(relayUpdateCalls.length).toBe(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // T7: ACP update during relay (mobile) request → sent on relay topic (regression)
+  // -------------------------------------------------------------------------
+  test("T7: ACP session/update notifications are routed to relay topic when mobile initiated the request", async () => {
+    bridge = createBridge(mockRm);
+    await bridge.start();
+
+    // Simulate mobile sending session/prompt on relay topic
+    mockRm.simulateData(
+      ROOM_NAME,
+      {
+        jsonrpc: "2.0",
+        id: 30,
+        method: "session/prompt",
+        params: {
+          prompt: [{ type: "text", text: "Mobile relay test" }],
+        },
+      },
+      "mobile-user",
+      "relay",
+    );
+
+    await tick(200);
+
+    // ACP update notifications should go to relay topic via sendToRoom
+    const relayCalls = mockRm.sendToRoom.mock.calls;
+    const updateCalls = relayCalls.filter(
+      (c: unknown[]) => {
+        const msg = c[1] as Record<string, unknown>;
+        return msg.method === "session/update";
+      },
+    );
+    expect(updateCalls.length).toBeGreaterThanOrEqual(1);
+
+    const [, notification] = updateCalls[0] as [string, Record<string, unknown>];
+    expect(notification.jsonrpc).toBe("2.0");
+    expect(notification.method).toBe("session/update");
+
+    // Updates should NOT have been sent via sendToRoomOnTopic on voice-acp
+    const topicCalls = mockRm.sendToRoomOnTopic.mock.calls;
+    const voiceAcpUpdateCalls = topicCalls.filter(
+      (c: unknown[]) => {
+        const topic = c[1] as string;
+        const msg = c[2] as Record<string, unknown>;
+        return topic === "voice-acp" && msg.method === "session/update";
+      },
+    );
+    expect(voiceAcpUpdateCalls.length).toBe(0);
   });
 
   test("session/new params include verbose: true in _meta (Task 038)", async () => {

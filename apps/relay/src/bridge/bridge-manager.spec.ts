@@ -8,14 +8,19 @@ import type { RoomManager, RoomConnection, DataHandler, DisconnectHandler } from
 // ---------------------------------------------------------------------------
 
 function createMockRoomManager() {
-  const dataHandlers: DataHandler[] = [];
+  const topicHandlers = new Map<string, DataHandler[]>();
   const disconnectHandlers: DisconnectHandler[] = [];
 
   return {
-    dataHandlers,
+    topicHandlers,
     disconnectHandlers,
-    onDataReceived: (handler: DataHandler) => {
-      dataHandlers.push(handler);
+    onDataReceived: (topic: string, handler: DataHandler) => {
+      const handlers = topicHandlers.get(topic);
+      if (handlers) {
+        handlers.push(handler);
+      } else {
+        topicHandlers.set(topic, [handler]);
+      }
     },
     onRoomDisconnected: (handler: DisconnectHandler) => {
       disconnectHandlers.push(handler);
