@@ -267,6 +267,24 @@ describe("RelayBridge", () => {
     expect(bridge.isStarted).toBe(false);
   });
 
+  test("incoming mobile message resets idle timer via touchRoom()", async () => {
+    bridge = createBridge(mockRm);
+    await bridge.start();
+
+    mockRm.simulateData(
+      ROOM_NAME,
+      {
+        jsonrpc: "2.0",
+        id: 50,
+        method: "session/prompt",
+        params: { prompt: [{ type: "text", text: "Touch test" }] },
+      },
+      "mobile-user",
+    );
+
+    expect(mockRm.touchRoom).toHaveBeenCalledWith(ROOM_NAME);
+  });
+
   test("non-object data is ignored", async () => {
     bridge = createBridge(mockRm);
     await bridge.start();

@@ -124,6 +124,9 @@ export class RelayBridge {
   private handleMobileMessage(data: unknown, _participantIdentity: string): void {
     if (typeof data !== "object" || data === null) return;
 
+    // Reset idle timer — incoming messages prove the session is active
+    this.options.roomManager.touchRoom(this.options.roomName);
+
     const msg = data as {
       jsonrpc?: string;
       id?: number | string;
