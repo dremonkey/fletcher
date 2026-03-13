@@ -241,6 +241,9 @@ Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layou
 - [x] 030: Text-Only Response Mode ✅ — `[TTS: ON/OFF]` toggle via data channel; agent skips TTS natively via `setAudioEnabled()`; persisted across restarts
 - [x] 030: Split Header into Two-Column Layout ✅ — cyan user histogram (left) + TTS toggle (right); HeaderBar widget
 - [x] 031/032: TTS Toggle Component + Agent Wiring ✅ — "TTS OFF" button ↔ amber agent histogram; single-tap toggle; `tts-mode` data channel event; persisted via SessionStorage
+- [ ] 039: Fix Missing Transcripts when TTS is OFF 📋 — response transcripts not visible in UI when TTS is disabled; needs runtime debugging; [BUG-015](../docs/field-tests/20260313-buglog.md)
+- [ ] 040: Relay Reconnection System Events 📋 — distinguish relay vs agent in participant handlers; emit relay-specific connect/disconnect events; [BUG-016](../docs/field-tests/20260313-buglog.md)
+- [ ] 041: Fix Late Tool-Call Artifact Stamping 📋 — `activeSegmentId` returns null after stream finalization; orphaned artifacts float to latest message; [BUG-012](../docs/field-tests/20260313-buglog.md)
 - [ ] 033: SpeakingRing Component 📋 — animated ring around participant avatars; VAD-driven; amber (user) / blue (agent)
 - [ ] 034: Inline Participant Histogram 📋 — compact AudioVisualizer in each participant row; 30fps throttle for 3+ participants
 - [ ] 035: Per-Participant Audio Stream Wiring 📋 — AnalyserNode per participant; connect to SpeakingRing + inline histogram
