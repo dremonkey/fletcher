@@ -575,4 +575,70 @@ describe('TranscriptManager', () => {
       });
     });
   });
+
+  // =========================================================================
+  // BUG-012: Late tool-call artifact stamping (lastFinalizedSegmentId)
+  // =========================================================================
+  describe('BUG-012: activeSegmentId after stream finalization', () => {
+    // -----------------------------------------------------------------------
+    // 16. activeSegmentId returns finalized segment ID after finalizeStream()
+    // -----------------------------------------------------------------------
+    it('returns finalized segment ID after stream finalization', () => {
+      // Stream starts, receives content, and finalizes
+      mgr.onPondering('Thinking...', 'stream-1');
+      mgr.onPondering(null, 'stream-1'); // pre-content
+      mgr.onContent('Hello', 'Hello', 'stream-1');
+
+      // Before finalization, activeSegmentId returns the live segment
+      expect(mgr.activeSegmentId).toBe('seg_1');
+
+      // Finalize (second onPondering(null) with contentStarted=true)
+      mgr.onPondering(null, 'stream-1');
+      expect(mgr._segments.size).toBe(0);
+
+      // After finalization, activeSegmentId should return the finalized ID
+      // (not null), so late-arriving tool artifacts get stamped correctly
+      expect(mgr.activeSegmentId).toBe('seg_1');
+    });
+
+    // -----------------------------------------------------------------------
+    // 17. New stream's segment ID takes precedence over lastFinalizedSegmentId
+    // -----------------------------------------------------------------------
+    it('returns new stream segment ID when a new stream starts', () => {
+      // Stream 1: full lifecycle
+      mgr.onPondering('A', 'stream-1');
+      mgr.onPondering(null, 'stream-1');
+      mgr.onContent('R1', 'R1', 'stream-1');
+      mgr.onPondering(null, 'stream-1'); // finalize
+
+      expect(mgr.activeSegmentId).toBe('seg_1'); // lastFinalizedSegmentId
+
+      // Stream 2 starts — activeSegmentId should switch to the new segment
+      mgr.onPondering('B', 'stream-2');
+      expect(mgr.activeSegmentId).toBe('seg_2');
+
+      // lastFinalizedSegmentId should NOT leak through when a live segment exists
+      mgr.onPondering(null, 'stream-2');
+      mgr.onContent('R2', 'R2', 'stream-2');
+      expect(mgr.activeSegmentId).toBe('seg_2');
+    });
+
+    // -----------------------------------------------------------------------
+    // 18. After finalization, activeSegmentId returns lastFinalizedSegmentId
+    //     (not null) — the core fix for late tool-call artifacts
+    // -----------------------------------------------------------------------
+    it('does not return null after finalization when lastFinalizedSegmentId is set', () => {
+      // Stream 1
+      mgr.onPondering('A', 'stream-1');
+      mgr.onPondering(null, 'stream-1');
+      mgr.onContent('Response', 'Response', 'stream-1');
+      mgr.onPondering(null, 'stream-1'); // finalize
+
+      // The segment is deleted, but activeSegmentId should still return
+      // the finalized segment ID
+      expect(mgr._segments.size).toBe(0);
+      expect(mgr.activeSegmentId).not.toBeNull();
+      expect(mgr.activeSegmentId).toBe('seg_1');
+    });
+  });
 });

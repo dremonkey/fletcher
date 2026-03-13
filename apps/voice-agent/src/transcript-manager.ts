@@ -34,6 +34,7 @@ export class TranscriptManager {
   private knownStreamIds = new Set<string>();
   private activeStreamId: string | null = null;
   private nextSegmentId = 0;
+  private lastFinalizedSegmentId: string | null = null;
 
   constructor(private deps: TranscriptManagerDeps) {}
 
@@ -137,6 +138,7 @@ export class TranscriptManager {
         final: true,
       });
     }
+    this.lastFinalizedSegmentId = `seg_${seg.segId}`;
     this.streamSegments.delete(streamId);
   }
 
@@ -146,9 +148,9 @@ export class TranscriptManager {
    * with the correct segment for client-side attachment (BUG-012 fix).
    */
   get activeSegmentId(): string | null {
-    if (!this.activeStreamId) return null;
+    if (!this.activeStreamId) return this.lastFinalizedSegmentId;
     const seg = this.streamSegments.get(this.activeStreamId);
-    return seg ? `seg_${seg.segId}` : null;
+    return seg ? `seg_${seg.segId}` : this.lastFinalizedSegmentId;
   }
 
   // Expose internals for testing

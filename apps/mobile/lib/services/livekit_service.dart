@@ -581,6 +581,18 @@ class LiveKitService extends ChangeNotifier {
 
     _listener?.on<ParticipantConnectedEvent>((event) {
       debugPrint('[Fletcher] Remote participant connected: ${event.participant.identity}');
+      // Relay participant — emit relay-specific event, don't process as agent
+      if (event.participant.identity?.startsWith('relay-') == true) {
+        _emitSystemEvent(SystemEvent(
+          id: 'relay-connected-${DateTime.now().millisecondsSinceEpoch}',
+          type: SystemEventType.room,
+          status: SystemEventStatus.success,
+          message: 'relay connected',
+          timestamp: DateTime.now(),
+          prefix: '\u25B8',
+        ));
+        return;
+      }
       healthService.updateAgentPresent(present: true);
       // Update diagnostics with agent identity
       _updateState(
@@ -614,6 +626,18 @@ class LiveKitService extends ChangeNotifier {
     _listener?.on<ParticipantDisconnectedEvent>((event) {
       final remaining = _room?.remoteParticipants.length ?? 0;
       debugPrint('[Fletcher] Remote participant disconnected: ${event.participant.identity} (remaining=$remaining)');
+      // Relay participant — emit relay-specific event, don't count toward agent presence
+      if (event.participant.identity?.startsWith('relay-') == true) {
+        _emitSystemEvent(SystemEvent(
+          id: 'relay-disconnected-${DateTime.now().millisecondsSinceEpoch}',
+          type: SystemEventType.room,
+          status: SystemEventStatus.error,
+          message: 'relay disconnected',
+          timestamp: DateTime.now(),
+          prefix: '\u2715',
+        ));
+        return;
+      }
       healthService.updateAgentPresent(present: remaining > 0);
       // Clear agent identity if no agents remain
       if (remaining == 0) {
@@ -878,10 +902,8 @@ class LiveKitService extends ChangeNotifier {
       // Prefer server-stamped segmentId for correct attachment (BUG-012 fix),
       // fall back to _lastAgentSegmentId for backward compatibility.
       final serverSegmentId = json['segmentId'] as String?;
-      final targetId = serverSegmentId ?? _lastAgentSegmentId;
-      final stamped = targetId != null
-          ? artifactEvent.withMessageId(targetId)
-          : artifactEvent;
+      final targetId = serverSegmentId ?? _lastAgentSegmentId ?? 'orphan_${DateTime.now().millisecondsSinceEpoch}';
+      final stamped = artifactEvent.withMessageId(targetId);
       final newArtifacts = [..._state.artifacts, stamped];
       // Keep only last 10 artifacts
       if (newArtifacts.length > 10) {
