@@ -223,6 +223,130 @@ describe("BridgeManager", () => {
     expect(mockRm.leaveRoom).not.toHaveBeenCalled();
   });
 
+  // -------------------------------------------------------------------------
+  // Deferred teardown (departure grace period)
+  // -------------------------------------------------------------------------
+
+  test("scheduleRemoveRoom() does not remove bridge immediately", async () => {
+    manager = new BridgeManager(
+      mockRm as unknown as RoomManager,
+      "bun",
+      [MOCK_ACPX_PATH],
+      undefined,
+      { departureGraceMs: 500 },
+    );
+
+    await manager.addRoom("room-grace");
+    expect(manager.hasRoom("room-grace")).toBe(true);
+
+    manager.scheduleRemoveRoom("room-grace");
+
+    // Bridge should still be alive immediately after scheduling
+    expect(manager.hasRoom("room-grace")).toBe(true);
+    expect(manager.hasPendingTeardown("room-grace")).toBe(true);
+    expect(manager.getPendingTeardowns()).toEqual(["room-grace"]);
+  });
+
+  test("scheduleRemoveRoom() removes bridge after grace period expires", async () => {
+    manager = new BridgeManager(
+      mockRm as unknown as RoomManager,
+      "bun",
+      [MOCK_ACPX_PATH],
+      undefined,
+      { departureGraceMs: 100 },
+    );
+
+    await manager.addRoom("room-expire");
+    manager.scheduleRemoveRoom("room-expire");
+
+    // Wait for grace period to expire
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    expect(manager.hasRoom("room-expire")).toBe(false);
+    expect(manager.hasPendingTeardown("room-expire")).toBe(false);
+    expect(mockRm.leaveRoom).toHaveBeenCalledWith("room-expire");
+  });
+
+  test("cancelPendingTeardown() prevents the deferred removal", async () => {
+    manager = new BridgeManager(
+      mockRm as unknown as RoomManager,
+      "bun",
+      [MOCK_ACPX_PATH],
+      undefined,
+      { departureGraceMs: 100 },
+    );
+
+    await manager.addRoom("room-cancel");
+    manager.scheduleRemoveRoom("room-cancel");
+    expect(manager.hasPendingTeardown("room-cancel")).toBe(true);
+
+    const cancelled = manager.cancelPendingTeardown("room-cancel");
+    expect(cancelled).toBe(true);
+    expect(manager.hasPendingTeardown("room-cancel")).toBe(false);
+
+    // Wait past grace period — bridge should still be alive
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(manager.hasRoom("room-cancel")).toBe(true);
+  });
+
+  test("duplicate scheduleRemoveRoom() is a no-op", async () => {
+    manager = new BridgeManager(
+      mockRm as unknown as RoomManager,
+      "bun",
+      [MOCK_ACPX_PATH],
+      undefined,
+      { departureGraceMs: 500 },
+    );
+
+    await manager.addRoom("room-dup");
+    manager.scheduleRemoveRoom("room-dup");
+    manager.scheduleRemoveRoom("room-dup");
+
+    // Only one pending teardown
+    expect(manager.getPendingTeardowns()).toEqual(["room-dup"]);
+  });
+
+  test("direct removeRoom() clears pending teardown", async () => {
+    manager = new BridgeManager(
+      mockRm as unknown as RoomManager,
+      "bun",
+      [MOCK_ACPX_PATH],
+      undefined,
+      { departureGraceMs: 500 },
+    );
+
+    await manager.addRoom("room-direct");
+    manager.scheduleRemoveRoom("room-direct");
+    expect(manager.hasPendingTeardown("room-direct")).toBe(true);
+
+    await manager.removeRoom("room-direct");
+
+    expect(manager.hasRoom("room-direct")).toBe(false);
+    expect(manager.hasPendingTeardown("room-direct")).toBe(false);
+  });
+
+  test("shutdownAll() clears all pending teardowns", async () => {
+    manager = new BridgeManager(
+      mockRm as unknown as RoomManager,
+      "bun",
+      [MOCK_ACPX_PATH],
+      undefined,
+      { departureGraceMs: 500 },
+    );
+
+    await manager.addRoom("room-sd1");
+    await manager.addRoom("room-sd2");
+    manager.scheduleRemoveRoom("room-sd1");
+    manager.scheduleRemoveRoom("room-sd2");
+
+    expect(manager.getPendingTeardowns().length).toBe(2);
+
+    await manager.shutdownAll();
+
+    expect(manager.getPendingTeardowns()).toEqual([]);
+    expect(manager.getActiveRooms()).toEqual([]);
+  });
+
   test("stopIdleTimer() prevents idle removal", async () => {
     manager = new BridgeManager(
       mockRm as unknown as RoomManager,

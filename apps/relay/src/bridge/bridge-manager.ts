@@ -12,18 +12,26 @@ import { rootLogger, type Logger } from "../utils/logger";
 // BridgeManager
 // ---------------------------------------------------------------------------
 
+export interface BridgeManagerOptions {
+  departureGraceMs?: number;
+}
+
 export class BridgeManager {
   private bridges = new Map<string, RelayBridge>();
+  private pendingTeardowns = new Map<string, Timer>();
   private idleTimer: ReturnType<typeof setInterval> | null = null;
   private log: Logger;
+  private departureGraceMs: number;
 
   constructor(
     private roomManager: RoomManager,
     private acpCommand: string,
     private acpArgs: string[],
     logger?: Logger,
+    options?: BridgeManagerOptions,
   ) {
     this.log = logger ?? rootLogger.child({ component: "bridge-manager" });
+    this.departureGraceMs = options?.departureGraceMs ?? 120_000;
   }
 
   /**
@@ -31,6 +39,7 @@ export class BridgeManager {
    * Idempotent — if a bridge already exists for the room, returns without action.
    */
   async addRoom(roomName: string): Promise<void> {
+    this.cancelPendingTeardown(roomName);
     if (this.bridges.has(roomName)) return;
 
     // Join the LiveKit room first
@@ -54,6 +63,8 @@ export class BridgeManager {
    * Remove a bridge: stop the bridge and leave the room.
    */
   async removeRoom(roomName: string): Promise<void> {
+    this.cancelPendingTeardown(roomName);
+
     const bridge = this.bridges.get(roomName);
     if (!bridge) return;
 
@@ -61,6 +72,65 @@ export class BridgeManager {
     this.bridges.delete(roomName);
     await this.roomManager.leaveRoom(roomName);
     this.log.info({ event: "room_removed", roomName });
+  }
+
+  // -------------------------------------------------------------------------
+  // Deferred teardown (departure grace period)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Schedule a deferred teardown for a room. If the participant reconnects
+   * before the grace period expires, the teardown can be cancelled.
+   * Deduplicates — calling again for the same room is a no-op.
+   */
+  scheduleRemoveRoom(roomName: string): void {
+    if (this.pendingTeardowns.has(roomName)) return;
+
+    this.log.info(
+      { event: "teardown_scheduled", roomName, graceMs: this.departureGraceMs },
+      "Deferred teardown scheduled",
+    );
+
+    const timer = setTimeout(async () => {
+      this.pendingTeardowns.delete(roomName);
+      this.log.info({ event: "teardown_executing", roomName }, "Grace period expired, removing room");
+      await this.removeRoom(roomName);
+    }, this.departureGraceMs);
+
+    // Don't prevent process exit
+    if (timer && typeof timer === "object" && "unref" in timer) {
+      (timer as NodeJS.Timeout).unref();
+    }
+
+    this.pendingTeardowns.set(roomName, timer);
+  }
+
+  /**
+   * Cancel a pending deferred teardown for a room.
+   * Returns true if a pending teardown was cancelled, false otherwise.
+   */
+  cancelPendingTeardown(roomName: string): boolean {
+    const timer = this.pendingTeardowns.get(roomName);
+    if (!timer) return false;
+
+    clearTimeout(timer);
+    this.pendingTeardowns.delete(roomName);
+    this.log.info({ event: "teardown_cancelled", roomName }, "Deferred teardown cancelled");
+    return true;
+  }
+
+  /**
+   * Check if a room has a pending deferred teardown.
+   */
+  hasPendingTeardown(roomName: string): boolean {
+    return this.pendingTeardowns.has(roomName);
+  }
+
+  /**
+   * Return all room names with pending teardowns (for observability).
+   */
+  getPendingTeardowns(): string[] {
+    return Array.from(this.pendingTeardowns.keys());
   }
 
   /**
@@ -88,6 +158,12 @@ export class BridgeManager {
    * Shut down all bridges and disconnect from all rooms.
    */
   async shutdownAll(): Promise<void> {
+    // Clear all pending deferred teardowns
+    for (const [roomName, timer] of this.pendingTeardowns) {
+      clearTimeout(timer);
+    }
+    this.pendingTeardowns.clear();
+
     const stops = Array.from(this.bridges.entries()).map(
       async ([roomName, bridge]) => {
         await bridge.stop();

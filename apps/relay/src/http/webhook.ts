@@ -43,6 +43,9 @@ export function createWebhookHandler(
         return Response.json({ received: true });
       }
 
+      // Cancel any pending deferred teardown — participant reconnected
+      bridgeManager.cancelPendingTeardown(roomName);
+
       if (bridgeManager.hasRoom(roomName)) {
         log.debug("Room already joined, skipping");
         return Response.json({ received: true });
@@ -71,13 +74,8 @@ export function createWebhookHandler(
         return Response.json({ received: true });
       }
 
-      try {
-        await bridgeManager.removeRoom(roomName);
-        log.info({ roomName, identity: participant?.identity }, "Removed room after participant left");
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Unknown error";
-        log.error({ roomName, error: message }, "Failed to remove room after participant left");
-      }
+      bridgeManager.scheduleRemoveRoom(roomName);
+      log.info({ roomName, identity: participant?.identity }, "Scheduled deferred teardown after participant left");
     }
 
     return Response.json({ received: true });

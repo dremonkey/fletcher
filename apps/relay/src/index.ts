@@ -22,11 +22,14 @@ const webhookReceiver = new WebhookReceiver(apiKey, apiSecret);
 
 const acpCommand = process.env.ACP_COMMAND ?? "openclaw";
 const acpArgs = (process.env.ACP_ARGS ?? "acp").split(" ").filter(Boolean);
+const departureGraceMs = Number(process.env.RELAY_DEPARTURE_GRACE_MS ?? 120_000);
 
 const bridgeManager = new BridgeManager(
   roomManager,
   acpCommand,
   acpArgs,
+  undefined,
+  { departureGraceMs },
 );
 
 // Start idle room cleanup timer
