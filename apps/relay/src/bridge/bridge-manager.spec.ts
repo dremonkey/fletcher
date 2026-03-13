@@ -36,7 +36,7 @@ function createMockRoomManager() {
 
 const MOCK_ACPX_PATH = path.resolve(
   import.meta.dir,
-  "../../test/mock-acpx.ts",
+  "../../../../packages/acp-client/test/mock-acpx.ts",
 );
 
 // ---------------------------------------------------------------------------

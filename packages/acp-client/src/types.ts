@@ -1,7 +1,7 @@
 /**
  * ACP (Agent Client Protocol) types for stdio transport.
  *
- * Builds on the JSON-RPC 2.0 types from src/rpc/types.ts.
+ * Builds on the JSON-RPC 2.0 types from rpc.ts.
  * ACP uses JSON-RPC 2.0 over newline-delimited stdio.
  */
 
@@ -9,11 +9,25 @@ import type {
   JsonRpcRequest,
   JsonRpcNotification,
   JsonRpcResponse,
-} from "../rpc/types";
-import type { Logger } from "../utils/logger";
+} from "./rpc";
 
 // Re-export JSON-RPC types for convenience
 export type { JsonRpcRequest, JsonRpcNotification, JsonRpcResponse };
+
+// ---------------------------------------------------------------------------
+// Logger
+// ---------------------------------------------------------------------------
+
+/**
+ * Generic logger interface accepted by AcpClient.
+ * Compatible with pino, winston, console, or any structured logger.
+ */
+export interface Logger {
+  info(obj: object, msg?: string): void;
+  warn(obj: object, msg?: string): void;
+  error(obj: object, msg?: string): void;
+  debug(obj: object, msg?: string): void;
+}
 
 // ---------------------------------------------------------------------------
 // Client options

@@ -2,7 +2,7 @@ import { describe, test, expect, afterEach } from "bun:test";
 import path from "path";
 import { AcpClient } from "./client";
 
-const MOCK_ACPX_PATH = path.resolve(import.meta.dir, "../../test/mock-acpx.ts");
+const MOCK_ACPX_PATH = path.resolve(import.meta.dir, "../test/mock-acpx.ts");
 
 function createClient(): AcpClient {
   return new AcpClient({
@@ -202,5 +202,140 @@ describe("AcpClient", () => {
 
     // Process should be dead after SIGKILL escalation
     expect(client.isAlive).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // Unsubscribe tests (new)
+  // -------------------------------------------------------------------------
+
+  test("onUpdate() returns an unsubscribe function that stops handler from receiving updates", async () => {
+    client = createClient();
+    await client.initialize();
+    await client.sessionNew({});
+
+    const receivedBefore: unknown[] = [];
+    const receivedAfter: unknown[] = [];
+
+    const unsubscribe = client.onUpdate((params) => {
+      receivedBefore.push(params);
+    });
+
+    // First prompt — handler is subscribed
+    await client.sessionPrompt({
+      sessionId: "mock-sess-001",
+      prompt: [{ type: "text", text: "First" }],
+    });
+    expect(receivedBefore.length).toBeGreaterThanOrEqual(1);
+
+    // Unsubscribe
+    unsubscribe();
+
+    // Register a second handler to verify updates still flow
+    client.onUpdate((params) => {
+      receivedAfter.push(params);
+    });
+
+    const countBefore = receivedBefore.length;
+
+    // Second prompt — first handler should NOT receive anything more
+    await client.sessionPrompt({
+      sessionId: "mock-sess-001",
+      prompt: [{ type: "text", text: "Second" }],
+    });
+
+    expect(receivedBefore.length).toBe(countBefore); // no new updates to unsubscribed handler
+    expect(receivedAfter.length).toBeGreaterThanOrEqual(1); // second handler still fires
+  });
+
+  test("onUpdate() unsubscribe is idempotent (calling twice does not throw)", async () => {
+    client = createClient();
+    await client.initialize();
+
+    const unsubscribe = client.onUpdate(() => {});
+    expect(() => {
+      unsubscribe();
+      unsubscribe(); // second call should be a no-op
+    }).not.toThrow();
+  });
+
+  test("onExit() returns an unsubscribe function that stops handler from being called", async () => {
+    // Use a client that will die on its own
+    client = new AcpClient({
+      command: "bun",
+      args: ["-e", "process.exit(0)"],
+    });
+
+    const exitCalls: (number | null)[] = [];
+    const unsubscribe = client.onExit((code) => {
+      exitCalls.push(code);
+    });
+
+    // Immediately unsubscribe before spawning
+    unsubscribe();
+
+    // initialize will fail (process exits immediately), but that's OK
+    try {
+      await client.initialize();
+    } catch {
+      // expected
+    }
+
+    // Wait a bit for the exit event to fire
+    await new Promise((r) => setTimeout(r, 200));
+
+    // Handler was unsubscribed before process exited — should not have been called
+    expect(exitCalls.length).toBe(0);
+  });
+
+  test("onExit() unsubscribe is idempotent", async () => {
+    client = createClient();
+    await client.initialize();
+
+    const unsubscribe = client.onExit(() => {});
+    expect(() => {
+      unsubscribe();
+      unsubscribe();
+    }).not.toThrow();
+  });
+
+  test("multiple onUpdate handlers can coexist and be individually unsubscribed", async () => {
+    client = createClient();
+    await client.initialize();
+    await client.sessionNew({});
+
+    const calls1: unknown[] = [];
+    const calls2: unknown[] = [];
+    const calls3: unknown[] = [];
+
+    const unsub1 = client.onUpdate((p) => calls1.push(p));
+    const unsub2 = client.onUpdate((p) => calls2.push(p));
+    client.onUpdate((p) => calls3.push(p)); // never unsubscribed
+
+    // First prompt — all three handlers fire
+    await client.sessionPrompt({
+      sessionId: "mock-sess-001",
+      prompt: [{ type: "text", text: "Hello" }],
+    });
+
+    expect(calls1.length).toBeGreaterThanOrEqual(1);
+    expect(calls2.length).toBeGreaterThanOrEqual(1);
+    expect(calls3.length).toBeGreaterThanOrEqual(1);
+
+    // Unsubscribe handlers 1 and 2
+    unsub1();
+    unsub2();
+
+    const snap1 = calls1.length;
+    const snap2 = calls2.length;
+
+    // Second prompt — only handler 3 should fire
+    await client.sessionPrompt({
+      sessionId: "mock-sess-001",
+      prompt: [{ type: "text", text: "World" }],
+    });
+
+    expect(calls1.length).toBe(snap1);
+    expect(calls2.length).toBe(snap2);
+    expect(calls3.length).toBeGreaterThan(snap1); // handler 3 accumulated more
   });
 });

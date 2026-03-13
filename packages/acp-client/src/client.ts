@@ -9,6 +9,7 @@ import type {
   AcpClientOptions,
   InitializeParams,
   InitializeResult,
+  Logger,
   SessionNewParams,
   SessionNewResult,
   SessionPromptParams,
@@ -16,9 +17,7 @@ import type {
   SessionCancelParams,
   SessionUpdateParams,
 } from "./types";
-import type { JsonRpcResponse } from "../rpc/types";
-import type { Logger } from "../utils/logger";
-import pino from "pino";
+import type { JsonRpcResponse } from "./rpc";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,7 +32,12 @@ type UpdateHandler = (params: SessionUpdateParams) => void;
 type ExitHandler = (code: number | null) => void;
 
 /** Silent logger used when no logger is provided. */
-const noopLogger = pino({ level: "silent" });
+const noopLogger: Logger = {
+  info() {},
+  warn() {},
+  error() {},
+  debug() {},
+};
 
 // ---------------------------------------------------------------------------
 // AcpClient
@@ -105,7 +109,7 @@ export class AcpClient {
 
     const params: InitializeParams = {
       protocolVersion: 1,
-      clientInfo: { name: "fletcher-relay", version: "0.1.0" },
+      clientInfo: { name: "fletcher-acp-client", version: "0.1.0" },
       capabilities: {},
     };
 
@@ -215,14 +219,28 @@ export class AcpClient {
   // Event handlers
   // -------------------------------------------------------------------------
 
-  /** Register a handler for session/update notifications from the agent. */
-  onUpdate(handler: UpdateHandler): void {
+  /**
+   * Register a handler for session/update notifications from the agent.
+   * Returns an unsubscribe function — call it to remove the handler.
+   */
+  onUpdate(handler: UpdateHandler): () => void {
     this.updateHandlers.push(handler);
+    return () => {
+      const idx = this.updateHandlers.indexOf(handler);
+      if (idx >= 0) this.updateHandlers.splice(idx, 1);
+    };
   }
 
-  /** Register a handler for when the ACP subprocess exits unexpectedly. */
-  onExit(handler: ExitHandler): void {
+  /**
+   * Register a handler for when the ACP subprocess exits unexpectedly.
+   * Returns an unsubscribe function — call it to remove the handler.
+   */
+  onExit(handler: ExitHandler): () => void {
     this.exitHandlers.push(handler);
+    return () => {
+      const idx = this.exitHandlers.indexOf(handler);
+      if (idx >= 0) this.exitHandlers.splice(idx, 1);
+    };
   }
 
   /** Whether the subprocess is currently alive. */

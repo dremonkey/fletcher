@@ -5,9 +5,9 @@
  * ACPX responses/notifications are forwarded back to the mobile client.
  */
 
-import { AcpClient } from "../acp/client";
+import { AcpClient } from "@fletcher/acp-client";
 import type { RoomManager } from "../livekit/room-manager";
-import type { SessionUpdateParams } from "../acp/types";
+import type { SessionUpdateParams } from "@fletcher/acp-client";
 import { INTERNAL_ERROR } from "../rpc/errors";
 import { rootLogger, type Logger } from "../utils/logger";
 
@@ -76,6 +76,7 @@ export class RelayBridge {
       mcpServers: [],
       _meta: {
         room_name: roomName,
+        verbose: true,
       },
     });
     this.sessionId = result.sessionId;
@@ -167,6 +168,7 @@ export class RelayBridge {
       mcpServers: [],
       _meta: {
         room_name: roomName,
+        verbose: true,
       },
     });
 

@@ -1,8 +1,8 @@
 import type { WebhookReceiver } from "livekit-server-sdk";
 import type { BridgeManager } from "../bridge/bridge-manager";
 import type { RoomManager } from "../livekit/room-manager";
-import { AcpClient } from "../acp/client";
-import type { SessionUpdateParams } from "../acp/types";
+import { AcpClient } from "@fletcher/acp-client";
+import type { SessionUpdateParams } from "@fletcher/acp-client";
 import { rootLogger, type Logger } from "../utils/logger";
 import { createWebhookHandler } from "./webhook";
 
