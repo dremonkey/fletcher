@@ -170,6 +170,7 @@ Developer experience improvements to the terminal UI launcher.
 - [~] 001: `fletcher tui` CLI entrypoint — code complete, needs manual verification
 - [x] 002: Reliable one-shot service startup — fixed registration log string, Docker CPU load dispatch bug ([agents-js#1082](https://github.com/livekit/agents-js/issues/1082)), ganglia config mismatch; tested on emulator + Pixel 9
 - [~] 003: Graceful Ctrl+C shutdown — Bun signal handler bug workaround + sync cleanup working; Ctrl+C during startup and double Ctrl+C untested
+- [ ] 004: Kill relay on TUI shutdown even if manually restarted — relay escapes cleanup when pre-running or restarted outside TUI ([BUG-005](../docs/field-tests/20260312-buglog.md))
 
 ### 9. [Connectivity & Resilience](./09-connectivity) 🔄
 Bulletproof connection handling: survive network switches, Bluetooth changes, airplane mode, and phone sleep.
@@ -251,8 +252,9 @@ Implementing best practices for TTS optimization, audio summaries, and visual-au
 **Tasks:**
 - [x] 016: Core TTS Rule Enforcement ✅ — strictly no markdown, phonetic spelling, punctuation for prosody; bootstrap message updated in `apps/voice-agent/src/bootstrap.ts`; 12 tests added
 - [ ] 017: Visual-Audio Artifact Coordination 📋 — auto-push detailed artifacts for complex data; verbal anchors
-- [ ] 018: Contextual Noise & Ambiguity Guard 📋 — harden agent against STT errors and hallucinations
-- [ ] 019: Session Initiation & Warm Start 📋 — silent background pre-loading of memory and project context
+- [ ] 018: Remove working directory prefix from chat messages — `[Working directory: path]` injected on every prompt; UX and token waste ([BUG-003](../docs/field-tests/20260312-buglog.md))
+- [ ] 019: Contextual Noise & Ambiguity Guard 📋 — harden agent against STT errors and hallucinations
+- [ ] 020: Session Initiation & Warm Start 📋 — silent background pre-loading of memory and project context
 
 ### 13. [Speaker Isolation (Voice Lock)](./11-speaker-isolation) 🔄
 Lock onto the primary speaker's voice in a 1-on-1 conversation — reject background speech, ambient noise, and echo so only the intended user is transcribed.
@@ -392,6 +394,7 @@ Split the single voice-agent pipeline into two distinct modes — **Voice Mode**
 - [ ] 052: Relay LLM Wrapper for Ganglia — JSON-RPC LLM backend routing through relay instead of direct completions API
 - [~] 053: Dual-Mode Chat/Live Split 🔄 — mic button as mode switch (muted=chat, unmuted=voice); relay routing implemented; agent text_message handler not yet removed
 - [~] 054: Mobile ACP Client 🔄 — JSON-RPC codec + RelayChatService + LiveKitService wiring done; 30 unit tests; cancel UI + inline error cards remaining
+- [ ] 055: Relay chunk-level debug logging — no chunk-level visibility in pipeline; needed to diagnose truncation ([BUG-006](../docs/field-tests/20260312-buglog.md))
 
 **Depends on:** Epic 4 (Ganglia session keys), Epic 7 (Sovereign Pairing), Epic 17 (Text Input), Epic 20 (Agent Dispatch)
 
