@@ -109,130 +109,36 @@ The relay's ACP client is **already implemented** (`apps/relay/src/acp/client.ts
 
 ## Tasks
 
-### 042: Relay Integration for Chat Mode (Flutter)
-Wire the Flutter app to communicate with the Fletcher Relay via JSON-RPC 2.0 over the LiveKit data channel. The app already subscribes to `ganglia-events` data channel — add a parallel `relay` topic (or reuse the existing channel with message type routing). Implement the client-side JSON-RPC methods: `session/new`, `session/message`, `session/resume`, `session/cancel`.
+### Core Relay Infrastructure (Epic 24) ✅
+The relay service itself is fully built — see [Epic 24: WebRTC ACP Relay](../24-webrtc-acp-relay/EPIC.md). All 9 tasks complete (LiveKit participant, ACP stdio client, data channel bridge, room lifecycle, health, resilience).
 
-This replaces the current text path (data channel → voice agent → Ganglia → OpenClaw) with data channel → relay → OpenClaw.
+### Implemented ✅
 
-**Depends on:** fletcher-relay project (relay-mvp epic)
+- [x] **044: Client-Side STT** — Removed. Unnecessary — OS keyboard and platform handle this natively.
+- [x] [**053: Dual-Mode Chat / Live Split**](./053-dual-mode-chat-live-split.md) [~] — Chat/live routing works; mic button toggles mode; relay handles text in chat mode. **Remaining:** remove `text_message` handler from `agent.ts`, field-verify session key continuity.
+- [x] [**054: Mobile ACP Client**](./054-mobile-jsonrpc-client.md) [~] — JSON-RPC codec, AcpClient service, streaming text into ChatTranscript, error handling, 30 unit tests. **Remaining:** wire `session/cancel` to UI cancel button, inline error cards (currently system events).
+- [x] [**055: Serialize relay `forwardToMobile` calls**](./_closed/055-relay-serialize-forward-to-mobile.md) — sendQueue Promise chain; chunk always arrives before result.
+- [x] [**056: Fix ACP Subprocess Leak**](./_closed/056-acp-subprocess-leak.md) — SIGKILL escalation after 3s SIGTERM grace period; process group kill.
+- [x] [**059: Deferred Teardown on `participant_left`**](./_closed/059-relay-deferred-teardown.md) — 120s grace period survives WiFi→cellular network switches.
 
-**Status:** [ ]
+### In Progress 🔄
 
----
+- [~] [**052: ACP Backend for Ganglia**](./052-relay-llm-wrapper.md) — `GANGLIA_TYPE=acp` LLM backend. Not started. Needed for voice mode to use ACP instead of HTTP/SSE completions API.
+- [~] [**057: Relay-Side ACP Response Timeout**](./057-relay-acp-response-timeout.md) — Not started. Configurable timeout for hung ACP responses; mobile error surface; subprocess re-init.
 
-### 043: Pluggable TTS Engine Abstraction
-Define a `TtsEngine` interface in Dart with implementations:
-- **NativeTtsEngine** — wraps `flutter_tts` (free, offline, platform voices)
-- **CartesiaTtsEngine** — REST/WebSocket API → audio bytes → `just_audio` playback (40ms TTFA)
-- **GeminiTtsEngine** — Google GenAI SDK with audio response modality
+### Backlog 📋
 
-The interface: `speak(String text)`, `stop()`, `state` stream. Sentence-level streaming: as relay streams text deltas via `session/update`, buffer into sentences, feed each to the active engine.
+These tasks complete the full dual-mode vision. Currently deferred — chat mode works for text without them.
 
-Engine selection via user setting (persisted in SharedPreferences).
-
-**Status:** [ ]
-
----
-
-### 044: Client-Side STT Integration (REMOVED)
-Add `speech_to_text` package for native on-device speech recognition in chat mode. STT output fills the text input field (user can review/edit before sending). This replaces the server-side Deepgram STT that runs through LiveKit.
-
-Key: native STT uses `MODE_NORMAL` on Android — no mic conflict with WebRTC. No audio track is published in chat mode.
-
-**Status:** [X] (Unnecessary - handled natively by OS keyboard/platform)
-
----
-
-### 045: Chat Mode Streaming Pipeline
-Wire the full chat mode pipeline: text input (typed or native STT) → relay JSON-RPC (`session/message`) → `session/update` stream → sentence buffer → TtsEngine (043) → audio out. Simultaneously render streamed text in ChatTranscript as it arrives.
-
-Handle: interruption (user starts typing while TTS is speaking), error recovery (relay timeout → surface error), empty responses.
-
-**Status:** [ ]
-
----
-
-### 046: Mode Switch Controller
-State machine managing transitions between voice mode and chat mode:
-- **Voice → Chat:** stop publishing audio track (not just mute — `removePublishedTrack`), release WebRTC audio session to `MODE_NORMAL`, stop agent idle timer. Agent sleeps naturally or is explicitly released. Relay becomes active participant for text routing.
-- **Chat → Voice:** dispatch agent (reuse Epic 20 dispatch flow), publish audio track, wait for agent connect, hand off to LiveKit voice pipeline. Relay goes passive (defers to agent). Stop client-side TTS.
-- **Persist mode across app restarts** (SharedPreferences).
-- **Handle in-flight responses** during switch: let current response finish in its original mode before switching.
-- **Coordinate with relay** via room metadata or data channel signals so relay knows whether to handle messages or defer to agent.
-
-**Status:** [ ]
-
----
-
-### 047: Chat Mode Artifact Delivery
-Artifacts in voice mode arrive via the `ganglia-events` data channel from the agent. In chat mode, artifacts arrive from the relay via JSON-RPC `session/update` notifications (with `type: "artifact"`). Ensure `_groupArtifactsByMessage` works with both artifact sources — artifacts should render inline below their originating message regardless of which mode produced them.
-
-**Status:** [ ]
-
----
-
-### 048: Unified Transcript Across Modes
-Ensure ChatTranscript seamlessly merges messages from both modes. A user might start in voice mode, switch to chat, then switch back — the transcript should be one continuous thread. Messages need a `source` tag (voice/chat) for debugging but should render identically.
-
-Session key continuity: both modes must use the same OpenClaw session (via `SessionKey`) so the LLM sees the full conversation history regardless of which mode produced each message. The relay uses the same `resolveSessionKey()` logic as Ganglia.
-
-**Status:** [ ]
-
----
-
-### 049: Voice Pipeline Clean Teardown
-When switching from voice to chat mode, perform a clean shutdown of the voice pipeline:
-- Unpublish audio track (not just mute — full `removePublishedTrack`)
-- Release Android `AudioManager` to `MODE_NORMAL`
-- Keep LiveKit room connection alive (relay still needs the data channel)
-- Clear stale voice state: `_lastAgentSegmentId`, reconnection flags, idle timer
-
-This directly addresses the root cause of BUG-001/003 (Mar 9) and BUG-009 (Mar 10). Unlike the current architecture, the room stays connected for the relay — only the audio track and agent are torn down.
-
-**Status:** [ ]
-
----
-
-### 050: Migrate Text Input from Agent to Relay
-The current text input (Epic 17) routes typed messages through the LiveKit data channel to the voice agent. Migrate this to route through the relay instead via JSON-RPC `session/message`. Text input always goes through chat mode — even if the agent happens to be connected, text messages are handled by the relay, not the agent. This ensures text works regardless of agent state.
-
-**Status:** [ ]
-
----
-
-### 051: Chat Mode Health & Error Handling
-Define health semantics for chat mode: relay participant presence in room, relay ↔ OpenClaw connectivity (via JSON-RPC heartbeat or health method), TTS engine status. Update HealthService to show appropriate status — when in chat mode, agent absence is normal, not "Degraded."
-
-Add relay-specific error surfaces: "Relay disconnected," "OpenClaw unreachable," "TTS engine error." These replace the voice-mode-centric health indicators.
-
-Addresses BUG-003 (Mar 10) — system status during agent sleep.
-
-**Status:** [ ]
-
----
-
-### 052: ACP Backend for Ganglia (`GANGLIA_TYPE=acp`)
-Create a new `LLM` backend in `livekit-agent-ganglia` that connects to OpenClaw via ACP (Agent Communication Protocol) instead of the current HTTP/SSE completions API. Spawns an ACP subprocess (stdio) or connects via WebSocket, performs the `initialize` → `session/new` handshake, and maps `session/prompt` → `session/update` streams back to `LLMStream`-compatible events. This replaces the half-duplex HTTP transport with full-duplex ACP, enabling mid-turn push, real-time events, and multi-modal coordination. See full spec: `apps/relay/docs/acp-transport.md`.
-
-**Status:** [ ]
-
----
-
-### 053: Dual-Mode Chat / Live Split
-Implement two distinct operating modes: **Chat mode** (text via relay participant on `"relay"` topic) and **Live mode** (voice via voice-agent, unchanged). Disable the current path that sends text messages through the voice agent (`text_message` on `ganglia-events`). Text exclusively routes through the relay in chat mode. Chat mode does not support TTS initially — text responses render in transcript only. TTS will be enabled later (independent of livekit-agent).
-
-**Depends on:** 052
-
-**Status:** [~] (chat/live routing works; text_message handler not yet removed from agent.ts; session key continuity needs field verification)
-
----
-
-### 054: Mobile ACP Client (JSON-RPC over Data Channel)
-Implement a full ACP client in the Flutter app that speaks JSON-RPC 2.0 over the `"relay"` data channel topic. The relay is a transparent passthrough — mobile speaks ACP directly. Methods: `session/prompt` (send text, receive streamed `session/update` notifications with `content_chunk` deltas), `session/cancel` (interrupt in-flight requests). Handle relay-specific errors (`-32003` voice mode active, `-32010` ACP lost, `-32011` session not ready). JSON-RPC codec, request ID correlation, and UI integration (streaming text into ChatTranscript, thinking spinner, error cards).
-
-**Depends on:** 053
-
-**Status:** [~] (JSON-RPC codec, ACP client, streaming, error handling done; cancel not wired to UI button; errors surface as system events not inline cards)
+- [ ] **042: Relay Integration for Chat Mode (Flutter)** — Superseded by 054 (Mobile ACP Client). Remaining work tracked there.
+- [ ] **043: Pluggable TTS Engine Abstraction** — `TtsEngine` interface with NativeTTS/Cartesia/Gemini implementations. Sentence-level streaming from relay text deltas.
+- [ ] **045: Chat Mode Streaming Pipeline** — Full pipeline: text input → relay JSON-RPC → sentence buffer → TtsEngine → audio out.
+- [ ] **046: Mode Switch Controller** — State machine for voice↔chat transitions. Audio track teardown/publish, agent dispatch/release, in-flight response handling.
+- [ ] **047: Chat Mode Artifact Delivery** — Artifacts via JSON-RPC `session/update` from relay (currently voice-mode only via `ganglia-events`).
+- [ ] **048: Unified Transcript Across Modes** — Seamless merge of voice and chat messages. Session key continuity verification.
+- [ ] **049: Voice Pipeline Clean Teardown** — `removePublishedTrack`, release `MODE_NORMAL`, keep room alive for relay. Root fix for BUG-001/003/009.
+- [ ] **050: Migrate Text Input from Agent to Relay** — Text always routes through relay, never agent. Partly done via 053.
+- [ ] **051: Chat Mode Health & Error Handling** — Relay-specific health semantics. Agent absence is normal in chat mode.
 
 ---
 
