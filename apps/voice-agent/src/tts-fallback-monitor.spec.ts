@@ -64,8 +64,8 @@ describe('attachFallbackMonitor', () => {
 
     expect(publishedEvents).toHaveLength(1);
     expect(publishedEvents[0]).toEqual({
-      type: 'artifact',
-      artifact_type: 'error',
+      type: 'system_event',
+      severity: 'error',
       title: 'Voice Degraded',
       message: 'Using backup voice. Quality may be reduced.',
     });
@@ -81,8 +81,8 @@ describe('attachFallbackMonitor', () => {
 
     expect(publishedEvents).toHaveLength(1);
     expect(publishedEvents[0]).toEqual({
-      type: 'artifact',
-      artifact_type: 'error',
+      type: 'system_event',
+      severity: 'success',
       title: 'Voice Restored',
       message: 'High-quality voice is back.',
     });

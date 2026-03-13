@@ -37,75 +37,96 @@
  *   NANOCLAW_CHANNEL_PREFIX - Channel prefix (default: 'lk')
  */
 
-import { defineAgent, cli, ServerOptions, tts, type JobContext, type JobProcess } from '@livekit/agents';
-import { voice } from '@livekit/agents';
-import * as deepgram from '@livekit/agents-plugin-deepgram';
-import * as silero from '@livekit/agents-plugin-silero';
-import * as livekit from '@livekit/agents-plugin-livekit';
-import { RoomEvent, ParticipantKind } from '@livekit/rtc-node';
-import { createGangliaFromEnv, resolveSessionKeySimple } from '@knittt/livekit-agent-ganglia';
-import pino from 'pino';
-import { TurnMetricsCollector } from './metrics';
-import { initTelemetry, shutdownTelemetry } from './telemetry';
-import { resolveAckSound } from './ack-sound-config';
-import { createTTS, type TTSProvider } from './tts-provider';
-import { TranscriptManager } from './transcript-manager';
-import { initHeapDiagnostics } from './heap-snapshot';
-import { buildBootstrapMessage } from './bootstrap';
-import { attachFallbackMonitor } from './tts-fallback-monitor';
-import { guardTTSInputStream } from './tts-chunk-guard';
+import {
+  defineAgent,
+  cli,
+  ServerOptions,
+  tts,
+  type JobContext,
+  type JobProcess,
+} from "@livekit/agents";
+import { voice } from "@livekit/agents";
+import * as deepgram from "@livekit/agents-plugin-deepgram";
+import * as silero from "@livekit/agents-plugin-silero";
+import * as livekit from "@livekit/agents-plugin-livekit";
+import { RoomEvent, ParticipantKind } from "@livekit/rtc-node";
+import {
+  createGangliaFromEnv,
+  resolveSessionKeySimple,
+} from "@knittt/livekit-agent-ganglia";
+import pino from "pino";
+import { TurnMetricsCollector } from "./metrics";
+import { initTelemetry, shutdownTelemetry } from "./telemetry";
+import { resolveAckSound } from "./ack-sound-config";
+import { createTTS, type TTSProvider } from "./tts-provider";
+import { TranscriptManager } from "./transcript-manager";
+import { initHeapDiagnostics } from "./heap-snapshot";
+import { buildBootstrapMessage } from "./bootstrap";
+import { attachFallbackMonitor } from "./tts-fallback-monitor";
+import { guardTTSInputStream } from "./tts-chunk-guard";
+import { RelayRoom } from "@knittt/livekit-agent-ganglia/dist/ganglia-types";
 
 // ---------------------------------------------------------------------------
 // Logger setup — pretty-print when running locally, JSON in production
 // ---------------------------------------------------------------------------
-const isLocal = process.env.NODE_ENV !== 'production' && !process.env.K_SERVICE;
+const isLocal = process.env.NODE_ENV !== "production" && !process.env.K_SERVICE;
 const logger = pino({
-  level: process.env.LOG_LEVEL || 'info',
-  ...(isLocal ? { transport: { target: 'pino-pretty', options: { colorize: true } } } : {}),
+  level: process.env.LOG_LEVEL || "info",
+  ...(isLocal
+    ? { transport: { target: "pino-pretty", options: { colorize: true } } }
+    : {}),
 });
 
 // ---------------------------------------------------------------------------
 // Environment validation
 // ---------------------------------------------------------------------------
 const REQUIRED_ENV = [
-  'LIVEKIT_URL',
-  'LIVEKIT_API_KEY',
-  'LIVEKIT_API_SECRET',
-  'DEEPGRAM_API_KEY',
+  "LIVEKIT_URL",
+  "LIVEKIT_API_KEY",
+  "LIVEKIT_API_SECRET",
+  "DEEPGRAM_API_KEY",
 ] as const;
 
-const ttsProvider = (process.env.TTS_PROVIDER ?? 'piper') as TTSProvider;
-const BRAIN_MAX_WAIT_MS = parseInt(process.env.FLETCHER_BRAIN_MAX_WAIT_MS ?? '60000', 10);
+const ttsProvider = (process.env.TTS_PROVIDER ?? "piper") as TTSProvider;
+const BRAIN_MAX_WAIT_MS = parseInt(
+  process.env.FLETCHER_BRAIN_MAX_WAIT_MS ?? "60000",
+  10,
+);
 
 // Skip env validation for download-files (runs during Docker build without env)
-if (!process.argv.includes('download-files')) {
+if (!process.argv.includes("download-files")) {
   const missing: string[] = REQUIRED_ENV.filter((k) => !process.env[k]);
 
   // TTS-provider-specific requirements
-  if (ttsProvider === 'elevenlabs' && !process.env.ELEVENLABS_API_KEY) {
-    missing.push('ELEVENLABS_API_KEY');
+  if (ttsProvider === "elevenlabs" && !process.env.ELEVENLABS_API_KEY) {
+    missing.push("ELEVENLABS_API_KEY");
   }
-  if (ttsProvider === 'google' && !process.env.GOOGLE_API_KEY) {
-    missing.push('GOOGLE_API_KEY');
+  if (ttsProvider === "google" && !process.env.GOOGLE_API_KEY) {
+    missing.push("GOOGLE_API_KEY");
   }
-  if (ttsProvider === 'piper' && !process.env.PIPER_URL) {
-    missing.push('PIPER_URL');
+  if (ttsProvider === "piper" && !process.env.PIPER_URL) {
+    missing.push("PIPER_URL");
   }
 
   if (missing.length > 0) {
-    logger.fatal(`Missing required environment variables: ${missing.join(', ')}`);
+    logger.fatal(
+      `Missing required environment variables: ${missing.join(", ")}`,
+    );
     process.exit(1);
   }
 
   // ACP is the default backend — no API key required from the voice agent.
   // The ACP subprocess (e.g. openclaw) handles its own authentication.
-  const gangliaType = process.env.GANGLIA_TYPE ?? 'acp';
+  const gangliaType = process.env.GANGLIA_TYPE ?? "acp";
 
-  logger.info({
-    livekitUrl: process.env.LIVEKIT_URL,
-    gangliaType,
-    ttsProvider,
-  }, 'Environment validated');
+  logger.info(
+    {
+      livekitUrl: process.env.LIVEKIT_URL,
+      gangliaType,
+      ttsProvider,
+    },
+    "Environment validated",
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -120,7 +141,10 @@ if (!process.argv.includes('download-files')) {
 class GuardedAgent extends voice.Agent {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   override async ttsNode(text: any, modelSettings: any): Promise<any> {
-    return super.ttsNode(guardTTSInputStream(text as ReadableStream<string>) as any, modelSettings);
+    return super.ttsNode(
+      guardTTSInputStream(text as ReadableStream<string>) as any,
+      modelSettings,
+    );
   }
 }
 
@@ -137,7 +161,7 @@ export default defineAgent({
     // STT, TTS, and LLM clients don't need prewarming — they establish
     // connections lazily on first use with negligible cold-start overhead.
     await silero.VAD.load({ activationThreshold: 0.6 });
-    logger.info('Agent pre-warmed: VAD model loaded');
+    logger.info("Agent pre-warmed: VAD model loaded");
   },
   entry: async (ctx: JobContext) => {
     const entryStartMs = performance.now();
@@ -148,16 +172,23 @@ export default defineAgent({
     const publishEvent = (event: Record<string, unknown>) => {
       const localParticipant = ctx.room.localParticipant;
       if (!localParticipant) return;
+      // Auto-stamp artifact events with current segment ID for correct
+      // client-side attachment (BUG-012 fix).  The client prefers this
+      // server-provided segmentId over its own _lastAgentSegmentId.
+      if (event.type === 'artifact' && !event.segmentId) {
+        event.segmentId = transcriptMgr.activeSegmentId;
+      }
       localParticipant.publishData(
         new TextEncoder().encode(JSON.stringify(event)),
-        { topic: 'ganglia-events', reliable: true },
+        { topic: "ganglia-events", reliable: true },
       );
     };
 
     const publishStatus = (action: string, detail?: string | null) => {
-      const event = detail != null
-        ? { type: 'status', action, detail, startedAt: Date.now() }
-        : { type: 'status', action, startedAt: Date.now() };
+      const event =
+        detail != null
+          ? { type: "status", action, detail, startedAt: Date.now() }
+          : { type: "status", action, startedAt: Date.now() };
       publishEvent(event);
     };
 
@@ -205,13 +236,20 @@ export default defineAgent({
     // whose HTTP connections haven't closed yet) mutate shared state and
     // corrupt newer streams' transcript events.  See BUG-010.
     // -----------------------------------------------------------------------
-    const transcriptMgr = new TranscriptManager({ publishEvent, publishStatus, stopAck, logger });
+    const transcriptMgr = new TranscriptManager({
+      publishEvent,
+      publishStatus,
+      stopAck,
+      logger,
+    });
 
     const gangliaLlm = await createGangliaFromEnv({
       logger,
-      room: ctx.room,  // Used by GANGLIA_TYPE=relay; ignored by other backends
-      onPondering: (phrase, streamId) => transcriptMgr.onPondering(phrase, streamId),
-      onContent: (delta, fullText, streamId) => transcriptMgr.onContent(delta, fullText, streamId),
+      room: ctx.room as RelayRoom, // Used by GANGLIA_TYPE=relay; ignored by other backends
+      onPondering: (phrase, streamId) =>
+        transcriptMgr.onPondering(phrase, streamId),
+      onContent: (delta, fullText, streamId) =>
+        transcriptMgr.onContent(delta, fullText, streamId),
     });
     logger.info(`Using ganglia backend: ${gangliaLlm.gangliaType()}`);
 
@@ -283,7 +321,7 @@ export default defineAgent({
     });
 
     await session.start({
-      agent: new GuardedAgent({ instructions: '' }),
+      agent: new GuardedAgent({ instructions: "" }),
       room: ctx.room,
       // Disable SDK transcription — we publish agent text ourselves via
       // the onContent callback → ganglia-events data channel.  This avoids
@@ -293,7 +331,10 @@ export default defineAgent({
     });
     await ctx.connect();
     const connectLatencyMs = Math.round(performance.now() - entryStartMs);
-    logger.info({ connectLatencyMs }, `Agent dispatch-to-connect latency: ${connectLatencyMs}ms — room: ${ctx.room.name}`);
+    logger.info(
+      { connectLatencyMs },
+      `Agent dispatch-to-connect latency: ${connectLatencyMs}ms — room: ${ctx.room.name}`,
+    );
 
     // -----------------------------------------------------------------------
     // Client data channel commands — listen for control events from the
@@ -302,36 +343,54 @@ export default defineAgent({
     // -----------------------------------------------------------------------
     let ttsEnabled = true;
 
-    ctx.room.on(RoomEvent.DataReceived, (payload: Uint8Array, participant: any, _kind: any, topic?: string) => {
-      if (topic !== 'ganglia-events') return;
-      try {
-        const event = JSON.parse(new TextDecoder().decode(payload));
-        if (event.type === 'tts-mode') {
-          ttsEnabled = event.value !== 'off';
-          session.output.setAudioEnabled(ttsEnabled);
-          logger.info({ ttsEnabled, participant: participant?.identity }, 'TTS mode changed');
-        }
+    ctx.room.on(
+      RoomEvent.DataReceived,
+      (payload: Uint8Array, participant: any, _kind: any, topic?: string) => {
+        if (topic !== "ganglia-events") return;
+        try {
+          const event = JSON.parse(new TextDecoder().decode(payload));
+          if (event.type === "tts-mode") {
+            ttsEnabled = event.value !== "off";
+            session.output.setAudioEnabled(ttsEnabled);
+            logger.info(
+              { ttsEnabled, participant: participant?.identity },
+              "TTS mode changed",
+            );
+          }
 
-        // Text input from mobile client — inject typed text into the LLM
-        // pipeline as a user message.  The response flows through the normal
-        // TTS + transcript pipeline. (TASK-017, Epic 17)
-        if (event.type === 'text_message' && typeof event.text === 'string' && event.text.trim()) {
-          logger.info({ text: event.text, participant: participant?.identity }, 'Text message received');
-          session.generateReply({ userInput: event.text });
+          // Text input from mobile client — inject typed text into the LLM
+          // pipeline as a user message.  The response flows through the normal
+          // TTS + transcript pipeline. (TASK-017, Epic 17)
+          if (
+            event.type === "text_message" &&
+            typeof event.text === "string" &&
+            event.text.trim()
+          ) {
+            logger.info(
+              { text: event.text, participant: participant?.identity },
+              "Text message received",
+            );
+            session.generateReply({ userInput: event.text });
+          }
+        } catch (e) {
+          logger.debug(
+            { error: e },
+            "Failed to parse incoming data channel event",
+          );
         }
-      } catch (e) {
-        logger.debug({ error: e }, 'Failed to parse incoming data channel event');
-      }
-    });
+      },
+    );
 
     // Initialize the background audio player without thinkingSound —
     // we control play/stop manually via the pondering lifecycle above.
     if (ackSound) {
       bgAudioPlayer = new voice.BackgroundAudioPlayer();
       await bgAudioPlayer.start({ room: ctx.room, agentSession: session });
-      logger.info('Acknowledgment sound enabled (plays on EOU, stops on first token or error)');
+      logger.info(
+        "Acknowledgment sound enabled (plays on EOU, stops on first token or error)",
+      );
     } else {
-      logger.info('Acknowledgment sound disabled');
+      logger.info("Acknowledgment sound disabled");
     }
 
     // -----------------------------------------------------------------------
@@ -343,14 +402,36 @@ export default defineAgent({
       const m = ev.metrics;
       // Log individual component metrics at debug level
       switch (m.type) {
-        case 'llm_metrics':
-          logger.debug({ ttftMs: m.ttftMs, durationMs: m.durationMs, tokensPerSecond: Math.round(m.tokensPerSecond), speechId: m.speechId }, 'LLM metrics');
+        case "llm_metrics":
+          logger.debug(
+            {
+              ttftMs: m.ttftMs,
+              durationMs: m.durationMs,
+              tokensPerSecond: Math.round(m.tokensPerSecond),
+              speechId: m.speechId,
+            },
+            "LLM metrics",
+          );
           break;
-        case 'tts_metrics':
-          logger.debug({ ttfbMs: m.ttfbMs, durationMs: m.durationMs, speechId: m.speechId }, 'TTS metrics');
+        case "tts_metrics":
+          logger.debug(
+            {
+              ttfbMs: m.ttfbMs,
+              durationMs: m.durationMs,
+              speechId: m.speechId,
+            },
+            "TTS metrics",
+          );
           break;
-        case 'eou_metrics':
-          logger.debug({ endOfUtteranceDelayMs: m.endOfUtteranceDelayMs, transcriptionDelayMs: m.transcriptionDelayMs, speechId: m.speechId }, 'EOU metrics');
+        case "eou_metrics":
+          logger.debug(
+            {
+              endOfUtteranceDelayMs: m.endOfUtteranceDelayMs,
+              transcriptionDelayMs: m.transcriptionDelayMs,
+              speechId: m.speechId,
+            },
+            "EOU metrics",
+          );
           break;
       }
       // Correlate into per-turn summaries
@@ -358,31 +439,43 @@ export default defineAgent({
     });
 
     session.on(voice.AgentSessionEventTypes.AgentStateChanged, (ev) => {
-      logger.info({ from: ev.oldState, to: ev.newState }, 'Agent state changed');
+      logger.info(
+        { from: ev.oldState, to: ev.newState },
+        "Agent state changed",
+      );
 
       // Brain maxWait timeout (BUG-008/005): start countdown on thinking,
       // cancel when any content arrives (state transitions away from thinking).
-      if (ev.newState === 'thinking' && BRAIN_MAX_WAIT_MS > 0) {
+      if (ev.newState === "thinking" && BRAIN_MAX_WAIT_MS > 0) {
         clearBrainTimeout();
         brainTimeoutHandle = setTimeout(() => {
-          logger.warn({ maxWaitMs: BRAIN_MAX_WAIT_MS }, 'Brain maxWait exceeded — aborting LLM stream');
+          logger.warn(
+            { maxWaitMs: BRAIN_MAX_WAIT_MS },
+            "Brain maxWait exceeded — aborting LLM stream",
+          );
           session.interrupt();
           publishEvent({
-            type: 'artifact',
-            artifact_type: 'error',
-            title: 'Brain Timed Out',
-            message: 'The response took too long. Please try again.',
+            type: "system_event",
+            severity: "error",
+            title: "Brain Timed Out",
+            message: "The response took too long. Please try again.",
           });
           brainTimeoutHandle = null;
         }, BRAIN_MAX_WAIT_MS);
-      } else if (ev.oldState === 'thinking') {
+      } else if (ev.oldState === "thinking") {
         clearBrainTimeout();
       }
 
       // Start ack on EOU detection (thinking state) — skip when TTS is
       // disabled since there's no point playing a chime if the user wants
       // silence (TASK-030).
-      if (ev.newState === 'thinking' && bgAudioPlayer && ackSound && !ackPlayHandle && ttsEnabled) {
+      if (
+        ev.newState === "thinking" &&
+        bgAudioPlayer &&
+        ackSound &&
+        !ackPlayHandle &&
+        ttsEnabled
+      ) {
         ackPlayHandle = bgAudioPlayer.play({ source: ackSound, volume: 0.8 });
       }
     });
@@ -404,14 +497,14 @@ export default defineAgent({
 
     session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (ev) => {
       if (ev.isFinal) {
-        logger.info({ transcript: ev.transcript }, 'User input (final)');
+        logger.info({ transcript: ev.transcript }, "User input (final)");
       }
       // Allocate a new segment on first interim of a new utterance
       if (!currentUserSegmentId) {
         currentUserSegmentId = `user_seg_${++userSegmentCounter}`;
       }
       publishEvent({
-        type: 'user_transcript',
+        type: "user_transcript",
         segmentId: currentUserSegmentId,
         text: ev.transcript,
         final: ev.isFinal,
@@ -433,25 +526,40 @@ export default defineAgent({
     const ERROR_ARTIFACT_DEBOUNCE_MS = 60_000;
 
     session.on(voice.AgentSessionEventTypes.Error, (ev) => {
-      const err = ev.error as { type?: string; label?: string; error?: Error; recoverable?: boolean };
+      const err = ev.error as {
+        type?: string;
+        label?: string;
+        error?: Error;
+        recoverable?: boolean;
+      };
       const message = err.error?.message ?? String(err);
 
       // "Queue is closed" is expected during disconnect — don't forward to client
-      if (message.includes('Queue is closed')) {
-        logger.debug({ label: err.label }, 'Queue closed (expected during disconnect)');
+      if (message.includes("Queue is closed")) {
+        logger.debug(
+          { label: err.label },
+          "Queue closed (expected during disconnect)",
+        );
         return;
       }
 
       // Use the SDK label (e.g. "elevenlabs.TTS", "deepgram.STT") for specificity,
       // fall back to generic category
-      const source = err.label
-        ?? (err.type === 'tts_error' ? 'TTS'
-          : err.type === 'stt_error' ? 'STT'
-          : err.type === 'llm_error' ? 'LLM'
-          : 'Pipeline');
-      logger.error({ source, message, recoverable: err.recoverable }, 'Pipeline error');
+      const source =
+        err.label ??
+        (err.type === "tts_error"
+          ? "TTS"
+          : err.type === "stt_error"
+            ? "STT"
+            : err.type === "llm_error"
+              ? "LLM"
+              : "Pipeline");
+      logger.error(
+        { source, message, recoverable: err.recoverable },
+        "Pipeline error",
+      );
 
-      const isTts = err.type === 'tts_error' || message.includes('TTS');
+      const isTts = err.type === "tts_error" || message.includes("TTS");
 
       // When using FallbackAdapter and the fallback TTS is still available,
       // suppress "Voice Unavailable" artifacts — the voice is degraded, not
@@ -463,9 +571,14 @@ export default defineAgent({
       // setupEventForwarding(), producing a misleading "Voice Unavailable"
       // artifact every 60s even though Piper is serving audio fine.
       if (isTts && ttsInstance instanceof tts.FallbackAdapter) {
-        const anyFallbackAvailable = ttsInstance.status.some((s, i) => i > 0 && s.available);
+        const anyFallbackAvailable = ttsInstance.status.some(
+          (s, i) => i > 0 && s.available,
+        );
         if (anyFallbackAvailable) {
-          logger.debug({ source, message }, 'TTS error suppressed — fallback still available');
+          logger.debug(
+            { source, message },
+            "TTS error suppressed — fallback still available",
+          );
           stopAck();
           return;
         }
@@ -476,11 +589,11 @@ export default defineAgent({
       if (now - lastErrorArtifact > ERROR_ARTIFACT_DEBOUNCE_MS) {
         lastErrorArtifact = now;
         publishEvent({
-          type: 'artifact',
-          artifact_type: 'error',
-          title: isTts ? 'Voice Unavailable' : `${source} Error`,
+          type: "system_event",
+          severity: "error",
+          title: isTts ? "Voice Unavailable" : `${source} Error`,
           message: isTts
-            ? 'All voice synthesis failed. Text responses will continue to appear.'
+            ? "All voice synthesis failed. Text responses will continue to appear."
             : message,
         });
       }
@@ -495,9 +608,12 @@ export default defineAgent({
     // full departure_timeout (120s), blocking recovery. See BUG-020.
     // -----------------------------------------------------------------------
     session.on(voice.AgentSessionEventTypes.Close, (ev: any) => {
-      logger.info({ reason: ev.reason }, 'AgentSession closed');
-      if (ev.reason === 'error') {
-        logger.error({ error: ev.error }, 'AgentSession died — disconnecting from room to allow fresh dispatch');
+      logger.info({ reason: ev.reason }, "AgentSession closed");
+      if (ev.reason === "error") {
+        logger.error(
+          { error: ev.error },
+          "AgentSession died — disconnecting from room to allow fresh dispatch",
+        );
         ctx.room.disconnect();
       }
     });
@@ -516,7 +632,10 @@ export default defineAgent({
       ctx.room.name,
       participantCount,
     );
-    logger.info({ type: sessionKey.type, key: sessionKey.key }, 'Session routing resolved');
+    logger.info(
+      { type: sessionKey.type, key: sessionKey.key },
+      "Session routing resolved",
+    );
 
     gangliaLlm.setSessionKey?.(sessionKey);
     gangliaLlm.setDefaultSession?.({
@@ -532,11 +651,14 @@ export default defineAgent({
     // that OpenClaw may ignore. (TASK-022)
     // -----------------------------------------------------------------------
     const bootstrapMsg = buildBootstrapMessage({
-      roomName: ctx.room.name ?? '',
+      roomName: ctx.room.name ?? "",
       participantIdentity: participant.identity,
     });
-    const isE2e = (ctx.room.name ?? '').startsWith('e2e-');
-    logger.info({ room: ctx.room.name, e2e: isE2e }, 'Sending bootstrap message');
+    const isE2e = (ctx.room.name ?? "").startsWith("e2e-");
+    logger.info(
+      { room: ctx.room.name, e2e: isE2e },
+      "Sending bootstrap message",
+    );
     session.generateReply({ userInput: bootstrapMsg });
 
     // -----------------------------------------------------------------------
@@ -546,7 +668,10 @@ export default defineAgent({
     // completes network handoffs (e.g., WiFi→5G). See BUG-015.
     // -----------------------------------------------------------------------
     ctx.room.on(RoomEvent.ParticipantDisconnected, (p) => {
-      logger.warn({ identity: p.identity, room: ctx.room.name }, 'Participant disconnected — waiting for reconnect (departure_timeout=120s)');
+      logger.warn(
+        { identity: p.identity, room: ctx.room.name },
+        "Participant disconnected — waiting for reconnect (departure_timeout=120s)",
+      );
     });
 
     ctx.room.on(RoomEvent.ParticipantConnected, (p) => {
@@ -556,22 +681,31 @@ export default defineAgent({
       // a previous session that outlived the user's departure_timeout.
       if (p.kind === ParticipantKind.AGENT) {
         logger.warn(
-          { newAgent: p.identity, myIdentity: ctx.room.localParticipant?.identity },
-          'Another agent joined — this agent exiting to prevent duplicate (BUG-013)',
+          {
+            newAgent: p.identity,
+            myIdentity: ctx.room.localParticipant?.identity,
+          },
+          "Another agent joined — this agent exiting to prevent duplicate (BUG-013)",
         );
         ctx.room.disconnect();
         return;
       }
 
-      logger.info({ identity: p.identity, room: ctx.room.name }, 'Participant connected');
+      logger.info(
+        { identity: p.identity, room: ctx.room.name },
+        "Participant connected",
+      );
       // If the reconnecting participant matches the original, update session routing
       if (p.identity === participant.identity) {
-        logger.info({ identity: p.identity }, 'Original participant reconnected — session continues');
+        logger.info(
+          { identity: p.identity },
+          "Original participant reconnected — session continues",
+        );
       }
     });
 
     ctx.addShutdownCallback(async () => {
-      logger.info('Shutting down voice agent...');
+      logger.info("Shutting down voice agent...");
       clearBrainTimeout();
       await bgAudioPlayer?.close();
       await session.close();
@@ -594,7 +728,7 @@ export default defineAgent({
 cli.runApp(
   new ServerOptions({
     agent: import.meta.filename,
-    agentName: 'fletcher-voice',
+    agentName: "fletcher-voice",
     initializeProcessTimeout: 60_000,
     loadFunc: async () => 0,
   }),

@@ -140,6 +140,17 @@ export class TranscriptManager {
     this.streamSegments.delete(streamId);
   }
 
+  /**
+   * Returns the segment ID (e.g. "seg_3") of the currently active LLM stream,
+   * or null if no stream is active.  Used by agent.ts to stamp artifact events
+   * with the correct segment for client-side attachment (BUG-012 fix).
+   */
+  get activeSegmentId(): string | null {
+    if (!this.activeStreamId) return null;
+    const seg = this.streamSegments.get(this.activeStreamId);
+    return seg ? `seg_${seg.segId}` : null;
+  }
+
   // Expose internals for testing
   get _activeStreamId(): string | null { return this.activeStreamId; }
   get _segments(): ReadonlyMap<string, StreamSegment> { return this.streamSegments; }

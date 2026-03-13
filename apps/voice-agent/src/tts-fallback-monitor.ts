@@ -1,5 +1,5 @@
 /**
- * TTS Fallback Monitor — publishes ganglia-events artifacts when the
+ * TTS Fallback Monitor — publishes system_event messages when the
  * FallbackAdapter switches between primary and fallback TTS providers.
  *
  * Three voice states are communicated to the client:
@@ -58,8 +58,8 @@ export function attachFallbackMonitor(
         'Primary TTS unavailable — using fallback (Piper)',
       );
       deps.publishEvent({
-        type: 'artifact',
-        artifact_type: 'error',
+        type: 'system_event',
+        severity: 'error',
         title: 'Voice Degraded',
         message: 'Using backup voice. Quality may be reduced.',
       });
@@ -69,8 +69,8 @@ export function attachFallbackMonitor(
         'Primary TTS recovered — resuming high-fidelity voice',
       );
       deps.publishEvent({
-        type: 'artifact',
-        artifact_type: 'error',
+        type: 'system_event',
+        severity: 'success',
         title: 'Voice Restored',
         message: 'High-quality voice is back.',
       });

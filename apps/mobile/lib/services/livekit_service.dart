@@ -857,13 +857,30 @@ class LiveKitService extends ChangeNotifier {
       _statusClearTimer = Timer(const Duration(seconds: 5), () {
         _updateState(clearStatus: true);
       });
+    } else if (eventType == 'system_event') {
+      // Server-sent system events (Brain Timed Out, Voice Degraded, etc.)
+      // rendered as inline system messages, not artifacts.
+      final severity = json['severity'] as String? ?? 'error';
+      final title = json['title'] as String? ?? 'Error';
+      final message = json['message'] as String? ?? '';
+      _emitSystemEvent(SystemEvent(
+        id: 'agent-event-${DateTime.now().millisecondsSinceEpoch}',
+        type: SystemEventType.agent,
+        status: severity == 'success'
+            ? SystemEventStatus.success
+            : SystemEventStatus.error,
+        message: '$title: $message',
+        timestamp: DateTime.now(),
+        prefix: severity == 'success' ? '\u26A1' : '\u2715',
+      ));
     } else if (eventType == 'artifact') {
       final artifactEvent = ArtifactEvent.fromJson(json);
-      // Associate artifact with the most recent agent message (TASK-023).
-      // If no agent message exists yet, messageId stays null and the
-      // ChatTranscript will use the fallback (nearest prior agent message).
-      final stamped = _lastAgentSegmentId != null
-          ? artifactEvent.withMessageId(_lastAgentSegmentId)
+      // Prefer server-stamped segmentId for correct attachment (BUG-012 fix),
+      // fall back to _lastAgentSegmentId for backward compatibility.
+      final serverSegmentId = json['segmentId'] as String?;
+      final targetId = serverSegmentId ?? _lastAgentSegmentId;
+      final stamped = targetId != null
+          ? artifactEvent.withMessageId(targetId)
           : artifactEvent;
       final newArtifacts = [..._state.artifacts, stamped];
       // Keep only last 10 artifacts
