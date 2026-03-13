@@ -318,6 +318,12 @@ class DiagnosticsInfo {
   final String? ttsProvider;
   final String? llmProvider;
 
+  /// Token usage from ACP `usage_update` events.
+  /// [tokenUsed] is the number of tokens consumed; [tokenSize] is the context
+  /// window limit. Both are null until the first usage update arrives.
+  final int? tokenUsed;
+  final int? tokenSize;
+
   const DiagnosticsInfo({
     this.roundTripMs,
     this.sessionName,
@@ -326,7 +332,27 @@ class DiagnosticsInfo {
     this.sttProvider,
     this.ttsProvider,
     this.llmProvider,
+    this.tokenUsed,
+    this.tokenSize,
   });
+
+  /// Human-readable token usage string, e.g. `'35K / 1M'`.
+  /// Returns null when no usage data has been received yet.
+  String? get tokenDisplay {
+    if (tokenUsed == null || tokenSize == null) return null;
+    final usedK = (tokenUsed! / 1000).toStringAsFixed(0);
+    final sizeK = tokenSize! >= 1000000
+        ? '${(tokenSize! / 1000000).toStringAsFixed(0)}M'
+        : '${(tokenSize! / 1000).toStringAsFixed(0)}K';
+    return '${usedK}K / $sizeK';
+  }
+
+  /// Fraction of the context window consumed (0.0–1.0).
+  /// Returns null when no usage data has been received yet.
+  double? get tokenPercentage =>
+      tokenUsed != null && tokenSize != null && tokenSize! > 0
+          ? tokenUsed! / tokenSize!
+          : null;
 
   DiagnosticsInfo copyWith({
     int? roundTripMs,
@@ -339,6 +365,10 @@ class DiagnosticsInfo {
     String? sttProvider,
     String? ttsProvider,
     String? llmProvider,
+    int? tokenUsed,
+    bool clearTokenUsed = false,
+    int? tokenSize,
+    bool clearTokenSize = false,
   }) {
     return DiagnosticsInfo(
       roundTripMs: clearRoundTripMs ? null : (roundTripMs ?? this.roundTripMs),
@@ -348,6 +378,8 @@ class DiagnosticsInfo {
       sttProvider: sttProvider ?? this.sttProvider,
       ttsProvider: ttsProvider ?? this.ttsProvider,
       llmProvider: llmProvider ?? this.llmProvider,
+      tokenUsed: clearTokenUsed ? null : (tokenUsed ?? this.tokenUsed),
+      tokenSize: clearTokenSize ? null : (tokenSize ?? this.tokenSize),
     );
   }
 
@@ -400,6 +432,13 @@ class ConversationState {
   /// Current input mode — voice-first (default) or text-input (safety hatch).
   final TextInputMode inputMode;
 
+  /// Active tool calls from ACP verbose mode.
+  ///
+  /// Contains in-progress and recently completed tool calls. The list grows
+  /// as `tool_call` events arrive and entries are updated when
+  /// `tool_call_update` events complete them. Cleared between prompt turns.
+  final List<ToolCallInfo> activeToolCalls;
+
   const ConversationState({
     this.status = ConversationStatus.connecting,
     this.userAudioLevel = 0.0,
@@ -416,6 +455,7 @@ class ConversationState {
     this.isAgentThinking = false,
     this.diagnostics = const DiagnosticsInfo(),
     this.inputMode = TextInputMode.textInput,
+    this.activeToolCalls = const [],
   });
 
   ConversationState copyWith({
@@ -437,6 +477,7 @@ class ConversationState {
     bool? isAgentThinking,
     DiagnosticsInfo? diagnostics,
     TextInputMode? inputMode,
+    List<ToolCallInfo>? activeToolCalls,
   }) {
     return ConversationState(
       status: status ?? this.status,
@@ -458,8 +499,43 @@ class ConversationState {
       isAgentThinking: isAgentThinking ?? this.isAgentThinking,
       diagnostics: diagnostics ?? this.diagnostics,
       inputMode: inputMode ?? this.inputMode,
+      activeToolCalls: activeToolCalls ?? this.activeToolCalls,
     );
   }
+}
+
+/// Represents a single tool call initiated by the ACP agent.
+///
+/// Tool calls are surfaced when verbose mode is enabled (`verbose: true` in
+/// `session/new`). The relay receives `tool_call` / `tool_call_update` events
+/// and the mobile shows them as inline indicators in the chat transcript.
+class ToolCallInfo {
+  final String id;
+  final String name;
+  final DateTime startedAt;
+
+  /// null = in-progress; "completed" / "error" = finished.
+  final String? status;
+
+  /// Wall-clock duration from [startedAt] to completion.
+  /// Only available once [status] is set (non-null).
+  final Duration? duration;
+
+  const ToolCallInfo({
+    required this.id,
+    required this.name,
+    required this.startedAt,
+    this.status,
+    this.duration,
+  });
+
+  ToolCallInfo copyWith({String? status, Duration? duration}) => ToolCallInfo(
+    id: id,
+    name: name,
+    startedAt: startedAt,
+    status: status ?? this.status,
+    duration: duration ?? this.duration,
+  );
 }
 
 enum TranscriptRole { user, agent }

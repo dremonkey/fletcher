@@ -30,6 +30,28 @@ class RelayPromptError extends RelayChatEvent {
   RelayPromptError(this.code, this.message);
 }
 
+/// Token usage data from a `usage_update` ACP event.
+///
+/// These can arrive at any point during a session/prompt stream.
+/// [used] tokens consumed; [size] is the context window size.
+class RelayUsageUpdate extends RelayChatEvent {
+  final int used;
+  final int size;
+  RelayUsageUpdate(this.used, this.size);
+}
+
+/// A tool call event from a `tool_call` or `tool_call_update` ACP event.
+///
+/// Emitted only when verbose mode is active (`verbose: true` in `session/new`).
+/// [status] is null when the tool call starts; non-null ("completed", "error")
+/// when it finishes.
+class RelayToolCallEvent extends RelayChatEvent {
+  final String id;
+  final String? title;
+  final String? status;
+  RelayToolCallEvent({required this.id, this.title, this.status});
+}
+
 // ---------------------------------------------------------------------------
 // ACP error codes from the relay
 // ---------------------------------------------------------------------------
@@ -152,6 +174,14 @@ class RelayChatService {
     final update = AcpUpdateParser.parse(params);
     if (update is AcpTextDelta && update.text.isNotEmpty) {
       _activeStream?.add(RelayContentDelta(update.text));
+    } else if (update is AcpUsageUpdate) {
+      _activeStream?.add(RelayUsageUpdate(update.used, update.size));
+    } else if (update is AcpToolCallUpdate) {
+      _activeStream?.add(RelayToolCallEvent(
+        id: update.id,
+        title: update.title,
+        status: update.status,
+      ));
     }
     // Non-content updates and null (malformed) are silently ignored.
   }

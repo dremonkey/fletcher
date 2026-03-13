@@ -241,63 +241,243 @@ void main() {
     });
 
     // -------------------------------------------------------------------------
-    // tool_call — emitted when agent invokes a tool
+    // tool_call — emitted when agent invokes a tool (verbose mode)
     // -------------------------------------------------------------------------
 
     group('tool_call', () {
-      test('returns AcpNonContentUpdate on tool invocation', () {
+      test('returns AcpToolCallUpdate with id and title (status: null)', () {
+        // Verbose mode: tool_call emitted when agent invokes a tool.
         final params = {
           'sessionId': 'sess_abc123',
           'update': {
             'sessionUpdate': 'tool_call',
-            'id': 'tool_abc123',
-            'title': 'Read file',
-            'input': {'path': '/home/user/project/main.dart'},
+            'id': 'tc_123',
+            'title': 'memory_search',
+            'input': '{"query": "user preferences"}',
           },
         };
-        expect(
-          AcpUpdateParser.parse(params),
-          AcpNonContentUpdate('tool_call'),
-        );
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpToolCallUpdate>());
+        final update = result! as AcpToolCallUpdate;
+        expect(update.id, 'tc_123');
+        expect(update.title, 'memory_search');
+        expect(update.status, isNull);
+        expect(update.input, '{"query": "user preferences"}');
+      });
+
+      test('returns null when id is missing', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'tool_call',
+            // 'id' is absent — malformed
+            'title': 'memory_search',
+          },
+        };
+        expect(AcpUpdateParser.parse(params), isNull);
+      });
+
+      test('returns null when id is not a string', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'tool_call',
+            'id': 42, // not a string
+            'title': 'memory_search',
+          },
+        };
+        expect(AcpUpdateParser.parse(params), isNull);
+      });
+
+      test('title is null when not present (optional field)', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'tool_call',
+            'id': 'tc_456',
+            // no title
+          },
+        };
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpToolCallUpdate>());
+        expect((result! as AcpToolCallUpdate).title, isNull);
+      });
+
+      test('input is null when not a string (e.g. object format)', () {
+        // input may be a JSON object on the wire; only capture if it is a string
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'tool_call',
+            'id': 'tc_789',
+            'title': 'read_file',
+            'input': {'path': '/home/user/main.dart'}, // object, not string
+          },
+        };
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpToolCallUpdate>());
+        expect((result! as AcpToolCallUpdate).input, isNull);
+      });
+
+      test('AcpToolCallUpdate equality works', () {
+        const a = AcpToolCallUpdate(id: 'tc_1', title: 'search', status: null);
+        const b = AcpToolCallUpdate(id: 'tc_1', title: 'search', status: null);
+        const c = AcpToolCallUpdate(id: 'tc_2', title: 'search', status: null);
+        expect(a, equals(b));
+        expect(a, isNot(equals(c)));
       });
     });
 
     // -------------------------------------------------------------------------
-    // tool_call_update — emitted as tool execution progresses
+    // tool_call_update — emitted as tool execution progresses (verbose mode)
     // -------------------------------------------------------------------------
 
     group('tool_call_update', () {
-      test('returns AcpNonContentUpdate for in_progress status', () {
+      test('returns AcpToolCallUpdate with id and status', () {
         final params = {
           'sessionId': 'sess_abc123',
           'update': {
             'sessionUpdate': 'tool_call_update',
-            'id': 'tool_abc123',
-            'status': 'in_progress',
-          },
-        };
-        expect(
-          AcpUpdateParser.parse(params),
-          AcpNonContentUpdate('tool_call_update'),
-        );
-      });
-
-      test('returns AcpNonContentUpdate for completed status with content', () {
-        final params = {
-          'sessionId': 'sess_abc123',
-          'update': {
-            'sessionUpdate': 'tool_call_update',
-            'id': 'tool_abc123',
+            'id': 'tc_123',
             'status': 'completed',
             'content': [
               {'type': 'text', 'text': 'File contents: void main() {}'},
             ],
           },
         };
-        expect(
-          AcpUpdateParser.parse(params),
-          AcpNonContentUpdate('tool_call_update'),
-        );
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpToolCallUpdate>());
+        final update = result! as AcpToolCallUpdate;
+        expect(update.id, 'tc_123');
+        expect(update.status, 'completed');
+        expect(update.title, isNull); // tool_call_update does not carry title
+      });
+
+      test('returns AcpToolCallUpdate for error status', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'tool_call_update',
+            'id': 'tc_456',
+            'status': 'error',
+          },
+        };
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpToolCallUpdate>());
+        expect((result! as AcpToolCallUpdate).status, 'error');
+      });
+
+      test('returns null when id is missing', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'tool_call_update',
+            // 'id' is absent — malformed
+            'status': 'completed',
+          },
+        };
+        expect(AcpUpdateParser.parse(params), isNull);
+      });
+
+      test('returns null when id is not a string', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'tool_call_update',
+            'id': 99, // not a string
+            'status': 'completed',
+          },
+        };
+        expect(AcpUpdateParser.parse(params), isNull);
+      });
+    });
+
+    // -------------------------------------------------------------------------
+    // usage_update — token consumption from OpenClaw session store
+    // -------------------------------------------------------------------------
+
+    group('usage_update', () {
+      test('returns AcpUsageUpdate for valid used and size', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'usage_update',
+            'used': 35224,
+            'size': 1048576,
+            '_meta': {'source': 'gateway-session-store', 'approximate': true},
+          },
+        };
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpUsageUpdate>());
+        final update = result! as AcpUsageUpdate;
+        expect(update.used, 35224);
+        expect(update.size, 1048576);
+      });
+
+      test('AcpUsageUpdate equality is based on used and size', () {
+        const a = AcpUsageUpdate(used: 1000, size: 100000);
+        const b = AcpUsageUpdate(used: 1000, size: 100000);
+        const c = AcpUsageUpdate(used: 2000, size: 100000);
+        expect(a, equals(b));
+        expect(a, isNot(equals(c)));
+      });
+
+      test('percentage is correct for normal values', () {
+        const update = AcpUsageUpdate(used: 500, size: 1000);
+        expect(update.percentage, 0.5);
+      });
+
+      test('percentage is 0.0 when size is 0 (avoids division by zero)', () {
+        const update = AcpUsageUpdate(used: 100, size: 0);
+        expect(update.percentage, 0.0);
+      });
+
+      test('returns null when used field is missing', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'usage_update',
+            // 'used' is absent
+            'size': 1048576,
+          },
+        };
+        expect(AcpUpdateParser.parse(params), isNull);
+      });
+
+      test('returns null when used is not an int', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'usage_update',
+            'used': '35224', // string, not int
+            'size': 1048576,
+          },
+        };
+        expect(AcpUpdateParser.parse(params), isNull);
+      });
+
+      test('returns null when size is missing', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'usage_update',
+            'used': 35224,
+            // 'size' is absent
+          },
+        };
+        expect(AcpUpdateParser.parse(params), isNull);
+      });
+
+      test('returns null when size is not an int', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'usage_update',
+            'used': 35224,
+            'size': 1048576.0, // double, not int
+          },
+        };
+        expect(AcpUpdateParser.parse(params), isNull);
       });
     });
 

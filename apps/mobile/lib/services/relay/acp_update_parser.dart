@@ -50,11 +50,80 @@ final class AcpTextDelta extends AcpUpdate {
   String toString() => 'AcpTextDelta(${text.length} chars)';
 }
 
+/// A `usage_update` event carrying token usage for the current session.
+///
+/// Fields:
+/// - [used]: tokens consumed so far in this session.
+/// - [size]: total context window size (in tokens).
+///
+/// [percentage] is a convenience getter: `used / size`, clamped to 0.0
+/// when [size] is zero to avoid division errors.
+final class AcpUsageUpdate extends AcpUpdate {
+  final int used;
+  final int size;
+
+  const AcpUsageUpdate({required this.used, required this.size});
+
+  double get percentage => size > 0 ? used / size : 0.0;
+
+  @override
+  bool operator ==(Object other) =>
+      other is AcpUsageUpdate && other.used == used && other.size == size;
+
+  @override
+  int get hashCode => Object.hash(used, size);
+
+  @override
+  String toString() => 'AcpUsageUpdate(used: $used, size: $size)';
+}
+
+/// A tool call started or updated.
+///
+/// Emitted when OpenClaw receives verbose mode (`verbose: true` in `session/new`).
+///
+/// On tool invocation:
+/// ```json
+/// { "sessionUpdate": "tool_call", "id": "tc_123", "title": "memory_search", "input": "{...}" }
+/// ```
+/// On tool completion or error:
+/// ```json
+/// { "sessionUpdate": "tool_call_update", "id": "tc_123", "status": "completed" }
+/// ```
+///
+/// [status] is null when the tool call has just started (kind == `tool_call`),
+/// and non-null (`"completed"`, `"error"`, etc.) for `tool_call_update` events.
+final class AcpToolCallUpdate extends AcpUpdate {
+  final String id;
+  final String? title;   // tool name (e.g., "memory_search")
+  final String? status;  // null=started, "completed", "error"
+  final String? input;   // JSON string of tool arguments (optional)
+
+  const AcpToolCallUpdate({
+    required this.id,
+    this.title,
+    this.status,
+    this.input,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      other is AcpToolCallUpdate &&
+      other.id == id &&
+      other.title == title &&
+      other.status == status &&
+      other.input == input;
+
+  @override
+  int get hashCode => Object.hash(id, title, status, input);
+
+  @override
+  String toString() => 'AcpToolCallUpdate(id: $id, title: $title, status: $status)';
+}
+
 /// A recognized but non-renderable update.
 ///
-/// Covers: `available_commands_update`, `plan`, `tool_call`,
-/// `tool_call_update`, unknown future kinds, and `agent_message_chunk`
-/// carrying non-text content (image, resource, etc.).
+/// Covers: `available_commands_update`, `plan`, unknown future kinds, and
+/// `agent_message_chunk` carrying non-text content (image, resource, etc.).
 ///
 /// [kind] is the raw `sessionUpdate` string — callers can inspect it
 /// for future feature handling or logging.
@@ -82,6 +151,8 @@ final class AcpNonContentUpdate extends AcpUpdate {
 ///
 /// Returns:
 /// - [AcpTextDelta] for `agent_message_chunk` with `{ type: "text", text }`
+/// - [AcpUsageUpdate] for `usage_update` with `used` and `size` fields
+/// - [AcpToolCallUpdate] for `tool_call` and `tool_call_update` kinds
 /// - [AcpNonContentUpdate] for all other recognized or unknown kinds,
 ///   and for `agent_message_chunk` with non-text content
 /// - `null` for malformed input (missing required fields, wrong types)
@@ -97,6 +168,34 @@ abstract final class AcpUpdateParser {
 
     if (kind == 'agent_message_chunk') {
       return _parseAgentMessageChunk(kind, update);
+    }
+
+    if (kind == 'usage_update') {
+      final used = update['used'];
+      final size = update['size'];
+      if (used is! int || size is! int) return null;
+      return AcpUsageUpdate(used: used, size: size);
+    }
+
+    if (kind == 'tool_call') {
+      final id = update['id'];
+      if (id is! String) return null;
+      return AcpToolCallUpdate(
+        id: id,
+        title: update['title'] as String?,
+        status: null,
+        input: update['input'] is String ? update['input'] as String : null,
+      );
+    }
+
+    if (kind == 'tool_call_update') {
+      final id = update['id'];
+      if (id is! String) return null;
+      return AcpToolCallUpdate(
+        id: id,
+        title: null,
+        status: update['status'] as String?,
+      );
     }
 
     return AcpNonContentUpdate(kind);

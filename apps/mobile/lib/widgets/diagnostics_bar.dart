@@ -75,6 +75,15 @@ class DiagnosticsBar extends StatelessWidget {
     return '${rt}ms';
   }
 
+  /// Color for the TOK metric based on context window usage percentage.
+  Color get _tokenColor {
+    final pct = diagnostics.tokenPercentage;
+    if (pct == null) return AppColors.cyan;
+    if (pct >= 0.9) return AppColors.healthRed;
+    if (pct >= 0.75) return AppColors.healthYellow;
+    return AppColors.cyan;
+  }
+
   void _showDiagnosticsModal(BuildContext context) {
     HapticFeedback.lightImpact();
     if (onTapDiagnostics != null) {
@@ -153,6 +162,14 @@ class DiagnosticsBar extends StatelessWidget {
                           TextSpan(text: ' | ', style: pipeStyle),
                           TextSpan(text: 'RT: ', style: metricStyle),
                           TextSpan(text: _rtText, style: metricStyle),
+                          if (diagnostics.tokenDisplay != null) ...[
+                            TextSpan(text: ' | ', style: pipeStyle),
+                            TextSpan(text: 'TOK: ', style: metricStyle),
+                            TextSpan(
+                              text: diagnostics.tokenDisplay!,
+                              style: metricStyle.copyWith(color: _tokenColor),
+                            ),
+                          ],
                         ],
                       ),
                       overflow: TextOverflow.ellipsis,
@@ -241,6 +258,12 @@ class _DiagnosticsModalState extends State<_DiagnosticsModal> {
           _DiagRow(label: 'TTS', value: diag.ttsProvider ?? '--', labelStyle: labelStyle, valueStyle: valueStyle),
           _DiagRow(label: 'LLM', value: diag.llmProvider ?? '--', labelStyle: labelStyle, valueStyle: valueStyle),
           _DiagRow(label: 'VAD', value: widget.vadConfidence.toStringAsFixed(2), labelStyle: labelStyle, valueStyle: valueStyle),
+          _DiagRow(
+            label: 'TOKENS',
+            value: diag.tokenDisplay ?? '--',
+            labelStyle: labelStyle,
+            valueStyle: valueStyle.copyWith(color: _tokenColor),
+          ),
           _DiagRow(label: 'RT', value: _rtValue, labelStyle: labelStyle, valueStyle: valueStyle),
           _DiagRow(label: 'SESSION', value: diag.sessionName ?? '--', labelStyle: labelStyle, valueStyle: valueStyle),
           _DiagRow(label: 'AGENT', value: diag.agentIdentity ?? '--', labelStyle: labelStyle, valueStyle: valueStyle),
@@ -288,6 +311,15 @@ class _DiagnosticsModalState extends State<_DiagnosticsModal> {
     if (connectedAt == null) return '--';
     final duration = DateTime.now().difference(connectedAt);
     return DiagnosticsInfo.formatUptime(duration);
+  }
+
+  /// Color for the TOKENS row based on context window usage percentage.
+  Color get _tokenColor {
+    final pct = widget.diagnostics.tokenPercentage;
+    if (pct == null) return AppColors.textPrimary;
+    if (pct >= 0.9) return AppColors.healthRed;
+    if (pct >= 0.75) return AppColors.healthYellow;
+    return AppColors.textPrimary;
   }
 }
 
