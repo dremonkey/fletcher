@@ -399,6 +399,7 @@ Split the single voice-agent pipeline into two distinct modes — **Voice Mode**
 - [x] 055: Serialize relay `forwardToMobile` calls — sendQueue Promise chain; chunk always arrives before result ✅
 - [x] 056: Fix ACP Subprocess Leak ✅ — SIGKILL escalation after 3s SIGTERM grace period; process group kill for children; defensive shutdown in doReinit(); 2 new tests ([BUG-009](../docs/field-tests/20260312-buglog.md))
 - [ ] 057: Relay-Side ACP Response Timeout 📋 — add configurable timeout to `AcpClient.request()`; surface error to mobile on timeout; mark subprocess for re-init ([BUG-010](../docs/field-tests/20260312-buglog.md))
+- [x] 059: Deferred Teardown on `participant_left` ✅ — 120s grace period before relay tears down bridge after ICE drop; survives WiFi→cellular network switches; `RELAY_DEPARTURE_GRACE_MS` env var ([TEST-001](../docs/field-tests/20260312-buglog.md))
 
 **Depends on:** Epic 4 (Ganglia session keys), Epic 7 (Sovereign Pairing), Epic 17 (Text Input), Epic 20 (Agent Dispatch)
 
