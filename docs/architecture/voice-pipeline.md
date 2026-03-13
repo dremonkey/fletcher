@@ -20,8 +20,17 @@ sequenceDiagram
     STT->>Agent: Final transcript (speech_final)
 
     Agent->>LLM: chat(messages)
-    LLM->>Brain: POST /v1/chat/completions (SSE)
-    Brain-->>LLM: Streamed response chunks
+
+    alt GANGLIA_TYPE=acp (default)
+        LLM->>Brain: ACP subprocess (JSON-RPC over stdio)
+        Brain-->>LLM: Streamed response chunks
+    else GANGLIA_TYPE=relay (planned)
+        LLM->>LK: data channel ("voice-acp" topic)
+        LK->>Brain: Relay → ACP subprocess
+        Brain-->>LK: Streamed chunks via relay
+        LK-->>LLM: data channel notifications
+    end
+
     LLM-->>Agent: Token stream
 
     Agent->>TTS: Text chunks (streaming)
@@ -103,11 +112,14 @@ The mobile app's `StatusBar` widget displays the phrase text via the existing `S
 
 ### LLM Bridge (Ganglia)
 
-Ganglia converts between the LiveKit `llm.LLM` interface and the OpenClaw/Nanoclaw HTTP API. See [Brain Plugin](brain-plugin.md) for details.
+Ganglia converts between the LiveKit `llm.LLM` interface and the OpenClaw backend. See [Brain Plugin](brain-plugin.md) for details.
 
-**Key behavior during streaming:**
-- Ganglia opens an SSE connection to the backend
-- Response chunks arrive as `data:` lines with JSON payloads
+**Transport options:**
+- **`GANGLIA_TYPE=acp`** (default) — spawns an ACP subprocess that communicates with OpenClaw over JSON-RPC/stdio. The voice-agent container must bundle `acp-client` and its dependencies.
+- **`GANGLIA_TYPE=relay`** (planned, [task 064](../tasks/04-livekit-agent-plugin/064-relay-llm-backend.md)) — routes requests through the Fletcher Relay via the LiveKit data channel (`voice-acp` topic). The relay handles ACP subprocess management, allowing the voice-agent to be a thin container with just the audio pipeline.
+
+**Key behavior during streaming (both transports):**
+- Response chunks arrive as streaming events (ACP notifications or data channel messages)
 - Each chunk may contain `content` (text) or `tool_calls` (function invocations)
 - Ganglia emits these as `ChatChunk` events that AgentSession forwards to TTS
 

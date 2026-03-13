@@ -97,6 +97,16 @@ The relay's ACP client is **already implemented** (`apps/relay/src/acp/client.ts
 | Timer complexity (BUG-002/006/007 Mar 10) | Idle timer only runs in voice mode |
 | Degraded status confusion (BUG-003 Mar 10) | Chat mode has its own health concept |
 
+### Relay-Mediated Voice LLM (Epic 4, Task 064)
+
+Voice mode can also route LLM requests through the relay instead of spawning its own ACP subprocess. This is tracked as [task 064 in Epic 4](../04-livekit-agent-plugin/064-relay-llm-backend.md) (`GANGLIA_TYPE=relay`). Benefits:
+
+- **Cloud deployment** — voice-agent container no longer needs `acp-client`, Python, or OpenClaw CLI bundled. The relay handles all ACP communication.
+- **Unified ACP management** — one process (the relay) manages all ACP subprocesses for both chat and voice modes.
+- **Simpler voice-agent image** — just LiveKit agents SDK + Ganglia + STT/TTS plugins.
+
+The voice-agent publishes on the `voice-acp` data channel topic; the relay bridges it to ACP and streams results back. This is orthogonal to the chat/voice mode split — it's about *how* voice mode talks to OpenClaw, not *whether* it does.
+
 ## Architecture
 
 ![Dual-Mode Architecture](./dual-mode-architecture.png)

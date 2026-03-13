@@ -27,6 +27,10 @@ The agent plugin (Ganglia) is the bridge between LiveKit's voice pipeline and th
 - [x] **007: Handle "Queue is closed" Error** — Fix critical bug where user interruptions cause accumulated "Queue is closed" errors that permanently kill the agent session.
 - [ ] **016: Explicit Turn Cancellation & Lane Management** — Implement robust cancellation of in-flight requests to prevent "Zombie Agent" states where network drops leave the OpenClaw session lane locked.
 
+### Phase 5: Relay-Mediated LLM
+
+- [ ] **064: Relay-Mediated LLM Backend** — Add `GANGLIA_TYPE=relay` backend that routes LLM requests through the Fletcher Relay via LiveKit data channel (`voice-acp` topic), eliminating the need for an ACP subprocess in the voice-agent container. Enables cloud deployment without bundling OpenClaw in the agent image.
+
 ## Status Summary
 
 | Phase | Description | Status |
@@ -35,9 +39,12 @@ The agent plugin (Ganglia) is the bridge between LiveKit's voice pipeline and th
 | 2 | Multi-Backend & API Evolution | Partially complete |
 | 3 | Session & Routing | Not started |
 | 4 | Resilience | Partially complete |
+| 5 | Relay-Mediated LLM | Not started |
 
 ## Dependencies
 
 - **Epic 02 (LiveKit Agent):** Consumes Ganglia as the LLM provider for the voice pipeline.
 - **Epic 05 (Latency):** Ganglia HTTP timing directly impacts voice-to-voice latency.
 - **Epic 10 (Metrics):** HTTP-layer timing instrumentation lives inside Ganglia.
+- **Epic 22 (Dual-Mode):** Relay-mediated LLM (task 064) enables cloud deployment by routing voice-mode LLM through the relay instead of a local ACP subprocess.
+- **Epic 24 (WebRTC ACP Relay):** Relay infrastructure that task 064 builds on.

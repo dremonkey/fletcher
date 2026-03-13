@@ -8,11 +8,25 @@ Ganglia uses a factory-and-registry pattern. Backends register themselves on imp
 
 ```mermaid
 flowchart TD
-    ENV["Environment<br/>GANGLIA_TYPE=openclaw|nanoclaw"]
+    ENV["Environment<br/>GANGLIA_TYPE=acp|relay|openclaw|nanoclaw"]
     F["createGangliaFromEnv()"]
     R["Backend Registry"]
 
-    subgraph "OpenClaw Backend"
+    subgraph "ACP Backend (default)"
+        ALLM["AcpLLM"]
+        AC["ACP Client (subprocess)"]
+        AGW["OpenClaw Gateway"]
+    end
+
+    subgraph "Relay Backend (planned)"
+        RLLM["RelayLLM"]
+        DC["Data Channel<br/>(voice-acp topic)"]
+        RELAY["Fletcher Relay"]
+        RAC["Relay ACP Client"]
+        RGW["OpenClaw Gateway"]
+    end
+
+    subgraph "OpenClaw Backend (legacy)"
         OLLM["OpenClawLLM"]
         OC["OpenClawClient"]
         GW["OpenClaw Gateway<br/>POST /v1/chat/completions"]
@@ -26,8 +40,12 @@ flowchart TD
 
     ENV --> F
     F --> R
+    R -->|"type=acp"| ALLM
+    R -->|"type=relay"| RLLM
     R -->|"type=openclaw"| OLLM
     R -->|"type=nanoclaw"| NLLM
+    ALLM --> AC --> AGW
+    RLLM --> DC --> RELAY --> RAC --> RGW
     OLLM --> OC --> GW
     NLLM --> NC --> NW
 ```
@@ -39,6 +57,8 @@ flowchart TD
 Backends self-register via `registerGanglia()`:
 
 ```typescript
+registerGanglia('acp', async () => AcpLLM)
+registerGanglia('relay', async () => RelayLLM)  // planned — task 064
 registerGanglia('openclaw', async () => OpenClawLLM)
 registerGanglia('nanoclaw', async () => NanoclawLLM)
 ```
@@ -51,12 +71,14 @@ New backends can be added without modifying factory code.
 
 | Variable | Backend | Default |
 |----------|---------|---------|
-| `GANGLIA_TYPE` (or `BRAIN_TYPE`) | Both | `openclaw` |
-| `OPENCLAW_GATEWAY_URL` | OpenClaw | `http://localhost:8080` |
-| `OPENCLAW_API_KEY` | OpenClaw | (required) |
+| `GANGLIA_TYPE` (or `BRAIN_TYPE`) | All | `acp` |
+| `ACP_AGENT_CMD` | ACP | `openclaw` |
+| `ACP_AGENT_ARGS` | ACP | (derived from env) |
+| `OPENCLAW_GATEWAY_URL` | OpenClaw (legacy) | `http://localhost:8080` |
+| `OPENCLAW_API_KEY` | OpenClaw (legacy) | (required) |
 | `NANOCLAW_URL` | Nanoclaw | `http://localhost:18789` |
 | `NANOCLAW_CHANNEL_PREFIX` | Nanoclaw | `lk` |
-| `GANGLIA_HISTORY_MODE` | Both | `latest` (openclaw), `full` (nanoclaw) |
+| `GANGLIA_HISTORY_MODE` | All | `latest` (openclaw), `full` (nanoclaw) |
 
 **Optional callbacks and options:**
 
@@ -135,6 +157,36 @@ class SessionError extends Error {
   reason: 'expired' | 'invalid' | 'not_found';
 }
 ```
+
+## Relay Backend (Planned)
+
+**Status:** Not yet implemented — see [task 064](../tasks/04-livekit-agent-plugin/064-relay-llm-backend.md).
+
+The relay backend (`GANGLIA_TYPE=relay`) routes LLM requests through the Fletcher Relay via the LiveKit data channel, rather than spawning a local ACP subprocess. This enables cloud deployment of the voice-agent without bundling OpenClaw in the agent container.
+
+### How It Works
+
+1. Voice-agent publishes a JSON-RPC 2.0 request on the `voice-acp` data channel topic
+2. The relay (already in the same LiveKit room) receives the request
+3. Relay forwards it to its existing ACP subprocess
+4. Streaming response chunks are sent back as JSON-RPC notifications on the same topic
+5. Final result is sent as a JSON-RPC response
+
+### `voice-acp` Data Channel Protocol
+
+Uses the same JSON-RPC 2.0 format as the mobile↔relay `acp` topic, but on a separate topic (`voice-acp`) to avoid routing conflicts:
+
+- **Request:** `session/message` — voice-agent sends user message + session key
+- **Streaming:** `session/chunk` — relay sends content deltas as notifications
+- **Result:** JSON-RPC response with complete content and finish reason
+- **Cancel:** `session/cancel` — voice-agent cancels in-flight request (e.g., on user interruption)
+
+### Why Not Reuse the Chat Topic?
+
+The relay's existing `acp` topic is owned by the mobile client for chat mode. Voice-mode requests need a separate topic to:
+- Avoid collisions when both voice-agent and mobile are in the room
+- Allow independent lifecycle management (voice requests can be cancelled by the agent without affecting chat)
+- Enable future mutual-exclusion enforcement at the relay level
 
 ## Nanoclaw Backend
 
