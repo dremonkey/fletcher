@@ -84,16 +84,20 @@ export async function discoverAndRejoinRooms({
     }
   }
 
-  logger.info(
-    {
-      event: "room_discovery_complete",
-      checked: result.roomsChecked,
-      rejoined: result.roomsRejoined.length,
-      skipped: result.roomsSkipped.length,
-      failed: result.roomsFailed.length,
-    },
-    `Room discovery: rejoined ${result.roomsRejoined.length} room(s)`,
-  );
+  const logData = {
+    event: "room_discovery_complete",
+    checked: result.roomsChecked,
+    rejoined: result.roomsRejoined.length,
+    skipped: result.roomsSkipped.length,
+    failed: result.roomsFailed.length,
+  };
+
+  // Only log at info when something actually happened; debug otherwise
+  if (result.roomsRejoined.length > 0 || result.roomsFailed.length > 0) {
+    logger.info(logData, `Room discovery: rejoined ${result.roomsRejoined.length} room(s)`);
+  } else {
+    logger.debug(logData, "Room discovery: no action needed");
+  }
 
   return result;
 }
