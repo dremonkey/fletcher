@@ -113,33 +113,42 @@ prompt/response cycles.
 
 ## Proposed Fix
 
-### Fix 1: Implement `session/load` in ACP client
+### Fix 1: Implement `loadSession` in ACP client
 
 **File:** `packages/acp-client/src/client.ts`
 
-Add a `sessionLoad` method that retrieves the current session state, including
-any messages not seen through real-time notifications:
+The OpenClaw ACP server already supports `loadSession` (partial — see
+[docs](https://docs.openclaw.ai/cli/acp#compatibility-matrix)):
+
+> **loadSession** — Rebinds the ACP session to a Gateway session key and
+> replays stored user/assistant text history. Tool/system history is not
+> reconstructed yet.
+
+Key behavior: `loadSession` **replays** the conversation as `session/update`
+notifications. This means the existing `onUpdate` handler would receive
+them automatically. The relay just needs to:
+
+1. Track which messages it has already forwarded (sequence counter or
+   content hash)
+2. Call `loadSession` at strategic moments (after prompt completion, or
+   periodically when idle)
+3. Forward any replayed messages that are new (not already forwarded)
 
 ```typescript
-interface SessionLoadResult {
-  sessionId: string;
-  messages: Array<{
-    role: "user" | "assistant";
-    content: ContentPart[];
-    timestamp?: string;
-    sequenceId?: number;
-  }>;
-}
-
-async sessionLoad(params: { sessionId: string }): Promise<SessionLoadResult> {
-  this.log.info({ event: "session_load", sessionId: params.sessionId }, "loading session state");
-  return (await this.request("session/load", params)) as SessionLoadResult;
+async sessionLoad(params: { sessionId: string }): Promise<void> {
+  this.log.info({ event: "session_load", sessionId: params.sessionId }, "loading session history");
+  // loadSession replays history as session/update notifications —
+  // the existing onUpdate handler will receive them.
+  await this.request("loadSession", params);
 }
 ```
 
-**Depends on:** OpenClaw ACP server supporting `session/load`. The server
-already advertises `loadSession: true`, so this may already be implemented
-server-side.
+**Limitation:** Only user/assistant text is replayed. Tool calls and system
+messages are not reconstructed. This is sufficient for BUG-022 (agent text
+was the lost content) but won't catch missed tool-result artifacts.
+
+**Depends on:** OpenClaw ACP server's `loadSession` (status: partial).
+Need to verify the exact JSON-RPC method name and params format.
 
 ### Fix 2: Post-prompt catch-up in RelayBridge
 

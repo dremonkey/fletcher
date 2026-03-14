@@ -25,6 +25,25 @@ export interface RelayBridgeOptions {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const MAX_PROMPT_LOG_LENGTH = 200;
+
+/** Extract a loggable text summary from an ACP prompt payload. */
+function extractPromptText(prompt: unknown): string | undefined {
+  if (!Array.isArray(prompt)) return undefined;
+  const text = prompt
+    .filter((p: any) => p?.type === "text" && typeof p.text === "string")
+    .map((p: any) => p.text)
+    .join("");
+  if (!text) return undefined;
+  return text.length > MAX_PROMPT_LOG_LENGTH
+    ? text.slice(0, MAX_PROMPT_LOG_LENGTH) + "…"
+    : text;
+}
+
+// ---------------------------------------------------------------------------
 // RelayBridge
 // ---------------------------------------------------------------------------
 
@@ -225,7 +244,8 @@ export class RelayBridge {
     this.log.debug({ event: "mobile_message_received", msg }, "← mobile");
 
     if (msg.method === "session/prompt") {
-      reqLog.info({ event: "mobile_prompt_received" });
+      const promptText = extractPromptText(msg.params?.prompt);
+      reqLog.info({ event: "mobile_prompt_received", promptText });
       this.activeRequestSource = "relay";
 
       // Lazy re-init if ACP subprocess died, then send prompt
@@ -280,7 +300,8 @@ export class RelayBridge {
     this.log.debug({ event: "voice_acp_message_received", msg }, "← voice-acp");
 
     if (msg.method === "session/message") {
-      reqLog.info({ event: "voice_acp_prompt_received" });
+      const promptText = extractPromptText(msg.params?.prompt);
+      reqLog.info({ event: "voice_acp_prompt_received", promptText });
       this.activeRequestSource = "voice-acp";
 
       // Lazy re-init if ACP subprocess died, then send prompt
