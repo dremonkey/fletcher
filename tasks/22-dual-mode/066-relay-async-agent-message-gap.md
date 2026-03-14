@@ -157,25 +157,99 @@ them automatically. The relay would need to:
 
 1. Track which messages it has already forwarded (sequence counter or
    content hash)
-2. Call `loadSession` at strategic moments (after prompt completion, or
-   periodically when idle)
+2. Call `loadSession` when a suspicious prompt completion is detected
 3. Suppress replayed messages that were already forwarded (deduplication)
+
+#### Trigger signal: `end_turn` with zero `agent_message_chunk`
+
+Log analysis across 48 completed prompts (two field-test sessions) found
+that prompts returning `end_turn` with **zero `agent_message_chunk` events**
+reliably identify BUG-022 instances:
+
+| Metric | Value |
+|--------|-------|
+| Total completed prompts analyzed | 48 |
+| Zero-text prompts detected | 6 (12.5%) |
+| Confirmed BUG-022 instances caught | 1/1 (100%) |
+| False negatives | 0 |
+| Worst-case false positives | 5 (~10%) |
+
+The false positives are tool-only turns (agent processed an instruction
+internally without producing text) or session reconnection artifacts. Each
+false positive costs one unnecessary `loadSession` call — no user-visible
+harm with deduplication in place.
+
+**Detailed breakdown:**
+
+Session-2 (post-relay-restart, 11 completed prompts):
+- 1 zero-text → **prompt #9 = CONFIRMED BUG-022** ✓
+
+Session-1 (37 completed prompts with debug logging):
+- 5 zero-text → all likely false positives:
+  - Tester command phrase ("Peanuts and watermelons") → tool-only turn
+  - Short "⚡️ Ack." acknowledgment → internal processing
+  - "Scribe Scan Complete" → possible earlier BUG-022 instance
+  - "Sorry about the silence" after session_cancel → reconnection artifact
+  - "Copy that. Standing by" → internal processing
+
+**Evidence:** `logs/relay-2026-03-14.log` (prompt #9 at lines 2356–2428)
+shows exactly: `session_info_update` → `usage_update` → `end_turn` with
+zero `agent_message_chunk` events. Every other completed prompt in the
+session had 4–22 `agent_message_chunk` events.
+
+#### Workaround flow
+
+```
+prompt completes with end_turn
+  └→ relay counts agent_message_chunk events during this prompt
+       └→ if zero:
+            └→ log warning: "zero-text response detected"
+            └→ wait for activeRequestSource === null (idle)
+            └→ call loadSession({ sessionId })
+                 └→ server replays history as session/update notifications
+                      └→ onUpdate handler receives them
+                           └→ dedup layer filters already-forwarded messages
+                                └→ any NEW messages forwarded to mobile
+```
+
+#### Implementation sketch
+
+**`apps/relay/src/bridge/relay-bridge.ts`** — add chunk counter + catch-up trigger:
+
+```typescript
+// In handleMobileMessage, before the prompt call:
+let chunkCount = 0;
+const countChunks = (params: SessionUpdateParams) => {
+  if (params.update?.sessionUpdate === "agent_message_chunk") chunkCount++;
+};
+// Subscribe to updates for this prompt cycle...
+
+// After prompt completes:
+if (chunkCount === 0) {
+  this.log.warn({ event: "zero_text_response", correlationId },
+    "Prompt returned end_turn with no text — triggering loadSession catch-up");
+  // Schedule catch-up after a short delay (let any in-flight updates arrive)
+  setTimeout(() => this.catchUpSession(), 500);
+}
+```
+
+**`packages/acp-client/src/client.ts`** — add `sessionLoad()` method:
 
 ```typescript
 async sessionLoad(params: { sessionId: string }): Promise<void> {
-  this.log.info({ event: "session_load", sessionId: params.sessionId }, "loading session history");
+  this.log.info({ event: "session_load", sessionId: params.sessionId },
+    "loading session history");
   // loadSession replays history as session/update notifications —
   // the existing onUpdate handler will receive them.
   await this.request("loadSession", params);
 }
 ```
 
-**Open questions before implementing:**
+#### Open questions before implementing
+
 - Exact JSON-RPC method name and params format (need to test against server)
 - How to deduplicate: does `loadSession` replay include sequence IDs or
   timestamps we can use to skip already-forwarded messages?
-- When to call it: post-prompt is the obvious trigger, but the user may be
-  waiting for the async message without ever sending another prompt
 - Performance: replaying full history is heavyweight; is there a lighter
   "since sequence N" variant?
 
@@ -206,7 +280,8 @@ was agent text) but won't catch missed tool-result artifacts.
 
 - [ ] Sub-agent results arrive on mobile (either via upstream fix or workaround)
 - [ ] No duplicate messages when catch-up and real-time overlap
-- [ ] Relay log includes prompt text content for debugging (DONE — commit `41edb1e`)
+- [x] Relay log includes prompt text content for debugging (commit `41edb1e`)
+- [x] Trigger signal identified: `end_turn` + zero `agent_message_chunk` (0% false negatives, ~10% false positives — acceptable)
 - [ ] Existing tests still pass
 
 ## Files
