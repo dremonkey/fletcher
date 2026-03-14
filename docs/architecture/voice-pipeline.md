@@ -174,6 +174,51 @@ The voice agent listens for `tts_availability_changed` events from the FallbackA
 
 Artifacts are debounced (at most one per 60 seconds) to avoid spamming the client during burst failures.
 
+## Hold Mode (Idle Detection)
+
+After a configurable period of silence (`FLETCHER_HOLD_TIMEOUT_MS`, default 60s), the voice agent enters **hold mode** — a Gemini Live-style idle detection mechanism that cleanly releases the agent while keeping the conversation session alive.
+
+### Why Not the SDK's `userAwayTimeout`
+
+The `@livekit/agents` SDK has a built-in 15-second `userAwayTimeout` that silently kills the STT stream when no user speech is detected. Once dead, no transcripts are generated, so the user can never exit "away" state — the pipeline is permanently dead while the agent zombie sits in the room consuming resources. Hold mode replaces this with proper idle handling: `userAwayTimeout` is set to `null` to disable the SDK mechanism entirely.
+
+### Hold Timer Lifecycle
+
+The hold timer runs in the voice agent and tracks silence periods:
+
+| Event | Timer Action |
+|-------|-------------|
+| Bootstrap sent | `resetHoldTimer()` — session started |
+| User speech (`UserInputTranscribed`) | `resetHoldTimer()` — activity detected |
+| Client data channel message | `resetHoldTimer()` — interaction detected |
+| Agent enters `thinking` or `speaking` | `clearHoldTimer()` — agent is active |
+| Agent enters `listening` (from speaking/thinking) | `resetHoldTimer()` — turn complete, fresh window |
+
+When the timer fires:
+
+1. Agent publishes `{type: "session_hold", reason: "idle"}` on the `ganglia-events` data channel
+2. 500ms grace period for SCTP delivery
+3. Agent calls `ctx.room.disconnect()` — fully releasing all resources
+
+The timer does **not** start before bootstrap (no false triggers during connection setup) and is disabled when `FLETCHER_HOLD_TIMEOUT_MS=0`.
+
+### Recovery Flow
+
+```
+Agent disconnects → Client's AgentPresenceService transitions to agentAbsent
+                  → Client shows "On hold — tap or speak to resume"
+                  → User speaks / taps / sends text
+                  → POST /dispatch-agent → LiveKit dispatches fresh agent
+                  → New agent joins, receives relay-bridged ACP session
+                  → Conversation continues seamlessly
+```
+
+The relay stays in the room throughout, keeping the ACP session alive. When the new agent joins and publishes on `voice-acp`, the relay bridges transparently.
+
+### Edge Case: Long LLM Responses
+
+The hold timer is cleared when the agent enters `thinking` state and stays cleared through `speaking`. It only restarts on `speaking → listening`. So the agent remains active for the full duration of LLM processing + TTS playout, regardless of duration. The separate `BRAIN_MAX_WAIT_MS` (default 60s) handles the case where the LLM produces no streaming content.
+
 ## Latency Budget
 
 Target: **sub-1.5 second** voice-to-voice round trip.

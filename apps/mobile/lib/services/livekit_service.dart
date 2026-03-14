@@ -94,6 +94,11 @@ class LiveKitService extends ChangeNotifier {
   // Connectivity-driven reconnect: waits for network restore when offline
   StreamSubscription<bool>? _networkRestoreSub;
 
+  // Hold mode — set when the agent sends a 'session_hold' event before
+  // disconnecting (idle timeout).  Passed to AgentPresenceService so it
+  // shows "on hold" UX instead of generic disconnect.
+  bool _holdModeActive = false;
+
   // Diagnostics: round-trip latency measurement
   // Tracks when user stopped speaking so we can measure RT when agent starts
   DateTime? _userSpeechEndTime;
@@ -601,6 +606,7 @@ class LiveKitService extends ChangeNotifier {
         ),
       );
       // Notify agent presence service (Epic 20)
+      _holdModeActive = false; // Agent connected — clear any hold flag
       agentPresenceService.onAgentConnected();
       // Always re-sync TTS mode when a new agent joins (BUG-001, BUG-004).
       // Send BEFORE flushing queued text messages so the agent processes
@@ -645,7 +651,8 @@ class LiveKitService extends ChangeNotifier {
           diagnostics: _state.diagnostics.copyWith(clearAgentIdentity: true),
         );
         // Notify agent presence service (Epic 20)
-        agentPresenceService.onAgentDisconnected();
+        agentPresenceService.onAgentDisconnected(holdMode: _holdModeActive);
+        _holdModeActive = false;
         // Reset segment ID so artifacts from the new session are not stamped
         // with the stale ID from the previous session. (BUG-004)
         _lastAgentSegmentId = null;
@@ -959,6 +966,11 @@ class LiveKitService extends ChangeNotifier {
           llmProvider: json['llm'] as String?,
         ),
       );
+    } else if (eventType == 'session_hold') {
+      // Agent is entering hold mode (idle timeout) — flag so we show
+      // "on hold" UX when the agent disconnects shortly after.
+      debugPrint('[Ganglia] Session hold (reason: ${json['reason']})');
+      _holdModeActive = true;
     }
   }
 

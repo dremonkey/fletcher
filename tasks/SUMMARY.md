@@ -45,6 +45,7 @@ The voice agent audio pipeline — STT, TTS, voice detection, and agent dispatch
 - [ ] 039: Brain maxWait Timeout 📋 — configurable `FLETCHER_BRAIN_MAX_WAIT_MS`; cancel hung LLM streams after N seconds; surface "Brain timed out — please retry" artifact to client ([BUG-008](../docs/field-tests/20260310-buglog.md))
 - [ ] 040: Guard Audio Track Restart When Muted 📋 — skip `restartTrack()` on device change when mic is muted; prevents network handoffs from reclaiming mic and blocking OS keyboard STT ([BUG-009](../docs/field-tests/20260310-buglog.md))
 - [ ] 041: Fix SDK ICE Reconnect Loop After Agent Idle ⚠️ — repeated ICE drops every ~25s after agent idle disconnect; duplicate reconnect events; UI stuck in Reconnecting; agent dispatch fails on coincident disconnect ([BUG-010](../docs/field-tests/20260310-buglog.md))
+- [ ] 042: Review BRAIN_MAX_WAIT_MS with Hold Mode 📋 — consider increasing/removing brain timeout now that hold mode handles idle detection; currently destructive (kills response) on legitimate long-thinking operations
 
 **Implemented:**
 - VoiceAgent wired to `@livekit/agents` SDK (deepgram.STT, cartesia.TTS, voice.AgentSession)
@@ -249,6 +250,7 @@ Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layou
 - [ ] 035: Per-Participant Audio Stream Wiring 📋 — AnalyserNode per participant; connect to SpeakingRing + inline histogram
 - [ ] 036: TUI Theme Bundles (Solarized, Gruvbox, Nord) 📋 — implementation of classic terminal-inspired color palettes
 - [ ] 037: Deduplicate Agent System Events & Expandable Long Rows 📋 — remove duplicate Connected/Disconnected cards; fix "speak or text" copy; tap-to-expand long system event rows
+- [ ] 059: Voice Mode Bottom Bar — Inline Histogram with Mic Button 📋 — move histograms from HeaderBar into bottom bar, inline with mic; visible only in voice mode; animated fade-in on mic tap; user histo (left, tap=mute), agent histo (right, tap=TTS off)
 - [x] 038a: Fix Artifact Clump Regression After Agent Reconnect ✅ — `_lastAgentSegmentId` reset on disconnect; artifacts now correctly distributed across messages ([BUG-004](../docs/field-tests/20260310-buglog.md))
 - [x] 038b: Verbose ACP Tool Feedback ✅ — verbose ACP mode; `tool_call`/`tool_call_update` parsing; inline ToolCallCard in chat transcript
 - [x] 058: Token Usage Display ✅ — `AcpUsageUpdate` parsing; `TOK: 35K / 1M` metric in DiagnosticsBar; color thresholds at 75%/90%
@@ -376,6 +378,7 @@ Eliminate idle agent costs by disconnecting the agent when nobody is speaking an
 - [ ] 008: Integration Test & Cost Validation 📋 — e2e lifecycle test + LiveKit Cloud billing verification (requires running infrastructure)
 - [x] 009: Suppress Reconnecting Banner on Intentional Agent Disconnect ✅ — guard `TrackUnsubscribedEvent` with `AgentPresenceState`; banner suppressed during idle timeout lifecycle
 - [x] 010: Unmute as Agent Dispatch Trigger ✅ — unmuting while agent absent calls `onSpeechDetected()`; ~300-500ms head start before audio-level detection
+- [x] 011: Hold Mode — Voice Agent Idle Detection & Release ✅ — Gemini Live-style hold mode; `FLETCHER_HOLD_TIMEOUT_MS` (default 60s); disables SDK `userAwayTimeout`; `session_hold` data channel event; client shows "on hold — tap or speak to resume"; fixes BUG-027 (silent pipeline death)
 
 **Depends on:** Epic 2 (Voice Agent), Epic 3 (Flutter App), Epic 9 (Connectivity)
 
@@ -414,6 +417,7 @@ Split the single voice-agent pipeline into two distinct modes — **Voice Mode**
 - [ ] 043: Pluggable TTS Engine Abstraction — `TtsEngine` interface + native/Cartesia/Gemini impls
 - [ ] 046: Mode Switch Controller — formal voice ↔ chat state machine + mode-aware health (absorbs 051)
 - [ ] 047: Chat Mode Artifact Delivery — artifacts via JSON-RPC from relay (currently voice-mode only)
+- [ ] 068: Relay Safety Net — Auto-Dispatch on Orphaned Response 📋 — relay detects `session/update` with no agent in room, dispatches fresh agent to deliver response; edge case coverage for agent crashes/network partitions
 
 **Depends on:** Epic 4 (Ganglia session keys), Epic 17 (Text Input), Epic 20 (Agent Dispatch), Epic 24 (Relay)
 

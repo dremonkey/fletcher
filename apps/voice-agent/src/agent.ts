@@ -20,6 +20,7 @@
  *   ELEVENLABS_API_KEY - ElevenLabs API key for TTS (when TTS_PROVIDER=elevenlabs)
  *   GOOGLE_API_KEY - Google AI Studio API key (when TTS_PROVIDER=google)
  *   GOOGLE_TTS_VOICE - Gemini voice name (default: 'Kore')
+ *   FLETCHER_HOLD_TIMEOUT_MS - Idle timeout before entering hold mode (default: 60000, 0 to disable)
  *   FLETCHER_ACK_SOUND - Acknowledgment sound on EOU: path to audio file, 'builtin' (default), or 'disabled'
  *   PIPER_URL - Piper TTS sidecar URL for local fallback (e.g. 'http://localhost:5000')
  *   PIPER_VOICE - Piper voice name (default: sidecar default)
@@ -89,7 +90,11 @@ const REQUIRED_ENV = [
 
 const ttsProvider = (process.env.TTS_PROVIDER ?? "piper") as TTSProvider;
 const BRAIN_MAX_WAIT_MS = parseInt(
-  process.env.FLETCHER_BRAIN_MAX_WAIT_MS ?? "60000",
+  process.env.FLETCHER_BRAIN_MAX_WAIT_MS ?? "0",
+  10,
+);
+const HOLD_TIMEOUT_MS = parseInt(
+  process.env.FLETCHER_HOLD_TIMEOUT_MS ?? "60000",
   10,
 );
 
@@ -203,6 +208,43 @@ export default defineAgent({
     };
 
     // -----------------------------------------------------------------------
+    // Hold mode — Gemini Live-style idle detection (BUG-027).
+    //
+    // After HOLD_TIMEOUT_MS of silence (no user speech, no agent activity),
+    // the agent sends a 'session_hold' event to the client and disconnects.
+    // The client shows "on hold — tap or speak to resume" and dispatches a
+    // fresh agent on interaction.  The relay stays in the room, keeping the
+    // ACP session alive for seamless conversation continuity.
+    //
+    // This also fixes BUG-027: when the SDK's STT stream dies silently,
+    // the hold timer correctly fires (there IS silence) and the user gets
+    // a clean recovery path instead of a zombie agent.
+    // -----------------------------------------------------------------------
+    let holdTimerHandle: ReturnType<typeof setTimeout> | null = null;
+
+    const clearHoldTimer = () => {
+      if (holdTimerHandle) {
+        clearTimeout(holdTimerHandle);
+        holdTimerHandle = null;
+      }
+    };
+
+    const resetHoldTimer = () => {
+      if (!bootstrapSent || HOLD_TIMEOUT_MS <= 0) return;
+      clearHoldTimer();
+      holdTimerHandle = setTimeout(() => {
+        logger.info(
+          { holdTimeoutMs: HOLD_TIMEOUT_MS },
+          "Hold timeout — entering hold mode",
+        );
+        publishEvent({ type: "session_hold", reason: "idle" });
+        // Grace period for SCTP delivery before disconnect
+        setTimeout(() => ctx.room.disconnect(), 500);
+        holdTimerHandle = null;
+      }, HOLD_TIMEOUT_MS);
+    };
+
+    // -----------------------------------------------------------------------
     // Acknowledgment sound — plays a looping chime while the brain is
     // processing.  Starts on EOU detection (agent enters 'thinking' state),
     // stops when the first content token arrives or on pipeline error.
@@ -303,6 +345,10 @@ export default defineAgent({
         // Require at least 1 transcribed word before interrupting — prevents
         // non-speech sounds (coughs, sighs) from cutting off the agent.
         minInterruptionWords: 1,
+        // Disable the SDK's 15-second userAwayTimeout — it silently kills the
+        // STT stream, leaving a zombie agent with no recovery path (BUG-027).
+        // Hold mode (below) provides proper idle detection with clean UX.
+        userAwayTimeout: null,
       },
       connOptions: {
         // Allow TTS to fail without killing the session.  When TTS hits a
@@ -352,6 +398,7 @@ export default defineAgent({
         if (topic !== "ganglia-events") return;
         try {
           const event = JSON.parse(new TextDecoder().decode(payload));
+          resetHoldTimer(); // Client interaction — reset idle timer
           if (event.type === "tts-mode") {
             ttsEnabled = event.value !== "off";
             session.output.setAudioEnabled(ttsEnabled);
@@ -469,6 +516,17 @@ export default defineAgent({
         clearBrainTimeout();
       }
 
+      // Hold timer: clear during agent activity (thinking/speaking),
+      // restart when agent finishes speaking (listening again).
+      if (ev.newState === "thinking" || ev.newState === "speaking") {
+        clearHoldTimer();
+      } else if (
+        ev.newState === "listening" &&
+        (ev.oldState === "speaking" || ev.oldState === "thinking")
+      ) {
+        resetHoldTimer();
+      }
+
       // Start ack on EOU detection (thinking state) — skip when TTS is
       // disabled since there's no point playing a chime if the user wants
       // silence (TASK-030).
@@ -499,6 +557,7 @@ export default defineAgent({
     let currentUserSegmentId: string | null = null;
 
     session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (ev) => {
+      resetHoldTimer(); // User spoke — reset idle timer
       if (ev.isFinal) {
         logger.info({ transcript: ev.transcript }, "User input (final)");
       }
@@ -672,6 +731,7 @@ export default defineAgent({
         "Sending bootstrap message (voice mode activated)",
       );
       session.generateReply({ userInput: bootstrapMsg });
+      resetHoldTimer(); // Session started — begin idle tracking
     };
 
     const isE2e = (ctx.room.name ?? "").startsWith("e2e-");
@@ -745,6 +805,7 @@ export default defineAgent({
     ctx.addShutdownCallback(async () => {
       logger.info("Shutting down voice agent...");
       clearBrainTimeout();
+      clearHoldTimer();
       await bgAudioPlayer?.close();
       await session.close();
       await shutdownTelemetry();

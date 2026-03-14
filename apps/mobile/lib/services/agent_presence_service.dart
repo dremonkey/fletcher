@@ -75,9 +75,15 @@ class AgentPresenceService extends ChangeNotifier {
     _transitionTo(AgentPresenceState.agentPresent);
   }
 
+  /// Whether the current disconnect is a hold-mode disconnect (idle timeout).
+  bool _holdMode = false;
+
   /// Call when the last remote participant (agent) disconnects.
-  void onAgentDisconnected() {
+  /// Set [holdMode] to true when the agent disconnected due to idle timeout
+  /// (session_hold event) — shows "on hold" UX instead of generic disconnect.
+  void onAgentDisconnected({bool holdMode = false}) {
     if (!_enabled) return;
+    _holdMode = holdMode;
     _transitionTo(AgentPresenceState.agentAbsent);
   }
 
@@ -143,8 +149,11 @@ class AgentPresenceService extends ChangeNotifier {
           onSystemEvent!(
             'agent-disconnected',
             'AGENT',
-            'Disconnected \u2014 speak to reconnect',
+            _holdMode
+                ? 'On hold \u2014 tap or speak to resume'
+                : 'Disconnected \u2014 speak to reconnect',
           );
+          _holdMode = false;
         }
         break;
       case AgentPresenceState.dispatching:

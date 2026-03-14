@@ -95,6 +95,19 @@ Runs diagnostic checks and reports overall system health:
 
 **Overall health:** `healthy` (all OK), `degraded` (has warnings), `unhealthy` (has errors).
 
+### AgentPresenceService
+
+Manages the agent lifecycle for on-demand dispatch (Epic 20). When the agent is absent, the service listens for speech via audio level monitoring and dispatches a fresh agent on detection.
+
+**State machine:**
+```
+AGENT_ABSENT → (speech / text / unmute) → DISPATCHING → (agent connected) → AGENT_PRESENT
+DISPATCHING → (dispatch failed) → AGENT_ABSENT
+AGENT_PRESENT → (agent disconnected) → AGENT_ABSENT
+```
+
+**Hold mode:** When the agent disconnects due to idle timeout (hold mode), the service receives `onAgentDisconnected(holdMode: true)` and emits "On hold — tap or speak to resume" instead of the generic "Disconnected — speak to reconnect". The hold flag is set by `LiveKitService` when it receives a `session_hold` event on the `ganglia-events` data channel just before the agent disconnects. This provides clear UX feedback that the session is paused, not broken — the user can resume by speaking, tapping, or sending a text message.
+
 ### ConnectivityService
 
 Lightweight network state tracker. Listens to `Connectivity.onConnectivityChanged` and emits boolean state transitions (online/offline).

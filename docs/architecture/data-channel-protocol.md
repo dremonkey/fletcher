@@ -187,6 +187,19 @@ The agent handles this by:
 
 This enables "safety hatch" text input when voice is impractical (noisy/quiet environments, network degradation, precision corrections). The text message shares the same conversation context as voice — no separate session or history.
 
+### Session Hold Event
+
+Sent by the voice agent when entering hold mode (idle timeout). The client uses this to show "on hold" UX instead of a generic disconnect message, and to inform the `AgentPresenceService` that the disconnect is intentional.
+
+```typescript
+interface SessionHoldEvent {
+  type: 'session_hold';
+  reason: 'idle';           // Currently only "idle"; extensible for future reasons
+}
+```
+
+The agent sends this event ~500ms before disconnecting from the room. The client sets a `_holdModeActive` flag, which is passed to `AgentPresenceService.onAgentDisconnected(holdMode: true)` when the agent participant disconnects. This produces a "On hold — tap or speak to resume" message instead of the generic "Disconnected — speak to reconnect".
+
 ### TTS Mode Toggle (TASK-030)
 
 Disables or re-enables TTS synthesis on the agent. When TTS is off, the agent skips all TTS API calls and acknowledgment sounds — responses arrive as text only via the data channel transcript. STT remains active.

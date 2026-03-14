@@ -157,6 +157,7 @@ Deferred — chat mode MVP works without these.
 - [ ] [**043: Pluggable TTS Engine Abstraction**](./043-pluggable-tts-engine.md) — `TtsEngine` interface with NativeTTS/Cartesia/Gemini implementations. Sentence buffer for relay text deltas.
 - [ ] [**046: Mode Switch Controller**](./046-mode-switch-controller.md) — Formal state machine for voice↔chat transitions. Agent dispatch/release coordination, in-flight response handling, mode-aware health semantics (absorbs 051). Basic toggle exists but no formal state machine.
 - [ ] [**047: Chat Mode Artifact Delivery**](./047-chat-mode-artifact-delivery.md) — Artifacts via JSON-RPC `session/update` from relay. Currently voice-mode only via `ganglia-events`; relay sends no artifact events.
+- [ ] [**068: Relay Safety Net — Auto-Dispatch on Orphaned Response**](./068-relay-safety-net.md) — Relay detects `session/update` with no agent in room, dispatches fresh agent to deliver response. Edge case coverage for agent crashes/network partitions (hold mode prevents the primary scenario).
 
 ---
 
