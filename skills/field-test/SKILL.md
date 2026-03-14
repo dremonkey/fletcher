@@ -80,18 +80,34 @@ ls docs/field-tests/$(date +%Y%m%d)-buglog.md 2>/dev/null
 ## Notes
 
 - Command phrase: "Peanuts and Watermelons" = instruction from tester
-- Services monitored: `livekit`, `voice-agent` (via `docker compose logs -f`)
+- Services monitored: `livekit`, `voice-agent` (via `docker compose logs -f`), `relay` (via `tail -f logs/relay-*.log`)
 ```
 
 ### 3. Start tailing logs
 
-Start a background log tail for both containers:
+Start a background log tail for the Docker containers:
 
 ```sh
 docker compose logs -f --tail 100 2>&1
 ```
 
-Run this with `run_in_background: true`. This is your primary data source for the rest of the session.
+Run this with `run_in_background: true`.
+
+**Also tail the relay logs.** The relay runs outside Docker (spawned by the TUI), so it won't appear in `docker compose logs`. Find and tail its log file:
+
+```sh
+ls logs/relay-$(date +%Y-%m-%d).log 2>/dev/null
+```
+
+If the file exists, tail it in a second background task:
+
+```sh
+tail -f logs/relay-$(date +%Y-%m-%d).log 2>&1
+```
+
+If no relay log file exists, check whether the relay is running (`pgrep -fa relay`). If it's not running, note it — relay logs won't be available. If it is running but there's no log file, check for alternative log locations or whether the relay is logging to stdout only.
+
+Both log streams are your primary data sources for the rest of the session.
 
 ### 4. Monitor loop
 
@@ -242,7 +258,9 @@ The encrypted `.txt` files (raw dumps) can contain PII since they're never visib
 
 - Bug logs: `docs/field-tests/YYYYMMDD-buglog.md`
 - Client logs: `docs/field-tests/YYYYMMDD-client-HHMM-HHMM.txt`
+- Relay logs: `logs/relay-YYYY-MM-DD.log` (outside Docker, spawned by TUI)
 - Docker config: `docker-compose.yml`
 - Voice agent: `apps/voice-agent/src/agent.ts`
+- Relay: `apps/relay/src/index.ts`
 - Ganglia: `packages/livekit-agent-ganglia/src/`
 - Task tracking: `tasks/SUMMARY.md`
