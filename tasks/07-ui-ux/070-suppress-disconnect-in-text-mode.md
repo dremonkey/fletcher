@@ -2,7 +2,7 @@
 
 **Status:** [ ] Not started
 **Priority:** MEDIUM
-**Epic:** 20 — Agent Cost Optimization
+**Epic:** 7 — UI Redesign (TUI Brutalist)
 
 ## Problem
 

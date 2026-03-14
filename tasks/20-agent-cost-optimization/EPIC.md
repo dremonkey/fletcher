@@ -119,27 +119,6 @@ Voice agent idle timer: after N seconds of silence, send `session_hold` event, d
 
 ---
 
-### 069: Hold Mode Disconnect — "Live Mode Paused" Visual Treatment
-Hold disconnect renders as neutral gray info instead of red error. Suppress duplicate raw disconnect event. Message: "Live mode paused — tap to resume."
-
-**Status:** [ ]
-
----
-
-### 070: Suppress Agent Disconnect in Text Mode
-When user is in text input mode (not voice mode), suppress hold disconnect system event entirely. Relay still handles chat — agent departure is invisible.
-
-**Status:** [ ]
-
----
-
-### 071: Hold Mode — Tappable Resume Action
-Add visual cue to mic button when on hold (slow amber pulse). Makes "tap to resume" discoverable without adding new UI elements.
-
-**Status:** [ ]
-
----
-
 ### 010: Unmute as Agent Dispatch Trigger
 When the user unmutes their mic while the agent is absent, treat it as an intent signal and immediately trigger dispatch — don't wait for speech detection (~300ms audio-level threshold). This gives a head start on agent connection, reducing perceived latency. Unmuting is a deliberate user action that strongly predicts imminent speech.
 

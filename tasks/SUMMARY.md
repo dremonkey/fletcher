@@ -251,6 +251,9 @@ Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layou
 - [ ] 036: TUI Theme Bundles (Solarized, Gruvbox, Nord) 📋 — implementation of classic terminal-inspired color palettes
 - [ ] 037: Deduplicate Agent System Events & Expandable Long Rows 📋 — remove duplicate Connected/Disconnected cards; fix "speak or text" copy; tap-to-expand long system event rows
 - [x] 059: Voice Mode Bottom Bar — Inline Histogram with Mic Button ✅ — histograms moved from HeaderBar into VoiceControlBar bottom bar; animated reveal (300ms easeOutCubic, 50ms stagger); user histo tap=muteOnly, agent histo tap=TTS toggle; HeaderBar removed (52dp reclaimed)
+- [ ] 069: Hold Mode Disconnect — "Live Mode Paused" Visual Treatment 📋 — hold disconnect renders as neutral gray info instead of red error; suppress duplicate raw disconnect event; message: "Live mode paused — tap to resume"
+- [ ] 070: Suppress Agent Disconnect in Text Mode 📋 — when user is in text input mode (not voice mode), suppress hold disconnect system event entirely; relay still handles chat
+- [ ] 071: Hold Mode — Tappable Resume Action 📋 — add visual cue to mic button when on hold (slow amber pulse); makes "tap to resume" discoverable without new UI elements
 - [x] 038a: Fix Artifact Clump Regression After Agent Reconnect ✅ — `_lastAgentSegmentId` reset on disconnect; artifacts now correctly distributed across messages ([BUG-004](../docs/field-tests/20260310-buglog.md))
 - [x] 038b: Verbose ACP Tool Feedback ✅ — verbose ACP mode; `tool_call`/`tool_call_update` parsing; inline ToolCallCard in chat transcript
 - [x] 058: Token Usage Display ✅ — `AcpUsageUpdate` parsing; `TOK: 35K / 1M` metric in DiagnosticsBar; color thresholds at 75%/90%
@@ -412,11 +415,6 @@ Split the single voice-agent pipeline into two distinct modes — **Voice Mode**
 - [x] 065: Fix Silent Message Loss in Relay→Mobile Path ✅ — add logging, publishData timeout, drop diagnostics ([BUG-020](../docs/field-tests/20260313-buglog.md))
 - [~] 066: Bridge Async Agent Messages to Mobile 🔄 — workaround implemented: `session/load` catch-up with chunk dedup detects zero-text `end_turn` and replays missed sub-agent results; verified against real OpenClaw; needs field test ([BUG-022](../docs/field-tests/20260313-buglog.md))
 - [ ] 067: Fix Large Payload Delivery Failure in Relay 📋 — RCA complete: upstream ACP notification failure (same as BUG-022) + broken catch-up dedup (count-based skipCount drifts above actual session history). Fix: replace count-based dedup with content-based text comparison + add INFO-level delivery diagnostics ([BUG-024](../docs/field-tests/20260314-buglog.md))
-
-**Hold mode UX (post TASK-011):**
-- [ ] 069: Hold Mode Disconnect — "Live Mode Paused" Visual Treatment 📋 — hold disconnect renders as neutral gray info instead of red error; suppress duplicate raw disconnect event; message: "Live mode paused — tap to resume"
-- [ ] 070: Suppress Agent Disconnect in Text Mode 📋 — when user is in text input mode (not voice mode), suppress hold disconnect system event entirely; relay still handles chat
-- [ ] 071: Hold Mode — Tappable Resume Action 📋 — add visual cue to mic button when on hold (slow amber pulse); makes "tap to resume" discoverable without new UI elements
 
 **Backlog (deferred — chat mode MVP works without these):**
 - [ ] 043: Pluggable TTS Engine Abstraction — `TtsEngine` interface + native/Cartesia/Gemini impls
