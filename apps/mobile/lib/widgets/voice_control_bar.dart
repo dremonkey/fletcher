@@ -105,13 +105,22 @@ class _VoiceControlBarState extends State<VoiceControlBar>
         widget.service.state.inputMode == TextInputMode.textInput;
     final wantHistograms = widget.service.isVoiceModeActive;
 
-    // Text field
+    // Text field — delay expansion if histograms are still shrinking
     if (wantText != _textFieldTargetVisible) {
       _textFieldTargetVisible = wantText;
       if (wantText) {
-        animate
-            ? _textFieldController.forward()
-            : _textFieldController.value = 1.0;
+        if (animate) {
+          final delay = _userHistoController.value > 0.1
+              ? const Duration(milliseconds: 150)
+              : Duration.zero;
+          Future.delayed(delay, () {
+            if (mounted && _textFieldTargetVisible) {
+              _textFieldController.forward();
+            }
+          });
+        } else {
+          _textFieldController.value = 1.0;
+        }
       } else {
         _focusNode.unfocus();
         _textController.clear();
@@ -121,14 +130,21 @@ class _VoiceControlBarState extends State<VoiceControlBar>
       }
     }
 
-    // Histograms
+    // Histograms — delay reveal if text field is still shrinking
     if (wantHistograms != _histogramsTargetVisible) {
       _histogramsTargetVisible = wantHistograms;
       if (wantHistograms) {
         if (animate) {
-          _userHistoController.forward();
-          Future.delayed(const Duration(milliseconds: 50), () {
-            if (mounted) _agentHistoController.forward();
+          final delay = _textFieldController.value > 0.1
+              ? const Duration(milliseconds: 200)
+              : Duration.zero;
+          Future.delayed(delay, () {
+            if (mounted && _histogramsTargetVisible) {
+              _userHistoController.forward();
+              Future.delayed(const Duration(milliseconds: 50), () {
+                if (mounted) _agentHistoController.forward();
+              });
+            }
           });
         } else {
           _userHistoController.value = 1.0;
