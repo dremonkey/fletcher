@@ -420,6 +420,7 @@ export default defineAgent({
     // -----------------------------------------------------------------------
     let ttsEnabled = true;
     let bootstrapSent = false;
+    let bootstrapComplete = false;
     // sendBootstrap is assigned after participant is resolved (see below).
     let sendBootstrap: (() => void) | undefined;
 
@@ -545,6 +546,20 @@ export default defineAgent({
         }, BRAIN_MAX_WAIT_MS);
       } else if (ev.oldState === "thinking") {
         clearBrainTimeout();
+      }
+
+      // Bootstrap completion — first transition to "listening" after bootstrap
+      // was sent signals the bootstrap round-trip is done and the agent is ready
+      // for user speech.  Publish a bootstrap_end event so the UI can dismiss
+      // the "Connecting..." indicator. (BUG-031)
+      if (
+        ev.newState === "listening" &&
+        bootstrapSent &&
+        !bootstrapComplete
+      ) {
+        bootstrapComplete = true;
+        publishEvent({ type: "bootstrap", phase: "end" });
+        logger.info("Bootstrap complete — agent ready for user speech");
       }
 
       // Hold timer: clear during agent activity (thinking/speaking),
@@ -753,6 +768,9 @@ export default defineAgent({
     sendBootstrap = async () => {
       if (bootstrapSent) return;
       bootstrapSent = true;
+      // Signal the UI that bootstrap is starting — the client can show a
+      // "Connecting..." indicator until bootstrap_end arrives. (BUG-031)
+      publishEvent({ type: "bootstrap", phase: "start" });
       // Wait for the WebRTC data channel to the relay to be fully
       // established. publishData silently drops messages if the
       // channel isn't ready yet (~150ms after room join is too early).
@@ -766,7 +784,15 @@ export default defineAgent({
         { room: ctx.room.name },
         "Sending bootstrap message (voice mode activated)",
       );
-      session.generateReply({ userInput: bootstrapMsg });
+      // allowInterruptions: false prevents barge-in during bootstrap.
+      // Without this, user speech during the bootstrap round-trip cancels
+      // the bootstrap LLM call, leaving the ACP session in a bad state
+      // where the last instruction was "Do not reply to this message."
+      // Subsequent user messages then get empty/broken responses. (BUG-031)
+      session.generateReply({
+        userInput: bootstrapMsg,
+        allowInterruptions: false,
+      });
       resetHoldTimer(); // Session started — begin idle tracking
     };
 

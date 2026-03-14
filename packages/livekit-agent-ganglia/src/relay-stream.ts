@@ -85,6 +85,7 @@ export class RelayChatStream extends LLMStream {
   private readonly _onContent?: (delta: string, fullText: string, streamId: string) => void;
   private readonly _promptTimeoutMs: number;
   private readonly _waitForRelay?: Promise<void>;
+  private _rejectPrompt?: (err: Error) => void;
 
   constructor(
     llmInstance: llm.LLM,
@@ -154,6 +155,7 @@ export class RelayChatStream extends LLMStream {
     const promptPromise = new Promise<void>((res, rej) => {
       resolvePrompt = res;
       rejectPrompt = rej;
+      this._rejectPrompt = rej; // Expose to close() for clean shutdown
     });
 
     // Subscribe to incoming messages from the relay.
@@ -280,7 +282,10 @@ export class RelayChatStream extends LLMStream {
       await Promise.race([promptPromise, timeoutPromise]);
       dbg.relayStream('run() complete: streamId=%s', this._streamId);
     } catch (error) {
-      this.logger.error(`RelayChatStream error: ${error}`);
+      // Don't log barge-in closure as an error — it's expected behavior.
+      if (!this.closed) {
+        this.logger.error(`RelayChatStream error: ${error}`);
+      }
       throw error;
     } finally {
       unsubscribe();
@@ -308,6 +313,11 @@ export class RelayChatStream extends LLMStream {
       // Ignore errors from cancel — relay may already be done
       dbg.relayStream('sendCancel failed (ignored): %s', (e as Error).message);
     }
+    // Reject the prompt so run() exits immediately instead of hanging
+    // until the 120s timeout.  Without this, the pondering timer keeps
+    // ticking for up to 2 minutes after barge-in. (BUG-031)
+    this._rejectPrompt?.(new Error('Stream closed (barge-in)'));
+    this._rejectPrompt = undefined;
     super.close();
   }
 }
