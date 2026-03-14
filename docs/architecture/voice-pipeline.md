@@ -63,7 +63,7 @@ AgentSession({ stt, tts, llm })
 
 The `Agent` object is an "empty shell" — OpenClaw owns personality, instructions, and tools. The agent passes an empty instructions string, relying entirely on the brain backend for conversation context.
 
-A **bootstrap message** is sent once per session to inject voice-specific behavioral instructions (TTS pronunciation hints, response length constraints, etc.) into the conversation via `session.generateReply({ userInput })`. The bootstrap is deferred until voice mode is activated — it fires when the first `tts-mode` event with `value !== "off"` arrives on the `ganglia-events` data channel. For e2e test rooms (`e2e-*` prefix), bootstrap fires immediately. See the [Startup sequence](#standalone-agent-appsvoice-agent) for details.
+A **bootstrap message** is sent once per session to inject voice-specific behavioral instructions (TTS pronunciation hints, response length constraints, etc.) into the conversation via `session.generateReply({ userInput })`. The bootstrap is deferred until the user activates the microphone — it fires on `RoomEvent.TrackSubscribed` when a non-agent participant publishes an audio track. A 2-second delay follows to ensure the WebRTC data channel is established before publishing. For e2e test rooms (`e2e-*` prefix), bootstrap fires immediately. See the [Startup sequence](#standalone-agent-appsvoice-agent) for details.
 
 ### Acknowledgment Sound (Background Audio)
 
@@ -209,7 +209,7 @@ The agent registers as a LiveKit worker. When a client joins a room, LiveKit dis
 4. On job dispatch: create STT, TTS, and AgentSession
 5. Resolve session routing via `resolveSessionKeySimple()`
 6. Set session key on Ganglia for conversation continuity
-7. **Bootstrap message** — a synthetic user message (`generateReply()`) that injects TTS/STT behavioral instructions into the session. Bootstrap is **deferred** until the client activates voice mode: it fires on the first `tts-mode` event with `value !== "off"` received on the `ganglia-events` data channel. For e2e test rooms (name prefixed with `e2e-`), bootstrap fires immediately after participant join.
+7. **Bootstrap message** — a synthetic user message (`generateReply()`) that injects TTS/STT behavioral instructions into the session. Bootstrap is **deferred** until the user activates the microphone: it fires on `RoomEvent.TrackSubscribed` when a non-agent participant publishes an audio track, plus a 2-second delay for WebRTC data channel establishment. For e2e test rooms (name prefixed with `e2e-`), bootstrap fires immediately after participant join.
 
 **Load reporting:** The agent reports zero load (`loadFunc: async () => 0`) so LiveKit always dispatches jobs to it. This avoids unreliable CPU sampling in containers.
 
