@@ -88,6 +88,9 @@ export class NanoclawClient {
      */
     async *chat(options) {
         const controller = new AbortController();
+        const fetchSignal = options.signal
+            ? AbortSignal.any([controller.signal, options.signal])
+            : controller.signal;
         const headers = {
             'Content-Type': 'application/json',
         };
@@ -123,10 +126,14 @@ export class NanoclawClient {
                 method: 'POST',
                 headers,
                 body: JSON.stringify(body),
-                signal: controller.signal,
+                signal: fetchSignal,
             });
         }
         catch (fetchError) {
+            if (options.signal?.aborted && fetchError instanceof DOMException && fetchError.name === 'AbortError') {
+                dbg.nanoclawClient('fetch aborted by external signal (graceful cancellation)');
+                return;
+            }
             this.logger.error(`NanoclawClient fetch failed for ${url}: ${fetchError}`);
             throw fetchError;
         }
@@ -173,6 +180,10 @@ export class NanoclawClient {
             }
         }
         catch (err) {
+            if (options.signal?.aborted && err instanceof DOMException && err.name === 'AbortError') {
+                dbg.nanoclawClient('stream read aborted by external signal (graceful cancellation)');
+                return;
+            }
             controller.abort();
             throw err;
         }

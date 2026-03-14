@@ -2,10 +2,10 @@
  * Ganglia Factory
  *
  * Creates LLM instances based on configuration.
- * Both OpenClaw and Nanoclaw backends are included in this package.
+ * ACP (JSON-RPC 2.0 over stdio) and Nanoclaw backends are included in this package.
  */
 import type { llm } from '@livekit/agents';
-import type { GangliaConfig, GangliaSessionInfo } from './ganglia-types.js';
+import type { GangliaConfig, GangliaSessionInfo, RelayRoom } from './ganglia-types.js';
 import type { SessionKey } from './session-routing.js';
 import { type Logger } from './logger.js';
 /**
@@ -32,9 +32,9 @@ export interface GangliaLLM extends llm.LLM {
  *
  * @example
  * ```typescript
- * // In llm.ts
+ * // In acp-llm.ts
  * import { registerGanglia } from './factory.js';
- * registerGanglia('openclaw', async () => OpenClawLLM);
+ * registerGanglia('acp', async () => AcpLLM);
  * ```
  */
 export declare function registerGanglia(type: string, factory: () => Promise<new (config: any) => GangliaLLM>): void;
@@ -44,10 +44,10 @@ export declare function registerGanglia(type: string, factory: () => Promise<new
  * @example
  * ```typescript
  * const llm = await createGanglia({
- *   type: 'openclaw',
- *   openclaw: {
- *     baseUrl: 'http://localhost:8080',
- *     apiKey: process.env.OPENCLAW_API_KEY!,
+ *   type: 'acp',
+ *   acp: {
+ *     command: 'openclaw',
+ *     args: ['acp'],
  *   },
  * });
  * ```
@@ -65,12 +65,17 @@ export declare function isGangliaAvailable(type: string): boolean;
  * Creates a ganglia instance from environment variables.
  *
  * Reads:
- * - GANGLIA_TYPE (default: 'openclaw')
- * - OPENCLAW_GATEWAY_URL, OPENCLAW_API_KEY (for openclaw)
+ * - GANGLIA_TYPE (default: 'acp')
+ * - ACP_COMMAND (default: 'openclaw'), ACP_ARGS (default: 'acp'), ACP_PROMPT_TIMEOUT_MS (for acp)
  * - NANOCLAW_URL (for nanoclaw)
  */
 export declare function createGangliaFromEnv(opts?: {
     logger?: Logger;
+    /**
+     * LiveKit Room reference — required when GANGLIA_TYPE=relay.
+     * Pass `ctx.room` from your voice-agent prewarm/entrypoint.
+     */
+    room?: RelayRoom;
     /** Callback for pondering status phrases while waiting for LLM first token. */
     onPondering?: (phrase: string | null, streamId: string) => void;
     /** Callback for each content chunk from the LLM stream. */

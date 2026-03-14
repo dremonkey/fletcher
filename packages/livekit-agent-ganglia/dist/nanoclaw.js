@@ -59,10 +59,12 @@ export class NanoclawLLM extends LLMBase {
     client;
     _model;
     _sessionKey;
+    _historyMode;
     constructor(config) {
         super();
         this.client = new NanoclawClient(config);
         this._model = 'nanoclaw';
+        this._historyMode = config.historyMode ?? 'full';
         if (!(this instanceof LLMBase)) {
             const msg = [
                 'NanoclawLLM: instanceof LLM check failed — likely duplicate @livekit/agents installs.',
@@ -116,16 +118,19 @@ export class NanoclawLLM extends LLMBase {
             toolCtx,
             connOptions: connOptions || { maxRetry: 3, retryIntervalMs: 2000, timeoutMs: 10000 },
             sessionKey: this._sessionKey,
+            historyMode: this._historyMode,
         });
     }
 }
 class NanoclawChatStream extends LLMStream {
     nanoclawClient;
     _sessionKey;
-    constructor(llmInstance, client, { chatCtx, toolCtx, connOptions, sessionKey, }) {
+    _historyMode;
+    constructor(llmInstance, client, { chatCtx, toolCtx, connOptions, sessionKey, historyMode, }) {
         super(llmInstance, { chatCtx, toolCtx, connOptions });
         this.nanoclawClient = client;
         this._sessionKey = sessionKey;
+        this._historyMode = historyMode;
     }
     async run() {
         dbg.nanoclawStream('run() called');
@@ -133,8 +138,23 @@ class NanoclawChatStream extends LLMStream {
         const chatCtx = this.chatCtx;
         const toolCtx = this.toolCtx;
         const connOptions = this.connOptions;
-        dbg.nanoclawStream('chatCtx.items count: %d', chatCtx.items?.length ?? 0);
-        for (const item of chatCtx.items) {
+        let itemsToProcess = chatCtx.items;
+        if (this._historyMode === 'latest') {
+            let lastUserIdx = -1;
+            for (let i = itemsToProcess.length - 1; i >= 0; i--) {
+                if (itemsToProcess[i] instanceof ChatMessageClass &&
+                    itemsToProcess[i].role === 'user') {
+                    lastUserIdx = i;
+                    break;
+                }
+            }
+            if (lastUserIdx >= 0) {
+                itemsToProcess = itemsToProcess.slice(lastUserIdx);
+            }
+            dbg.nanoclawStream('historyMode=latest: %d/%d items (lastUserIdx=%d)', itemsToProcess.length, chatCtx.items.length, lastUserIdx);
+        }
+        dbg.nanoclawStream('chatCtx.items count: %d', itemsToProcess.length);
+        for (const item of itemsToProcess) {
             dbg.nanoclawStream('item type=%s instanceof ChatMessage=%s FunctionCall=%s', item?.constructor?.name, item instanceof ChatMessageClass, item instanceof FunctionCallClass);
             if (item instanceof ChatMessageClass) {
                 const msg = {
@@ -210,6 +230,7 @@ class NanoclawChatStream extends LLMStream {
                 tools: tools && tools.length > 0 ? tools : undefined,
                 session,
                 sessionKey: this._sessionKey,
+                signal: this.abortController.signal,
             });
             for await (const chunk of stream) {
                 // Handle extended events (status, artifact) - pass through

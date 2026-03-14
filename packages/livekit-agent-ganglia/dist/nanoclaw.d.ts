@@ -31,6 +31,7 @@ export declare class NanoclawLLM extends LLMBase implements GangliaLLM {
     private client;
     private _model;
     private _sessionKey?;
+    private _historyMode;
     constructor(config: NanoclawConfig);
     /**
      * Returns the ganglia type identifier.
@@ -67,11 +68,13 @@ export declare class NanoclawLLM extends LLMBase implements GangliaLLM {
 declare class NanoclawChatStream extends LLMStream {
     private nanoclawClient;
     private _sessionKey?;
-    constructor(llmInstance: NanoclawLLM, client: NanoclawClient, { chatCtx, toolCtx, connOptions, sessionKey, }: {
+    private _historyMode;
+    constructor(llmInstance: NanoclawLLM, client: NanoclawClient, { chatCtx, toolCtx, connOptions, sessionKey, historyMode, }: {
         chatCtx: ChatContext;
         toolCtx?: ToolContext;
         connOptions: APIConnectOptions;
         sessionKey?: SessionKey;
+        historyMode: 'full' | 'latest';
     });
     protected run(): Promise<void>;
 }

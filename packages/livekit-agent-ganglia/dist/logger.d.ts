@@ -19,8 +19,12 @@ export declare const noopLogger: Logger;
  */
 export declare const dbg: {
     factory: Debug.Debugger;
+    acpStream: Debug.Debugger;
     openclawStream: Debug.Debugger;
     openclawClient: Debug.Debugger;
+    openresponses: Debug.Debugger;
     nanoclawStream: Debug.Debugger;
     nanoclawClient: Debug.Debugger;
+    relayStream: Debug.Debugger;
+    relayClient: Debug.Debugger;
 };

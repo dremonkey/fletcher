@@ -2,7 +2,7 @@
  * Ganglia Factory
  *
  * Creates LLM instances based on configuration.
- * Both OpenClaw and Nanoclaw backends are included in this package.
+ * ACP (JSON-RPC 2.0 over stdio) and Nanoclaw backends are included in this package.
  */
 import { noopLogger, dbg } from './logger.js';
 /**
@@ -16,9 +16,9 @@ const registry = new Map();
  *
  * @example
  * ```typescript
- * // In llm.ts
+ * // In acp-llm.ts
  * import { registerGanglia } from './factory.js';
- * registerGanglia('openclaw', async () => OpenClawLLM);
+ * registerGanglia('acp', async () => AcpLLM);
  * ```
  */
 export function registerGanglia(type, factory) {
@@ -30,10 +30,10 @@ export function registerGanglia(type, factory) {
  * @example
  * ```typescript
  * const llm = await createGanglia({
- *   type: 'openclaw',
- *   openclaw: {
- *     baseUrl: 'http://localhost:8080',
- *     apiKey: process.env.OPENCLAW_API_KEY!,
+ *   type: 'acp',
+ *   acp: {
+ *     command: 'openclaw',
+ *     args: ['acp'],
  *   },
  * });
  * ```
@@ -64,24 +64,47 @@ export function isGangliaAvailable(type) {
  * Creates a ganglia instance from environment variables.
  *
  * Reads:
- * - GANGLIA_TYPE (default: 'openclaw')
- * - OPENCLAW_GATEWAY_URL, OPENCLAW_API_KEY (for openclaw)
+ * - GANGLIA_TYPE (default: 'acp')
+ * - ACP_COMMAND (default: 'openclaw'), ACP_ARGS (default: 'acp'), ACP_PROMPT_TIMEOUT_MS (for acp)
  * - NANOCLAW_URL (for nanoclaw)
  */
 export async function createGangliaFromEnv(opts) {
     const logger = opts?.logger || noopLogger;
-    const type = (process.env.GANGLIA_TYPE || process.env.BRAIN_TYPE || 'openclaw');
+    const type = (process.env.GANGLIA_TYPE || process.env.BRAIN_TYPE || 'acp');
     dbg.factory('createGangliaFromEnv: GANGLIA_TYPE=%s BRAIN_TYPE=%s resolved=%s', process.env.GANGLIA_TYPE, process.env.BRAIN_TYPE, type);
     dbg.factory('registered types: %s', Array.from(registry.keys()).join(', ') || 'none');
-    if (type === 'openclaw') {
-        const baseUrl = process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:8080';
-        dbg.factory('creating openclaw: baseUrl=%s hasApiKey=%s', baseUrl, !!process.env.OPENCLAW_API_KEY);
-        logger.info(`Creating ganglia backend: openclaw (${baseUrl})`);
+    if (type === 'acp') {
+        const command = process.env.ACP_COMMAND || 'openclaw';
+        const argsRaw = process.env.ACP_ARGS || 'acp';
+        const args = argsRaw.split(',').map((a) => a.trim()).filter(Boolean);
+        const promptTimeoutMs = process.env.ACP_PROMPT_TIMEOUT_MS
+            ? parseInt(process.env.ACP_PROMPT_TIMEOUT_MS, 10)
+            : undefined;
+        dbg.factory('creating acp: command=%s args=%o promptTimeoutMs=%s', command, args, promptTimeoutMs);
+        logger.info(`Creating ganglia backend: acp (command: ${command} ${args.join(' ')})`);
         return createGanglia({
-            type: 'openclaw',
-            openclaw: {
-                baseUrl,
-                apiKey: process.env.OPENCLAW_API_KEY || '',
+            type: 'acp',
+            acp: {
+                command,
+                args,
+                promptTimeoutMs,
+                logger,
+                onPondering: opts?.onPondering,
+                onContent: opts?.onContent,
+            },
+        });
+    }
+    if (type === 'relay') {
+        if (!opts?.room) {
+            throw new Error('GANGLIA_TYPE=relay requires a room in opts. ' +
+                'Pass { room: ctx.room } to createGangliaFromEnv().');
+        }
+        dbg.factory('creating relay: room=%s', opts.room?.name ?? '(unknown)');
+        logger.info('Creating ganglia backend: relay');
+        return createGanglia({
+            type: 'relay',
+            relay: {
+                room: opts.room,
                 logger,
                 onPondering: opts?.onPondering,
                 onContent: opts?.onContent,

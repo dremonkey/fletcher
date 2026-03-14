@@ -9,7 +9,7 @@
  */
 import { llm, APIConnectOptions } from '@livekit/agents';
 import { type GangliaLLM, registerGanglia } from './factory.js';
-import type { GangliaSessionInfo, RelayConfig } from './ganglia-types.js';
+import type { GangliaSessionInfo, RelayConfig, RelayRoom } from './ganglia-types.js';
 import type { SessionKey } from './session-routing.js';
 import { type Logger, noopLogger, dbg } from './logger.js';
 import { DataChannelTransport, VOICE_ACP_TOPIC } from './relay-transport.js';
@@ -23,6 +23,9 @@ const LLMBase = llm.LLM;
 
 /** Default prompt timeout: 2 minutes. */
 const DEFAULT_PROMPT_TIMEOUT_MS = 120_000;
+
+/** How long to wait for a relay-* participant before giving up (ms). */
+const RELAY_WAIT_TIMEOUT_MS = 10_000;
 
 export class RelayLLM extends LLMBase implements GangliaLLM {
   private readonly _config: RelayConfig;
@@ -93,8 +96,9 @@ export class RelayLLM extends LLMBase implements GangliaLLM {
   /**
    * Creates a new chat stream for a user turn.
    *
-   * Scans room participants for a relay-* identity. Throws immediately if
-   * none found — no retry/fallback in this implementation phase.
+   * If no relay-* participant is currently in the room, the stream will wait
+   * up to RELAY_WAIT_TIMEOUT_MS for one to appear before sending the request.
+   * This handles the bootstrap race where the agent joins before the relay.
    */
   chat({
     chatCtx,
@@ -110,38 +114,33 @@ export class RelayLLM extends LLMBase implements GangliaLLM {
   }): RelayChatStream {
     const room = this._config.room;
 
-    // Locate the relay participant (identity starts with "relay-").
-    let relayParticipant: { identity: string } | undefined;
-    for (const [, participant] of room.remoteParticipants) {
-      if (participant.identity.startsWith('relay-')) {
-        relayParticipant = participant;
-        break;
-      }
-    }
-
-    if (!relayParticipant) {
-      const identities = Array.from(room.remoteParticipants.values())
-        .map((p) => p.identity)
-        .join(', ') || '(none)';
-      throw new Error(
-        `RelayLLM: no relay-* participant found in room. ` +
-          `Remote participants: ${identities}. ` +
-          `Ensure the relay has joined the room before starting a chat session.`,
-      );
-    }
+    // Check if relay is already present — if so, log immediately.
+    // If not, create a promise that resolves when a relay-* participant joins.
+    const relayParticipant = this._findRelayParticipant(room);
 
     const streamId = `relay_${++this._nextStreamSeq}`;
     const requestId = `req-${streamId}-${Date.now()}`;
-    dbg.relayStream(
-      'chat() called: streamId=%s requestId=%s relayIdentity=%s',
-      streamId,
-      requestId,
-      relayParticipant.identity,
-    );
 
-    this._logger.info(
-      `RelayLLM: routing prompt via relay participant ${relayParticipant.identity}`,
-    );
+    let waitForRelay: Promise<void> | undefined;
+    if (relayParticipant) {
+      dbg.relayStream(
+        'chat() called: streamId=%s requestId=%s relayIdentity=%s',
+        streamId,
+        requestId,
+        relayParticipant.identity,
+      );
+      this._logger.info(
+        `RelayLLM: routing prompt via relay participant ${relayParticipant.identity}`,
+      );
+    } else {
+      dbg.relayStream(
+        'chat() called: streamId=%s requestId=%s — no relay participant yet, will wait',
+        streamId,
+        requestId,
+      );
+      this._logger.info('RelayLLM: relay not yet in room, waiting for relay-* participant');
+      waitForRelay = this._waitForRelayParticipant(room);
+    }
 
     const transport = new DataChannelTransport(room, VOICE_ACP_TOPIC);
 
@@ -158,6 +157,56 @@ export class RelayLLM extends LLMBase implements GangliaLLM {
       onPondering: this._onPondering,
       onContent: this._onContent,
       promptTimeoutMs: this._promptTimeoutMs,
+      waitForRelay,
+    });
+  }
+
+  /**
+   * Find a relay-* participant in the room's remote participants.
+   */
+  private _findRelayParticipant(room: RelayRoom): { identity: string } | undefined {
+    for (const [, participant] of room.remoteParticipants) {
+      if (participant.identity.startsWith('relay-')) {
+        return participant;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Returns a promise that resolves when a relay-* participant joins the room,
+   * or rejects after RELAY_WAIT_TIMEOUT_MS.
+   */
+  private _waitForRelayParticipant(room: RelayRoom): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        room.off('participantConnected', onParticipant);
+        const identities = Array.from(room.remoteParticipants.values())
+          .map((p) => p.identity)
+          .join(', ') || '(none)';
+        reject(new Error(
+          `RelayLLM: no relay-* participant joined within ${RELAY_WAIT_TIMEOUT_MS}ms. ` +
+          `Remote participants: ${identities}.`,
+        ));
+      }, RELAY_WAIT_TIMEOUT_MS);
+
+      const onParticipant = (p: { identity: string }) => {
+        if (p.identity.startsWith('relay-')) {
+          clearTimeout(timeout);
+          room.off('participantConnected', onParticipant);
+          this._logger.info(`RelayLLM: relay participant joined: ${p.identity}`);
+          resolve();
+        }
+      };
+
+      room.on('participantConnected', onParticipant);
+
+      // Double-check in case relay joined between chat() and this listener.
+      if (this._findRelayParticipant(room)) {
+        clearTimeout(timeout);
+        room.off('participantConnected', onParticipant);
+        resolve();
+      }
     });
   }
 

@@ -15,7 +15,12 @@ import { llm } from '@livekit/agents';
 // Mock Room helpers
 // ---------------------------------------------------------------------------
 
-function makeMockRoom(remoteIdentities: string[] = []): RelayRoom {
+interface MockRoom extends RelayRoom {
+  /** Simulate a participant joining the room. */
+  emitParticipantConnected(identity: string): void;
+}
+
+function makeMockRoom(remoteIdentities: string[] = []): MockRoom {
   const remoteParticipants = new Map<string, { identity: string }>(
     remoteIdentities.map((id) => [id, { identity: id }]),
   );
@@ -43,6 +48,12 @@ function makeMockRoom(remoteIdentities: string[] = []): RelayRoom {
       }
       return this as any;
     },
+
+    emitParticipantConnected(identity: string) {
+      remoteParticipants.set(identity, { identity });
+      const arr = listeners.get('participantConnected');
+      if (arr) arr.forEach((fn) => fn({ identity }));
+    },
   };
 }
 
@@ -53,44 +64,14 @@ function makeChatCtx(text: string): llm.ChatContext {
 }
 
 // ---------------------------------------------------------------------------
-// T8: No relay participant → chat() throws
+// T8: Relay participant presence — chat() waits or proceeds
 // ---------------------------------------------------------------------------
 
-describe('T8: RelayLLM.chat() — no relay participant', () => {
-  test('throws descriptive error when no relay-* participant is in the room', () => {
-    const room = makeMockRoom(['mobile-alice', 'voice-agent-1']);
-    const relayLlm = new RelayLLM({ room });
-
-    expect(() =>
-      relayLlm.chat({
-        chatCtx: makeChatCtx('Hello'),
-      }),
-    ).toThrow(/no relay-\* participant found/);
-  });
-
-  test('error message includes remote participant identities', () => {
-    const room = makeMockRoom(['mobile-alice', 'voice-agent-1']);
-    const relayLlm = new RelayLLM({ room });
-
-    expect(() =>
-      relayLlm.chat({ chatCtx: makeChatCtx('Hello') }),
-    ).toThrow(/mobile-alice/);
-  });
-
-  test('throws even when room is empty', () => {
-    const room = makeMockRoom([]);
-    const relayLlm = new RelayLLM({ room });
-
-    expect(() =>
-      relayLlm.chat({ chatCtx: makeChatCtx('Hello') }),
-    ).toThrow(/no relay-\* participant found/);
-  });
-
-  test('does NOT throw when relay-* participant is present', () => {
+describe('T8: RelayLLM.chat() — relay participant handling', () => {
+  test('returns stream immediately when relay-* participant is present', () => {
     const room = makeMockRoom(['relay-main', 'mobile-alice']);
     const relayLlm = new RelayLLM({ room });
 
-    // Should not throw — just verify we get a stream back
     const stream = relayLlm.chat({ chatCtx: makeChatCtx('Hello') });
     expect(stream).toBeTruthy();
     stream.close();
@@ -102,6 +83,39 @@ describe('T8: RelayLLM.chat() — no relay participant', () => {
 
     const stream = relayLlm.chat({ chatCtx: makeChatCtx('Hi') });
     expect(stream).toBeTruthy();
+    stream.close();
+  });
+
+  test('does not throw when no relay participant — returns stream that waits', () => {
+    const room = makeMockRoom(['mobile-alice', 'voice-agent-1']);
+    const relayLlm = new RelayLLM({ room });
+
+    // Should NOT throw — creates a stream that will wait for relay
+    const stream = relayLlm.chat({ chatCtx: makeChatCtx('Hello') });
+    expect(stream).toBeTruthy();
+    stream.close();
+  });
+
+  test('does not throw when room is empty — returns stream that waits', () => {
+    const room = makeMockRoom([]);
+    const relayLlm = new RelayLLM({ room });
+
+    const stream = relayLlm.chat({ chatCtx: makeChatCtx('Hello') });
+    expect(stream).toBeTruthy();
+    stream.close();
+  });
+
+  test('waitForRelay resolves when relay joins after chat()', () => {
+    const room = makeMockRoom([]);
+    const relayLlm = new RelayLLM({ room });
+
+    const stream = relayLlm.chat({ chatCtx: makeChatCtx('Hello') });
+    expect(stream).toBeTruthy();
+
+    // Simulate relay joining — the internal waitForRelay promise should resolve
+    room.emitParticipantConnected('relay-zebes-rail');
+
+    // Stream should have been unblocked (no timeout error)
     stream.close();
   });
 });

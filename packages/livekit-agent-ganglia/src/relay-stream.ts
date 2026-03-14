@@ -70,6 +70,7 @@ export class RelayChatStream extends LLMStream {
   private readonly _onPondering?: (phrase: string | null, streamId: string) => void;
   private readonly _onContent?: (delta: string, fullText: string, streamId: string) => void;
   private readonly _promptTimeoutMs: number;
+  private readonly _waitForRelay?: Promise<void>;
 
   constructor(
     llmInstance: llm.LLM,
@@ -83,6 +84,7 @@ export class RelayChatStream extends LLMStream {
       onPondering,
       onContent,
       promptTimeoutMs,
+      waitForRelay,
     }: {
       chatCtx: ChatContext;
       toolCtx?: ToolContext;
@@ -92,6 +94,7 @@ export class RelayChatStream extends LLMStream {
       onPondering?: (phrase: string | null, streamId: string) => void;
       onContent?: (delta: string, fullText: string, streamId: string) => void;
       promptTimeoutMs: number;
+      waitForRelay?: Promise<void>;
     },
   ) {
     super(llmInstance, { chatCtx, toolCtx, connOptions });
@@ -101,6 +104,7 @@ export class RelayChatStream extends LLMStream {
     this._onPondering = onPondering;
     this._onContent = onContent;
     this._promptTimeoutMs = promptTimeoutMs;
+    this._waitForRelay = waitForRelay;
 
     // LLMStream.startSoon() discards the promise returned by mainTask.
     // When run() re-throws after emitError(), the rejection becomes unhandled.
@@ -224,6 +228,13 @@ export class RelayChatStream extends LLMStream {
           this._onPondering!(phrases[idx], this._streamId);
           dbg.relayStream('pondering: "%s" streamId=%s', phrases[idx], this._streamId);
         }, PONDERING_INTERVAL_MS);
+      }
+
+      // Wait for relay participant if not yet in room (bootstrap race fix).
+      if (this._waitForRelay) {
+        dbg.relayStream('waiting for relay participant before sending request...');
+        await this._waitForRelay;
+        dbg.relayStream('relay participant arrived, proceeding with request');
       }
 
       // Publish the JSON-RPC session/prompt request.

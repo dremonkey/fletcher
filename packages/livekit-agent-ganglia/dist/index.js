@@ -1,16 +1,16 @@
 /**
  * Livekit Agent Ganglia
  *
- * A unified LiveKit Agents LLM plugin supporting OpenClaw and Nanoclaw backends.
+ * A unified LiveKit Agents LLM plugin supporting ACP and Nanoclaw backends.
  *
  * @example
  * ```typescript
- * import { createGanglia, createGangliaFromEnv, OpenClawLLM, NanoclawLLM } from '@knittt/livekit-agent-ganglia';
+ * import { createGanglia, createGangliaFromEnv, AcpLLM, NanoclawLLM } from '@knittt/livekit-agent-ganglia';
  *
- * // From explicit config (OpenClaw)
+ * // From explicit config (ACP — default)
  * const llm = await createGanglia({
- *   type: 'openclaw',
- *   openclaw: { baseUrl: 'http://localhost:8080', apiKey: '...' },
+ *   type: 'acp',
+ *   acp: { command: 'openclaw', args: ['acp'] },
  * });
  *
  * // From explicit config (Nanoclaw)
@@ -19,11 +19,11 @@
  *   nanoclaw: { url: 'http://localhost:18789' },
  * });
  *
- * // From environment variables (GANGLIA_TYPE=openclaw|nanoclaw)
+ * // From environment variables (GANGLIA_TYPE=acp|nanoclaw)
  * const llm = await createGangliaFromEnv();
  *
  * // Direct instantiation
- * const openclawLlm = new OpenClawLLM({ baseUrl: 'http://localhost:8080' });
+ * const acpLlm = new AcpLLM({ command: 'openclaw', args: ['acp'] });
  * const nanoclawLlm = new NanoclawLLM({ url: 'http://localhost:18789' });
  * ```
  */
@@ -38,22 +38,23 @@ export { ToolInterceptor, createToolInterceptor, createReadFileArtifact, createE
 export { EventInterceptor } from './event-interceptor.js';
 // Session Routing
 export { resolveSessionKey, resolveSessionKeySimple, } from './session-routing.js';
-// OpenClaw Implementation
-import { OpenClawLLM } from './llm.js';
-export { OpenClawLLM };
-export { extractSessionFromContext } from './llm.js';
-export { OpenClawClient, generateSessionId, buildSessionHeaders, buildMetadataHeaders, applySessionKey } from './client.js';
-export * from './types/index.js';
+// ACP Implementation
+import { AcpLLM } from './acp-llm.js';
+export { AcpLLM };
 // Nanoclaw Implementation
 import { NanoclawLLM } from './nanoclaw.js';
 export { NanoclawLLM };
 export { extractNanoclawSession } from './nanoclaw.js';
 export { NanoclawClient, generateChannelJid, sessionKeyToChannel } from './nanoclaw-client.js';
+// Relay Implementation
+import { RelayLLM } from './relay-llm.js';
+export { RelayLLM };
+export { DataChannelTransport, VOICE_ACP_TOPIC } from './relay-transport.js';
 /**
- * OpenClaw LLM namespace
+ * ACP LLM namespace (default backend)
  */
-export const openclaw = {
-    LLM: OpenClawLLM,
+export const acp = {
+    LLM: AcpLLM,
 };
 /**
  * Nanoclaw LLM namespace
@@ -61,4 +62,10 @@ export const openclaw = {
 export const nanoclaw = {
     LLM: NanoclawLLM,
 };
-export default openclaw;
+/**
+ * Relay LLM namespace
+ */
+export const relay = {
+    LLM: RelayLLM,
+};
+export default acp;

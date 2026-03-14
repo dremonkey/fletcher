@@ -14,8 +14,12 @@ export const noopLogger = {
  */
 export const dbg = {
     factory: Debug('ganglia:factory'),
+    acpStream: Debug('ganglia:acp:stream'),
     openclawStream: Debug('ganglia:openclaw:stream'),
     openclawClient: Debug('ganglia:openclaw:client'),
+    openresponses: Debug('ganglia:openclaw:openresponses'),
     nanoclawStream: Debug('ganglia:nanoclaw:stream'),
     nanoclawClient: Debug('ganglia:nanoclaw:client'),
+    relayStream: Debug('ganglia:relay:stream'),
+    relayClient: Debug('ganglia:relay:client'),
 };

@@ -1,5 +1,5 @@
 import type { GangliaSessionInfo, NanoclawConfig } from './ganglia-types.js';
-import type { OpenClawMessage, OpenClawChatResponse } from './types/index.js';
+import type { OpenClawMessage, OpenClawChatResponse } from './types/nanoclaw.js';
 import type { SessionKey } from './session-routing.js';
 /**
  * Chat options for Nanoclaw API.
@@ -13,6 +13,8 @@ export interface NanoclawChatOptions {
     session?: GangliaSessionInfo;
     /** Resolved session key for routing. Takes priority over session for channel header. */
     sessionKey?: SessionKey;
+    /** External abort signal — when aborted, the in-flight fetch is cancelled immediately. */
+    signal?: AbortSignal;
 }
 /**
  * Generates a Nanoclaw channel JID from session info.
