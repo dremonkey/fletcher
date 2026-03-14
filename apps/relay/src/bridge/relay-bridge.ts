@@ -62,6 +62,19 @@ export class RelayBridge {
   private forwardFailures = 0;
   private static readonly MAX_CONSECUTIVE_FAILURES = 3;
 
+  /**
+   * WORKAROUND: BUG-022 / openclaw/openclaw#40693
+   * Chunk counting + catch-up state for detecting and recovering from
+   * missing sub-agent results. See catchUpSession() for the full mechanism.
+   *
+   * TODO(BUG-022): Remove once openclaw/openclaw#40693 is fixed and merged.
+   */
+  private forwardedChunkCount = 0;
+  private promptChunkCount = 0;
+  private inCatchUp = false;
+  private catchUpSkipCount = 0;
+  private catchUpChunksSeen = 0;
+
   constructor(private options: RelayBridgeOptions) {
     this.log = options.logger ??
       rootLogger.child({ component: "relay-bridge", roomName: options.roomName });
@@ -127,6 +140,41 @@ export class RelayBridge {
     // 4. Register ACP update handler — route to the topic that owns the active request
     this.acpClient.onUpdate((params: SessionUpdateParams) => {
       this.log.debug({ event: "acp_update_received", params }, "← acp session/update");
+
+      const isAgentChunk = (params as any).update?.sessionUpdate === "agent_message_chunk";
+
+      // WORKAROUND: BUG-022 — catch-up dedup logic
+      // During loadSession replay, skip chunks we already forwarded and only
+      // forward genuinely new content (the missed sub-agent result).
+      // TODO(BUG-022): Remove once openclaw/openclaw#40693 is fixed and merged.
+      if (this.inCatchUp) {
+        if (isAgentChunk) {
+          this.catchUpChunksSeen++;
+          if (this.catchUpChunksSeen <= this.catchUpSkipCount) {
+            this.log.debug(
+              { event: "catch_up_skip", seen: this.catchUpChunksSeen, skip: this.catchUpSkipCount },
+              "skipping already-forwarded chunk during catch-up",
+            );
+            return;
+          }
+          // This is NEW content — forward it
+          this.forwardedChunkCount++;
+        } else {
+          // Non-chunk update during catch-up — skip (metadata replay, already sent)
+          this.log.debug({ event: "catch_up_skip_metadata" }, "skipping non-chunk update during catch-up");
+          return;
+        }
+        // Fall through to forward new catch-up chunks to mobile
+        this.forwardToMobile({ jsonrpc: "2.0", method: "session/update", params });
+        return;
+      }
+
+      // Normal (non-catch-up) path: count agent_message_chunk events
+      if (isAgentChunk) {
+        this.promptChunkCount++;
+        this.forwardedChunkCount++;
+      }
+
       if (this.activeRequestSource === "voice-acp") {
         this.forwardToVoiceAgent({ jsonrpc: "2.0", method: "session/update", params });
       } else {
@@ -216,6 +264,54 @@ export class RelayBridge {
   }
 
   // -------------------------------------------------------------------------
+  // BUG-022 catch-up
+  // -------------------------------------------------------------------------
+
+  /**
+   * WORKAROUND: BUG-022 / openclaw/openclaw#40693
+   * When a prompt completes with end_turn but zero agent_message_chunk events,
+   * the sub-agent result was likely swallowed by the upstream dispatch bug.
+   * This method calls loadSession to replay the full session history; the
+   * onUpdate handler deduplicates already-forwarded chunks and forwards only
+   * genuinely new content.
+   *
+   * TODO(BUG-022): Remove once openclaw/openclaw#40693 is fixed and merged.
+   */
+  private async catchUpSession(): Promise<void> {
+    if (!this.sessionId) return;
+    if (this.activeRequestSource !== null) return;
+    if (this.inCatchUp) return;
+
+    this.inCatchUp = true;
+    this.catchUpSkipCount = this.forwardedChunkCount;
+    this.catchUpChunksSeen = 0;
+
+    this.log.info(
+      { event: "catch_up_start", sessionId: this.sessionId, skipCount: this.catchUpSkipCount },
+      "starting loadSession catch-up (BUG-022)",
+    );
+
+    try {
+      await this.acpClient.sessionLoad({
+        sessionId: this.sessionId,
+        cwd: process.cwd(),
+        mcpServers: [],
+      });
+      this.log.info(
+        { event: "catch_up_complete", newChunks: this.catchUpChunksSeen - this.catchUpSkipCount },
+        "loadSession catch-up complete",
+      );
+    } catch (err) {
+      this.log.error(
+        { event: "catch_up_failed", error: (err as Error).message },
+        "loadSession catch-up failed",
+      );
+    } finally {
+      this.inCatchUp = false;
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Message handling
   // -------------------------------------------------------------------------
 
@@ -247,6 +343,7 @@ export class RelayBridge {
       const promptText = extractPromptText(msg.params?.prompt);
       reqLog.info({ event: "mobile_prompt_received", promptText });
       this.activeRequestSource = "relay";
+      this.promptChunkCount = 0; // BUG-022: reset per-prompt chunk counter
 
       // Lazy re-init if ACP subprocess died, then send prompt
       this.ensureAcp()
@@ -255,13 +352,29 @@ export class RelayBridge {
           return this.acpClient.sessionPrompt(params as any);
         })
         .then((result) => {
-          reqLog.info({ event: "mobile_prompt_completed", stopReason: (result as any).stopReason });
+          const stopReason = (result as any).stopReason;
+          reqLog.info({ event: "mobile_prompt_completed", stopReason });
           this.activeRequestSource = null;
           this.forwardToMobile({
             jsonrpc: "2.0",
             id: msg.id,
             result,
           });
+
+          // WORKAROUND: BUG-022 / openclaw/openclaw#40693
+          // If the prompt completed with end_turn but zero agent_message_chunk
+          // events, the sub-agent result was likely lost. Trigger loadSession
+          // to replay and forward any missed messages.
+          // TODO(BUG-022): Remove once openclaw/openclaw#40693 is fixed and merged.
+          if (stopReason === "end_turn" && this.promptChunkCount === 0) {
+            reqLog.warn(
+              { event: "zero_text_prompt", sessionId: this.sessionId },
+              "prompt completed with end_turn but no agent_message_chunk — triggering loadSession catch-up (BUG-022)",
+            );
+            this.catchUpSession().catch((err) => {
+              reqLog.error({ event: "catch_up_error", error: (err as Error).message }, "catch-up failed");
+            });
+          }
         })
         .catch((err: Error) => {
           reqLog.error({ event: "acp_error", error: err.message });

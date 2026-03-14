@@ -215,6 +215,27 @@ export class AcpClient {
     this.sendNotification("session/cancel", params ?? {});
   }
 
+  /**
+   * WORKAROUND: BUG-022 / openclaw/openclaw#40693
+   * ACP sessions spawned via sessions_spawn never trigger the auto-announce
+   * flow, so sub-agent results are invisible to the relay. session/load
+   * replays the full session history as session/update notifications,
+   * allowing us to detect and forward any missed agent messages.
+   *
+   * ACP spec: https://agentclientprotocol.com/protocol/session-setup
+   * Requires the `loadSession` capability (advertised in initialize response).
+   *
+   * TODO(BUG-022): Remove once openclaw/openclaw#40693 is fixed and merged.
+   */
+  async sessionLoad(params: {
+    sessionId: string;
+    cwd: string;
+    mcpServers: unknown[];
+  }): Promise<void> {
+    this.log.info({ event: "session_load", sessionId: params.sessionId }, "loading session history");
+    await this.request("session/load", params);
+  }
+
   // -------------------------------------------------------------------------
   // Event handlers
   // -------------------------------------------------------------------------

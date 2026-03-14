@@ -186,9 +186,9 @@ describe("RelayBridge", () => {
     const [, notification] = updateCalls[0] as [string, Record<string, unknown>];
     expect(notification.jsonrpc).toBe("2.0");
     expect(notification.method).toBe("session/update");
-    const params = notification.params as { updates: { kind: string; content: { text: string } }[] };
-    expect(params.updates[0].kind).toBe("content_chunk");
-    expect(params.updates[0].content.text).toBe("Echo: Test update");
+    const params = notification.params as { update: { sessionUpdate: string; content: { type: string; text: string } } };
+    expect(params.update.sessionUpdate).toBe("agent_message_chunk");
+    expect(params.update.content.text).toBe("Echo: Test update");
   });
 
   test("mobile session/cancel is forwarded to ACP", async () => {
@@ -598,5 +598,210 @@ describe("RelayBridge", () => {
       "utf-8",
     );
     expect(bridgeSrc).toContain("verbose: true");
+  });
+
+  // -------------------------------------------------------------------------
+  // BUG-022 workaround: loadSession catch-up for missing sub-agent results
+  // -------------------------------------------------------------------------
+
+  test("BUG-022: zero-text prompt triggers loadSession catch-up and forwards new chunks", async () => {
+    bridge = createBridge(mockRm);
+    await bridge.start();
+
+    // Send [no-echo] prompt — mock returns end_turn with no agent_message_chunk
+    mockRm.simulateData(
+      ROOM_NAME,
+      {
+        jsonrpc: "2.0",
+        id: 100,
+        method: "session/prompt",
+        params: {
+          prompt: [{ type: "text", text: "[no-echo]" }],
+        },
+      },
+      "mobile-user",
+    );
+
+    // Wait for prompt + catch-up to complete
+    await tick(500);
+
+    // The catch-up should have forwarded the async sub-agent result
+    const calls = mockRm.sendToRoom.mock.calls;
+    const updateCalls = calls.filter(
+      (c: unknown[]) => {
+        const msg = c[1] as Record<string, unknown>;
+        return msg.method === "session/update";
+      },
+    );
+
+    // At least one update should have been forwarded (the async result from loadSession)
+    expect(updateCalls.length).toBeGreaterThanOrEqual(1);
+
+    // Verify it contains the async sub-agent result text
+    const asyncChunk = updateCalls.find((c: unknown[]) => {
+      const msg = c[1] as Record<string, unknown>;
+      const params = msg.params as any;
+      return params?.update?.content?.text === "Async sub-agent result";
+    });
+    expect(asyncChunk).toBeDefined();
+  });
+
+  test("BUG-022: catch-up deduplicates already-forwarded chunks", async () => {
+    bridge = createBridge(mockRm);
+    await bridge.start();
+
+    // 1. Send a normal prompt that generates an agent_message_chunk
+    mockRm.simulateData(
+      ROOM_NAME,
+      {
+        jsonrpc: "2.0",
+        id: 101,
+        method: "session/prompt",
+        params: {
+          prompt: [{ type: "text", text: "Hello first" }],
+        },
+      },
+      "mobile-user",
+    );
+    await tick(300);
+
+    // Count chunks forwarded so far
+    const chunksBefore = mockRm.sendToRoom.mock.calls.filter(
+      (c: unknown[]) => {
+        const msg = c[1] as Record<string, unknown>;
+        const params = msg.params as any;
+        return msg.method === "session/update" && params?.update?.sessionUpdate === "agent_message_chunk";
+      },
+    ).length;
+    expect(chunksBefore).toBe(1); // "Echo: Hello first"
+
+    // 2. Send [no-echo] prompt — triggers catch-up
+    mockRm.simulateData(
+      ROOM_NAME,
+      {
+        jsonrpc: "2.0",
+        id: 102,
+        method: "session/prompt",
+        params: {
+          prompt: [{ type: "text", text: "[no-echo]" }],
+        },
+      },
+      "mobile-user",
+    );
+    await tick(500);
+
+    // 3. Verify: the "Echo: Hello first" chunk should NOT appear again (deduped)
+    const allChunkCalls = mockRm.sendToRoom.mock.calls.filter(
+      (c: unknown[]) => {
+        const msg = c[1] as Record<string, unknown>;
+        const params = msg.params as any;
+        return msg.method === "session/update" && params?.update?.sessionUpdate === "agent_message_chunk";
+      },
+    );
+
+    // Should have: 1 original + 1 async (no duplicate of "Echo: Hello first")
+    const echoChunks = allChunkCalls.filter((c: unknown[]) => {
+      const params = (c[1] as any).params as any;
+      return params?.update?.content?.text === "Echo: Hello first";
+    });
+    expect(echoChunks.length).toBe(1); // exactly once — not duplicated
+
+    // The async sub-agent result should be present
+    const asyncChunks = allChunkCalls.filter((c: unknown[]) => {
+      const params = (c[1] as any).params as any;
+      return params?.update?.content?.text === "Async sub-agent result";
+    });
+    expect(asyncChunks.length).toBe(1);
+  });
+
+  test("BUG-022: catch-up does not fire for prompts with text content", async () => {
+    bridge = createBridge(mockRm);
+    await bridge.start();
+
+    // Normal prompt — mock returns agent_message_chunk + stopReason "completed"
+    mockRm.simulateData(
+      ROOM_NAME,
+      {
+        jsonrpc: "2.0",
+        id: 103,
+        method: "session/prompt",
+        params: {
+          prompt: [{ type: "text", text: "Normal prompt" }],
+        },
+      },
+      "mobile-user",
+    );
+    await tick(300);
+
+    // Verify: should have exactly 1 chunk (the echo) and 1 result — no catch-up
+    const updateCalls = mockRm.sendToRoom.mock.calls.filter(
+      (c: unknown[]) => {
+        const msg = c[1] as Record<string, unknown>;
+        return msg.method === "session/update";
+      },
+    );
+    expect(updateCalls.length).toBe(1); // just the echo, no catch-up replay
+
+    const responseCalls = mockRm.sendToRoom.mock.calls.filter(
+      (c: unknown[]) => {
+        const msg = c[1] as Record<string, unknown>;
+        return msg.id === 103 && "result" in msg;
+      },
+    );
+    expect(responseCalls.length).toBe(1);
+    expect((responseCalls[0][1] as any).result.stopReason).toBe("completed");
+  });
+
+  test("BUG-022: catch-up does not fire when voice-acp request is active", async () => {
+    bridge = createBridge(mockRm);
+    await bridge.start();
+
+    // Simulate a voice-acp prompt that is in flight (keeps activeRequestSource = "voice-acp")
+    mockRm.simulateData(
+      ROOM_NAME,
+      {
+        jsonrpc: "2.0",
+        id: 104,
+        method: "session/message",
+        params: {
+          prompt: [{ type: "text", text: "Voice prompt in flight" }],
+        },
+      },
+      "voice-agent",
+      "voice-acp",
+    );
+
+    // Wait for it to complete (so the ACP is ready for the next prompt)
+    await tick(300);
+
+    // Now send a [no-echo] prompt from mobile. Even though this triggers
+    // the catch-up condition, the bridge should remain stable.
+    mockRm.simulateData(
+      ROOM_NAME,
+      {
+        jsonrpc: "2.0",
+        id: 105,
+        method: "session/prompt",
+        params: {
+          prompt: [{ type: "text", text: "[no-echo]" }],
+        },
+      },
+      "mobile-user",
+    );
+
+    await tick(500);
+
+    // Bridge should still be functional — no crash from catch-up
+    expect(bridge.isStarted).toBe(true);
+
+    // The [no-echo] result should have been forwarded to mobile
+    const resultCalls = mockRm.sendToRoom.mock.calls.filter(
+      (c: unknown[]) => {
+        const msg = c[1] as Record<string, unknown>;
+        return msg.id === 105 && "result" in msg;
+      },
+    );
+    expect(resultCalls.length).toBe(1);
+    expect((resultCalls[0][1] as any).result.stopReason).toBe("end_turn");
   });
 });
