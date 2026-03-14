@@ -1,6 +1,6 @@
 # TASK-066: Bridge async agent messages to mobile via relay
 
-**Status:** [ ] Blocked (upstream)
+**Status:** [~] Workaround implemented — awaiting upstream fix
 **Priority:** High
 **Epic:** 22 (Dual-Mode Architecture)
 **Origin:** BUG-022 (field test 2026-03-13, 21:10 PDT)
@@ -65,21 +65,14 @@ stdio JSON-RPC 2.0. It supports three operations:
 2. `session/prompt` → sends prompt, receives response stream
 3. `session/update` notifications (pushed by server during prompt processing)
 
-**There is no mechanism to receive async messages:**
-- No `session/load` or `session/history` method (despite `loadSession: true`
-  in the server's advertised capabilities — `client.ts:113`)
-- No polling or subscription for background activity
-- `session/update` notifications only arrive during an active prompt cycle
+**There is no mechanism to receive async messages** — `session/update`
+notifications only arrive during an active prompt cycle. The web UI shows all
+messages because it has a direct WebSocket connection to the OpenClaw session
+feed. The relay is blind to anything not flowing through the ACP stdio pipe.
 
-The web UI shows all messages because it has a direct WebSocket connection to
-the OpenClaw session feed. The relay is blind to anything not flowing through
-the ACP stdio pipe.
-
-**File:** `packages/acp-client/src/client.ts:191-216` — only three session
-methods: `sessionNew`, `sessionPrompt`, `sessionCancel`. No load/history.
-
-**File:** `packages/acp-client/src/types.ts:86-88` — `SessionNewResult` returns
-only `{ sessionId: string }`, no conversation history.
+**However**, the server advertises `loadSession: true` and supports the ACP
+`session/load` method, which replays the full session history as
+`session/update` notifications. This enables a catch-up workaround (see below).
 
 ### Root cause — upstream bug in OpenClaw ACP dispatch
 
@@ -137,34 +130,33 @@ pushes them, they'll flow through automatically.
 **Action:** Monitor #40693 for resolution. Once fixed, verify with a field
 test that sub-agent results arrive on mobile.
 
-### Workaround: `loadSession` catch-up (if upstream fix is delayed)
+### Workaround: `session/load` catch-up — IMPLEMENTED ✅
 
-If #40693 takes a long time to land, we can work around it using the ACP
-`loadSession` capability.
+Commit `0ff20c5` implements a catch-up workaround using the ACP `session/load`
+method ([spec](https://agentclientprotocol.com/protocol/session-setup)).
 
-**File:** `packages/acp-client/src/client.ts`
+#### How it works
 
-The OpenClaw ACP server supports `loadSession` (partial — see
-[docs](https://docs.openclaw.ai/cli/acp#compatibility-matrix)):
+1. **Chunk counting:** The relay counts `agent_message_chunk` events per prompt
+   cycle (`promptChunkCount`) and across the session (`forwardedChunkCount`).
 
-> **loadSession** — Rebinds the ACP session to a Gateway session key and
-> replays stored user/assistant text history. Tool/system history is not
-> reconstructed yet.
+2. **Trigger:** When a prompt completes with `stopReason === "end_turn"` and
+   `promptChunkCount === 0`, the relay logs a warning and calls `catchUpSession()`.
 
-Key behavior: `loadSession` **replays** the conversation as `session/update`
-notifications. This means the existing `onUpdate` handler would receive
-them automatically. The relay would need to:
+3. **Catch-up:** Calls `session/load` (ACP spec method, requires `sessionId`,
+   `cwd`, `mcpServers`). The server replays the full session history as
+   `session/update` notifications.
 
-1. Track which messages it has already forwarded (sequence counter or
-   content hash)
-2. Call `loadSession` when a suspicious prompt completion is detected
-3. Suppress replayed messages that were already forwarded (deduplication)
+4. **Dedup:** The `onUpdate` handler skips the first `forwardedChunkCount`
+   `agent_message_chunk` events (already forwarded) and forwards only genuinely
+   new content. Non-chunk metadata updates are also skipped during catch-up.
 
-#### Trigger signal: `end_turn` with zero `agent_message_chunk`
+5. **Guards:** Catch-up is skipped if no sessionId, another prompt is active
+   (`activeRequestSource !== null`), or catch-up is already in progress.
 
-Log analysis across 48 completed prompts (two field-test sessions) found
-that prompts returning `end_turn` with **zero `agent_message_chunk` events**
-reliably identify BUG-022 instances:
+#### Trigger signal analysis
+
+Log analysis across 48 completed prompts (two field-test sessions):
 
 | Metric | Value |
 |--------|-------|
@@ -174,102 +166,45 @@ reliably identify BUG-022 instances:
 | False negatives | 0 |
 | Worst-case false positives | 5 (~10%) |
 
-The false positives are tool-only turns (agent processed an instruction
-internally without producing text) or session reconnection artifacts. Each
-false positive costs one unnecessary `loadSession` call — no user-visible
-harm with deduplication in place.
+False positives are tool-only turns or reconnection artifacts. Each costs one
+unnecessary `session/load` call — no user-visible harm with dedup in place.
 
-**Detailed breakdown:**
+#### Verified against real OpenClaw
 
-Session-2 (post-relay-restart, 11 completed prompts):
-- 1 zero-text → **prompt #9 = CONFIRMED BUG-022** ✓
+Tested `session/load` against `agent:main:relay:sage-mushroom` (58k tokens):
+- Server replayed 15 `agent_message_chunk` + 14 `user_message_chunk` +
+  `session_info_update`, `usage_update`, `available_commands_update`
+- Result contains `configOptions` and `modes` (extra data beyond ACP spec)
+- No errors, all notifications arrived via existing `onUpdate` handler
 
-Session-1 (37 completed prompts with debug logging):
-- 5 zero-text → all likely false positives:
-  - Tester command phrase ("Peanuts and watermelons") → tool-only turn
-  - Short "⚡️ Ack." acknowledgment → internal processing
-  - "Scribe Scan Complete" → possible earlier BUG-022 instance
-  - "Sorry about the silence" after session_cancel → reconnection artifact
-  - "Copy that. Standing by" → internal processing
+#### ACP spec details
 
-**Evidence:** `logs/relay-2026-03-14.log` (prompt #9 at lines 2356–2428)
-shows exactly: `session_info_update` → `usage_update` → `end_turn` with
-zero `agent_message_chunk` events. Every other completed prompt in the
-session had 4–22 `agent_message_chunk` events.
+- **Method:** `session/load` (not `loadSession` — that's the capability name)
+- **Params:** `{ sessionId, cwd, mcpServers }` (cwd and mcpServers required)
+- **Behavior:** Server replays full conversation as `session/update` notifications
+  before returning the result
+- **Capability:** Requires `loadSession: true` in initialize response (OpenClaw advertises this)
 
-#### Workaround flow
+#### Limitation
 
-```
-prompt completes with end_turn
-  └→ relay counts agent_message_chunk events during this prompt
-       └→ if zero:
-            └→ log warning: "zero-text response detected"
-            └→ wait for activeRequestSource === null (idle)
-            └→ call loadSession({ sessionId })
-                 └→ server replays history as session/update notifications
-                      └→ onUpdate handler receives them
-                           └→ dedup layer filters already-forwarded messages
-                                └→ any NEW messages forwarded to mobile
-```
+Only user/assistant text is replayed. Tool calls and system messages are not
+reconstructed. Sufficient for BUG-022 (the lost content was agent text) but
+won't catch missed tool-result artifacts.
 
-#### Implementation sketch
-
-**`apps/relay/src/bridge/relay-bridge.ts`** — add chunk counter + catch-up trigger:
-
-```typescript
-// In handleMobileMessage, before the prompt call:
-let chunkCount = 0;
-const countChunks = (params: SessionUpdateParams) => {
-  if (params.update?.sessionUpdate === "agent_message_chunk") chunkCount++;
-};
-// Subscribe to updates for this prompt cycle...
-
-// After prompt completes:
-if (chunkCount === 0) {
-  this.log.warn({ event: "zero_text_response", correlationId },
-    "Prompt returned end_turn with no text — triggering loadSession catch-up");
-  // Schedule catch-up after a short delay (let any in-flight updates arrive)
-  setTimeout(() => this.catchUpSession(), 500);
-}
-```
-
-**`packages/acp-client/src/client.ts`** — add `sessionLoad()` method:
-
-```typescript
-async sessionLoad(params: { sessionId: string }): Promise<void> {
-  this.log.info({ event: "session_load", sessionId: params.sessionId },
-    "loading session history");
-  // loadSession replays history as session/update notifications —
-  // the existing onUpdate handler will receive them.
-  await this.request("loadSession", params);
-}
-```
-
-#### Open questions before implementing
-
-- Exact JSON-RPC method name and params format (need to test against server)
-- How to deduplicate: does `loadSession` replay include sequence IDs or
-  timestamps we can use to skip already-forwarded messages?
-- Performance: replaying full history is heavyweight; is there a lighter
-  "since sequence N" variant?
-
-**Limitation:** Only user/assistant text is replayed. Tool calls and system
-messages are not reconstructed. Sufficient for BUG-022 (the lost content
-was agent text) but won't catch missed tool-result artifacts.
+All workaround code is marked with `TODO(BUG-022)` for removal once the
+upstream fix lands.
 
 ## Edge Cases
 
-- **Session load during active prompt:** Don't call `loadSession` while a
-  prompt is being processed — it could interfere with the streaming response.
-  Only catch up when `activeRequestSource === null`.
+- **Session load during active prompt:** Guarded — `catchUpSession()` checks
+  `activeRequestSource !== null` and skips if another prompt is in flight.
 
-- **Duplicate messages:** If `loadSession` replays messages that were already
-  forwarded via real-time notifications, the mobile would receive duplicates.
-  Need a sequence number or message ID to deduplicate.
+- **Duplicate messages:** Handled — dedup layer counts `agent_message_chunk`
+  events forwarded so far and skips that many during `session/load` replay.
 
-- **Large session history:** `loadSession` replays the entire conversation.
-  The catch-up should only forward messages newer than the last seen
-  sequence ID, not replay everything to mobile.
+- **Large session history:** `session/load` replays the entire conversation,
+  but the dedup layer skips all already-forwarded chunks. Only new chunks
+  (the missed sub-agent result) are forwarded. Cost is CPU, not bandwidth.
 
 - **Mobile-side rendering of late messages:** Even if we forward the missed
   message, the mobile needs to handle a message that arrives out of order
@@ -278,19 +213,22 @@ was agent text) but won't catch missed tool-result artifacts.
 
 ## Acceptance Criteria
 
-- [ ] Sub-agent results arrive on mobile (either via upstream fix or workaround)
-- [ ] No duplicate messages when catch-up and real-time overlap
+- [~] Sub-agent results arrive on mobile (workaround implemented — needs field test to confirm end-to-end)
+- [x] No duplicate messages when catch-up and real-time overlap (dedup layer with chunk counting)
 - [x] Relay log includes prompt text content for debugging (commit `41edb1e`)
 - [x] Trigger signal identified: `end_turn` + zero `agent_message_chunk` (0% false negatives, ~10% false positives — acceptable)
-- [ ] Existing tests still pass
+- [x] Existing tests still pass (121/121 pass)
+- [x] `session/load` verified against real OpenClaw ACP server
+- [ ] Field test: confirm sub-agent result arrives on mobile via catch-up
+- [ ] Upstream fix lands (openclaw/openclaw#40693) → remove workaround code (grep `TODO(BUG-022)`)
 
 ## Files
 
-If workaround is needed:
-- `packages/acp-client/src/client.ts` — Add `sessionLoad()` method
-- `packages/acp-client/src/types.ts` — Add types for loadSession
-- `apps/relay/src/bridge/relay-bridge.ts` — Deduplication + catch-up trigger
-- `apps/relay/src/bridge/relay-bridge.spec.ts` — Tests for catch-up
+Workaround (commit `0ff20c5`):
+- `packages/acp-client/src/client.ts` — `sessionLoad()` method (ACP `session/load`)
+- `packages/acp-client/test/mock-acpx.ts` — `[no-echo]` + `session/load` mock support
+- `apps/relay/src/bridge/relay-bridge.ts` — Chunk counting, catch-up trigger, dedup
+- `apps/relay/src/bridge/relay-bridge.spec.ts` — 4 BUG-022 workaround tests
 
 ## Related
 

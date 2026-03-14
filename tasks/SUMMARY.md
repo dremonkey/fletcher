@@ -407,7 +407,7 @@ Split the single voice-agent pipeline into two distinct modes — **Voice Mode**
 - [x] 062: Voice Agent ACP Wiring ✅ — env validation updated; ACP defaults; OPENCLAW_API_KEY no longer required
 - [ ] 057: Relay-Side ACP Response Timeout 📋 — configurable timeout for hung ACP responses ([BUG-010](../docs/field-tests/20260312-buglog.md))
 - [x] 065: Fix Silent Message Loss in Relay→Mobile Path ✅ — add logging, publishData timeout, drop diagnostics ([BUG-020](../docs/field-tests/20260313-buglog.md))
-- [ ] 066: Bridge Async Agent Messages to Mobile 📋 — ACP subprocess doesn't receive sub-agent results between prompt cycles; session/load catch-up needed ([BUG-022](../docs/field-tests/20260313-buglog.md))
+- [~] 066: Bridge Async Agent Messages to Mobile 🔄 — workaround implemented: `session/load` catch-up with chunk dedup detects zero-text `end_turn` and replays missed sub-agent results; verified against real OpenClaw; needs field test ([BUG-022](../docs/field-tests/20260313-buglog.md))
 
 **Backlog (deferred — chat mode MVP works without these):**
 - [ ] 043: Pluggable TTS Engine Abstraction — `TtsEngine` interface + native/Cartesia/Gemini impls
