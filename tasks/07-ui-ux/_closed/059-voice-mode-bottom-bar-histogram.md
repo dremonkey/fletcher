@@ -1,6 +1,6 @@
 # TASK-059: Voice Mode Bottom Bar — Inline Histogram with Mic Button
 
-**Status:** [ ] Not started
+**Status:** [x] Complete
 **Priority:** MEDIUM
 **Epic:** 7 — UI Redesign (TUI Brutalist)
 

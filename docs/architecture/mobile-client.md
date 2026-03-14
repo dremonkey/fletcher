@@ -303,9 +303,28 @@ Displays the agent's current activity with an icon:
 - Orange for write/edit operations
 - Auto-hides when no status event is active
 
-### AudioWaveform
+### VoiceControlBar
 
-Custom painter rendering 15 vertical bars from a rolling sample buffer. Bar height maps to audio amplitude. Two instances: amber for user, gray for agent.
+Unified bottom bar replacing the legacy `HeaderBar` + `TextInputBar` pair. Contains three animated zones:
+
+| Zone | Voice mode | Text mode |
+|------|-----------|-----------|
+| Left | User histogram (cyan, tap = mute without exiting voice mode) | Text field |
+| Center | Mic button | Mic button |
+| Right | Agent histogram (amber, tap = toggle TTS) | — |
+
+Histograms reveal with a 300ms `easeOutCubic` SizeTransition + FadeTransition, with a 50ms stagger (user histogram first). The `_HistogramPainter` is a unified CustomPainter with configurable direction; samples are reversed so newest data appears closest to the mic button.
+
+The `LiveKitService.isVoiceModeActive` flag drives histogram visibility. It stays `true` when muted via histogram tap (`muteOnly()`), but becomes `false` when exiting voice mode via mic button (`toggleInputMode()`).
+
+### MicButton
+
+56dp square button with visual states driven by `ConversationStatus`:
+- **Idle/listening:** Breathing amber glow (500ms, `easeInOut`)
+- **AI speaking:** Pulse synced to `aiAudioLevel`
+- **Processing:** Spinning `SweepGradient` arc overlay (1200ms)
+- **Muted:** Dimmed `mic_off` icon
+- **Error/reconnecting:** Red/yellow border
 
 ### TranscriptSubtitle
 

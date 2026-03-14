@@ -41,6 +41,11 @@ class LiveKitService extends ChangeNotifier {
   bool get textOnlyMode => _textOnlyMode;
   bool get voiceOutEnabled => !_textOnlyMode;
 
+  /// Voice mode is active when the user has explicitly entered voice-first mode
+  /// and the mic is live. Stays true when muted via histogram tap (muteOnly).
+  bool _voiceModeActive = false;
+  bool get isVoiceModeActive => _voiceModeActive;
+
   Timer? _audioLevelTimer;
   Timer? _statusClearTimer;
   Timer? _userSubtitleClearTimer;
@@ -1337,16 +1342,24 @@ class LiveKitService extends ChangeNotifier {
     debugPrint('[Fletcher] Input mode toggled: $current → $next');
     _state = _state.copyWith(inputMode: next);
 
-    // Auto-mute mic when entering text mode, unmute when reverting to voice.
-    // Await so the OS mic resource is fully released before the keyboard
-    // appears — this lets Android STT use the mic without conflict.
-    if (next == TextInputMode.textInput && !_isMuted) {
-      await toggleMute();
-    } else if (next == TextInputMode.voiceFirst && _isMuted) {
-      await toggleMute();
+    if (next == TextInputMode.textInput) {
+      // Exiting voice mode — mute and deactivate
+      _voiceModeActive = false;
+      if (!_isMuted) await toggleMute();
+    } else if (next == TextInputMode.voiceFirst) {
+      // Entering voice mode — unmute and activate
+      if (_isMuted) await toggleMute();
+      _voiceModeActive = true;
     }
 
     notifyListeners();
+  }
+
+  /// Mute/unmute without exiting voice mode. Used when tapping the user
+  /// histogram — keeps histograms visible while silencing the mic.
+  Future<void> muteOnly() async {
+    await toggleMute();
+    // _voiceModeActive stays unchanged — histograms remain visible
   }
 
   /// Send a text message through the appropriate channel.

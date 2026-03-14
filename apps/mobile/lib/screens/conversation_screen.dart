@@ -8,10 +8,8 @@ import '../theme/app_typography.dart';
 import '../theme/tui_widgets.dart';
 import '../widgets/artifact_viewer.dart';
 import '../widgets/chat_transcript.dart';
-import '../widgets/header_bar.dart';
 import '../widgets/diagnostics_bar.dart';
-import '../widgets/mic_button.dart';
-import '../widgets/text_input_bar.dart';
+import '../widgets/voice_control_bar.dart';
 
 class ConversationScreen extends StatefulWidget {
   final List<String> livekitUrls;
@@ -94,15 +92,6 @@ class _ConversationScreenState extends State<ConversationScreen>
       body: SafeArea(
         child: Column(
           children: [
-            // Split header: user histogram (left) + TTS toggle (right)
-            HeaderBar(
-              userAmplitudes: state.userWaveform,
-              agentAmplitudes: state.aiWaveform,
-              voiceOutEnabled: _liveKitService.voiceOutEnabled,
-              onToggleTts: _liveKitService.toggleTextOnlyMode,
-            ),
-            const SizedBox(height: AppSpacing.xs),
-
             // Diagnostics bar (48dp min)
             DiagnosticsBar(
               overallHealth: healthOverall,
@@ -153,8 +142,8 @@ class _ConversationScreenState extends State<ConversationScreen>
             ),
             const SizedBox(height: AppSpacing.sm),
 
-            // Input bar: mic button (voice-first) or text field + mic (text-input)
-            TextInputBar(service: _liveKitService),
+            // Voice control bar: mic + histograms (voice mode) or text field
+            VoiceControlBar(service: _liveKitService),
             const SizedBox(height: AppSpacing.base),
           ],
         ),

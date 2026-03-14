@@ -250,7 +250,7 @@ Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layou
 - [ ] 035: Per-Participant Audio Stream Wiring 📋 — AnalyserNode per participant; connect to SpeakingRing + inline histogram
 - [ ] 036: TUI Theme Bundles (Solarized, Gruvbox, Nord) 📋 — implementation of classic terminal-inspired color palettes
 - [ ] 037: Deduplicate Agent System Events & Expandable Long Rows 📋 — remove duplicate Connected/Disconnected cards; fix "speak or text" copy; tap-to-expand long system event rows
-- [ ] 059: Voice Mode Bottom Bar — Inline Histogram with Mic Button 📋 — move histograms from HeaderBar into bottom bar, inline with mic; visible only in voice mode; animated fade-in on mic tap; user histo (left, tap=mute), agent histo (right, tap=TTS off)
+- [x] 059: Voice Mode Bottom Bar — Inline Histogram with Mic Button ✅ — histograms moved from HeaderBar into VoiceControlBar bottom bar; animated reveal (300ms easeOutCubic, 50ms stagger); user histo tap=muteOnly, agent histo tap=TTS toggle; HeaderBar removed (52dp reclaimed)
 - [x] 038a: Fix Artifact Clump Regression After Agent Reconnect ✅ — `_lastAgentSegmentId` reset on disconnect; artifacts now correctly distributed across messages ([BUG-004](../docs/field-tests/20260310-buglog.md))
 - [x] 038b: Verbose ACP Tool Feedback ✅ — verbose ACP mode; `tool_call`/`tool_call_update` parsing; inline ToolCallCard in chat transcript
 - [x] 058: Token Usage Display ✅ — `AcpUsageUpdate` parsing; `TOK: 35K / 1M` metric in DiagnosticsBar; color thresholds at 75%/90%
