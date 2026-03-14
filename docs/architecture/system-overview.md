@@ -154,11 +154,8 @@ The system is configured entirely through environment variables. See [Infrastruc
 |----------|---------|---------|
 | `LIVEKIT_URL` | Voice agent, relay, mobile | LiveKit WebSocket URL |
 | `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | Voice agent, relay, token gen | LiveKit authentication |
-| `GANGLIA_TYPE` | Voice agent | Backend selection: `openclaw` or `nanoclaw` |
-| `OPENCLAW_GATEWAY_URL` | Voice agent | Gateway HTTP endpoint |
-| `OPENCLAW_API_KEY` | Voice agent | Gateway authentication |
+| `GANGLIA_TYPE` | Voice agent | Backend selection: `relay` (default) or `nanoclaw` |
 | `DEEPGRAM_API_KEY` | Voice agent | Speech-to-text provider |
-| `CARTESIA_API_KEY` | Voice agent | Text-to-speech provider |
 | `FLETCHER_OWNER_IDENTITY` | Voice agent | Owner detection for session routing |
 | `ACP_COMMAND` / `ACP_ARGS` | Relay | ACP subprocess command (default: `openclaw acp`) |
 | `RELAY_HTTP_PORT` | Relay | HTTP server port (default: 7890, localhost only) |

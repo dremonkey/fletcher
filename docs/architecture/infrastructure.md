@@ -71,8 +71,8 @@ voice-agent:
   env_file: .env
   environment:
     LIVEKIT_URL: ws://localhost:7880
-    OPENCLAW_GATEWAY_URL: http://localhost:18789
     PIPER_URL: http://localhost:5000
+    GANGLIA_TYPE: relay
     DEBUG: ganglia:*
     LOG_LEVEL: debug
   restart: unless-stopped
@@ -193,13 +193,10 @@ See [Network Connectivity](network-connectivity.md) for the full URL resolution 
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `GANGLIA_TYPE` | No | `openclaw` | Backend: `openclaw` or `nanoclaw` |
+| `GANGLIA_TYPE` | No | `relay` | Backend: `relay` (default) or `nanoclaw` |
 | `BRAIN_TYPE` | No | — | Alias for `GANGLIA_TYPE` |
-| `OPENCLAW_GATEWAY_URL` | No | `http://localhost:8080` | OpenClaw Gateway HTTP endpoint |
-| `OPENCLAW_API_KEY` | If OpenClaw | — | Gateway authentication token |
 | `NANOCLAW_URL` | No | `http://localhost:18789` | Nanoclaw HTTP endpoint |
 | `NANOCLAW_CHANNEL_PREFIX` | No | `lk` | JID channel prefix |
-| `GANGLIA_HISTORY_MODE` | No | per-backend | History sending: `full` or `latest` |
 
 ### Voice Providers
 

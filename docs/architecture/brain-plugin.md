@@ -8,28 +8,16 @@ Ganglia uses a factory-and-registry pattern. Backends register themselves on imp
 
 ```mermaid
 flowchart TD
-    ENV["Environment<br/>GANGLIA_TYPE=acp|relay|openclaw|nanoclaw"]
+    ENV["Environment<br/>GANGLIA_TYPE=relay|nanoclaw"]
     F["createGangliaFromEnv()"]
     R["Backend Registry"]
 
-    subgraph "ACP Backend (default)"
-        ALLM["AcpLLM"]
-        AC["ACP Client (subprocess)"]
-        AGW["OpenClaw Gateway"]
-    end
-
-    subgraph "Relay Backend (planned)"
+    subgraph "Relay Backend (default)"
         RLLM["RelayLLM"]
         DC["Data Channel<br/>(voice-acp topic)"]
         RELAY["Fletcher Relay"]
         RAC["Relay ACP Client"]
         RGW["OpenClaw Gateway"]
-    end
-
-    subgraph "OpenClaw Backend (legacy)"
-        OLLM["OpenClawLLM"]
-        OC["OpenClawClient"]
-        GW["OpenClaw Gateway<br/>POST /v1/chat/completions"]
     end
 
     subgraph "Nanoclaw Backend"
@@ -40,13 +28,9 @@ flowchart TD
 
     ENV --> F
     F --> R
-    R -->|"type=acp"| ALLM
     R -->|"type=relay"| RLLM
-    R -->|"type=openclaw"| OLLM
     R -->|"type=nanoclaw"| NLLM
-    ALLM --> AC --> AGW
     RLLM --> DC --> RELAY --> RAC --> RGW
-    OLLM --> OC --> GW
     NLLM --> NC --> NW
 ```
 
@@ -57,9 +41,7 @@ flowchart TD
 Backends self-register via `registerGanglia()`:
 
 ```typescript
-registerGanglia('acp', async () => AcpLLM)
-registerGanglia('relay', async () => RelayLLM)  // planned — task 064
-registerGanglia('openclaw', async () => OpenClawLLM)
+registerGanglia('relay', async () => RelayLLM)
 registerGanglia('nanoclaw', async () => NanoclawLLM)
 ```
 
@@ -71,14 +53,9 @@ New backends can be added without modifying factory code.
 
 | Variable | Backend | Default |
 |----------|---------|---------|
-| `GANGLIA_TYPE` (or `BRAIN_TYPE`) | All | `acp` |
-| `ACP_AGENT_CMD` | ACP | `openclaw` |
-| `ACP_AGENT_ARGS` | ACP | (derived from env) |
-| `OPENCLAW_GATEWAY_URL` | OpenClaw (legacy) | `http://localhost:8080` |
-| `OPENCLAW_API_KEY` | OpenClaw (legacy) | (required) |
+| `GANGLIA_TYPE` (or `BRAIN_TYPE`) | All | `relay` |
 | `NANOCLAW_URL` | Nanoclaw | `http://localhost:18789` |
 | `NANOCLAW_CHANNEL_PREFIX` | Nanoclaw | `lk` |
-| `GANGLIA_HISTORY_MODE` | All | `latest` (openclaw), `full` (nanoclaw) |
 
 **Optional callbacks and options:**
 
@@ -102,7 +79,7 @@ All backends implement this interface (extending `llm.LLM`):
 interface GangliaLLM extends llm.LLM {
   setDefaultSession?(session: GangliaSessionInfo): void;
   setSessionKey?(sessionKey: SessionKey): void;
-  gangliaType(): string;  // 'openclaw' or 'nanoclaw'
+  gangliaType(): string;  // 'relay' or 'nanoclaw'
 }
 ```
 
@@ -158,32 +135,30 @@ class SessionError extends Error {
 }
 ```
 
-## Relay Backend (Planned)
+## Relay Backend (Default)
 
-**Status:** Not yet implemented — see [task 064](../tasks/04-livekit-agent-plugin/064-relay-llm-backend.md).
-
-The relay backend (`GANGLIA_TYPE=relay`) routes LLM requests through the Fletcher Relay via the LiveKit data channel, rather than spawning a local ACP subprocess. This enables cloud deployment of the voice-agent without bundling OpenClaw in the agent container.
+The relay backend (`GANGLIA_TYPE=relay`, default) routes LLM requests through the Fletcher Relay via the LiveKit data channel, rather than spawning a local ACP subprocess. This keeps the voice-agent container thin — just the audio pipeline with no OpenClaw dependency.
 
 ### How It Works
 
-1. Voice-agent publishes a JSON-RPC 2.0 request on the `voice-acp` data channel topic
+1. Voice-agent publishes a JSON-RPC 2.0 `session/prompt` request on the `voice-acp` data channel topic
 2. The relay (already in the same LiveKit room) receives the request
-3. Relay forwards it to its existing ACP subprocess
-4. Streaming response chunks are sent back as JSON-RPC notifications on the same topic
+3. Relay forwards it to its ACP subprocess
+4. Streaming response chunks are sent back as `session/update` JSON-RPC notifications on the same topic
 5. Final result is sent as a JSON-RPC response
 
 ### `voice-acp` Data Channel Protocol
 
-Uses the same JSON-RPC 2.0 format as the mobile↔relay `acp` topic, but on a separate topic (`voice-acp`) to avoid routing conflicts:
+Uses JSON-RPC 2.0 on a dedicated topic (`voice-acp`), separate from the mobile↔relay `acp` topic:
 
-- **Request:** `session/message` — voice-agent sends user message + session key
-- **Streaming:** `session/chunk` — relay sends content deltas as notifications
-- **Result:** JSON-RPC response with complete content and finish reason
-- **Cancel:** `session/cancel` — voice-agent cancels in-flight request (e.g., on user interruption)
+- **Request:** `session/prompt` — voice-agent sends user message
+- **Streaming:** `session/update` — relay sends `agent_message_chunk` content deltas as notifications
+- **Result:** JSON-RPC response with `stopReason`
+- **Cancel:** `session/cancel` — voice-agent cancels in-flight request (e.g., on user interruption / barge-in)
 
-### Why Not Reuse the Chat Topic?
+### Why a Separate Topic?
 
-The relay's existing `acp` topic is owned by the mobile client for chat mode. Voice-mode requests need a separate topic to:
+The relay's `acp` topic is owned by the mobile client for chat mode. Voice-mode requests use `voice-acp` to:
 - Avoid collisions when both voice-agent and mobile are in the room
 - Allow independent lifecycle management (voice requests can be cancelled by the agent without affecting chat)
 - Enable future mutual-exclusion enforcement at the relay level
@@ -273,8 +248,10 @@ Ganglia uses a two-tier logging system:
 
 **Debug namespaces:**
 - `ganglia:factory` — backend selection and instantiation
-- `ganglia:openclaw:stream` — OpenClaw SSE parsing
-- `ganglia:openclaw:client` — OpenClaw HTTP requests
+- `ganglia:relay:stream` — relay data channel message handling
+- `ganglia:relay:client` — relay transport and connection
+- `ganglia:openclaw:stream` — OpenClaw SSE parsing (legacy, used by relay internals)
+- `ganglia:openclaw:client` — OpenClaw HTTP requests (legacy)
 - `ganglia:nanoclaw:stream` — Nanoclaw SSE parsing
 - `ganglia:nanoclaw:client` — Nanoclaw HTTP requests
 
@@ -295,7 +272,7 @@ The default logger (`noopLogger`) is silent. In the voice agent, a `pino` logger
 The package exports everything needed to use or extend Ganglia:
 
 - **Factory:** `createGanglia()`, `createGangliaFromEnv()`, `registerGanglia()`
-- **Backends:** `OpenClawLLM`, `NanoclawLLM` (and their clients)
+- **Backends:** `RelayLLM`, `NanoclawLLM` (and their clients/transports)
 - **Session routing:** `resolveSessionKey()`, `resolveSessionKeySimple()`, `SessionKey`
 - **Events:** `StatusEvent`, `ArtifactEvent`, `ContentEvent`, type guards
 - **Tool interception:** `ToolInterceptor`, `EventInterceptor`

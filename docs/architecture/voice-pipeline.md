@@ -21,15 +21,10 @@ sequenceDiagram
 
     Agent->>LLM: chat(messages)
 
-    alt GANGLIA_TYPE=acp (default)
-        LLM->>Brain: ACP subprocess (JSON-RPC over stdio)
-        Brain-->>LLM: Streamed response chunks
-    else GANGLIA_TYPE=relay (planned)
-        LLM->>LK: data channel ("voice-acp" topic)
-        LK->>Brain: Relay → ACP subprocess
-        Brain-->>LK: Streamed chunks via relay
-        LK-->>LLM: data channel notifications
-    end
+    LLM->>LK: data channel ("voice-acp" topic)
+    LK->>Brain: Relay → ACP subprocess
+    Brain-->>LK: Streamed chunks via relay
+    LK-->>LLM: data channel notifications
 
     LLM-->>Agent: Token stream
 
@@ -67,6 +62,8 @@ AgentSession({ stt, tts, llm })
 ```
 
 The `Agent` object is an "empty shell" — OpenClaw owns personality, instructions, and tools. The agent passes an empty instructions string, relying entirely on the brain backend for conversation context.
+
+A **bootstrap message** is sent once per session to inject voice-specific behavioral instructions (TTS pronunciation hints, response length constraints, etc.) into the conversation via `session.generateReply({ userInput })`. The bootstrap is deferred until voice mode is activated — it fires when the first `tts-mode` event with `value !== "off"` arrives on the `ganglia-events` data channel. For e2e test rooms (`e2e-*` prefix), bootstrap fires immediately. See the [Startup sequence](#standalone-agent-appsvoice-agent) for details.
 
 ### Acknowledgment Sound (Background Audio)
 
@@ -108,17 +105,15 @@ The mobile app's `StatusBar` widget displays the phrase text via the existing `S
 - `apps/voice-agent/src/ack-sound-config.ts` — env var resolution
 - `apps/voice-agent/src/agent.ts` — BackgroundAudioPlayer wiring + onPondering callback
 - `packages/livekit-agent-ganglia/src/pondering.ts` — phrase list and shuffle
-- `packages/livekit-agent-ganglia/src/llm.ts` — pondering timer in OpenClawChatStream
+- `packages/livekit-agent-ganglia/src/relay-stream.ts` — pondering timer in RelayChatStream
 
 ### LLM Bridge (Ganglia)
 
 Ganglia converts between the LiveKit `llm.LLM` interface and the OpenClaw backend. See [Brain Plugin](brain-plugin.md) for details.
 
-**Transport options:**
-- **`GANGLIA_TYPE=acp`** (default) — spawns an ACP subprocess that communicates with OpenClaw over JSON-RPC/stdio. The voice-agent container must bundle `acp-client` and its dependencies.
-- **`GANGLIA_TYPE=relay`** (planned, [task 064](../tasks/04-livekit-agent-plugin/064-relay-llm-backend.md)) — routes requests through the Fletcher Relay via the LiveKit data channel (`voice-acp` topic). The relay handles ACP subprocess management, allowing the voice-agent to be a thin container with just the audio pipeline.
+**Transport:** `GANGLIA_TYPE=relay` (default) — routes requests through the Fletcher Relay via the LiveKit data channel (`voice-acp` topic). The relay handles ACP subprocess management, allowing the voice-agent to be a thin container with just the audio pipeline.
 
-**Key behavior during streaming (both transports):**
+**Key behavior during streaming:**
 - Response chunks arrive as streaming events (ACP notifications or data channel messages)
 - Each chunk may contain `content` (text) or `tool_calls` (function invocations)
 - Ganglia emits these as `ChatChunk` events that AgentSession forwards to TTS
@@ -214,6 +209,7 @@ The agent registers as a LiveKit worker. When a client joins a room, LiveKit dis
 4. On job dispatch: create STT, TTS, and AgentSession
 5. Resolve session routing via `resolveSessionKeySimple()`
 6. Set session key on Ganglia for conversation continuity
+7. **Bootstrap message** — a synthetic user message (`generateReply()`) that injects TTS/STT behavioral instructions into the session. Bootstrap is **deferred** until the client activates voice mode: it fires on the first `tts-mode` event with `value !== "off"` received on the `ganglia-events` data channel. For e2e test rooms (name prefixed with `e2e-`), bootstrap fires immediately after participant join.
 
 **Load reporting:** The agent reports zero load (`loadFunc: async () => 0`) so LiveKit always dispatches jobs to it. This avoids unreliable CPU sampling in containers.
 
@@ -254,7 +250,7 @@ User transcription (STT) still uses the SDK's `lk.transcription` text stream —
 ```
 
 **Implementation files:**
-- `packages/livekit-agent-ganglia/src/llm.ts` — `onContent` callback in `OpenClawChatStream`
+- `packages/livekit-agent-ganglia/src/relay-stream.ts` — `onContent` callback in `RelayChatStream`
 - `apps/voice-agent/src/agent.ts` — publishes `agent_transcript` events, disables SDK transcription
 - `apps/mobile/lib/services/livekit_service.dart` — handles `agent_transcript` in `_processGangliaEvent()`
 
