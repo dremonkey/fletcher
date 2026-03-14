@@ -652,11 +652,17 @@ class LiveKitService extends ChangeNotifier {
       healthService.updateAgentPresent(present: remaining > 0);
       // Clear agent identity if no agents remain
       if (remaining == 0) {
+        // When hold mode is active, clear the reconnecting status that
+        // TrackUnsubscribed may have set (it fires before ParticipantDisconnected,
+        // so the agentAbsent guard doesn't catch it). Without this, the status
+        // stays "reconnecting" and unmute→dispatch is blocked. (BUG-031)
+        final wasHoldMode = _holdModeActive;
         _updateState(
+          status: wasHoldMode ? ConversationStatus.idle : null,
           diagnostics: _state.diagnostics.copyWith(clearAgentIdentity: true),
         );
         // Notify agent presence service (Epic 20)
-        agentPresenceService.onAgentDisconnected(holdMode: _holdModeActive);
+        agentPresenceService.onAgentDisconnected(holdMode: wasHoldMode);
         _holdModeActive = false;
         // Reset segment ID so artifacts from the new session are not stamped
         // with the stale ID from the previous session. (BUG-004)
@@ -687,8 +693,11 @@ class LiveKitService extends ChangeNotifier {
       // (on-demand dispatch lifecycle). The agent presence UX (system events)
       // already communicates what happened.
       if (event.track.kind == TrackType.AUDIO) {
-        final isAgentAbsent = agentPresenceService.enabled &&
-            agentPresenceService.state == AgentPresenceState.agentAbsent;
+        // Also skip when hold mode is active — the agent is leaving
+        // intentionally, not due to a network issue. (BUG-031)
+        final isAgentAbsent = (agentPresenceService.enabled &&
+            agentPresenceService.state == AgentPresenceState.agentAbsent) ||
+            _holdModeActive;
         if (!isAgentAbsent) {
           _updateState(status: ConversationStatus.reconnecting);
         }
