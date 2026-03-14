@@ -1556,6 +1556,7 @@ class LiveKitService extends ChangeNotifier {
       -32003 => 'Voice mode active — switch to voice',
       -32010 => 'Backend unavailable — retrying...',
       -32011 => 'Relay starting up — try again',
+      -32029 => 'Rate limited — try again shortly',
       _ => 'Error: $message',
     };
   }

@@ -58,6 +58,16 @@ bridgeManager.startDiscoveryTimer(
   Number(process.env.RELAY_DISCOVERY_INTERVAL_MS ?? 30_000),
 );
 
+// Crash protection: log and exit on unhandled errors (BUG-025)
+process.on("uncaughtException", (err) => {
+  log.fatal({ err }, "Uncaught exception — exiting");
+  process.exit(1);
+});
+process.on("unhandledRejection", (reason) => {
+  log.fatal({ err: reason }, "Unhandled rejection — exiting");
+  process.exit(1);
+});
+
 // Graceful shutdown
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, async () => {

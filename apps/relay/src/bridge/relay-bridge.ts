@@ -5,10 +5,10 @@
  * ACPX responses/notifications are forwarded back to the mobile client.
  */
 
-import { AcpClient } from "@fletcher/acp-client";
+import { AcpClient, AcpError } from "@fletcher/acp-client";
 import type { RoomManager } from "../livekit/room-manager";
 import type { SessionUpdateParams } from "@fletcher/acp-client";
-import { INTERNAL_ERROR } from "../rpc/errors";
+import { INTERNAL_ERROR, RATE_LIMITED } from "../rpc/errors";
 import { rootLogger, type Logger } from "../utils/logger";
 
 // ---------------------------------------------------------------------------
@@ -41,6 +41,21 @@ function extractPromptText(prompt: unknown): string | undefined {
   return text.length > MAX_PROMPT_LOG_LENGTH
     ? text.slice(0, MAX_PROMPT_LOG_LENGTH) + "…"
     : text;
+}
+
+const RATE_LIMIT_PATTERN = /429|quota|rate.limit|RESOURCE_EXHAUSTED/i;
+
+/** Classify an ACP error for forwarding to the client. */
+function classifyAcpError(err: Error): { errorCode: number; errorMessage: string } {
+  if (err instanceof AcpError) {
+    const details = typeof (err.data as any)?.details === "string" ? (err.data as any).details : "";
+    const haystack = `${err.message} ${details}`;
+    if (RATE_LIMIT_PATTERN.test(haystack)) {
+      return { errorCode: RATE_LIMITED, errorMessage: "Rate limited — try again shortly" };
+    }
+    return { errorCode: err.code, errorMessage: err.message };
+  }
+  return { errorCode: INTERNAL_ERROR, errorMessage: err.message };
 }
 
 // ---------------------------------------------------------------------------
@@ -405,10 +420,11 @@ export class RelayBridge {
         .catch((err: Error) => {
           reqLog.error({ event: "acp_error", error: err.message });
           this.activeRequestSource = null;
+          const { errorCode, errorMessage } = classifyAcpError(err);
           this.forwardToMobile({
             jsonrpc: "2.0",
             id: msg.id,
-            error: { code: INTERNAL_ERROR, message: err.message },
+            error: { code: errorCode, message: errorMessage },
           });
         });
     } else if (msg.method === "session/cancel") {
@@ -461,10 +477,11 @@ export class RelayBridge {
         .catch((err: Error) => {
           reqLog.error({ event: "acp_error", error: err.message });
           this.activeRequestSource = null;
+          const { errorCode, errorMessage } = classifyAcpError(err);
           this.forwardToVoiceAgent({
             jsonrpc: "2.0",
             id: msg.id,
-            error: { code: INTERNAL_ERROR, message: err.message },
+            error: { code: errorCode, message: errorMessage },
           });
         });
     } else if (msg.method === "session/cancel") {

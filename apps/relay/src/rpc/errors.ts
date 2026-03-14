@@ -32,3 +32,6 @@ export const SESSION_NOT_FOUND = -1;
 
 /** The session is already processing a request. */
 export const SESSION_BUSY = -2;
+
+/** Upstream LLM rate limit exceeded. */
+export const RATE_LIMITED = -32029;

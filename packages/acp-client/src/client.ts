@@ -23,6 +23,18 @@ import type { JsonRpcResponse } from "./rpc.js";
 // Types
 // ---------------------------------------------------------------------------
 
+/** Typed JSON-RPC error that preserves code, message, and data from ACP. */
+export class AcpError extends Error {
+  constructor(
+    public readonly code: number,
+    message: string,
+    public readonly data?: unknown,
+  ) {
+    super(message);
+    this.name = "AcpError";
+  }
+}
+
 interface PendingRequest {
   resolve: (value: unknown) => void;
   reject: (reason: Error) => void;
@@ -382,8 +394,8 @@ export class AcpClient {
       this.pendingRequests.delete(id);
 
       if ("error" in msg) {
-        const err = msg.error as { code: number; message: string };
-        pending.reject(new Error(`JSON-RPC error ${err.code}: ${err.message}`));
+        const { code, message, data } = msg.error as { code: number; message: string; data?: unknown };
+        pending.reject(new AcpError(code, message, data));
       } else {
         pending.resolve(msg.result);
       }
