@@ -361,19 +361,19 @@ describe("RelayBridge", () => {
   });
 
   // -------------------------------------------------------------------------
-  // T4: voice-acp session/message → sessionPrompt() called
+  // T4: voice-acp session/prompt → sessionPrompt() called
   // -------------------------------------------------------------------------
-  test("T4: voice-acp session/message is forwarded to ACP with sessionId injected", async () => {
+  test("T4: voice-acp session/prompt is forwarded to ACP with sessionId injected", async () => {
     bridge = createBridge(mockRm);
     await bridge.start();
 
-    // Simulate voice-agent sending session/message on voice-acp topic
+    // Simulate voice-agent sending session/prompt on voice-acp topic
     mockRm.simulateData(
       ROOM_NAME,
       {
         jsonrpc: "2.0",
         id: 10,
-        method: "session/message",
+        method: "session/prompt",
         params: {
           prompt: [{ type: "text", text: "Voice prompt" }],
         },
@@ -440,13 +440,13 @@ describe("RelayBridge", () => {
     bridge = createBridge(mockRm);
     await bridge.start();
 
-    // Simulate voice-agent sending session/message on voice-acp topic
+    // Simulate voice-agent sending session/prompt on voice-acp topic
     mockRm.simulateData(
       ROOM_NAME,
       {
         jsonrpc: "2.0",
         id: 20,
-        method: "session/message",
+        method: "session/prompt",
         params: {
           prompt: [{ type: "text", text: "Voice update test" }],
         },
@@ -762,7 +762,7 @@ describe("RelayBridge", () => {
       {
         jsonrpc: "2.0",
         id: 104,
-        method: "session/message",
+        method: "session/prompt",
         params: {
           prompt: [{ type: "text", text: "Voice prompt in flight" }],
         },
@@ -803,5 +803,94 @@ describe("RelayBridge", () => {
     );
     expect(resultCalls.length).toBe(1);
     expect((resultCalls[0][1] as any).result.stopReason).toBe("end_turn");
+  });
+
+  // -------------------------------------------------------------------------
+  // BUG-024: multi-round catch-up drift regression
+  // -------------------------------------------------------------------------
+
+  test("BUG-024: catch-up still works after multiple rounds (no count drift)", async () => {
+    // Reproduces BUG-024: after one successful catch-up round, the count-based
+    // dedup's skipCount drifted above the actual session history chunk count,
+    // causing all subsequent catch-ups to skip everything (newChunks: -4).
+    // The content-based dedup should handle this correctly.
+    bridge = createBridge(mockRm);
+    await bridge.start();
+
+    // Round 1: Normal prompt → generates 1 agent_message_chunk
+    mockRm.simulateData(
+      ROOM_NAME,
+      {
+        jsonrpc: "2.0",
+        id: 200,
+        method: "session/prompt",
+        params: { prompt: [{ type: "text", text: "Hello first" }] },
+      },
+      "mobile-user",
+    );
+    await tick(300);
+
+    // Round 2: [no-echo] prompt → triggers first catch-up
+    mockRm.simulateData(
+      ROOM_NAME,
+      {
+        jsonrpc: "2.0",
+        id: 201,
+        method: "session/prompt",
+        params: { prompt: [{ type: "text", text: "[no-echo]" }] },
+      },
+      "mobile-user",
+    );
+    await tick(500);
+
+    // Verify first catch-up forwarded the async result
+    const afterRound2 = mockRm.sendToRoom.mock.calls.filter(
+      (c: unknown[]) => {
+        const msg = c[1] as Record<string, unknown>;
+        const params = msg.params as any;
+        return params?.update?.content?.text === "Async sub-agent result";
+      },
+    );
+    expect(afterRound2.length).toBe(1);
+
+    // Round 3: Another normal prompt
+    mockRm.simulateData(
+      ROOM_NAME,
+      {
+        jsonrpc: "2.0",
+        id: 202,
+        method: "session/prompt",
+        params: { prompt: [{ type: "text", text: "Hello second" }] },
+      },
+      "mobile-user",
+    );
+    await tick(300);
+
+    // Round 4: Another [no-echo] prompt → triggers second catch-up
+    // With the old count-based dedup, this would skip everything (BUG-024).
+    // With content-based dedup, it should still find new async content.
+    mockRm.simulateData(
+      ROOM_NAME,
+      {
+        jsonrpc: "2.0",
+        id: 203,
+        method: "session/prompt",
+        params: { prompt: [{ type: "text", text: "[no-echo]" }] },
+      },
+      "mobile-user",
+    );
+    await tick(500);
+
+    // Verify: the second catch-up ALSO forwarded the new async result.
+    // The mock-acpx appends a new "Async sub-agent result" chunk each time
+    // loadSession is called, so we should see 2 total async result chunks.
+    const allAsyncChunks = mockRm.sendToRoom.mock.calls.filter(
+      (c: unknown[]) => {
+        const msg = c[1] as Record<string, unknown>;
+        const params = msg.params as any;
+        return params?.update?.content?.text === "Async sub-agent result";
+      },
+    );
+    expect(allAsyncChunks.length).toBe(2);
   });
 });

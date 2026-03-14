@@ -63,17 +63,22 @@ export class RelayBridge {
   private static readonly MAX_CONSECUTIVE_FAILURES = 3;
 
   /**
-   * WORKAROUND: BUG-022 / openclaw/openclaw#40693
-   * Chunk counting + catch-up state for detecting and recovering from
-   * missing sub-agent results. See catchUpSession() for the full mechanism.
+   * WORKAROUND: BUG-022 / BUG-024 / openclaw/openclaw#40693
+   * Content-based catch-up dedup for detecting and recovering from
+   * missing agent messages. See catchUpSession() for the full mechanism.
+   *
+   * Uses accumulated text comparison instead of chunk counting to avoid
+   * the skipCount drift bug that caused BUG-024 (newChunks: -4).
    *
    * TODO(BUG-022): Remove once openclaw/openclaw#40693 is fixed and merged.
    */
-  private forwardedChunkCount = 0;
+  /** Running concatenation of all agent text forwarded, for catch-up dedup. */
+  private forwardedAgentText = "";
+  /** Number of agent_message_chunk events in the current prompt (reset per prompt). */
   private promptChunkCount = 0;
   private inCatchUp = false;
-  private catchUpSkipCount = 0;
-  private catchUpChunksSeen = 0;
+  /** Accumulated text during catch-up replay, for comparison against forwardedAgentText. */
+  private catchUpAccumulatedText = "";
 
   constructor(private options: RelayBridgeOptions) {
     this.log = options.logger ??
@@ -143,22 +148,28 @@ export class RelayBridge {
 
       const isAgentChunk = (params as any).update?.sessionUpdate === "agent_message_chunk";
 
-      // WORKAROUND: BUG-022 — catch-up dedup logic
-      // During loadSession replay, skip chunks we already forwarded and only
-      // forward genuinely new content (the missed sub-agent result).
+      // WORKAROUND: BUG-022 / BUG-024 — content-based catch-up dedup
+      // During loadSession replay, compare accumulated text against what was
+      // already forwarded. Only forward genuinely new content.
       // TODO(BUG-022): Remove once openclaw/openclaw#40693 is fixed and merged.
       if (this.inCatchUp) {
         if (isAgentChunk) {
-          this.catchUpChunksSeen++;
-          if (this.catchUpChunksSeen <= this.catchUpSkipCount) {
+          const text = this.extractChunkText(params);
+          if (text) this.catchUpAccumulatedText += text;
+          // Skip content we've already forwarded
+          if (this.catchUpAccumulatedText.length <= this.forwardedAgentText.length) {
             this.log.debug(
-              { event: "catch_up_skip", seen: this.catchUpChunksSeen, skip: this.catchUpSkipCount },
-              "skipping already-forwarded chunk during catch-up",
+              {
+                event: "catch_up_skip",
+                replayedLen: this.catchUpAccumulatedText.length,
+                forwardedLen: this.forwardedAgentText.length,
+              },
+              "skipping already-forwarded content during catch-up",
             );
             return;
           }
-          // This is NEW content — forward it
-          this.forwardedChunkCount++;
+          // New content found — update the running total
+          this.forwardedAgentText = this.catchUpAccumulatedText;
         } else {
           // Non-chunk update during catch-up — skip (metadata replay, already sent)
           this.log.debug({ event: "catch_up_skip_metadata" }, "skipping non-chunk update during catch-up");
@@ -169,10 +180,11 @@ export class RelayBridge {
         return;
       }
 
-      // Normal (non-catch-up) path: count agent_message_chunk events
+      // Normal (non-catch-up) path: track agent text for dedup
       if (isAgentChunk) {
         this.promptChunkCount++;
-        this.forwardedChunkCount++;
+        const text = this.extractChunkText(params);
+        if (text) this.forwardedAgentText += text;
       }
 
       if (this.activeRequestSource === "voice-acp") {
@@ -268,12 +280,16 @@ export class RelayBridge {
   // -------------------------------------------------------------------------
 
   /**
-   * WORKAROUND: BUG-022 / openclaw/openclaw#40693
+   * WORKAROUND: BUG-022 / BUG-024 / openclaw/openclaw#40693
    * When a prompt completes with end_turn but zero agent_message_chunk events,
-   * the sub-agent result was likely swallowed by the upstream dispatch bug.
+   * the agent result was likely swallowed by the upstream dispatch bug.
    * This method calls loadSession to replay the full session history; the
-   * onUpdate handler deduplicates already-forwarded chunks and forwards only
-   * genuinely new content.
+   * onUpdate handler uses content-based dedup (text length comparison) to
+   * skip already-forwarded content and forward only genuinely new text.
+   *
+   * BUG-024 fix: replaced count-based dedup (forwardedChunkCount vs
+   * catchUpSkipCount) with content-based dedup (forwardedAgentText vs
+   * catchUpAccumulatedText) to eliminate the skipCount drift bug.
    *
    * TODO(BUG-022): Remove once openclaw/openclaw#40693 is fixed and merged.
    */
@@ -283,12 +299,12 @@ export class RelayBridge {
     if (this.inCatchUp) return;
 
     this.inCatchUp = true;
-    this.catchUpSkipCount = this.forwardedChunkCount;
-    this.catchUpChunksSeen = 0;
+    this.catchUpAccumulatedText = "";
+    const textLenBefore = this.forwardedAgentText.length;
 
     this.log.info(
-      { event: "catch_up_start", sessionId: this.sessionId, skipCount: this.catchUpSkipCount },
-      "starting loadSession catch-up (BUG-022)",
+      { event: "catch_up_start", sessionId: this.sessionId, forwardedTextLen: textLenBefore },
+      "starting loadSession catch-up (BUG-022/BUG-024)",
     );
 
     try {
@@ -297,9 +313,10 @@ export class RelayBridge {
         cwd: process.cwd(),
         mcpServers: [],
       });
+      const newChars = this.forwardedAgentText.length - textLenBefore;
       this.log.info(
-        { event: "catch_up_complete", newChunks: this.catchUpChunksSeen - this.catchUpSkipCount },
-        "loadSession catch-up complete",
+        { event: "catch_up_complete", newChars },
+        `loadSession catch-up complete — ${newChars} new chars forwarded`,
       );
     } catch (err) {
       this.log.error(
@@ -309,6 +326,15 @@ export class RelayBridge {
     } finally {
       this.inCatchUp = false;
     }
+  }
+
+  /** Extract the text content from an agent_message_chunk update, or null. */
+  private extractChunkText(params: SessionUpdateParams): string | null {
+    const update = (params as any).update;
+    if (update?.sessionUpdate !== "agent_message_chunk") return null;
+    const content = update?.content;
+    if (content?.type !== "text" || typeof content?.text !== "string") return null;
+    return content.text;
   }
 
   // -------------------------------------------------------------------------
@@ -508,6 +534,9 @@ export class RelayBridge {
   private forwardToMobile(msg: object): void {
     if (!this.started) return;
 
+    const method = (msg as any).method ?? ("result" in (msg as any) ? "result" : "error");
+    const payloadSize = JSON.stringify(msg).length;
+
     this.log.debug({ event: "forward_to_mobile", msg }, "→ mobile");
 
     this.sendQueue = this.sendQueue.then(() =>
@@ -515,6 +544,10 @@ export class RelayBridge {
         .sendToRoom(this.options.roomName, msg)
         .then(() => {
           this.forwardFailures = 0;
+          this.log.info(
+            { event: "forward_to_mobile_ok", method, payloadSize },
+            "→ mobile delivered",
+          );
         })
         .catch((err: Error) => {
           this.forwardFailures++;
@@ -523,7 +556,8 @@ export class RelayBridge {
               event: "forward_to_mobile_failed",
               error: err.message,
               consecutiveFailures: this.forwardFailures,
-              method: (msg as any).method,
+              method,
+              payloadSize,
             },
             "Failed to forward message to mobile",
           );
