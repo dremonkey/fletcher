@@ -413,6 +413,11 @@ Split the single voice-agent pipeline into two distinct modes — **Voice Mode**
 - [~] 066: Bridge Async Agent Messages to Mobile 🔄 — workaround implemented: `session/load` catch-up with chunk dedup detects zero-text `end_turn` and replays missed sub-agent results; verified against real OpenClaw; needs field test ([BUG-022](../docs/field-tests/20260313-buglog.md))
 - [ ] 067: Fix Large Payload Delivery Failure in Relay 📋 — RCA complete: upstream ACP notification failure (same as BUG-022) + broken catch-up dedup (count-based skipCount drifts above actual session history). Fix: replace count-based dedup with content-based text comparison + add INFO-level delivery diagnostics ([BUG-024](../docs/field-tests/20260314-buglog.md))
 
+**Hold mode UX (post TASK-011):**
+- [ ] 069: Hold Mode Disconnect — "Live Mode Paused" Visual Treatment 📋 — hold disconnect renders as neutral gray info instead of red error; suppress duplicate raw disconnect event; message: "Live mode paused — tap to resume"
+- [ ] 070: Suppress Agent Disconnect in Text Mode 📋 — when user is in text input mode (not voice mode), suppress hold disconnect system event entirely; relay still handles chat
+- [ ] 071: Hold Mode — Tappable Resume Action 📋 — add visual cue to mic button when on hold (slow amber pulse); makes "tap to resume" discoverable without new UI elements
+
 **Backlog (deferred — chat mode MVP works without these):**
 - [ ] 043: Pluggable TTS Engine Abstraction — `TtsEngine` interface + native/Cartesia/Gemini impls
 - [ ] 046: Mode Switch Controller — formal voice ↔ chat state machine + mode-aware health (absorbs 051)
