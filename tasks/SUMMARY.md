@@ -406,6 +406,7 @@ Split the single voice-agent pipeline into two distinct modes — **Voice Mode**
 - [x] 061: AcpLLM Backend + Remove OpenClaw HTTP ✅ — `GANGLIA_TYPE=acp` default; lazy init; OpenClaw HTTP fully deleted
 - [x] 062: Voice Agent ACP Wiring ✅ — env validation updated; ACP defaults; OPENCLAW_API_KEY no longer required
 - [ ] 057: Relay-Side ACP Response Timeout 📋 — configurable timeout for hung ACP responses ([BUG-010](../docs/field-tests/20260312-buglog.md))
+- [ ] 065: Fix Silent Message Loss in Relay→Mobile Path 📋 — add logging, publishData timeout, drop diagnostics ([BUG-020](../docs/field-tests/20260313-buglog.md))
 
 **Backlog (deferred — chat mode MVP works without these):**
 - [ ] 043: Pluggable TTS Engine Abstraction — `TtsEngine` interface + native/Cartesia/Gemini impls
