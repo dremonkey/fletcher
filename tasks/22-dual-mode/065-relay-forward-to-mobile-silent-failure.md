@@ -113,26 +113,73 @@ The mobile's `handleMessage()` silently drops messages when:
 If the relay successfully publishes but timing/ordering causes a mismatch on the
 mobile side, the message is silently dropped with no diagnostic information.
 
-### Most likely BUG-020 scenario
+### Log forensics — `logs/relay-2026-03-13.log`
 
-Given the same session had BUG-011 (relay disconnect) and BUG-017 (bootstrap
-race), the most likely chain of events:
+Server-side relay logs were recovered for the incident window. Key timeline:
 
-1. Relay's LiveKit room connection degraded (network glitch or ICE failure)
-2. `RoomEvent.Disconnected` either hadn't fired yet (zombie) or fired but the
-   BUG-011 fix wasn't deployed at that point in the session
-3. Mobile sent a chat message → relay received it (subscription still worked)
-4. Relay forwarded to ACP → ACP processed → response visible in OpenClaw web UI
-5. ACP sent `session/update` + result back to relay via stdout → relay received
-6. Relay called `forwardToMobile()` → `publishData()` either:
+```
+18:46:39  Relay starts (PID 2152717)
+18:48:44  Prompt #1 — mobile_prompt_received → session_prompt → prompt_completed → mobile_prompt_responded (end_turn) ✓
+18:50:39  Prompt #2 — mobile_prompt_received → session_prompt → prompt_completed (13s) → mobile_prompt_responded (end_turn) ✓
+18:51:44  Prompt #3 — mobile_prompt_received → session_prompt → prompt_completed (5s)  → mobile_prompt_responded (end_turn) ✓
+18:53:00  participant_left webhook for device-BP3A.251105.015 → room_removed, ACP shut down
+18:53:15  participant_joined webhook → room re-created, fresh ACP session (c4b6a7d4)
+18:55:18  Relay shutdown
+```
+
+**Critical observation:** All three prompts (including the 18:51 incident)
+logged `mobile_prompt_responded` with `stopReason: end_turn`. From the relay's
+perspective, everything succeeded — ACP processed every prompt and returned
+results.
+
+**But `mobile_prompt_responded` does NOT confirm delivery.** It's logged
+*before* `forwardToMobile()` is called:
+
+```typescript
+// relay-bridge.ts:234-241
+.then((result) => {
+  reqLog.info({ event: "mobile_prompt_responded", ... });  // ← logged here
+  this.activeRequestSource = null;
+  this.forwardToMobile({ ... });  // ← actual delivery here (fire-and-forget, errors swallowed)
+})
+```
+
+The log proves ACP responded. It says **nothing** about whether the response
+reached mobile. And the `.catch(() => {})` ensures we'll never know.
+
+**Zero errors in the entire log.** No warnings, no exceptions, no failures of
+any kind. The relay thought everything was fine.
+
+### Revised scenario — asymmetric connection degradation
+
+The `participant_left` at 18:53:00 (70 seconds after the 18:51 prompt) is the
+smoking gun. The mobile's LiveKit connection was **dying but not yet dead** when
+the relay tried to publish the 18:51 response.
+
+Timeline reconstruction:
+
+1. Mobile sent prompt at 18:51:44 — relay received it (subscription path still
+   worked; the data channel receive direction was intact)
+2. Relay forwarded to ACP → ACP processed → returned result at 18:51:49
+3. Relay called `forwardToMobile()` at 18:51:49 — `publishData()` on a
+   **degrading** connection. The publish direction of the data channel was
+   already failing while the subscribe direction still worked.
+4. `publishData` either:
    - **Threw** → caught and silently swallowed by `.catch(() => {})`
-   - **Hung** → `sendQueue` permanently blocked, all subsequent messages lost
-   - **"Succeeded"** → data never actually delivered (zombie connection)
-7. Mobile never received the message — zero logging on either side
+   - **"Succeeded"** at the API level but WebRTC never delivered the packet
+     (ICE connection was degrading, DTLS channel dropping packets)
+5. Mobile never received the response
+6. ~70s later, the connection fully died → `participant_left` webhook at 18:53:00
+7. Relay correctly handled the disconnect (teardown + rejoin at 18:53:15)
 
-Without server-side logs from the 18:51 timeframe, we cannot distinguish which
-of the three `publishData` outcomes occurred. **This is exactly the problem —
-the current code makes it impossible to diagnose.**
+This is **asymmetric WebRTC data channel degradation**: the mobile could still
+send (its prompt reached the relay at 18:51:44) but the relay could no longer
+publish back (the return path was broken). LiveKit's `RoomEvent.Disconnected`
+hadn't fired yet, so the relay had no way to know.
+
+**This is NOT a zombie Room object.** The connection was actively dying, not
+already dead. The relay's Room was still "connected" from LiveKit's perspective.
+The failure was at the transport layer — below the SDK's visibility.
 
 ## Proposed Fix
 
