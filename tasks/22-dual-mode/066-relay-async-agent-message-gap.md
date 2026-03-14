@@ -1,9 +1,10 @@
 # TASK-066: Bridge async agent messages to mobile via relay
 
-**Status:** [ ] Not started
+**Status:** [ ] Blocked (upstream)
 **Priority:** High
 **Epic:** 22 (Dual-Mode Architecture)
 **Origin:** BUG-022 (field test 2026-03-13, 21:10 PDT)
+**Upstream:** [openclaw/openclaw#40693](https://github.com/openclaw/openclaw/issues/40693)
 
 ## Problem
 
@@ -80,26 +81,35 @@ methods: `sessionNew`, `sessionPrompt`, `sessionCancel`. No load/history.
 **File:** `packages/acp-client/src/types.ts:86-88` — `SessionNewResult` returns
 only `{ sessionId: string }`, no conversation history.
 
-### Root cause — architectural gap
+### Root cause — upstream bug in OpenClaw ACP dispatch
 
-The relay architecture is a **synchronous request/response bridge**:
+The relay architecture already handles async pushes correctly — the `onUpdate`
+handler (relay-bridge.ts:109-116) forwards `session/update` notifications to
+mobile regardless of `activeRequestSource` state. If the ACP server pushed
+the sub-agent result, the relay would forward it automatically.
 
-```
-Mobile → prompt → Relay → ACP → OpenClaw → response → ACP → Relay → Mobile  ✓
-```
+**The server never pushes it.** This is tracked upstream as
+[openclaw/openclaw#40693](https://github.com/openclaw/openclaw/issues/40693):
 
-It does NOT bridge **asynchronous agent output**:
+> ACP sessions spawned via `sessions_spawn({ runtime: "acp" })` never trigger
+> the auto-announce flow to the parent session.
+>
+> Standard subagent runs go through `runEmbeddedPiAgent` → emits
+> `{ stream: "lifecycle", phase: "end" }` → triggers `completeSubagentRun` →
+> `runSubagentAnnounceFlow` → announces to parent.
+>
+> **ACP sessions take a different code path:** `tryDispatchAcpReply` →
+> `acpManager.runTurn()` → calls `recordProcessed("completed")` and
+> `markIdle("message_completed")` — **it never emits the `lifecycle` event.**
+> So the subagent registry listener never fires → no announce.
 
-```
-Sub-agent finishes → OpenClaw session → Web UI  ✓
-                                      → Relay   ✗ (never pushed)
-                                      → Mobile  ✗ (relay never saw it)
-```
-
-The ACP server advertises `loadSession: true` in its `initialize` response,
-indicating the protocol supports session loading. But the relay never uses this
-capability — it creates a fresh session and only sees messages that flow through
-prompt/response cycles.
+Related upstream issues:
+- [#38626](https://github.com/openclaw/openclaw/issues/38626) — Subagent
+  lifecycle observability + async supervision controls (feature request)
+- [#40907](https://github.com/openclaw/openclaw/issues/40907) — Channel-level
+  async streaming: messages queued until entire agent run completes
+- [#33859](https://github.com/openclaw/openclaw/issues/33859) — ACP sessions
+  inherit parent delivery context, ignoring `acp.delivery.mode`
 
 ### This is NOT BUG-020
 
@@ -108,16 +118,33 @@ prompt/response cycles.
 | **Layer** | Transport (WebRTC) | Protocol (ACP) |
 | **Relay saw the message?** | Yes — forwarded it | No — never received it |
 | **publishData error?** | Silent swallow (fixed) | N/A — nothing to publish |
-| **Fix** | Logging + timeout (task 065) | Session catch-up mechanism |
-| **Root cause** | Asymmetric channel degradation | ACP doesn't push async messages |
+| **Fix** | Logging + timeout (task 065) | Upstream: emit lifecycle event |
+| **Root cause** | Asymmetric channel degradation | ACP dispatch skips announce |
 
 ## Proposed Fix
 
-### Fix 1: Implement `loadSession` in ACP client
+### Primary fix: Upstream (openclaw/openclaw#40693)
+
+The OpenClaw ACP dispatch path needs to emit the `lifecycle` event with
+`phase: "end"` when an ACP session completes. This triggers the existing
+announce flow, which pushes the result as a `session/update` notification
+to the parent session's ACP client (our relay).
+
+**No relay-side changes needed.** The relay's `onUpdate` handler already
+forwards all `session/update` notifications to mobile. Once the server
+pushes them, they'll flow through automatically.
+
+**Action:** Monitor #40693 for resolution. Once fixed, verify with a field
+test that sub-agent results arrive on mobile.
+
+### Workaround: `loadSession` catch-up (if upstream fix is delayed)
+
+If #40693 takes a long time to land, we can work around it using the ACP
+`loadSession` capability.
 
 **File:** `packages/acp-client/src/client.ts`
 
-The OpenClaw ACP server already supports `loadSession` (partial — see
+The OpenClaw ACP server supports `loadSession` (partial — see
 [docs](https://docs.openclaw.ai/cli/acp#compatibility-matrix)):
 
 > **loadSession** — Rebinds the ACP session to a Gateway session key and
@@ -126,13 +153,13 @@ The OpenClaw ACP server already supports `loadSession` (partial — see
 
 Key behavior: `loadSession` **replays** the conversation as `session/update`
 notifications. This means the existing `onUpdate` handler would receive
-them automatically. The relay just needs to:
+them automatically. The relay would need to:
 
 1. Track which messages it has already forwarded (sequence counter or
    content hash)
 2. Call `loadSession` at strategic moments (after prompt completion, or
    periodically when idle)
-3. Forward any replayed messages that are new (not already forwarded)
+3. Suppress replayed messages that were already forwarded (deduplication)
 
 ```typescript
 async sessionLoad(params: { sessionId: string }): Promise<void> {
@@ -143,123 +170,63 @@ async sessionLoad(params: { sessionId: string }): Promise<void> {
 }
 ```
 
+**Open questions before implementing:**
+- Exact JSON-RPC method name and params format (need to test against server)
+- How to deduplicate: does `loadSession` replay include sequence IDs or
+  timestamps we can use to skip already-forwarded messages?
+- When to call it: post-prompt is the obvious trigger, but the user may be
+  waiting for the async message without ever sending another prompt
+- Performance: replaying full history is heavyweight; is there a lighter
+  "since sequence N" variant?
+
 **Limitation:** Only user/assistant text is replayed. Tool calls and system
-messages are not reconstructed. This is sufficient for BUG-022 (agent text
-was the lost content) but won't catch missed tool-result artifacts.
-
-**Depends on:** OpenClaw ACP server's `loadSession` (status: partial).
-Need to verify the exact JSON-RPC method name and params format.
-
-### Fix 2: Post-prompt catch-up in RelayBridge
-
-**File:** `apps/relay/src/bridge/relay-bridge.ts`
-
-After each prompt completes, check if the session has messages that weren't
-forwarded to mobile. This catches async messages that arrived between prompts:
-
-```typescript
-// In the prompt completion handler (line 237-244):
-.then(async (result) => {
-  reqLog.info({ event: "mobile_prompt_completed", stopReason: (result as any).stopReason });
-  this.activeRequestSource = null;
-  this.forwardToMobile({
-    jsonrpc: "2.0",
-    id: msg.id,
-    result,
-  });
-
-  // Catch-up: check for async messages we missed
-  await this.catchUpMissedMessages();
-})
-```
-
-The `catchUpMissedMessages()` method calls `session/load`, compares with a local
-sequence counter, and forwards any messages the mobile hasn't seen.
-
-### Fix 3: (Pragmatic alternative) Periodic session poll
-
-If `session/load` is not available or too expensive, add a lightweight periodic
-poll that checks a message count or sequence number and alerts when messages are
-missed:
-
-**File:** `apps/relay/src/bridge/relay-bridge.ts`
-
-```typescript
-private messageSequence = 0;
-private pollInterval: Timer | null = null;
-
-private startSessionPoll(): void {
-  this.pollInterval = setInterval(async () => {
-    if (!this.sessionId || this.activeRequestSource) return;
-    // Check for new messages via a lightweight endpoint
-    // Forward any that weren't seen through the notification channel
-  }, 10_000); // every 10 seconds
-}
-```
-
-### Fix 4: (Minimal) Log detection of async gap
-
-If the full fix is deferred, at minimum add detection logging so async message
-gaps are visible in the relay log. When a prompt response references content
-that wasn't part of the current prompt cycle, log a warning:
-
-```typescript
-// In the onUpdate handler (line 109):
-this.acpClient.onUpdate((params: SessionUpdateParams) => {
-  this.log.debug({ event: "acp_update_received", params }, "← acp session/update");
-  this.messageSequence++;  // Track messages we've seen
-  // ... existing routing logic
-});
-```
+messages are not reconstructed. Sufficient for BUG-022 (the lost content
+was agent text) but won't catch missed tool-result artifacts.
 
 ## Edge Cases
 
-- **Session load during active prompt:** Don't call `session/load` while a
+- **Session load during active prompt:** Don't call `loadSession` while a
   prompt is being processed — it could interfere with the streaming response.
   Only catch up when `activeRequestSource === null`.
 
-- **Duplicate messages:** If `session/load` returns messages that were already
+- **Duplicate messages:** If `loadSession` replays messages that were already
   forwarded via real-time notifications, the mobile would receive duplicates.
   Need a sequence number or message ID to deduplicate.
 
-- **Large session history:** `session/load` might return the entire conversation
-  history. The catch-up should only forward messages newer than the last seen
-  sequence ID, not replay the whole session.
+- **Large session history:** `loadSession` replays the entire conversation.
+  The catch-up should only forward messages newer than the last seen
+  sequence ID, not replay everything to mobile.
 
 - **Mobile-side rendering of late messages:** Even if we forward the missed
   message, the mobile needs to handle a message that arrives out of order
   (after the user's follow-up prompt and response). The UI should insert it
   at the correct position in the conversation timeline.
 
-- **ACP server doesn't support `session/load`:** The server advertises
-  `loadSession: true` but the actual protocol method may differ. Need to verify
-  against OpenClaw's ACP server implementation before building the client.
-
 ## Acceptance Criteria
 
-- [ ] `session/load` (or equivalent) implemented in `AcpClient`
-- [ ] Relay catches async messages that arrive between prompt cycles
-- [ ] Missed messages are forwarded to mobile with correct ordering
+- [ ] Sub-agent results arrive on mobile (either via upstream fix or workaround)
 - [ ] No duplicate messages when catch-up and real-time overlap
-- [ ] Relay log includes a warning when async messages are detected
+- [ ] Relay log includes prompt text content for debugging (DONE — commit `41edb1e`)
 - [ ] Existing tests still pass
 
 ## Files
 
+If workaround is needed:
 - `packages/acp-client/src/client.ts` — Add `sessionLoad()` method
-- `packages/acp-client/src/types.ts` — Add `SessionLoadResult` type
-- `apps/relay/src/bridge/relay-bridge.ts` — Post-prompt catch-up logic
+- `packages/acp-client/src/types.ts` — Add types for loadSession
+- `apps/relay/src/bridge/relay-bridge.ts` — Deduplication + catch-up trigger
 - `apps/relay/src/bridge/relay-bridge.spec.ts` — Tests for catch-up
 
 ## Related
 
+- **Upstream:** [openclaw/openclaw#40693](https://github.com/openclaw/openclaw/issues/40693) — ACP sessions never trigger auto-announce
+- **Upstream:** [openclaw/openclaw#38626](https://github.com/openclaw/openclaw/issues/38626) — Subagent lifecycle observability
+- **Upstream:** [openclaw/openclaw#40907](https://github.com/openclaw/openclaw/issues/40907) — Channel-level async streaming
 - **BUG-020 / TASK-065:** Transport-layer silent failure — different root cause
   but same user-visible symptom. Task 065 is complete.
 - **BUG-021:** Session hang at 20:42 PDT — may be related (the user's prompt
   was lost in the hung crimson-tunic session, triggering the switch to
   sage-mushroom where BUG-022 occurred).
-- ACP `initialize` response: `agentCapabilities.loadSession: true` — suggests
-  the protocol supports session loading, but the client doesn't implement it.
 
 ## Date
 
