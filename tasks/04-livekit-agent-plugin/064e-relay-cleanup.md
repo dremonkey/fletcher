@@ -72,7 +72,7 @@ With `GANGLIA_TYPE=relay`, the voice-agent no longer needs to spawn its own ACP 
 - [x] pnpm volume mount removed from voice-agent in docker-compose.yml
 - [x] ACP_COMMAND env var removed from voice-agent in docker-compose.yml
 - [x] GANGLIA_TYPE=relay set in voice-agent environment
-- [ ] acp-client COPY removed from voice-agent Dockerfile — deferred to 064f (ganglia workspace dep)
+- [x] acp-client COPY removed from voice-agent Dockerfile (done in 064f)
 - [x] `.env.example` updated with relay option
 - [ ] Field test: relay latency overhead <50ms
 - [ ] Docker image size compared before/after

@@ -78,45 +78,28 @@ describe('isGangliaAvailable', () => {
 });
 
 describe('Backend Registration', () => {
-  it('acp backend is registered after import', async () => {
-    // Import the acp-llm module to trigger registration
-    await import('./acp-llm.js');
-    expect(isGangliaAvailable('acp')).toBe(true);
-  });
-
   it('nanoclaw backend is registered after import', async () => {
-    // Import the nanoclaw module to trigger registration
     await import('./nanoclaw.js');
     expect(isGangliaAvailable('nanoclaw')).toBe(true);
   });
 
+  it('relay backend is registered after import', async () => {
+    await import('./relay-llm.js');
+    expect(isGangliaAvailable('relay')).toBe(true);
+  });
+
   it('both backends are available via index', async () => {
-    // Import from index to ensure both are loaded
     const ganglia = await import('./index.js');
 
-    expect(ganglia.isGangliaAvailable('acp')).toBe(true);
+    expect(ganglia.isGangliaAvailable('relay')).toBe(true);
     expect(ganglia.isGangliaAvailable('nanoclaw')).toBe(true);
-    expect(ganglia.getRegisteredTypes()).toContain('acp');
+    expect(ganglia.getRegisteredTypes()).toContain('relay');
     expect(ganglia.getRegisteredTypes()).toContain('nanoclaw');
   });
 
-  it('openclaw type is no longer available', async () => {
+  it('acp type is no longer available', async () => {
     await import('./index.js');
-    expect(isGangliaAvailable('openclaw')).toBe(false);
-  });
-
-  it('createGanglia works for acp', async () => {
-    await import('./acp-llm.js');
-    const llm = await createGanglia({
-      type: 'acp',
-      acp: {
-        command: 'bun',
-        args: ['--version'],
-      },
-    });
-
-    expect(llm.gangliaType()).toBe('acp');
-    expect(llm.label()).toBe('acp');
+    expect(isGangliaAvailable('acp')).toBe(false);
   });
 
   it('createGanglia works for nanoclaw', async () => {
@@ -131,44 +114,26 @@ describe('Backend Registration', () => {
     expect(llm.gangliaType()).toBe('nanoclaw');
     expect(llm.label()).toBe('nanoclaw');
   });
-
-  it('createGanglia throws Unknown ganglia type for openclaw', async () => {
-    await expect(
-      createGanglia({ type: 'openclaw' as any, openclaw: {} } as any),
-    ).rejects.toThrow('Unknown ganglia type: openclaw');
-  });
 });
 
 describe('createGangliaFromEnv', () => {
-  it('defaults to acp when GANGLIA_TYPE not set', async () => {
-    await import('./acp-llm.js');
+  it('defaults to relay when GANGLIA_TYPE not set', async () => {
+    await import('./relay-llm.js');
     const origType = process.env.GANGLIA_TYPE;
     const origBrainType = process.env.BRAIN_TYPE;
     delete process.env.GANGLIA_TYPE;
     delete process.env.BRAIN_TYPE;
 
     const { createGangliaFromEnv } = await import('./factory.js');
-    const llm = await createGangliaFromEnv();
 
-    expect(llm.gangliaType()).toBe('acp');
+    // relay requires a room — should throw a clear error
+    await expect(createGangliaFromEnv()).rejects.toThrow(
+      'GANGLIA_TYPE=relay requires a room',
+    );
 
     // Restore env
     if (origType !== undefined) process.env.GANGLIA_TYPE = origType;
     if (origBrainType !== undefined) process.env.BRAIN_TYPE = origBrainType;
-  });
-
-  it('creates acp when GANGLIA_TYPE=acp', async () => {
-    await import('./acp-llm.js');
-    const origType = process.env.GANGLIA_TYPE;
-    process.env.GANGLIA_TYPE = 'acp';
-
-    const { createGangliaFromEnv } = await import('./factory.js');
-    const llm = await createGangliaFromEnv();
-
-    expect(llm.gangliaType()).toBe('acp');
-
-    if (origType !== undefined) process.env.GANGLIA_TYPE = origType;
-    else delete process.env.GANGLIA_TYPE;
   });
 
   it('creates nanoclaw when GANGLIA_TYPE=nanoclaw', async () => {
@@ -185,13 +150,13 @@ describe('createGangliaFromEnv', () => {
     else delete process.env.GANGLIA_TYPE;
   });
 
-  it('throws for GANGLIA_TYPE=openclaw', async () => {
+  it('throws for GANGLIA_TYPE=acp', async () => {
     await import('./index.js');
     const origType = process.env.GANGLIA_TYPE;
-    process.env.GANGLIA_TYPE = 'openclaw';
+    process.env.GANGLIA_TYPE = 'acp';
 
     const { createGangliaFromEnv } = await import('./factory.js');
-    await expect(createGangliaFromEnv()).rejects.toThrow('Unknown GANGLIA_TYPE: openclaw');
+    await expect(createGangliaFromEnv()).rejects.toThrow('Unknown GANGLIA_TYPE: acp');
 
     if (origType !== undefined) process.env.GANGLIA_TYPE = origType;
     else delete process.env.GANGLIA_TYPE;

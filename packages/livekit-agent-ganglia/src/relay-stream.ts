@@ -9,12 +9,26 @@ import { llm, APIConnectOptions } from '@livekit/agents';
 import type { StreamTransport } from './relay-transport.js';
 import { dbg } from './logger.js';
 import { getShuffledPhrases } from './pondering.js';
-import { extractLatestUserText } from './acp-stream.js';
 
 type ChatChunk = llm.ChatChunk;
 type ChatContext = llm.ChatContext;
 type ToolContext = llm.ToolContext;
 const LLMStream = llm.LLMStream;
+const ChatMessageClass = llm.ChatMessage;
+
+/**
+ * Extracts the latest user message text from a ChatContext.
+ * Only the most recent user utterance is needed — not the full history.
+ */
+export function extractLatestUserText(chatCtx: ChatContext): string {
+  for (let i = chatCtx.items.length - 1; i >= 0; i--) {
+    const item = chatCtx.items[i];
+    if (item instanceof ChatMessageClass && (item as any).role === 'user') {
+      return (item as any).textContent || '';
+    }
+  }
+  return '';
+}
 
 /** How often to rotate the pondering phrase (ms). */
 const PONDERING_INTERVAL_MS = 3000;

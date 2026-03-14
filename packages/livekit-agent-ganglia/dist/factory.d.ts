@@ -2,7 +2,7 @@
  * Ganglia Factory
  *
  * Creates LLM instances based on configuration.
- * ACP (JSON-RPC 2.0 over stdio) and Nanoclaw backends are included in this package.
+ * Relay (data channel) and Nanoclaw backends are included in this package.
  */
 import type { llm } from '@livekit/agents';
 import type { GangliaConfig, GangliaSessionInfo, RelayRoom } from './ganglia-types.js';
@@ -32,9 +32,9 @@ export interface GangliaLLM extends llm.LLM {
  *
  * @example
  * ```typescript
- * // In acp-llm.ts
+ * // In relay-llm.ts
  * import { registerGanglia } from './factory.js';
- * registerGanglia('acp', async () => AcpLLM);
+ * registerGanglia('relay', async () => RelayLLM);
  * ```
  */
 export declare function registerGanglia(type: string, factory: () => Promise<new (config: any) => GangliaLLM>): void;
@@ -44,11 +44,8 @@ export declare function registerGanglia(type: string, factory: () => Promise<new
  * @example
  * ```typescript
  * const llm = await createGanglia({
- *   type: 'acp',
- *   acp: {
- *     command: 'openclaw',
- *     args: ['acp'],
- *   },
+ *   type: 'relay',
+ *   relay: { room, logger },
  * });
  * ```
  */
@@ -65,8 +62,7 @@ export declare function isGangliaAvailable(type: string): boolean;
  * Creates a ganglia instance from environment variables.
  *
  * Reads:
- * - GANGLIA_TYPE (default: 'acp')
- * - ACP_COMMAND (default: 'openclaw'), ACP_ARGS (default: 'acp'), ACP_PROMPT_TIMEOUT_MS (for acp)
+ * - GANGLIA_TYPE (default: 'relay')
  * - NANOCLAW_URL (for nanoclaw)
  */
 export declare function createGangliaFromEnv(opts?: {

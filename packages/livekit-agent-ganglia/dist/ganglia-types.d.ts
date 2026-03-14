@@ -22,28 +22,6 @@ export interface GangliaSessionInfo {
     customSessionId?: string;
 }
 /**
- * ACP backend configuration.
- *
- * Connects to an OpenClaw ACP agent subprocess via JSON-RPC 2.0 over stdio.
- * This is the default backend (GANGLIA_TYPE=acp).
- */
-export interface AcpConfig {
-    /** ACP subprocess command (e.g., "openclaw"). */
-    command: string;
-    /** ACP subprocess arguments (e.g., ["acp"]). */
-    args?: string[];
-    /** Additional environment variables for the subprocess. */
-    env?: Record<string, string>;
-    /** Prompt timeout in ms (default: 120000). Override via ACP_PROMPT_TIMEOUT_MS env var. */
-    promptTimeoutMs?: number;
-    /** Optional logger for production-level logging (defaults to silent). */
-    logger?: import('./logger.js').Logger;
-    /** Callback emitted while waiting for first content token. Called with null when content starts. */
-    onPondering?: (phrase: string | null, streamId: string) => void;
-    /** Callback emitted for each content-bearing chunk from the ACP stream. */
-    onContent?: (delta: string, fullText: string, streamId: string) => void;
-}
-/**
  * Minimal interface for a LiveKit Room as needed by RelayLLM.
  *
  * Using a structural interface rather than importing @livekit/rtc-node directly
@@ -103,10 +81,6 @@ export interface NanoclawConfig {
  * Use `type` to determine which backend to instantiate.
  */
 export type GangliaConfig = {
-    type: 'acp';
-    acp: AcpConfig;
-    logger?: import('./logger.js').Logger;
-} | {
     type: 'relay';
     relay: RelayConfig;
     logger?: import('./logger.js').Logger;

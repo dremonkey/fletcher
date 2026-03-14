@@ -1,7 +1,7 @@
 # Task 064f: Remove ACP Backend (AcpLLM/AcpChatStream)
 
 **Epic:** 04 — Ganglia / Brain Plugin
-**Status:** [ ]
+**Status:** [x]
 **Depends on:** 064e
 **Blocks:** none
 
@@ -43,16 +43,16 @@ The `@fletcher/acp-client` package itself may still be used by the relay — onl
 
 ## Acceptance criteria
 
-- [ ] `acp-llm.ts` deleted
-- [ ] `acp-stream.ts` deleted
-- [ ] Factory registration for `'acp'` removed
-- [ ] `createGangliaFromEnv()` `type === 'acp'` branch removed
-- [ ] `GangliaConfig` no longer includes `{ type: 'acp' }` variant
-- [ ] `AcpConfig` type removed (or moved if relay needs it)
-- [ ] `dbg.acpStream` namespace removed
-- [ ] All exports updated — no broken imports
-- [ ] All tests pass after removal
-- [ ] Default `GANGLIA_TYPE` changed from `'acp'` to `'relay'` in factory
+- [x] `acp-llm.ts` deleted
+- [x] `acp-stream.ts` deleted
+- [x] Factory registration for `'acp'` removed
+- [x] `createGangliaFromEnv()` `type === 'acp'` branch removed
+- [x] `GangliaConfig` no longer includes `{ type: 'acp' }` variant
+- [x] `AcpConfig` type removed
+- [x] `dbg.acpStream` namespace removed
+- [x] All exports updated — no broken imports
+- [x] All tests pass after removal (127 pass, 0 fail)
+- [x] Default `GANGLIA_TYPE` changed from `'acp'` to `'relay'` in factory
 
 <!--
 Status key:

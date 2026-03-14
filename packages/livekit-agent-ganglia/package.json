@@ -1,7 +1,7 @@
 {
   "name": "@knittt/livekit-agent-ganglia",
   "version": "0.1.0",
-  "description": "A unified LiveKit Agents LLM plugin supporting ACP and Nanoclaw backends.",
+  "description": "A unified LiveKit Agents LLM plugin supporting Relay and Nanoclaw backends.",
   "main": "dist/index.js",
   "type": "module",
   "types": "dist/index.d.ts",
@@ -14,7 +14,6 @@
     "test": "bun test --max-concurrency 3"
   },
   "dependencies": {
-    "@fletcher/acp-client": "workspace:*",
     "debug": "^4.4.0"
   },
   "peerDependencies": {

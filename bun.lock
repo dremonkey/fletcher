@@ -63,7 +63,6 @@
       "name": "@knittt/livekit-agent-ganglia",
       "version": "0.1.0",
       "dependencies": {
-        "@fletcher/acp-client": "workspace:*",
         "debug": "^4.4.0",
       },
       "devDependencies": {

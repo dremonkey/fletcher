@@ -27,7 +27,6 @@ export const noopLogger: Logger = {
  */
 export const dbg = {
   factory: Debug('ganglia:factory'),
-  acpStream: Debug('ganglia:acp:stream'),
   openclawStream: Debug('ganglia:openclaw:stream'),
   openclawClient: Debug('ganglia:openclaw:client'),
   openresponses: Debug('ganglia:openclaw:openresponses'),
