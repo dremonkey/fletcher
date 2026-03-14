@@ -202,6 +202,8 @@ The client sends the current `tts-mode` state on room connect and reconnect so t
 
 On the agent side, `session.output.setAudioEnabled(enabled)` toggles TTS inference natively — when audio output is disabled, the SDK's `ttsTask` skips `performTTSInference` entirely.
 
+**Bootstrap trigger:** The first `tts-mode` event with `value !== "off"` also triggers the voice agent's bootstrap message — a one-time synthetic user message that injects TTS/STT behavioral instructions into the session. This deferred bootstrap ensures the agent does not send a greeting or consume LLM resources until the user actually activates voice mode. For e2e test rooms (`e2e-*` prefix), bootstrap fires immediately on room join instead of waiting for a `tts-mode` event.
+
 ## Chunking Protocol
 
 LiveKit data channels have a typical MTU of ~16KB. Messages larger than 14KB (headroom under the MTU) are split into chunks.

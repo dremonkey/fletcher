@@ -49,7 +49,7 @@ import { voice } from "@livekit/agents";
 import * as deepgram from "@livekit/agents-plugin-deepgram";
 import * as silero from "@livekit/agents-plugin-silero";
 import * as livekit from "@livekit/agents-plugin-livekit";
-import { RoomEvent, ParticipantKind } from "@livekit/rtc-node";
+import { RoomEvent, ParticipantKind, TrackKind } from "@livekit/rtc-node";
 import {
   createGangliaFromEnv,
   resolveSessionKeySimple,
@@ -342,6 +342,9 @@ export default defineAgent({
     // 'ganglia-events' topic. (TASK-030)
     // -----------------------------------------------------------------------
     let ttsEnabled = true;
+    let bootstrapSent = false;
+    // sendBootstrap is assigned after participant is resolved (see below).
+    let sendBootstrap: (() => void) | undefined;
 
     ctx.room.on(
       RoomEvent.DataReceived,
@@ -644,22 +647,57 @@ export default defineAgent({
     });
 
     // -----------------------------------------------------------------------
-    // Bootstrap message — inject a synthetic user message at session start.
-    // Fires after session routing is resolved so OpenClaw receives correct
-    // session headers.  Uses generateReply() to flow through the full voice
-    // pipeline (STT → LLM → TTS) rather than a system-level instruction
-    // that OpenClaw may ignore. (TASK-022)
+    // Bootstrap message — deferred until voice mode is activated.
+    // The bootstrap injects TTS/STT instructions into the session. It only
+    // makes sense when voice mode is ON (ttsEnabled=true). Sending it
+    // immediately on room join wastes a relay prompt round-trip and times
+    // out when the user hasn't enabled voice yet. (BUG-023)
+    //
+    // For e2e tests, voice mode is always on — send bootstrap immediately.
     // -----------------------------------------------------------------------
-    const bootstrapMsg = buildBootstrapMessage({
-      roomName: ctx.room.name ?? "",
-      participantIdentity: participant.identity,
-    });
+    sendBootstrap = async () => {
+      if (bootstrapSent) return;
+      bootstrapSent = true;
+      // Wait for the WebRTC data channel to the relay to be fully
+      // established. publishData silently drops messages if the
+      // channel isn't ready yet (~150ms after room join is too early).
+      // 2s is conservative but reliable. (BUG-023)
+      await new Promise((r) => setTimeout(r, 2000));
+      const bootstrapMsg = buildBootstrapMessage({
+        roomName: ctx.room.name ?? "",
+        participantIdentity: participant.identity,
+      });
+      logger.info(
+        { room: ctx.room.name },
+        "Sending bootstrap message (voice mode activated)",
+      );
+      session.generateReply({ userInput: bootstrapMsg });
+    };
+
     const isE2e = (ctx.room.name ?? "").startsWith("e2e-");
-    logger.info(
-      { room: ctx.room.name, e2e: isE2e },
-      "Sending bootstrap message",
+    if (isE2e) {
+      sendBootstrap();
+    } else {
+      logger.info("Bootstrap deferred — waiting for voice mode activation (mic on)");
+    }
+
+    // -----------------------------------------------------------------------
+    // Voice mode activation — trigger bootstrap on first device audio track.
+    // The mic toggle is the true voice mode signal. When the user enables
+    // the mic, the device publishes an audio track. The first audio track
+    // subscription from a non-agent participant triggers the bootstrap. (BUG-023)
+    // -----------------------------------------------------------------------
+    ctx.room.on(
+      RoomEvent.TrackSubscribed,
+      (track: any, _publication: any, trackParticipant: any) => {
+        if (
+          track.kind === TrackKind.KIND_AUDIO &&
+          trackParticipant?.kind !== ParticipantKind.AGENT
+        ) {
+          sendBootstrap?.();
+        }
+      },
     );
-    session.generateReply({ userInput: bootstrapMsg });
 
     // -----------------------------------------------------------------------
     // Participant lifecycle — log disconnect/reconnect for observability.

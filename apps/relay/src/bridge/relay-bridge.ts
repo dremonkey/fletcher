@@ -412,7 +412,7 @@ export class RelayBridge {
 
     this.log.debug({ event: "voice_acp_message_received", msg }, "← voice-acp");
 
-    if (msg.method === "session/message") {
+    if (msg.method === "session/prompt") {
       const promptText = extractPromptText(msg.params?.prompt);
       reqLog.info({ event: "voice_acp_prompt_received", promptText });
       this.activeRequestSource = "voice-acp";
