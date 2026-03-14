@@ -96,7 +96,7 @@ A unified LLM plugin (`@knittt/livekit-agent-ganglia`) that bridges LiveKit agen
   - [x] 064b: RelayBridge Voice-ACP Handler
   - [x] 064c: Ganglia RelayLLM Backend
   - [x] 064d: Voice-Agent Wiring
-  - [ ] 064e: Relay Cleanup & Deployment (deferred)
+  - [~] 064e: Relay Cleanup & Deployment — docker-compose cleaned (pnpm mount, ACP_COMMAND removed, GANGLIA_TYPE=relay); Dockerfile acp-client COPY deferred to 064f
   - [ ] 064f: Remove ACP Backend (deferred)
 
 **Implemented:**

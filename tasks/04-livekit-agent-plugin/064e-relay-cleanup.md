@@ -1,7 +1,7 @@
 # Task 064e: Relay Backend Cleanup & Deployment
 
 **Epic:** 04 — Ganglia / Brain Plugin
-**Status:** [ ]
+**Status:** [~]
 **Depends on:** 064d
 **Blocks:** 064f
 
@@ -31,8 +31,7 @@ With `GANGLIA_TYPE=relay`, the voice-agent no longer needs to spawn its own ACP 
 
 ### 2. Update `apps/voice-agent/Dockerfile`
 
-- Remove COPY of `packages/acp-client/` (if relay is the only backend)
-- Verify no other dependencies on acp-client remain
+- ~~Remove COPY of `packages/acp-client/`~~ — **deferred to 064f**: ganglia still has a workspace dep on `@fletcher/acp-client`, so `bun install --frozen-lockfile` requires the package.json to be present. Removing the COPY requires removing the ganglia→acp-client dependency first.
 
 ### 3. Update `.env.example`
 
@@ -70,11 +69,11 @@ With `GANGLIA_TYPE=relay`, the voice-agent no longer needs to spawn its own ACP 
 
 ## Acceptance criteria
 
-- [ ] pnpm volume mount removed from voice-agent in docker-compose.yml
-- [ ] ACP_COMMAND env var removed from voice-agent in docker-compose.yml
-- [ ] GANGLIA_TYPE=relay set in voice-agent environment
-- [ ] acp-client COPY removed from voice-agent Dockerfile
-- [ ] `.env.example` updated with relay option
+- [x] pnpm volume mount removed from voice-agent in docker-compose.yml
+- [x] ACP_COMMAND env var removed from voice-agent in docker-compose.yml
+- [x] GANGLIA_TYPE=relay set in voice-agent environment
+- [ ] acp-client COPY removed from voice-agent Dockerfile — deferred to 064f (ganglia workspace dep)
+- [x] `.env.example` updated with relay option
 - [ ] Field test: relay latency overhead <50ms
 - [ ] Docker image size compared before/after
 
