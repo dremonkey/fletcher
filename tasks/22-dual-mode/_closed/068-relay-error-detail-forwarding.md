@@ -1,6 +1,6 @@
 # TASK-068: Forward ACP error details to mobile (rate-limit handling)
 
-**Status:** [ ] Not started
+**Status:** [x] Complete
 **Priority:** Medium
 **Epic:** 22 (Dual-Mode Architecture)
 **Origin:** BUG-025, BUG-026 (field test 2026-03-14, 00:41 PDT)
