@@ -100,5 +100,5 @@ DEBUG=ganglia:* LOG_LEVEL=debug bun run apps/voice-agent/src/index.ts
 
 **Date:** 2026-03-13
 **Priority:** Medium
-**Status:** Not started — needs runtime debugging before implementation
+**Status:** [x] Closed — cannot reproduce after BUG-017 fix (relay bootstrap race). The missing transcripts were caused by the relay never connecting, not TTS state.
 **Field test:** [BUG-015](../../docs/field-tests/20260313-buglog.md)
