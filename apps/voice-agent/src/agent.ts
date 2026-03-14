@@ -50,7 +50,7 @@ import { voice } from "@livekit/agents";
 import * as deepgram from "@livekit/agents-plugin-deepgram";
 import * as silero from "@livekit/agents-plugin-silero";
 import * as livekit from "@livekit/agents-plugin-livekit";
-import { RoomEvent, ParticipantKind, TrackKind } from "@livekit/rtc-node";
+import { RoomEvent, ParticipantKind, TrackKind, type RemoteParticipant } from "@livekit/rtc-node";
 import {
   createGangliaFromEnv,
   resolveSessionKeySimple,
@@ -132,6 +132,37 @@ if (!process.argv.includes("download-files")) {
     },
     "Environment validated",
   );
+}
+
+// ---------------------------------------------------------------------------
+// waitForDeviceParticipant — like ctx.waitForParticipant() but skips relay
+// participants (identity: "relay-*"). The relay is a data-only participant
+// with no audio tracks; linking the agent session to it makes STT/VAD deaf.
+// (BUG-030)
+// ---------------------------------------------------------------------------
+async function waitForDeviceParticipant(ctx: JobContext): Promise<RemoteParticipant> {
+  const isDevice = (p: RemoteParticipant) =>
+    p.info.kind !== ParticipantKind.AGENT && !p.identity.startsWith("relay-");
+
+  for (const p of ctx.room.remoteParticipants.values()) {
+    if (isDevice(p)) return p;
+  }
+
+  return new Promise<RemoteParticipant>((resolve, reject) => {
+    const onConnected = (p: RemoteParticipant) => {
+      if (isDevice(p)) { cleanup(); resolve(p); }
+    };
+    const onDisconnected = () => {
+      cleanup();
+      reject(new Error("Room disconnected while waiting for device participant"));
+    };
+    const cleanup = () => {
+      ctx.room.off(RoomEvent.ParticipantConnected, onConnected);
+      ctx.room.off(RoomEvent.Disconnected, onDisconnected);
+    };
+    ctx.room.on(RoomEvent.ParticipantConnected, onConnected);
+    ctx.room.on(RoomEvent.Disconnected, onDisconnected);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -680,7 +711,12 @@ export default defineAgent({
       }
     });
 
-    const participant = await ctx.waitForParticipant();
+    // Wait for a device participant (not the relay or another agent).
+    // ctx.waitForParticipant() returns the first non-AGENT participant,
+    // which can be the relay (identity: "relay-*") if it joins before
+    // the device. Linking audio input to the relay breaks STT/VAD since
+    // it has no audio tracks. (BUG-030)
+    const participant = await waitForDeviceParticipant(ctx);
     logger.info(`Participant joined: ${participant.identity}`);
 
     // Resolve session routing based on participant identity and room occupancy
