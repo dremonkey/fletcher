@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 
 import 'acp_update_parser.dart';
 import 'json_rpc.dart';
@@ -149,14 +150,23 @@ class RelayChatService {
   /// internally to [Uint8List] for the JSON-RPC codec.
   void handleMessage(List<int> data) {
     final msg = decodeJsonRpc(Uint8List.fromList(data));
-    if (msg == null) return; // malformed — ignore
+    if (msg == null) {
+      debugPrint('[RelayChatService] Dropped malformed JSON-RPC message '
+          '(${data.length} bytes)');
+      return;
+    }
 
     if (msg is JsonRpcServerNotification && msg.method == 'session/update') {
       _handleSessionUpdate(msg.params);
     } else if (msg is JsonRpcResponse && msg.id == _activeRequestId) {
       _handlePromptResult(msg);
+    } else if (msg is JsonRpcResponse) {
+      debugPrint('[RelayChatService] Dropped response with mismatched id: '
+          'got=${msg.id} expected=$_activeRequestId');
+    } else {
+      debugPrint('[RelayChatService] Dropped unhandled message: '
+          '${msg.runtimeType}');
     }
-    // Other messages (unknown methods, mismatched IDs) are silently ignored.
   }
 
   /// Clean up on dispose (e.g., room disconnect).

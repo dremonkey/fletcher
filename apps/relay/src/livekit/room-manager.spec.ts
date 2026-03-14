@@ -508,4 +508,37 @@ describe("RoomManager", () => {
     expect(conn.roomName).toBe("test-room");
     expect(freshManager.getRoom("test-room")).toBeDefined();
   });
+
+  // -----------------------------------------------------------------------
+  // sendToRoomOnTopic timeout (BUG-020)
+  // -----------------------------------------------------------------------
+
+  test("sendToRoomOnTopic rejects if publishData hangs beyond timeout", async () => {
+    // Replace publishData with a never-resolving promise to simulate FFI hang
+    mockRoom.localParticipant.publishData = mock(
+      () => new Promise<void>(() => {}), // never resolves
+    );
+
+    // Use a short timeout for testing
+    const origTimeout = RoomManager.PUBLISH_TIMEOUT_MS;
+    (RoomManager as any).PUBLISH_TIMEOUT_MS = 100;
+
+    try {
+      await manager.joinRoom("test-room");
+
+      await expect(
+        manager.sendToRoomOnTopic("test-room", "relay", { msg: "hello" }),
+      ).rejects.toThrow("publishData timed out");
+    } finally {
+      (RoomManager as any).PUBLISH_TIMEOUT_MS = origTimeout;
+    }
+  });
+
+  test("sendToRoomOnTopic resolves normally when publishData succeeds fast", async () => {
+    await manager.joinRoom("test-room");
+
+    // Should not throw or timeout
+    await manager.sendToRoomOnTopic("test-room", "relay", { msg: "fast" });
+    expect(mockRoom._mocks.publishData).toHaveBeenCalledTimes(1);
+  });
 });

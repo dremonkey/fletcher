@@ -169,9 +169,12 @@ export class RoomManager {
     return this.sendToRoomOnTopic(roomName, "relay", msg);
   }
 
+  /** Timeout for publishData calls — prevents FFI hangs from blocking the send queue. */
+  static readonly PUBLISH_TIMEOUT_MS = 5_000;
+
   /**
    * Publish a JSON message to a room's data channel on the specified topic.
-   * Throws if not currently in the specified room.
+   * Throws if not currently in the specified room or if publishData times out.
    */
   async sendToRoomOnTopic(roomName: string, topic: string, msg: object): Promise<void> {
     const conn = this.rooms.get(roomName);
@@ -180,10 +183,22 @@ export class RoomManager {
     }
 
     const data = Buffer.from(JSON.stringify(msg));
-    await conn.room.localParticipant!.publishData(data, {
-      reliable: true,
-      topic,
-    });
+
+    let timer: ReturnType<typeof setTimeout>;
+    await Promise.race([
+      conn.room.localParticipant!.publishData(data, {
+        reliable: true,
+        topic,
+      }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(
+            `publishData timed out after ${RoomManager.PUBLISH_TIMEOUT_MS}ms (room: ${roomName}, topic: ${topic})`,
+          )),
+          RoomManager.PUBLISH_TIMEOUT_MS,
+        );
+      }),
+    ]).finally(() => clearTimeout(timer!));
 
     conn.lastActivity = Date.now();
   }

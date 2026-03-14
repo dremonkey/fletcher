@@ -39,6 +39,9 @@ export class RelayBridge {
   private sendQueue: Promise<void> = Promise.resolve();
   /** Which data channel topic owns the active ACP request. null = idle. */
   private activeRequestSource: "relay" | "voice-acp" | null = null;
+  /** Consecutive publishData failures — used to detect a dead forward path. */
+  private forwardFailures = 0;
+  private static readonly MAX_CONSECUTIVE_FAILURES = 3;
 
   constructor(private options: RelayBridgeOptions) {
     this.log = options.logger ??
@@ -232,7 +235,7 @@ export class RelayBridge {
           return this.acpClient.sessionPrompt(params as any);
         })
         .then((result) => {
-          reqLog.info({ event: "mobile_prompt_responded", stopReason: (result as any).stopReason });
+          reqLog.info({ event: "mobile_prompt_completed", stopReason: (result as any).stopReason });
           this.activeRequestSource = null;
           this.forwardToMobile({
             jsonrpc: "2.0",
@@ -287,7 +290,7 @@ export class RelayBridge {
           return this.acpClient.sessionPrompt(params as any);
         })
         .then((result) => {
-          reqLog.info({ event: "voice_acp_prompt_responded", stopReason: (result as any).stopReason });
+          reqLog.info({ event: "voice_acp_prompt_completed", stopReason: (result as any).stopReason });
           this.activeRequestSource = null;
           this.forwardToVoiceAgent({
             jsonrpc: "2.0",
@@ -341,8 +344,26 @@ export class RelayBridge {
     this.sendQueue = this.sendQueue.then(() =>
       this.options.roomManager
         .sendToRoomOnTopic(this.options.roomName, "voice-acp", msg)
-        .catch(() => {
-          // Room may have disconnected — swallow errors
+        .then(() => {
+          this.forwardFailures = 0;
+        })
+        .catch((err: Error) => {
+          this.forwardFailures++;
+          this.log.error(
+            {
+              event: "forward_to_voice_agent_failed",
+              error: err.message,
+              consecutiveFailures: this.forwardFailures,
+              method: (msg as any).method,
+            },
+            "Failed to forward message to voice-agent",
+          );
+          if (this.forwardFailures >= RelayBridge.MAX_CONSECUTIVE_FAILURES) {
+            this.log.error(
+              { event: "forward_path_dead", consecutiveFailures: this.forwardFailures },
+              "Forward path appears dead — too many consecutive failures",
+            );
+          }
         })
     );
   }
@@ -358,8 +379,26 @@ export class RelayBridge {
     this.sendQueue = this.sendQueue.then(() =>
       this.options.roomManager
         .sendToRoom(this.options.roomName, msg)
-        .catch(() => {
-          // Room may have disconnected — swallow errors
+        .then(() => {
+          this.forwardFailures = 0;
+        })
+        .catch((err: Error) => {
+          this.forwardFailures++;
+          this.log.error(
+            {
+              event: "forward_to_mobile_failed",
+              error: err.message,
+              consecutiveFailures: this.forwardFailures,
+              method: (msg as any).method,
+            },
+            "Failed to forward message to mobile",
+          );
+          if (this.forwardFailures >= RelayBridge.MAX_CONSECUTIVE_FAILURES) {
+            this.log.error(
+              { event: "forward_path_dead", consecutiveFailures: this.forwardFailures },
+              "Forward path appears dead — too many consecutive failures",
+            );
+          }
         })
     );
   }

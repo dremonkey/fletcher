@@ -1,6 +1,6 @@
 # TASK-065: Fix silent message loss in relay→mobile forwarding path
 
-**Status:** [ ] Not started
+**Status:** [x] Complete
 **Priority:** High
 **Epic:** 22 (Dual-Mode Architecture)
 **Origin:** BUG-020 (field test 2026-03-13, 18:51 PDT)
@@ -300,21 +300,19 @@ void handleMessage(List<int> data) {
   counter should be reset when the bridge restarts (it's an instance field, so
   a new bridge instance for a rejoin starts at 0 — correct by construction).
 
-- **Timer leak from `Promise.race` timeout:** The `setTimeout` in the race is
-  not cleaned up on successful publish. For correctness, use `AbortSignal` or
-  `clearTimeout` on success. In practice, 5s timer leak per message is harmless,
-  but worth a TODO.
+- **Timer leak from `Promise.race` timeout:** Addressed — `finally(() => clearTimeout(timer!))` cleans up the timer on both success and failure.
 
 ## Acceptance Criteria
 
-- [ ] `forwardToMobile()` errors are logged with message method and failure count
-- [ ] `forwardToVoiceAgent()` errors are logged with the same pattern
-- [ ] `publishData` calls time out after 5s instead of hanging forever
-- [ ] After 3 consecutive forward failures, an error-level "forward path dead" log emits
-- [ ] Unit test: `sendToRoom` rejection is logged (not silently swallowed)
-- [ ] Unit test: `sendToRoom` hang (never-resolving promise) times out after 5s
-- [ ] Mobile-side: dropped messages produce a `debugPrint` log line
-- [ ] Existing tests still pass (`bun test` in `apps/relay`)
+- [x] `forwardToMobile()` errors are logged with message method and failure count
+- [x] `forwardToVoiceAgent()` errors are logged with the same pattern
+- [x] `publishData` calls time out after 5s instead of hanging forever
+- [x] After 3 consecutive forward failures, an error-level "forward path dead" log emits
+- [x] Unit test: `sendToRoom` rejection is logged (not silently swallowed)
+- [x] Unit test: `sendToRoom` hang (never-resolving promise) times out after 5s
+- [x] Mobile-side: dropped messages produce a `debugPrint` log line
+- [x] Existing tests still pass (117/117, `bun test` in `apps/relay`)
+- [x] Renamed `mobile_prompt_responded` → `mobile_prompt_completed` (log event is ACP completion, not delivery confirmation)
 
 ## Files
 

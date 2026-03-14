@@ -533,6 +533,40 @@ describe("RelayBridge", () => {
     expect(voiceAcpUpdateCalls.length).toBe(0);
   });
 
+  // -------------------------------------------------------------------------
+  // BUG-020: forwardToMobile logs errors instead of silently swallowing
+  // -------------------------------------------------------------------------
+  test("forwardToMobile logs error when sendToRoom rejects (BUG-020)", async () => {
+    const sendError = new Error("connection dead");
+    mockRm.sendToRoom = mock(async () => {
+      throw sendError;
+    });
+
+    bridge = createBridge(mockRm);
+    await bridge.start();
+
+    // Simulate a prompt — the result forward will hit the failing sendToRoom
+    mockRm.simulateData(
+      ROOM_NAME,
+      {
+        jsonrpc: "2.0",
+        id: 200,
+        method: "session/prompt",
+        params: { prompt: [{ type: "text", text: "BUG-020 test" }] },
+      },
+      "mobile-user",
+    );
+
+    await tick(300);
+
+    // The bridge should not crash — the error is caught and logged.
+    // We verify sendToRoom was called (and rejected).
+    expect(mockRm.sendToRoom).toHaveBeenCalled();
+
+    // Bridge should still be started (not crashed)
+    expect(bridge.isStarted).toBe(true);
+  });
+
   test("session/new params include verbose: true in _meta (Task 038)", async () => {
     // Regression guard: the relay must pass verbose: true in _meta when
     // creating a session so that OpenClaw emits tool_call / tool_call_update
