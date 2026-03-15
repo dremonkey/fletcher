@@ -23,6 +23,7 @@
  *   FLETCHER_HOLD_TIMEOUT_MS - Idle timeout before entering hold mode (default: 60000, 0 to disable)
  *   FLETCHER_VOICE_TAG - Tag prepended to all user messages (default: '[VOICE]', empty string to disable)
  *   FLETCHER_ACK_SOUND - Acknowledgment sound on EOU: path to audio file, 'builtin' (default), or 'disabled'
+ *   FLETCHER_STT_WATCHDOG_MS - STT liveness timeout in ms (default: 30000, 0 to disable) (BUG-027)
  *   PIPER_URL - Piper TTS sidecar URL for local fallback (e.g. 'http://localhost:5000')
  *   PIPER_VOICE - Piper voice name (default: sidecar default)
  *
@@ -66,6 +67,7 @@ import { initHeapDiagnostics } from "./heap-snapshot";
 import { buildBootstrapMessage, VOICE_TAG } from "./bootstrap";
 import { attachFallbackMonitor } from "./tts-fallback-monitor";
 import { guardTTSInputStream } from "./tts-chunk-guard";
+import { createSttWatchdog } from "./stt-watchdog";
 import { RelayRoom } from "@knittt/livekit-agent-ganglia/dist/ganglia-types";
 
 // ---------------------------------------------------------------------------
@@ -96,6 +98,10 @@ const BRAIN_MAX_WAIT_MS = parseInt(
 );
 const HOLD_TIMEOUT_MS = parseInt(
   process.env.FLETCHER_HOLD_TIMEOUT_MS ?? "60000",
+  10,
+);
+const STT_WATCHDOG_MS = parseInt(
+  process.env.FLETCHER_STT_WATCHDOG_MS ?? "30000",
   10,
 );
 
@@ -453,6 +459,36 @@ export default defineAgent({
     );
 
     // -----------------------------------------------------------------------
+    // STT Health Watchdog — detects silent STT pipeline death (BUG-027).
+    //
+    // The SDK's AudioRecognition tasks (VAD + STT) can die silently when
+    // the stream reader is released (e.g., track resubscription, network
+    // glitches).  The error is caught by isStreamReaderReleaseError() and
+    // swallowed — no events, no recovery.  The agent becomes a zombie.
+    //
+    // The watchdog monitors UserInputTranscribed events.  If no STT
+    // activity arrives for STT_WATCHDOG_MS while the agent is listening
+    // (and STT was previously active), the watchdog disconnects the room.
+    // This triggers hold mode, giving the client a clean recovery path.
+    //
+    // The watchdog only arms after the first STT event, so it doesn't
+    // trigger when the user simply hasn't spoken yet or has their mic off.
+    // -----------------------------------------------------------------------
+    const sttWatchdog = createSttWatchdog(
+      {
+        getAgentState: () => session.agentState as any,
+        disconnectRoom: () => {
+          publishEvent({ type: "session_hold", reason: "stt_watchdog" });
+          // Grace period for SCTP delivery before disconnect
+          setTimeout(() => ctx.room.disconnect(), 500);
+        },
+        publishEvent,
+        logger,
+      },
+      STT_WATCHDOG_MS,
+    );
+
+    // -----------------------------------------------------------------------
     // Client data channel commands — listen for control events from the
     // mobile app (e.g., tts-mode toggle).  Events arrive as JSON on the
     // 'ganglia-events' topic. (TASK-030)
@@ -565,6 +601,13 @@ export default defineAgent({
         "Agent state changed",
       );
 
+      // STT watchdog: track agent state to know when silence is expected
+      if (ev.newState === "listening") {
+        sttWatchdog.onAgentListening();
+      } else {
+        sttWatchdog.onAgentBusy();
+      }
+
       // Finalize user transcript segment — EOU confirmed, LLM is dispatching.
       // This closes the accumulated user text as a single message box.
       if (ev.newState === "thinking") {
@@ -605,6 +648,7 @@ export default defineAgent({
         bootstrapComplete = true;
         publishEvent({ type: "bootstrap", phase: "end" });
         logger.info("Bootstrap complete — agent ready for user speech");
+        sttWatchdog.activate(); // Bootstrap done — start monitoring STT health
       }
 
       // Hold timer: clear during agent activity (thinking/speaking),
@@ -667,6 +711,7 @@ export default defineAgent({
 
     session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (ev) => {
       resetHoldTimer(); // User spoke — reset idle timer
+      sttWatchdog.onSttActivity(); // STT is alive — reset watchdog
       if (ev.isFinal) {
         logger.info({ transcript: ev.transcript }, "User input (final)");
       }
@@ -945,6 +990,7 @@ export default defineAgent({
       logger.info("Shutting down voice agent...");
       clearBrainTimeout();
       clearHoldTimer();
+      sttWatchdog.dispose();
       await bgAudioPlayer?.close();
       await session.close();
       await shutdownTelemetry();
