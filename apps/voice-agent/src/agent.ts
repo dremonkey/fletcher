@@ -338,8 +338,20 @@ export default defineAgent({
         if (items) {
           for (let i = items.length - 1; i >= 0; i--) {
             const item = items[i];
-            if (item.role === "user" && typeof item.textContent === "string") {
-              item.textContent = `${VOICE_TAG} ${item.textContent}`;
+            if (item.role === "user" && item.content) {
+              const idx = item.content.findIndex((c: unknown) => typeof c === "string");
+              if (idx !== -1) {
+                const text = item.content[idx] as string;
+                // Skip bootstrap messages (they inject system instructions, not
+                // user speech) and already-tagged content (prevents accumulation
+                // when preemptive generations share the same chat context).
+                if (
+                  !text.startsWith(VOICE_TAG) &&
+                  !text.includes("Do not reply to this message")
+                ) {
+                  item.content[idx] = `${VOICE_TAG} ${text}`;
+                }
+              }
               break;
             }
           }
@@ -549,6 +561,12 @@ export default defineAgent({
         "Agent state changed",
       );
 
+      // Finalize user transcript segment — EOU confirmed, LLM is dispatching.
+      // This closes the accumulated user text as a single message box.
+      if (ev.newState === "thinking") {
+        finalizeUserSegment();
+      }
+
       // Brain maxWait timeout (BUG-008/005): start countdown on thinking,
       // cancel when any content arrives (state transitions away from thinking).
       if (ev.newState === "thinking" && BRAIN_MAX_WAIT_MS > 0) {
@@ -618,12 +636,30 @@ export default defineAgent({
     // around the broken agent transcript pipeline (BUG-010).  Disabling it
     // also killed user transcript forwarding (BUG-012).
     //
-    // We forward both interim and final user transcripts ourselves via the
-    // ganglia-events data channel, matching the pattern used for agent
-    // transcripts.
+    // Transcript grouping: Deepgram emits `speech_final` on every pause,
+    // which would split a single thought into multiple message boxes.  We
+    // keep accumulating text under the same segmentId until the agent
+    // enters `thinking` (i.e., EOU confirmed and LLM dispatched).  This
+    // groups all Deepgram segments that belong to the same turn into one
+    // message box on the client.
     // -----------------------------------------------------------------------
     let userSegmentCounter = 0;
     let currentUserSegmentId: string | null = null;
+    let accumulatedUserText = "";
+
+    const finalizeUserSegment = () => {
+      if (!currentUserSegmentId) return;
+      if (accumulatedUserText) {
+        publishEvent({
+          type: "user_transcript",
+          segmentId: currentUserSegmentId,
+          text: accumulatedUserText,
+          final: true,
+        });
+      }
+      currentUserSegmentId = null;
+      accumulatedUserText = "";
+    };
 
     session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (ev) => {
       resetHoldTimer(); // User spoke — reset idle timer
@@ -634,14 +670,28 @@ export default defineAgent({
       if (!currentUserSegmentId) {
         currentUserSegmentId = `user_seg_${++userSegmentCounter}`;
       }
-      publishEvent({
-        type: "user_transcript",
-        segmentId: currentUserSegmentId,
-        text: ev.transcript,
-        final: ev.isFinal,
-      });
       if (ev.isFinal) {
-        currentUserSegmentId = null;
+        // Deepgram speech_final — append to accumulated text but keep
+        // the same segmentId.  The segment stays open until the LLM fires.
+        accumulatedUserText +=
+          (accumulatedUserText ? " " : "") + ev.transcript;
+        publishEvent({
+          type: "user_transcript",
+          segmentId: currentUserSegmentId,
+          text: accumulatedUserText,
+          final: false, // not final until LLM dispatches
+        });
+      } else {
+        // Interim — show accumulated finals + current interim together
+        const displayText = accumulatedUserText
+          ? accumulatedUserText + " " + ev.transcript
+          : ev.transcript;
+        publishEvent({
+          type: "user_transcript",
+          segmentId: currentUserSegmentId,
+          text: displayText,
+          final: false,
+        });
       }
     });
 
