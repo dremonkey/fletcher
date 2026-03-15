@@ -150,7 +150,7 @@ class AgentPresenceService extends ChangeNotifier {
             'agent-disconnected',
             'AGENT',
             _holdMode
-                ? 'On hold \u2014 tap or speak to resume'
+                ? 'Live mode paused \u2014 tap to resume'
                 : 'Disconnected \u2014 speak to reconnect',
           );
           _holdMode = false;

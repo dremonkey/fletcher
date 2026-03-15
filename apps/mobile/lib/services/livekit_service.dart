@@ -667,16 +667,20 @@ class LiveKitService extends ChangeNotifier {
         // Reset segment ID so artifacts from the new session are not stamped
         // with the stale ID from the previous session. (BUG-004)
         _lastAgentSegmentId = null;
+        // Emit agent disconnected system event (task 020)
+        // Suppress duplicate raw disconnect during hold — the agent presence
+        // service already emits a hold-specific event. (TASK-069)
+        if (!wasHoldMode) {
+          _emitSystemEvent(SystemEvent(
+            id: 'agent-disconnect-${DateTime.now().millisecondsSinceEpoch}',
+            type: SystemEventType.agent,
+            status: SystemEventStatus.error,
+            message: 'disconnected',
+            timestamp: DateTime.now(),
+            prefix: '\u2715',
+          ));
+        }
       }
-      // Emit agent disconnected system event (task 020)
-      _emitSystemEvent(SystemEvent(
-        id: 'agent-disconnect-${DateTime.now().millisecondsSinceEpoch}',
-        type: SystemEventType.agent,
-        status: SystemEventStatus.error,
-        message: 'disconnected',
-        timestamp: DateTime.now(),
-        prefix: '\u2715',
-      ));
     });
 
     _listener?.on<TrackSubscribedEvent>((event) {
@@ -1666,8 +1670,10 @@ class LiveKitService extends ChangeNotifier {
           status = SystemEventStatus.pending;
           prefix = '\u25B8'; // ▸
         } else if (id == 'agent-disconnected') {
-          status = SystemEventStatus.error;
-          prefix = '\u2715'; // ✕
+          status = _holdModeActive
+              ? SystemEventStatus.pending   // gray, neutral
+              : SystemEventStatus.error;    // red, alarming
+          prefix = _holdModeActive ? '\u25B8' : '\u2715'; // ▸ vs ✕
         } else {
           status = SystemEventStatus.success;
           prefix = '\u25B8'; // ▸
