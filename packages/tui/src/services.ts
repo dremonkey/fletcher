@@ -211,7 +211,7 @@ async function startRelay(): Promise<void> {
 
   const relayProc = spawn(["bun", "run", join(ROOT, "apps/relay/src/index.ts")], {
     cwd: join(ROOT, "apps/relay"),
-    env: { ...process.env, RELAY_HTTP_PORT: String(RELAY_PORT) },
+    env: { ...process.env, RELAY_HTTP_PORT: String(RELAY_PORT), LOG_LEVEL: "debug" },
     stdout: logFd,
     stderr: logFd,
   });
