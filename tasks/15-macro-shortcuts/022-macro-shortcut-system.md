@@ -13,11 +13,24 @@ Developing on the go with a voice interface can be high-friction for repetitive 
 - **Trigger Handling:** Tapping a macro sends a predefined "Command" to the agent.
 - **Developer Macros:** Initial focus on dev-friendly macros (Pulse Check, Bug Log, Context Snapshot, Delegate to Claude).
 
+## Shared Foundation: Slash Command Interceptor
+
+The macro system shares infrastructure with EPIC-25 (Session Resumption). TASK-076 builds a **client-side slash command interceptor** in `sendTextMessage()` that routes `/`-prefixed input to a command registry instead of sending to the agent/relay. The macro grid buttons call the same registry — each macro is just a visual shortcut to a slash command.
+
+```
+  /sessions  ←── TASK-076/077 (EPIC-25)  ←── [SES] macro button
+  /pulse     ←── Phase 4 (below)         ←── [PLS] macro button
+  /bug       ←── Phase 4 (below)         ←── [BUG] macro button
+```
+
+**Dependency:** TASK-076 (slash command interceptor) should be built before or alongside Phase 1 below. The `MacroRegistry` wraps the same command registry with UI metadata (shortLabel, category, position).
+
 ## Implementation Plan
 
 ### Phase 1: Configuration & Model (Macro Registry)
 - [ ] Define `Macro` model in Flutter: `id`, `label`, `shortLabel` (3-4 char brutalist style), `command`, `category`.
 - [ ] Create a `MacroRegistry` service to manage the list of available macros (up to 9 for the grid).
+- [ ] Wire `MacroRegistry` to the slash command registry (TASK-076) — each macro's `command` field maps to a registered slash command handler.
 - [ ] Support loading macros from a JSON config (bundled or remote).
 - [ ] Add `handedness` preference setting (`right` or `left`) to control cluster position.
 
@@ -31,7 +44,7 @@ Developing on the go with a voice interface can be high-friction for repetitive 
 - [ ] Integrate `TuiMacroCluster` into the `MainView` layout as a **floating overlay** in the thumb zone.
 
 ### Phase 3: Action Dispatcher
-- [ ] Hook macro taps into `ChatService.sendMessage()`.
+- [ ] Hook macro taps into the slash command registry (TASK-076) — same handler as typing the command.
 - [ ] Ensure macros are treated as "Command" inputs (visible in chat transcript as user actions).
 - [ ] (Optional) Add visual feedback on the button when a macro is running.
 
@@ -44,6 +57,7 @@ Developing on the go with a voice interface can be high-friction for repetitive 
 - [ ] **[TSK]** Task: `/task` (Create new task file).
 - [ ] **[GIT]** Git Status: `/git status` (Quick repo check).
 - [ ] **[DOC]** Docs: `/docs` (Open relevant documentation).
+- [ ] **[SES]** Sessions: `/sessions` (List past sessions — EPIC-25).
 - [ ] **[HLP]** Help: `/help` (Show available commands).
 
 ## Success Criteria

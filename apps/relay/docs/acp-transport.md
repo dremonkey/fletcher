@@ -78,7 +78,7 @@ The voice agent is **stateless** — a disposable tunnel between the user's micr
 **All state lives in the ACP agent** (OpenClaw or Claude Code). The ACP agent correlates sessions by the session key (participant identity / room) passed in `session/new` metadata — not by ACP session ID. Each voice agent lifecycle gets a fresh ACP session ID, but the backend maps it to the same underlying conversation.
 
 **Implications:**
-- **No `session/load`** — every voice agent lifecycle starts with `session/new`. The ACP agent doesn't need to advertise `loadSession` capability.
+- **No `session/load` for voice agents** — every voice agent lifecycle starts with `session/new`. The ACP agent doesn't need to advertise `loadSession` capability for voice. (NOTE: `session/load` will be used for session resumption via mobile-initiated history load — see EPIC-25.)
 - **No reconnection logic** — if the connection drops, the voice agent is already dying (idle timeout, network failure, process crash). LiveKit dispatches a fresh agent when the user returns.
 - **No in-flight recovery** — if a `session/prompt` is pending when the connection dies, that turn is lost. The user speaks again and triggers a new turn on the new agent.
 - **No heartbeat required** — the voice agent has its own idle timeout (default 5 min). LiveKit's `departure_timeout` (120s) covers the gap between agent death and user return.
