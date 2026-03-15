@@ -576,6 +576,9 @@ class LiveKitService extends ChangeNotifier {
           connected: false,
           errorDetail: 'Disconnected ($reason)',
         );
+        // BUG-031: SDK reconnect failed — clear the stale flag so the
+        // app-layer reconnect loop in _reconnectRoom() can actually run.
+        _reconnecting = false;
         _reconnectRoom();
       } else {
         healthService.updateRoomConnected(
@@ -1294,6 +1297,13 @@ class LiveKitService extends ChangeNotifier {
           agentPresenceService.state == AgentPresenceState.agentAbsent &&
           (_reconnecting || _state.status == ConversationStatus.reconnecting)) {
         debugPrint('[Fletcher] Unmute while agent absent — deferring dispatch until reconnected (BUG-010)');
+      }
+      // BUG-031: Mic toggle as recovery trigger — if the service is in a
+      // dead error/reconnecting state, treat unmute as user intent to recover.
+      if (_state.status == ConversationStatus.error ||
+          _state.status == ConversationStatus.reconnecting) {
+        debugPrint('[Fletcher] Unmute while in ${_state.status} — triggering tryReconnect (BUG-031)');
+        unawaited(tryReconnect());
       }
       // Republish a fresh audio track — setMicrophoneEnabled(true) creates
       // a new LocalAudioTrack and publishes it to the PeerConnection.
