@@ -78,7 +78,7 @@ describe('token-server', () => {
       expect(res.status).toBe(400);
     });
 
-    it('includes room config with agent dispatch in the token', async () => {
+    it('does not include room config with agent dispatch (on-demand only)', async () => {
       const handler = createFetchHandler(makeConfig());
       const res = await handler(makeRequest('/token?room=test-room&identity=user-1'));
       const body = await res.json();
@@ -86,33 +86,8 @@ describe('token-server', () => {
       const verifier = new TokenVerifier(TEST_API_KEY, TEST_API_SECRET);
       const claims = await verifier.verify(body.token);
 
-      expect(claims.roomConfig).toBeDefined();
-      expect(claims.roomConfig?.agents).toHaveLength(1);
-      expect(claims.roomConfig?.agents?.[0]?.agentName).toBe(DEFAULT_AGENT_NAME);
-    });
-
-    it('includes user_id in agent dispatch metadata', async () => {
-      const handler = createFetchHandler(makeConfig());
-      const res = await handler(makeRequest('/token?room=test-room&identity=alice'));
-      const body = await res.json();
-
-      const verifier = new TokenVerifier(TEST_API_KEY, TEST_API_SECRET);
-      const claims = await verifier.verify(body.token);
-
-      const metadata = JSON.parse(claims.roomConfig?.agents?.[0]?.metadata ?? '{}');
-      expect(metadata.user_id).toBe('alice');
-    });
-
-    it('uses the configured agent name', async () => {
-      const customName = 'custom-agent';
-      const handler = createFetchHandler(makeConfig({ agentName: customName }));
-      const res = await handler(makeRequest('/token?room=test-room&identity=user-1'));
-      const body = await res.json();
-
-      const verifier = new TokenVerifier(TEST_API_KEY, TEST_API_SECRET);
-      const claims = await verifier.verify(body.token);
-
-      expect(claims.roomConfig?.agents?.[0]?.agentName).toBe(customName);
+      // Agent dispatch removed from JWT — agents join via POST /dispatch-agent
+      expect(claims.roomConfig?.agents ?? []).toHaveLength(0);
     });
 
     it('includes correct video grants', async () => {
@@ -206,26 +181,4 @@ describe('token-server', () => {
     });
   });
 
-  describe('FLETCHER_AGENT_NAME env var', () => {
-    it('defaults to fletcher-voice when not set', async () => {
-      // The default is already 'fletcher-voice' in makeConfig
-      const handler = createFetchHandler(makeConfig());
-      const res = await handler(makeRequest('/token?room=r&identity=u'));
-      const body = await res.json();
-
-      const verifier = new TokenVerifier(TEST_API_KEY, TEST_API_SECRET);
-      const claims = await verifier.verify(body.token);
-      expect(claims.roomConfig?.agents?.[0]?.agentName).toBe('fletcher-voice');
-    });
-
-    it('uses custom agent name when configured', async () => {
-      const handler = createFetchHandler(makeConfig({ agentName: 'my-custom-agent' }));
-      const res = await handler(makeRequest('/token?room=r&identity=u'));
-      const body = await res.json();
-
-      const verifier = new TokenVerifier(TEST_API_KEY, TEST_API_SECRET);
-      const claims = await verifier.verify(body.token);
-      expect(claims.roomConfig?.agents?.[0]?.agentName).toBe('my-custom-agent');
-    });
-  });
 });

@@ -60,11 +60,11 @@ class AgentPresenceService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Disable on-demand dispatch (agent always present via token dispatch).
+  /// Disable on-demand dispatch (no agent needed, e.g. text-only mode).
   void disable() {
     _enabled = false;
     _localVad.stopListening();
-    _state = AgentPresenceState.agentPresent;
+    _state = AgentPresenceState.agentAbsent;
     notifyListeners();
   }
 

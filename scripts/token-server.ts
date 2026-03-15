@@ -15,7 +15,7 @@
  *   POST /dispatch-agent                   → { "status": "dispatched", ... }
  */
 
-import { AccessToken, RoomConfiguration, RoomAgentDispatch, AgentDispatchClient, RoomServiceClient } from "livekit-server-sdk";
+import { AccessToken, AgentDispatchClient, RoomServiceClient } from "livekit-server-sdk";
 
 /**
  * Convert a WebSocket URL to its HTTP equivalent.
@@ -78,13 +78,6 @@ export function createFetchHandler(config: TokenServerConfig) {
         canPublish: true,
         canSubscribe: true,
         canPublishData: true,
-      });
-
-      token.roomConfig = new RoomConfiguration({
-        agents: [new RoomAgentDispatch({
-          agentName: config.agentName,
-          metadata: JSON.stringify({ user_id: identity }),
-        })],
       });
 
       const jwt = await token.toJwt();
