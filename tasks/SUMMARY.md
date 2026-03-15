@@ -42,10 +42,10 @@ The voice agent audio pipeline — STT, TTS, voice detection, and agent dispatch
 - [x] 014: TTS Error Graceful Degradation ✅ — `maxUnrecoverableErrors: Infinity` prevents session death; `ttsConnOptions: { maxRetry: 0 }` eliminates 429 retry storms; debounced "Voice Unavailable" artifact sent to client ([BUG-024](../docs/field-tests/20260304-buglog.md))
 - [x] 032: Idle Timer TTS-Aware ✅ — reset idle timer on `speaking → listening` so TTS playout doesn't consume the idle window; field-verified 2026-03-10 ([BUG-002](../docs/field-tests/20260310-buglog.md))
 - [x] 033: Bootstrap TTS Settle Window ✅ — 200ms settle window + unconditional `_sendTtsMode()` + SCTP message reordering + bootstrap skip when user text arrives first; field-verified 2026-03-10 ([BUG-001](../docs/field-tests/20260310-buglog.md))
-- [ ] 039: Brain maxWait Timeout 📋 — configurable `FLETCHER_BRAIN_MAX_WAIT_MS`; cancel hung LLM streams after N seconds; surface "Brain timed out — please retry" artifact to client ([BUG-008](../docs/field-tests/20260310-buglog.md))
+- [x] 039: Brain maxWait Timeout ✅ — removed; hold mode handles idle detection, brain timeout was destructive for long tool-use operations (TASK-042)
 - [ ] 040: Guard Audio Track Restart When Muted 📋 — skip `restartTrack()` on device change when mic is muted; prevents network handoffs from reclaiming mic and blocking OS keyboard STT ([BUG-009](../docs/field-tests/20260310-buglog.md))
 - [ ] 041: Fix SDK ICE Reconnect Loop After Agent Idle ⚠️ — repeated ICE drops every ~25s after agent idle disconnect; duplicate reconnect events; UI stuck in Reconnecting; agent dispatch fails on coincident disconnect ([BUG-010](../docs/field-tests/20260310-buglog.md))
-- [ ] 042: Review BRAIN_MAX_WAIT_MS with Hold Mode 📋 — consider increasing/removing brain timeout now that hold mode handles idle detection; currently destructive (kills response) on legitimate long-thinking operations
+- [x] 042: Review BRAIN_MAX_WAIT_MS with Hold Mode ✅ — removed BRAIN_MAX_WAIT_MS entirely; hold mode handles idle, ACP-level timeouts handle hung connections
 - [ ] 073: STT Pipeline Survives Track Resubscription ⚠️ — SDK `AudioRecognition`/`MultiInputStream` dies on track unpublish/republish (mic toggle); agent becomes deaf; Option A: mute instead of unpublish; BUG-027c/d ([field test](../docs/field-tests/20260315-buglog.md))
 
 **Implemented:**

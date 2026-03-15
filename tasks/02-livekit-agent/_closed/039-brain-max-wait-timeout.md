@@ -1,7 +1,7 @@
 # Task 039: Brain maxWait Timeout
 
 **Epic:** 02 — LiveKit Agent
-**Status:** Implemented — Option B (setTimeout abort in agent.ts)
+**Status:** [x] Removed — hold mode (TASK-011) handles idle detection; brain timeout was destructive for long tool-use operations (see TASK-042)
 **Priority:** Medium
 **Origin:** Field test BUG-008 (2026-03-10)
 

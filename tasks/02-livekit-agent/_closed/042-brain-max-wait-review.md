@@ -1,6 +1,6 @@
 # TASK-042: Review BRAIN_MAX_WAIT_MS with Hold Mode
 
-**Status:** [ ] Not started
+**Status:** [x] Complete — removed BRAIN_MAX_WAIT_MS entirely (option 2)
 **Priority:** LOW
 **Epic:** 2 — Voice Agent Pipeline
 

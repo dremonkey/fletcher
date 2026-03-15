@@ -217,7 +217,7 @@ The relay stays in the room throughout, keeping the ACP session alive. When the 
 
 ### Edge Case: Long LLM Responses
 
-The hold timer is cleared when the agent enters `thinking` state and stays cleared through `speaking`. It only restarts on `speaking → listening`. So the agent remains active for the full duration of LLM processing + TTS playout, regardless of duration. The separate `BRAIN_MAX_WAIT_MS` (default 60s) handles the case where the LLM produces no streaming content.
+The hold timer is cleared when the agent enters `thinking` state and stays cleared through `speaking`. It only restarts on `speaking → listening`. So the agent remains active for the full duration of LLM processing + TTS playout, regardless of duration.
 
 ## Latency Budget
 

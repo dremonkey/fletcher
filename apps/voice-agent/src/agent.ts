@@ -92,10 +92,6 @@ const REQUIRED_ENV = [
 ] as const;
 
 const ttsProvider = (process.env.TTS_PROVIDER ?? "piper") as TTSProvider;
-const BRAIN_MAX_WAIT_MS = parseInt(
-  process.env.FLETCHER_BRAIN_MAX_WAIT_MS ?? "0",
-  10,
-);
 const HOLD_TIMEOUT_MS = parseInt(
   process.env.FLETCHER_HOLD_TIMEOUT_MS ?? "60000",
   10,
@@ -236,14 +232,6 @@ export default defineAgent({
     };
 
     let session: voice.AgentSession;
-    let brainTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
-
-    const clearBrainTimeout = () => {
-      if (brainTimeoutHandle) {
-        clearTimeout(brainTimeoutHandle);
-        brainTimeoutHandle = null;
-      }
-    };
 
     // -----------------------------------------------------------------------
     // Hold mode — Gemini Live-style idle detection (BUG-027).
@@ -525,7 +513,6 @@ export default defineAgent({
             logger.info({}, 'Received end_voice_session — user switched to text mode');
             sttWatchdog.dispose();
             clearHoldTimer();
-            clearBrainTimeout();
             ctx.room.disconnect();
             return;
           }
@@ -627,28 +614,6 @@ export default defineAgent({
       // This closes the accumulated user text as a single message box.
       if (ev.newState === "thinking") {
         finalizeUserSegment();
-      }
-
-      // Brain maxWait timeout (BUG-008/005): start countdown on thinking,
-      // cancel when any content arrives (state transitions away from thinking).
-      if (ev.newState === "thinking" && BRAIN_MAX_WAIT_MS > 0) {
-        clearBrainTimeout();
-        brainTimeoutHandle = setTimeout(() => {
-          logger.warn(
-            { maxWaitMs: BRAIN_MAX_WAIT_MS },
-            "Brain maxWait exceeded — aborting LLM stream",
-          );
-          session.interrupt();
-          publishEvent({
-            type: "system_event",
-            severity: "error",
-            title: "Brain Timed Out",
-            message: "The response took too long. Please try again.",
-          });
-          brainTimeoutHandle = null;
-        }, BRAIN_MAX_WAIT_MS);
-      } else if (ev.oldState === "thinking") {
-        clearBrainTimeout();
       }
 
       // Bootstrap completion — first transition to "listening" after bootstrap
@@ -1006,7 +971,6 @@ export default defineAgent({
 
     ctx.addShutdownCallback(async () => {
       logger.info("Shutting down voice agent...");
-      clearBrainTimeout();
       clearHoldTimer();
       sttWatchdog.dispose();
       await bgAudioPlayer?.close();

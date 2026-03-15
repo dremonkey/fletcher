@@ -9,7 +9,7 @@
 
 When the relay sends a `session/prompt` to the ACP subprocess, it waits indefinitely for the JSON-RPC response. If OpenClaw hangs (gateway stuck, tool call never returns, subprocess in bad state), the user sees an endless spinner with no recovery path.
 
-The voice-agent has `FLETCHER_BRAIN_MAX_WAIT_MS` (task 039), but the relay has no equivalent timeout.
+The voice-agent previously had `FLETCHER_BRAIN_MAX_WAIT_MS` (task 039) but it was removed as destructive (TASK-042). The relay has no equivalent timeout either.
 
 ## Evidence
 
