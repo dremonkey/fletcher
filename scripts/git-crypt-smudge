@@ -1,0 +1,15 @@
+#!/bin/sh
+# Worktree-aware wrapper for `git-crypt smudge`.
+# When running inside a git worktree, git-crypt can't find its keys
+# because it looks in $GIT_DIR (e.g. .git/worktrees/<name>/) instead of
+# the main .git/ directory. This wrapper creates a symlink so git-crypt
+# finds its keys in either context.
+
+GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
+COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null)
+
+if [ "$GIT_DIR" != "$COMMON_DIR" ] && [ ! -e "$GIT_DIR/git-crypt" ]; then
+  ln -s "$COMMON_DIR/git-crypt" "$GIT_DIR/git-crypt"
+fi
+
+exec git-crypt smudge "$@"

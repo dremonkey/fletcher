@@ -1,0 +1,11 @@
+#!/bin/sh
+# Worktree-aware wrapper for `git-crypt diff`. See git-crypt-smudge for details.
+
+GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
+COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null)
+
+if [ "$GIT_DIR" != "$COMMON_DIR" ] && [ ! -e "$GIT_DIR/git-crypt" ]; then
+  ln -s "$COMMON_DIR/git-crypt" "$GIT_DIR/git-crypt"
+fi
+
+exec git-crypt diff "$@"
