@@ -62,6 +62,24 @@ class LiveKitService extends ChangeNotifier {
   Timer? _backgroundCountdownTimer;
   int _backgroundMinutesRemaining = 0;
 
+  // Background disconnect for chat mode (TASK-074 / BUG-034)
+  bool _backgroundDisconnected = false;
+
+  @visibleForTesting
+  bool get backgroundDisconnectedForTest => _backgroundDisconnected;
+
+  @visibleForTesting
+  set backgroundDisconnectedForTest(bool value) =>
+      _backgroundDisconnected = value;
+
+  @visibleForTesting
+  // ignore: avoid_setters_without_getters
+  set roomForTest(Room? room) => _room = room;
+
+  @visibleForTesting
+  // ignore: avoid_setters_without_getters
+  set voiceModeActiveForTest(bool value) => _voiceModeActive = value;
+
   // Credential cache for reconnects
   String? _url;
   String? _token;
@@ -1956,9 +1974,9 @@ class LiveKitService extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   /// Called when the app is backgrounded (AppLifecycleState.paused).
-  /// If the screen is not locked, starts a 10-minute countdown that
-  /// disconnects the session on expiry. Screen-locked means the user may
-  /// be talking via earbuds, so we skip the timeout.
+  /// In chat mode, disconnects immediately to avoid relay churn (TASK-074 / BUG-034).
+  /// In voice mode, starts a 10-minute countdown that disconnects on expiry.
+  /// Screen-locked means the user may be talking via earbuds, so we skip both.
   void onAppBackgrounded({required bool isScreenLocked}) {
     debugPrint('[Fletcher] onAppBackgrounded called — room=${_room != null ? 'connected' : 'NULL'}, isScreenLocked=$isScreenLocked');
     if (_room == null) return;
@@ -1967,16 +1985,26 @@ class LiveKitService extends ChangeNotifier {
       return;
     }
 
-    debugPrint('[Fletcher] App backgrounded — starting ${_backgroundTimeout.inMinutes}min timeout');
+    // Chat mode: disconnect immediately — no reason to keep room alive when
+    // the user can't interact. Preserves transcripts for UI on resume.
+    if (!_voiceModeActive) {
+      debugPrint('[Fletcher] Chat mode backgrounded — disconnecting immediately');
+      _backgroundDisconnected = true;
+      disconnect(preserveTranscripts: true);
+      return;
+    }
+
+    // Voice mode: existing 10-minute timeout (user may switch back quickly)
+    debugPrint('[Fletcher] Voice mode backgrounded — starting ${_backgroundTimeout.inMinutes}min timeout');
     _backgroundMinutesRemaining = _backgroundTimeout.inMinutes;
 
-    _updateBackgroundNotification();
+    updateBackgroundNotification();
 
     _backgroundCountdownTimer?.cancel();
     _backgroundCountdownTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       _backgroundMinutesRemaining--;
       if (_backgroundMinutesRemaining > 0) {
-        _updateBackgroundNotification();
+        updateBackgroundNotification();
       }
     });
 
@@ -1990,8 +2018,23 @@ class LiveKitService extends ChangeNotifier {
   }
 
   /// Called when the app is resumed (AppLifecycleState.resumed).
-  /// Cancels any active background timeout and resets the notification.
+  /// In chat mode after a background disconnect, reconnects automatically
+  /// using cached credentials (TASK-074). In voice mode, cancels any active
+  /// background timeout and resets the notification.
   void onAppResumed() {
+    // Reconnect after chat-mode background disconnect (TASK-074 / BUG-034)
+    if (_backgroundDisconnected) {
+      _backgroundDisconnected = false;
+      debugPrint('[Fletcher] Resuming after background disconnect — reconnecting');
+      connectWithDynamicRoom(
+        urls: _allUrls,
+        tokenServerPort: _tokenServerPort,
+        departureTimeoutS: _departureTimeoutS,
+      );
+      return;
+    }
+
+    // Existing: cancel voice-mode background timeout
     if (_backgroundTimeoutTimer == null) return;
 
     debugPrint('[Fletcher] App resumed — cancelling background timeout');
@@ -2009,7 +2052,8 @@ class LiveKitService extends ChangeNotifier {
     }
   }
 
-  void _updateBackgroundNotification() {
+  @visibleForOverriding
+  void updateBackgroundNotification() {
     FlutterForegroundTask.updateService(
       notificationTitle: 'Fletcher',
       notificationText: 'Disconnecting in $_backgroundMinutesRemaining min',
