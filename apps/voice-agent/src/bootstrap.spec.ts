@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'bun:test';
-import { buildBootstrapMessage, BOOTSTRAP_SENTINEL } from './bootstrap';
+import { buildBootstrapMessage, BOOTSTRAP_SENTINEL, VOICE_TAG } from './bootstrap';
 
 describe('buildBootstrapMessage', () => {
   describe('normal rooms', () => {
     const ctx = { roomName: 'my-room', participantIdentity: 'user-1' };
 
-    it('includes the TTS context preamble', () => {
+    it('includes the TTS context preamble with the voice tag', () => {
       const msg = buildBootstrapMessage(ctx);
       expect(msg).toContain('voice conversation');
+      expect(msg).toContain(VOICE_TAG);
     });
 
     it('forbids markdown syntax in responses', () => {
@@ -31,18 +32,6 @@ describe('buildBootstrapMessage', () => {
       expect(msg).toContain('commas for brief pauses');
       expect(msg).toContain('ellipses');
       expect(msg).toContain('em-dashes');
-    });
-
-    it('includes phonetic override for Knittt', () => {
-      const msg = buildBootstrapMessage(ctx);
-      expect(msg).toContain('Knittt');
-      expect(msg).toContain('knit');
-    });
-
-    it('includes phonetic override for Toch', () => {
-      const msg = buildBootstrapMessage(ctx);
-      expect(msg).toContain('Toch');
-      expect(msg).toContain('toke');
     });
 
     it('instructs not to read URLs aloud', () => {

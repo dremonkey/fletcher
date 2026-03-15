@@ -21,6 +21,7 @@
  *   GOOGLE_API_KEY - Google AI Studio API key (when TTS_PROVIDER=google)
  *   GOOGLE_TTS_VOICE - Gemini voice name (default: 'Kore')
  *   FLETCHER_HOLD_TIMEOUT_MS - Idle timeout before entering hold mode (default: 60000, 0 to disable)
+ *   FLETCHER_VOICE_TAG - Tag prepended to all user messages (default: '[VOICE]', empty string to disable)
  *   FLETCHER_ACK_SOUND - Acknowledgment sound on EOU: path to audio file, 'builtin' (default), or 'disabled'
  *   PIPER_URL - Piper TTS sidecar URL for local fallback (e.g. 'http://localhost:5000')
  *   PIPER_VOICE - Piper voice name (default: sidecar default)
@@ -62,7 +63,7 @@ import { resolveAckSound } from "./ack-sound-config";
 import { createTTS, type TTSProvider } from "./tts-provider";
 import { TranscriptManager } from "./transcript-manager";
 import { initHeapDiagnostics } from "./heap-snapshot";
-import { buildBootstrapMessage } from "./bootstrap";
+import { buildBootstrapMessage, VOICE_TAG } from "./bootstrap";
 import { attachFallbackMonitor } from "./tts-fallback-monitor";
 import { guardTTSInputStream } from "./tts-chunk-guard";
 import { RelayRoom } from "@knittt/livekit-agent-ganglia/dist/ganglia-types";
@@ -325,6 +326,28 @@ export default defineAgent({
         transcriptMgr.onContent(delta, fullText, streamId),
     });
     logger.info(`Using ganglia backend: ${gangliaLlm.gangliaType()}`);
+
+    // Wrap the ganglia LLM to prepend the voice tag to every user message.
+    // This lets the backend (OpenClaw/ACP) distinguish voice-agent messages
+    // from other sources (web chat, API). The tag value is configurable via
+    // FLETCHER_VOICE_TAG (default: "[VOICE]").
+    if (VOICE_TAG) {
+      const originalChat = gangliaLlm.chat.bind(gangliaLlm);
+      (gangliaLlm as any).chat = (opts: any) => {
+        const items = opts.chatCtx?.items;
+        if (items) {
+          for (let i = items.length - 1; i >= 0; i--) {
+            const item = items[i];
+            if (item.role === "user" && typeof item.textContent === "string") {
+              item.textContent = `${VOICE_TAG} ${item.textContent}`;
+              break;
+            }
+          }
+        }
+        return originalChat(opts);
+      };
+      logger.info({ voiceTag: VOICE_TAG }, "Voice tag enabled");
+    }
 
     // -----------------------------------------------------------------------
     // VAD & turn detection — Silero VAD for robust speech/silence detection,
