@@ -517,6 +517,19 @@ export default defineAgent({
             );
           }
 
+          // Voice→text mode switch — client signals the agent to self-terminate
+          // so a fresh agent with a fresh pipeline can be dispatched on return
+          // to voice mode.  Without this, the client would have to wait for
+          // the 60s hold timer or 30s STT watchdog. (BUG-027c, Epic 26)
+          if (event.type === 'end_voice_session') {
+            logger.info({}, 'Received end_voice_session — user switched to text mode');
+            sttWatchdog.dispose();
+            clearHoldTimer();
+            clearBrainTimeout();
+            ctx.room.disconnect();
+            return;
+          }
+
           // Text input from mobile client — inject typed text into the LLM
           // pipeline as a user message.  The response flows through the normal
           // TTS + transcript pipeline. (TASK-017, Epic 17)

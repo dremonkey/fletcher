@@ -104,6 +104,11 @@ class LiveKitService extends ChangeNotifier {
   // shows "on hold" UX instead of generic disconnect.
   bool _holdModeActive = false;
 
+  // Mode switch active — set during voice→text transition while the agent
+  // is self-terminating via end_voice_session.  Suppresses red disconnect
+  // UX in favor of neutral "Switched to text mode". (BUG-027c, Epic 26)
+  bool _modeSwitchActive = false;
+
   // Diagnostics: round-trip latency measurement
   // Tracks when user stopped speaking so we can measure RT when agent starts
   DateTime? _userSpeechEndTime;
@@ -659,25 +664,40 @@ class LiveKitService extends ChangeNotifier {
       healthService.updateAgentPresent(present: remaining > 0);
       // Clear agent identity if no agents remain
       if (remaining == 0) {
-        // When hold mode is active, clear the reconnecting status that
-        // TrackUnsubscribed may have set (it fires before ParticipantDisconnected,
-        // so the agentAbsent guard doesn't catch it). Without this, the status
-        // stays "reconnecting" and unmute→dispatch is blocked. (BUG-031)
+        // When hold mode or mode switch is active, clear the reconnecting
+        // status that TrackUnsubscribed may have set (it fires before
+        // ParticipantDisconnected, so the agentAbsent guard doesn't catch
+        // it). Without this, the status stays "reconnecting" and
+        // unmute→dispatch is blocked. (BUG-031, BUG-027c)
         final wasHoldMode = _holdModeActive;
+        final wasModeSwitch = _modeSwitchActive;
+        final isNeutralDisconnect = wasHoldMode || wasModeSwitch;
         _updateState(
-          status: wasHoldMode ? ConversationStatus.idle : null,
+          status: isNeutralDisconnect ? ConversationStatus.idle : null,
           diagnostics: _state.diagnostics.copyWith(clearAgentIdentity: true),
         );
         // Notify agent presence service (Epic 20)
         agentPresenceService.onAgentDisconnected(holdMode: wasHoldMode);
         _holdModeActive = false;
+        // Don't clear _modeSwitchActive here — it stays true until text→voice
+        // transition clears it in toggleInputMode().
         // Reset segment ID so artifacts from the new session are not stamped
         // with the stale ID from the previous session. (BUG-004)
         _lastAgentSegmentId = null;
         // Emit agent disconnected system event (task 020)
-        // Suppress duplicate raw disconnect during hold — the agent presence
-        // service already emits a hold-specific event. (TASK-069)
-        if (!wasHoldMode) {
+        // Suppress duplicate raw disconnect during hold or mode switch —
+        // the agent presence service already emits hold-specific events,
+        // and mode switch is intentional. (TASK-069, BUG-027c)
+        if (wasModeSwitch) {
+          _emitSystemEvent(SystemEvent(
+            id: 'agent-disconnect-${DateTime.now().millisecondsSinceEpoch}',
+            type: SystemEventType.agent,
+            status: SystemEventStatus.pending,
+            message: 'switched to text mode',
+            timestamp: DateTime.now(),
+            prefix: '\u25B8', // ▸ neutral
+          ));
+        } else if (!wasHoldMode) {
           _emitSystemEvent(SystemEvent(
             id: 'agent-disconnect-${DateTime.now().millisecondsSinceEpoch}',
             type: SystemEventType.agent,
@@ -704,11 +724,12 @@ class LiveKitService extends ChangeNotifier {
       // (on-demand dispatch lifecycle). The agent presence UX (system events)
       // already communicates what happened.
       if (event.track.kind == TrackType.AUDIO) {
-        // Also skip when hold mode is active — the agent is leaving
-        // intentionally, not due to a network issue. (BUG-031)
+        // Also skip when hold mode or mode switch is active — the agent
+        // is leaving intentionally, not due to a network issue. (BUG-031, BUG-027c)
         final isAgentAbsent = (agentPresenceService.enabled &&
             agentPresenceService.state == AgentPresenceState.agentAbsent) ||
-            _holdModeActive;
+            _holdModeActive ||
+            _modeSwitchActive;
         if (!isAgentAbsent) {
           _updateState(status: ConversationStatus.reconnecting);
         }
@@ -1358,9 +1379,15 @@ class LiveKitService extends ChangeNotifier {
 
   /// Toggle between voice-first and text-input modes.
   ///
-  /// When entering text-input mode, any active mute state is preserved.
-  /// When reverting to voice-first mode, the text input cleanup happens
-  /// at the widget layer (clearing text, dismissing keyboard).
+  /// **Voice → Text:** Signals the agent to self-terminate via
+  /// `end_voice_session`, then unpublishes the audio track to release
+  /// Android's AudioRecord for keyboard STT. The pipeline death is
+  /// intentional — a fresh agent will be dispatched on return to voice.
+  ///
+  /// **Text → Voice:** Republishes the audio track, then dispatches a
+  /// fresh agent with a fresh pipeline if the previous one is gone.
+  ///
+  /// (BUG-027c, Epic 26)
   Future<void> toggleInputMode() async {
     final current = _state.inputMode;
     final next = current == TextInputMode.voiceFirst
@@ -1370,32 +1397,65 @@ class LiveKitService extends ChangeNotifier {
     _state = _state.copyWith(inputMode: next);
 
     if (next == TextInputMode.textInput) {
-      // Exiting voice mode — mute and deactivate
+      // --- Voice → Text ---
       _voiceModeActive = false;
-      if (!_isMuted) await toggleMute();
+      _modeSwitchActive = true; // Suppress red disconnect UX (Task 4)
+      // 1. Signal agent to self-terminate (immediate, don't wait 60s hold)
+      await _sendEvent({'type': 'end_voice_session'});
+      // 2. Unpublish track to release AudioRecord for keyboard STT
+      if (!_isMuted) await toggleMute(); // existing removePublishedTrack path
     } else if (next == TextInputMode.voiceFirst) {
-      // Entering voice mode — unmute and activate
+      // --- Text → Voice ---
+      _modeSwitchActive = false;
+      // 1. Republish audio track
       if (_isMuted) await toggleMute();
       _voiceModeActive = true;
+      // 2. Dispatch fresh agent (existing mechanism).
+      //    Agent may already be gone from end_voice_session signal.
+      //    AgentPresenceService handles dispatch when agent is absent.
+      if (agentPresenceService.enabled &&
+          agentPresenceService.state == AgentPresenceState.agentAbsent) {
+        agentPresenceService.onSpeechDetected();
+      }
     }
 
     notifyListeners();
   }
 
-  /// Mute/unmute without exiting voice mode. Used when tapping the user
+  /// Soft mute/unmute without exiting voice mode. Used when tapping the user
   /// histogram — keeps histograms visible while silencing the mic.
+  ///
+  /// Unlike toggleMute() (which calls removePublishedTrack), this uses
+  /// setMicrophoneEnabled(false/true) so the audio track stays published.
+  /// The SDK's MultiInputStream pump gets silence frames but stays alive —
+  /// unmuting resumes audio instantly with no pipeline death. (BUG-027c)
+  ///
+  /// Tradeoff: keyboard STT won't work while soft-muted in voice mode
+  /// because AudioRecord is still held. Voice mode IS the STT.
   Future<void> muteOnly() async {
-    await toggleMute();
+    _isMuted = !_isMuted;
+    debugPrint('[Fletcher] Soft mute toggled: muted=$_isMuted (voice mode stays active)');
+    if (_isMuted) {
+      _updateState(status: ConversationStatus.muted);
+      await _localParticipant?.setMicrophoneEnabled(false);
+    } else {
+      _updateState(status: ConversationStatus.idle);
+      await _localParticipant?.setMicrophoneEnabled(true);
+    }
     // _voiceModeActive stays unchanged — histograms remain visible
   }
 
   /// Send a text message through the appropriate channel.
   ///
-  /// **Chat mode** (muted): routes via relay JSON-RPC (`session/prompt`
-  /// on `"relay"` topic). Response streams back as `session/update` chunks.
+  /// **Text mode** (`TextInputMode.textInput`): routes via relay JSON-RPC
+  /// (`session/prompt` on `"relay"` topic). Response streams back as
+  /// `session/update` chunks. Agent is terminated in this mode.
   ///
-  /// **Voice mode** (unmuted): routes via `ganglia-events` to the voice
-  /// agent, which injects it into the AgentSession (existing path).
+  /// **Voice mode** (`TextInputMode.voiceFirst`): routes via
+  /// `ganglia-events` to the voice agent, which injects it into the
+  /// AgentSession. Works even when soft-muted (mic silenced but agent alive).
+  ///
+  /// Routing is based on `inputMode`, not mute state. (BUG-027c, Epic 26)
   ///
   /// The user's message is added to the local transcript immediately
   /// (optimistic update) regardless of mode.
@@ -1403,7 +1463,8 @@ class LiveKitService extends ChangeNotifier {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
 
-    debugPrint('[Fletcher] Sending text message: ${trimmed.length} chars (mode=${_isMuted ? "chat" : "voice"})');
+    final isTextMode = _state.inputMode == TextInputMode.textInput;
+    debugPrint('[Fletcher] Sending text message: ${trimmed.length} chars (mode=${isTextMode ? "text" : "voice"})');
 
     // Optimistic: add user message to local transcript immediately
     final entry = TranscriptEntry(
@@ -1425,8 +1486,11 @@ class LiveKitService extends ChangeNotifier {
     }
     _updateState(transcript: updatedTranscript);
 
-    // --- Chat mode: route through relay ---
-    if (_isMuted) {
+    // --- Text mode: always route through relay (BUG-027c, Epic 26) ---
+    // Routing is based on inputMode, not mute state. In text mode the
+    // agent is terminated; relay is the only path. In voice mode, even
+    // if soft-muted, text goes to the agent (if present).
+    if (isTextMode) {
       await _sendViaRelay(trimmed);
       return;
     }
@@ -1684,10 +1748,11 @@ class LiveKitService extends ChangeNotifier {
           status = SystemEventStatus.pending;
           prefix = '\u25B8'; // ▸
         } else if (id == 'agent-disconnected') {
-          status = _holdModeActive
+          final isNeutral = _holdModeActive || _modeSwitchActive;
+          status = isNeutral
               ? SystemEventStatus.pending   // gray, neutral
               : SystemEventStatus.error;    // red, alarming
-          prefix = _holdModeActive ? '\u25B8' : '\u2715'; // ▸ vs ✕
+          prefix = isNeutral ? '\u25B8' : '\u2715'; // ▸ vs ✕
         } else {
           status = SystemEventStatus.success;
           prefix = '\u25B8'; // ▸
