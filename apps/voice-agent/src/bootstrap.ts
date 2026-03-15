@@ -5,7 +5,36 @@
  *
  * Every room gets a bootstrap message:
  *   - E2E test rooms (`e2e-*`): keep responses brief, no tools/memory
- *   - Normal rooms: STT/TTS context so the agent knows input is transcribed
+ *   - Normal rooms: formatting context so the LLM knows input is dictated
+ *
+ * ## OpenClaw voice mode detection (BUG-014 / BUG-033)
+ *
+ * OpenClaw's gateway has automatic voice mode detection. When it identifies a
+ * session as "voice", it activates server-side audio generation and SUPPRESSES
+ * `agent_message_chunk` updates (text streaming). This is intended for clients
+ * that let OpenClaw handle TTS, but Fletcher runs its own TTS pipeline — so
+ * suppressed chunks means the voice agent gets zero text and the user hears
+ * nothing.
+ *
+ * The gateway's detection triggers on keywords in the prompt content. Known
+ * trigger words (non-exhaustive):
+ *
+ *   - "voice" (e.g. "voice conversation", "voice message")
+ *   - "TTS" / "Text-to-Speech"
+ *   - "STT" / "Speech-to-Text"
+ *
+ * **DO NOT use any of these words in the bootstrap message.** Use indirect
+ * phrasing instead:
+ *
+ *   | Avoid                  | Use instead                        |
+ *   |------------------------|------------------------------------|
+ *   | "voice conversation"   | "dictated, not typed"              |
+ *   | "Speech-to-Text"       | "transcription errors"             |
+ *   | "TTS engine"           | "read aloud"                       |
+ *   | "voice messages"       | "dictated messages" or just drop   |
+ *
+ * This was first hit in BUG-014 (completions API) and recurred in BUG-033
+ * (ACP protocol) — same root cause, different transport.
  *
  * Future: mission briefing / silent handshake (EPIC 14).
  */
@@ -31,20 +60,24 @@ const E2E_BOOTSTRAP_BODY = [
 ].join(" ");
 
 function buildVoiceBootstrapBody(): string {
+  // IMPORTANT: Avoid keywords like "voice", "TTS", "Speech-to-Text", "STT"
+  // in the bootstrap message. OpenClaw's gateway detects these and activates
+  // its own server-side audio generation mode, which suppresses text chunks
+  // (agent_message_chunk updates) — breaking Fletcher's pipeline. (BUG-014)
   return [
-    // Voice
-    `User messages tagged with \`${VOICE_TAG}\` are from a voice conversation.`,
+    // Brevity
+    `User messages tagged with \`${VOICE_TAG}\` are dictated, not typed.`,
     "Keep responses brief — two or three sentences maximum.",
 
-    // STT awareness
-    `User messages tagged with \`${VOICE_TAG}\` are from Speech-to-Text — transcription errors are likely.`,
+    // Transcription awareness (avoid "STT" / "Speech-to-Text")
+    `Messages tagged with \`${VOICE_TAG}\` may contain transcription errors.`,
     "If an input is short, ambiguous, or nonsensical, always clarify before using tools or starting a new task.",
 
-    // TTS output rules — no markdown
-    "Your responses to voice messages are delivered through a Text-to-Speech (TTS) engine.",
-    "Never use any markdown syntax in spoken responses.",
+    // Plain text output rules — no markdown (avoid "TTS" / "Text-to-Speech")
+    "Your responses will be read aloud.",
+    "Never use any markdown syntax.",
     "That means no asterisks, no hashes, no hyphens as bullet points, no square brackets, no backticks, no underscores for emphasis, and no numbered lists with periods.",
-    "Markdown symbols are read aloud literally by the TTS engine and will sound broken.",
+    "Markdown symbols are read aloud literally and will sound broken.",
 
     // Verbal structure instead of lists
     'When listing multiple items, use verbal signposting — say "First...", "Second...", "And finally..." — instead of bullet points or numbered lists.',
