@@ -5,9 +5,11 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../models/command_result.dart';
 import '../models/conversation_state.dart';
 import '../models/system_event.dart';
 import 'agent_dispatch_service.dart';
+import 'command_registry.dart';
 import 'agent_presence_service.dart';
 import 'relay/relay_chat_service.dart';
 import 'connectivity_service.dart';
@@ -33,6 +35,8 @@ class LiveKitService extends ChangeNotifier {
 
   ConversationState _state = const ConversationState();
   ConversationState get state => _state;
+
+  final CommandRegistry _commandRegistry = CommandRegistry();
 
   bool _isMuted = true;
   bool get isMuted => _isMuted;
@@ -449,13 +453,13 @@ class LiveKitService extends ChangeNotifier {
       // the microphone when the app goes to background (BUG-022)
       await _startForegroundService();
 
-      // Enable agent presence service for on-demand dispatch (Epic 20).
+      // Configure dispatch URL for agent presence service (Epic 20).
       // Derive dispatch URL from the LiveKit URL (same host, token server port).
+      // Note: enable() is deferred to voice mode activation (TASK-078).
       if (_currentRoomName != null) {
         final uri = Uri.parse(url);
         final dispatchBaseUrl = 'http://${uri.host}:$_tokenServerPort';
         agentPresenceService.updateDispatchBaseUrl(dispatchBaseUrl);
-        agentPresenceService.enable(_currentRoomName!);
       }
 
       // Always send TTS mode state to agent on connect (BUG-001, TASK-030).
@@ -1422,13 +1426,19 @@ class LiveKitService extends ChangeNotifier {
       await _sendEvent({'type': 'end_voice_session'});
       // 2. Unpublish track to release AudioRecord for keyboard STT
       if (!_isMuted) await toggleMute(); // existing removePublishedTrack path
+      // 3. Disable agent presence — no agent needed in text mode (TASK-078)
+      agentPresenceService.disable();
     } else if (next == TextInputMode.voiceFirst) {
       // --- Text → Voice ---
       _modeSwitchActive = false;
       // 1. Republish audio track
       if (_isMuted) await toggleMute();
       _voiceModeActive = true;
-      // 2. Dispatch fresh agent (existing mechanism).
+      // 2. Enable agent presence for on-demand dispatch (TASK-078)
+      if (_currentRoomName != null) {
+        agentPresenceService.enable(_currentRoomName!);
+      }
+      // 3. Dispatch fresh agent if absent.
       //    Agent may already be gone from end_voice_session signal.
       //    AgentPresenceService handles dispatch when agent is absent.
       if (agentPresenceService.enabled &&
@@ -1480,6 +1490,15 @@ class LiveKitService extends ChangeNotifier {
   Future<void> sendTextMessage(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
+
+    // Slash command intercept — route to registry, skip agent/relay
+    if (trimmed.startsWith('/') && trimmed.length > 1) {
+      final result = await _commandRegistry.dispatch(trimmed);
+      if (result != null) {
+        _addCommandResult(result);
+      }
+      return;
+    }
 
     final isTextMode = _state.inputMode == TextInputMode.textInput;
     debugPrint('[Fletcher] Sending text message: ${trimmed.length} chars (mode=${isTextMode ? "text" : "voice"})');
@@ -1695,6 +1714,11 @@ class LiveKitService extends ChangeNotifier {
     };
   }
 
+  void _addCommandResult(CommandResult result) {
+    final updated = List<CommandResult>.from(_state.commandResults)..add(result);
+    _updateState(commandResults: updated);
+  }
+
   void _updateState({
     ConversationStatus? status,
     double? userAudioLevel,
@@ -1713,6 +1737,7 @@ class LiveKitService extends ChangeNotifier {
     List<SystemEvent>? systemEvents,
     bool? isAgentThinking,
     DiagnosticsInfo? diagnostics,
+    List<CommandResult>? commandResults,
   }) {
     _state = _state.copyWith(
       status: status,
@@ -1732,6 +1757,7 @@ class LiveKitService extends ChangeNotifier {
       systemEvents: systemEvents,
       isAgentThinking: isAgentThinking,
       diagnostics: diagnostics,
+      commandResults: commandResults,
     );
     notifyListeners();
   }

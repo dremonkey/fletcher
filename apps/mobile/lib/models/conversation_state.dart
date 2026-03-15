@@ -1,4 +1,5 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'command_result.dart';
 import 'system_event.dart';
 
 enum ConversationStatus {
@@ -439,6 +440,9 @@ class ConversationState {
   /// `tool_call_update` events complete them. Cleared between prompt turns.
   final List<ToolCallInfo> activeToolCalls;
 
+  /// Results from slash command executions shown inline in the chat transcript.
+  final List<CommandResult> commandResults;
+
   const ConversationState({
     this.status = ConversationStatus.connecting,
     this.userAudioLevel = 0.0,
@@ -456,6 +460,7 @@ class ConversationState {
     this.diagnostics = const DiagnosticsInfo(),
     this.inputMode = TextInputMode.textInput,
     this.activeToolCalls = const [],
+    this.commandResults = const [],
   });
 
   ConversationState copyWith({
@@ -478,6 +483,7 @@ class ConversationState {
     DiagnosticsInfo? diagnostics,
     TextInputMode? inputMode,
     List<ToolCallInfo>? activeToolCalls,
+    List<CommandResult>? commandResults,
   }) {
     return ConversationState(
       status: status ?? this.status,
@@ -500,6 +506,7 @@ class ConversationState {
       diagnostics: diagnostics ?? this.diagnostics,
       inputMode: inputMode ?? this.inputMode,
       activeToolCalls: activeToolCalls ?? this.activeToolCalls,
+      commandResults: commandResults ?? this.commandResults,
     );
   }
 }

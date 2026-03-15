@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../models/command_result.dart';
 import '../models/conversation_state.dart';
 import '../models/system_event.dart';
 import '../services/livekit_service.dart';
@@ -9,6 +10,7 @@ import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/tui_widgets.dart';
 import 'artifact_viewer.dart';
+import 'command_result_card.dart';
 import 'system_event_card.dart';
 import 'thinking_spinner.dart';
 import 'tool_call_card.dart';
@@ -41,7 +43,8 @@ class _ChatTranscriptState extends State<ChatTranscript> {
     _scrollController.addListener(_onScroll);
     _lastItemCount = widget.service.state.transcript.length +
         widget.service.state.systemEvents.length +
-        widget.service.state.activeToolCalls.length;
+        widget.service.state.activeToolCalls.length +
+        widget.service.state.commandResults.length;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
     });
@@ -70,6 +73,7 @@ class _ChatTranscriptState extends State<ChatTranscript> {
     final newCount = state.transcript.length +
         state.systemEvents.length +
         state.activeToolCalls.length +
+        state.commandResults.length +
         thinkingCount;
     final hasNewItems = newCount > _lastItemCount;
     _lastItemCount = newCount;
@@ -160,6 +164,14 @@ class _ChatTranscriptState extends State<ChatTranscript> {
       timestampedItems.add(_TimestampedItem(
         timestamp: event.timestamp,
         item: _ChatItem.systemEvent(event),
+      ));
+    }
+
+    // Add command results
+    for (final result in state.commandResults) {
+      timestampedItems.add(_TimestampedItem(
+        timestamp: result.timestamp,
+        item: _ChatItem.commandResult(result),
       ));
     }
 
@@ -255,6 +267,12 @@ class _ChatTranscriptState extends State<ChatTranscript> {
         if (item.isToolCall) {
           return ToolCallCard(toolCall: item.toolCall!);
         }
+        if (item.isCommandResult) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: CommandResultCard(result: item.commandResult!),
+          );
+        }
         return Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
           child: _TranscriptMessage(
@@ -275,12 +293,13 @@ class _TimestampedItem {
   const _TimestampedItem({required this.timestamp, required this.item});
 }
 
-/// Represents a message, system event, divider, thinking spinner, or tool
-/// call indicator in the chat list.
+/// Represents a message, system event, divider, thinking spinner, tool
+/// call indicator, or command result in the chat list.
 class _ChatItem {
   final TranscriptEntry? entry;
   final SystemEvent? systemEvent;
   final ToolCallInfo? toolCall;
+  final CommandResult? commandResult;
   final bool isDivider;
   final bool isThinking;
   final List<ArtifactEvent> artifacts;
@@ -289,19 +308,22 @@ class _ChatItem {
       : isDivider = false,
         isThinking = false,
         systemEvent = null,
-        toolCall = null;
+        toolCall = null,
+        commandResult = null;
   const _ChatItem.divider()
       : entry = null,
         isDivider = true,
         isThinking = false,
         systemEvent = null,
         toolCall = null,
+        commandResult = null,
         artifacts = const [];
   const _ChatItem.systemEvent(this.systemEvent)
       : entry = null,
         isDivider = false,
         isThinking = false,
         toolCall = null,
+        commandResult = null,
         artifacts = const [];
   const _ChatItem.thinking()
       : entry = null,
@@ -309,17 +331,27 @@ class _ChatItem {
         isThinking = true,
         systemEvent = null,
         toolCall = null,
+        commandResult = null,
         artifacts = const [];
   const _ChatItem.toolCall(this.toolCall)
       : entry = null,
         isDivider = false,
         isThinking = false,
         systemEvent = null,
+        commandResult = null,
+        artifacts = const [];
+  const _ChatItem.commandResult(this.commandResult)
+      : entry = null,
+        isDivider = false,
+        isThinking = false,
+        systemEvent = null,
+        toolCall = null,
         artifacts = const [];
 
   bool get isMessage => entry != null;
   bool get isSystemEvent => systemEvent != null;
   bool get isToolCall => toolCall != null;
+  bool get isCommandResult => commandResult != null;
 }
 
 /// A single transcript message rendered as a TuiCard.
