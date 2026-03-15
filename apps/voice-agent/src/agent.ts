@@ -403,10 +403,12 @@ export default defineAgent({
         // the user transcript segment — closing the message box mid-sentence.
         // The 200-400ms latency saving isn't worth the broken transcript UX.
         preemptiveGeneration: false,
-        // Give the turn detector more time to decide if the user is done.
-        // Default 500ms was too aggressive for natural speech pauses (BUG-014).
-        minEndpointingDelay: 800,
-        maxEndpointingDelay: 3000,
+        // Give the turn detector time to decide if the user is done.
+        // Slightly above SDK default (500ms) to reduce premature EOU,
+        // but lower than previous 800ms to keep response time snappy
+        // now that preemptiveGeneration is off.
+        minEndpointingDelay: 600,
+        maxEndpointingDelay: 2000,
         // Require deliberate speech before interrupting agent TTS — reduces
         // false interruptions from brief noises that pass VAD (TASK-014).
         minInterruptionDuration: 800,
