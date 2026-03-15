@@ -169,6 +169,7 @@ describe("createSttWatchdog", () => {
     await sleep(TEST_TIMEOUT_MS + TEST_CHECK_INTERVAL_MS * 2);
 
     expect(ctx.getDisconnectCount()).toBe(0);
+    // No events published (not even early hold) because not activated
     expect(ctx.publishedEvents).toHaveLength(0);
   });
 
@@ -202,9 +203,8 @@ describe("createSttWatchdog", () => {
     await sleep(TEST_TIMEOUT_MS + TEST_CHECK_INTERVAL_MS * 2);
 
     expect(ctx.getDisconnectCount()).toBe(1);
-    expect(ctx.publishedEvents).toHaveLength(1);
-    expect(ctx.publishedEvents[0]!.type).toBe("system_event");
-    expect(ctx.publishedEvents[0]!.title).toBe("Voice Pipeline Recovery");
+    // Early session_hold is sent at first silence detection (checkInterval)
+    expect(ctx.publishedEvents.some((e) => e.type === "session_hold")).toBe(true);
   });
 
   it("logs a warning when triggering recovery", async () => {
@@ -226,6 +226,50 @@ describe("createSttWatchdog", () => {
   // -------------------------------------------------------------------------
   // Activity resets the clock
   // -------------------------------------------------------------------------
+
+  it("sends early session_hold before full timeout", async () => {
+    ctx = createTestDeps();
+    // Long timeout so disconnect doesn't fire, but check interval is short
+    watchdog = createSttWatchdog(ctx.deps, 200, TEST_CHECK_INTERVAL_MS);
+
+    watchdog.onSttActivity();
+    watchdog.activate();
+    watchdog.onAgentListening();
+
+    // Wait past one check interval but before the full timeout
+    await sleep(TEST_CHECK_INTERVAL_MS * 3);
+
+    // Early session_hold should be published
+    expect(ctx.publishedEvents.some((e) => e.type === "session_hold")).toBe(true);
+    // But disconnect should NOT have fired yet
+    expect(ctx.getDisconnectCount()).toBe(0);
+  });
+
+  it("resets early hold flag when STT activity resumes", async () => {
+    ctx = createTestDeps();
+    watchdog = createSttWatchdog(ctx.deps, 200, TEST_CHECK_INTERVAL_MS);
+
+    watchdog.onSttActivity();
+    watchdog.activate();
+    watchdog.onAgentListening();
+
+    // Wait for early hold
+    await sleep(TEST_CHECK_INTERVAL_MS * 3);
+    expect(ctx.publishedEvents.some((e) => e.type === "session_hold")).toBe(true);
+
+    // STT comes back — reset
+    watchdog.onSttActivity();
+
+    // Clear events for clean check
+    ctx.publishedEvents.length = 0;
+
+    // Wait again — should send another early hold since flag was reset
+    await sleep(TEST_CHECK_INTERVAL_MS * 3);
+    expect(ctx.publishedEvents.some((e) => e.type === "session_hold")).toBe(true);
+
+    // Still no disconnect (200ms timeout not reached)
+    expect(ctx.getDisconnectCount()).toBe(0);
+  });
 
   it("does NOT trigger if STT activity keeps resetting the clock", async () => {
     ctx = createTestDeps();

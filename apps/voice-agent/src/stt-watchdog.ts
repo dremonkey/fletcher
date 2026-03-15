@@ -130,6 +130,7 @@ export function createSttWatchdog(
   let _listeningStartMs = 0;
   let _checkInterval: ReturnType<typeof setInterval> | null = null;
   let _disposed = false;
+  let _holdSent = false;
 
   const startChecking = () => {
     if (_checkInterval || _disposed) return;
@@ -161,19 +162,29 @@ export function createSttWatchdog(
         "STT watchdog: no STT activity detected — pipeline may be dead, triggering recovery",
       );
 
-      // Publish a system event so the client knows why the agent disconnected
-      deps.publishEvent({
-        type: "system_event",
-        severity: "warning",
-        title: "Voice Pipeline Recovery",
-        message: "Voice input stopped responding. Reconnecting...",
-      });
-
       // Disconnect to trigger hold mode → client shows "tap to resume"
       deps.disconnectRoom();
 
       // Stop checking after triggering recovery — the session is ending
       stopChecking();
+      return;
+    }
+
+    // Send session_hold early — the data channel may die before the full
+    // timeout elapses (DTLS timeout after track unpublish).  Send the hold
+    // event on the first check that detects silence so the client gets it
+    // while the transport is still alive.  The actual disconnect happens
+    // later when the full timeout fires.
+    if (!_holdSent && silenceMs >= checkIntervalMs && listeningMs >= checkIntervalMs) {
+      deps.logger.info(
+        { silenceMs, timeoutMs },
+        "STT watchdog: sending early session_hold — data channel may degrade before timeout",
+      );
+      deps.publishEvent({
+        type: "session_hold",
+        reason: "stt_watchdog",
+      });
+      _holdSent = true;
     }
   };
 
@@ -193,6 +204,7 @@ export function createSttWatchdog(
 
     onSttActivity() {
       _lastActivityMs = Date.now();
+      _holdSent = false; // Reset — STT is alive, cancel any early hold
       if (!_sttEverActive) {
         _sttEverActive = true;
         deps.logger.debug(

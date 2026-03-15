@@ -478,8 +478,10 @@ export default defineAgent({
       {
         getAgentState: () => session.agentState as any,
         disconnectRoom: () => {
-          publishEvent({ type: "session_hold", reason: "stt_watchdog" });
-          // Grace period for SCTP delivery before disconnect
+          // session_hold is sent early by the watchdog (on first silence
+          // detection) while the data channel is still alive.  By the time
+          // disconnectRoom fires, the data channel may have DTLS-timed-out,
+          // so we don't rely on publishing here.
           setTimeout(() => ctx.room.disconnect(), 500);
         },
         publishEvent,
