@@ -638,8 +638,12 @@ class LiveKitService extends ChangeNotifier {
     });
 
     _listener?.on<ParticipantDisconnectedEvent>((event) {
-      final remaining = _room?.remoteParticipants.length ?? 0;
-      debugPrint('[Fletcher] Remote participant disconnected: ${event.participant.identity} (remaining=$remaining)');
+      // Count only agent participants — relay participants are infrastructure,
+      // not agents, and should not prevent hold mode / disconnect handling.
+      final remaining = _room?.remoteParticipants.values
+          .where((p) => p.identity?.startsWith('relay-') != true)
+          .length ?? 0;
+      debugPrint('[Fletcher] Remote participant disconnected: ${event.participant.identity} (remaining agents=$remaining)');
       // Relay participant — emit relay-specific event, don't count toward agent presence
       if (event.participant.identity?.startsWith('relay-') == true) {
         _emitSystemEvent(SystemEvent(
