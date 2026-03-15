@@ -93,7 +93,7 @@ Session listing and switching uses a **slash command** (`/sessions`) rather than
 ## Tasks
 
 - [ ] **TASK-075: Spike -- session/load + session/list fidelity** -- Call `session/load` on an existing multi-turn session, log the full replay, and map what's included (user turns, agent turns, tool calls, artifacts) vs. what's missing. Also test `session/list`. Results determine scope of remaining tasks.
-- [ ] **TASK-076: Client-side slash command interceptor** -- In `sendTextMessage()`, intercept `/`-prefixed input and route to a command registry instead of sending to agent/relay. Start with `/sessions` as the first command. This is the foundation for all TASK-022 macros.
+- [x] **TASK-076: Client-side slash command interceptor** -- In `sendTextMessage()`, intercept `/`-prefixed input and route to a command registry instead of sending to agent/relay. Ships with `/help` as proof-of-life. This is the foundation for all TASK-022 macros.
 - [ ] **TASK-077: `/sessions` command + session list rendering** -- Wire `/sessions` to relay `session/list`, render results as tappable `SessionCard` widgets inline in the chat stream. Tap = immediate session switch.
 
 Candidate follow-up tasks (pending spike results):
