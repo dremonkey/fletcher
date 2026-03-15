@@ -32,6 +32,31 @@ docker compose logs --tail 50 voice-agent 2>&1 | grep -c "registered worker"
 
 If 0, wait a few seconds and retry (up to 30s). Do not proceed until the agent is registered.
 
+### 1a. Ensure relay is running
+
+The relay runs **outside Docker** as a standalone Bun process. Check if it's already running:
+
+```sh
+pgrep -fa "relay/src/index"
+```
+
+If not running, start it with logs piped to the daily log file (relay logs to stdout only — without this pipe, logs are lost):
+
+```sh
+mkdir -p logs
+bun run apps/relay/src/index.ts >> logs/relay-$(date +%Y-%m-%d).log 2>&1
+```
+
+Run this with `run_in_background: true`. Verify it started:
+
+```sh
+sleep 1 && tail -5 logs/relay-$(date +%Y-%m-%d).log
+```
+
+You should see `Fletcher Relay listening` on port 7890. If the relay crashes on startup, check for port conflicts (`lsof -i :7890`).
+
+**Important:** If you need to restart the relay later (e.g., after a code fix), always pipe to the log file. Never run it bare — stdout logs vanish when the background task completes.
+
 ### 1b. Prepare device logcat
 
 Clear the Android logcat buffer and increase it to 16MB so client-side logs survive the entire field test:
@@ -93,19 +118,13 @@ docker compose logs -f --tail 100 2>&1
 
 Run this with `run_in_background: true`.
 
-**Also tail the relay logs.** The relay runs outside Docker (spawned by the TUI), so it won't appear in `docker compose logs`. Find and tail its log file:
-
-```sh
-ls logs/relay-$(date +%Y-%m-%d).log 2>/dev/null
-```
-
-If the file exists, tail it in a second background task:
+**Also tail the relay logs.** The relay runs outside Docker (started in step 1a), so it won't appear in `docker compose logs`. Tail its log file in a second background task:
 
 ```sh
 tail -f logs/relay-$(date +%Y-%m-%d).log 2>&1
 ```
 
-If no relay log file exists, check whether the relay is running (`pgrep -fa relay`). If it's not running, note it — relay logs won't be available. If it is running but there's no log file, check for alternative log locations or whether the relay is logging to stdout only.
+If the log file doesn't exist, the relay wasn't started with log piping — restart it per step 1a.
 
 Both log streams are your primary data sources for the rest of the session.
 
@@ -181,9 +200,19 @@ If the issue is fixable from the backend:
 5. **Verify** — Watch logs to confirm the fix works when the tester's next interaction comes through.
 6. **Update buglog** — Mark the entry as FIXED with timestamp.
 
+For relay fixes (code lives in `apps/relay/`):
+
+1. **Kill the old relay:** `kill $(pgrep -f "relay/src/index")`
+2. **Restart with log piping:**
+   ```sh
+   bun run apps/relay/src/index.ts >> logs/relay-$(date +%Y-%m-%d).log 2>&1
+   ```
+   Run with `run_in_background: true`.
+3. **Re-tail the relay log** in a new background task.
+
 If the issue is client-side or external, note it in the buglog as "Needs investigation" or "Client-side fix needed" and move on.
 
-**Important:** After rebuilding, re-start the background log tail (step 3) since the old one will have ended when the container restarted.
+**Important:** After rebuilding/restarting, re-start the background log tails (step 3) since the old ones will have ended when processes restarted.
 
 ### 5. Watch for "Peanuts and Watermelons"
 
