@@ -428,7 +428,7 @@ Split the single voice-agent pipeline into two distinct modes — **Voice Mode**
 
 **Depends on:** Epic 4 (Ganglia session keys), Epic 17 (Text Input), Epic 20 (Agent Dispatch), Epic 24 (Relay)
 
-### 24. [WebRTC ACP Relay](./24-webrtc-acp-relay) ✅
+### 24. [WebRTC ACP Relay](./24-webrtc-acp-relay)
 Lightweight LiveKit participant that bridges mobile data channel messages to ACP agent subprocesses over stdio. Enables text-mode conversations without the voice pipeline. Foundation for dual-mode architecture (Epic 22).
 
 **Tasks:**
@@ -443,6 +443,22 @@ Lightweight LiveKit participant that bridges mobile data channel messages to ACP
 - [x] Health & Observability — `/health`, `/rooms`, pino structured logging
 
 **Depends on:** Epic 4 (Ganglia session keys)
+
+### 25. [Session Resumption](./25-session-resumption) 🔄
+Session management improvements: slash-command interception, room/session decoupling, and seamless conversation resume.
+
+**Tasks:**
+- [x] 076: Slash Command Interceptor ✅ — `/`-prefix interception in sendTextMessage(), CommandRegistry with async handlers, `/help` built-in, CommandResultCard inline widget; 15 tests
+
+### 26. [Voice Mode Consolidation](./26-voice-mode) 🔄
+Consolidated index of ~41 voice tasks from 10 epics. Single place to prioritize voice work holistically. First task removes auto-dispatch so voice agent joins only on demand.
+
+**Tasks:**
+- [ ] 078: Remove Auto-Dispatch — voice agent joins only on demand
+
+**Phases:** Architecture → Pipeline Reliability → Latency → Voice Quality → Voice Identity → On-Device TTS → Polish
+
+**Depends on:** Epic 2 (Voice Agent), Epic 4 (Ganglia), Epic 20 (Agent Dispatch)
 
 ### 23. [Relay Native Rewrite](./23-relay-native-rewrite) 📋
 Rewrite the Fletcher Relay from TypeScript/Bun to Go or Rust, producing a single static binary for easy distribution. Eliminates the Bun + node_modules runtime dependency.
