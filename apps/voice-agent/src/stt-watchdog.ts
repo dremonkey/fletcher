@@ -20,8 +20,14 @@
  * the watchdog disconnects the room.  This triggers hold mode, which
  * gives the client a clean "tap to resume" recovery path.
  *
- * The watchdog only activates after the first STT event — before that,
- * the user may simply not be speaking (mic off, bootstrap in progress).
+ * Two modes of detection:
+ *
+ * 1. **STT died mid-session**: STT was active, then went silent for
+ *    `timeoutMs`.  Classic BUG-027 from MultiInputStream pump error.
+ *
+ * 2. **STT never started**: An audio track is subscribed (user has mic
+ *    on) but no STT events arrive within `timeoutMs`.  This catches
+ *    cases where the SDK's audio pipeline fails to initialize properly.
  *
  * ## Usage
  *
@@ -39,6 +45,9 @@
  *   if (ev.newState === 'listening') watchdog.onAgentListening();
  *   else watchdog.onAgentBusy();
  * });
+ *
+ * // When audio track is subscribed:
+ * watchdog.onAudioTrackSubscribed();
  *
  * // When bootstrap completes:
  * watchdog.activate();
@@ -75,9 +84,7 @@ export interface SttWatchdogDeps {
 export interface SttWatchdog {
   /**
    * Activate the watchdog.  Call after bootstrap completes and the
-   * agent is ready to receive speech.  The watchdog does NOT start
-   * the timeout clock until the first STT event — this avoids false
-   * alarms when the user has their mic off or hasn't spoken yet.
+   * agent is ready to receive speech.
    */
   activate(): void;
 
@@ -86,6 +93,12 @@ export interface SttWatchdog {
    * (both interim and final).  Resets the silence clock.
    */
   onSttActivity(): void;
+
+  /**
+   * Notify the watchdog that a user audio track was subscribed.
+   * Starts the "never started" timer if STT hasn't been active yet.
+   */
+  onAudioTrackSubscribed(): void;
 
   /**
    * Notify the watchdog that the agent entered "listening" state.
@@ -128,6 +141,7 @@ export function createSttWatchdog(
   let _lastActivityMs = 0;
   let _agentListening = false;
   let _listeningStartMs = 0;
+  let _audioTrackSubscribedMs = 0;
   let _checkInterval: ReturnType<typeof setInterval> | null = null;
   let _disposed = false;
   let _holdSent = false;
@@ -145,46 +159,56 @@ export function createSttWatchdog(
   };
 
   const check = () => {
-    // Only check when: activated, STT was active before, agent is listening
-    if (!_activated || !_sttEverActive || !_agentListening) return;
+    if (!_activated || !_agentListening) return;
 
     const now = Date.now();
-    const silenceMs = now - _lastActivityMs;
     const listeningMs = now - _listeningStartMs;
 
-    // The timeout must have elapsed since BOTH last activity AND since
-    // we entered listening state.  This prevents false alarms when the
-    // agent just finished speaking (transition to listening resets the
-    // listening clock but STT activity may not have arrived yet).
-    if (silenceMs >= timeoutMs && listeningMs >= timeoutMs) {
-      deps.logger.warn(
-        { silenceMs, timeoutMs, listeningMs },
-        "STT watchdog: no STT activity detected — pipeline may be dead, triggering recovery",
-      );
+    // Mode 1: STT was active, then went silent (classic BUG-027)
+    if (_sttEverActive) {
+      const silenceMs = now - _lastActivityMs;
 
-      // Disconnect to trigger hold mode → client shows "tap to resume"
-      deps.disconnectRoom();
+      if (silenceMs >= timeoutMs && listeningMs >= timeoutMs) {
+        deps.logger.warn(
+          { silenceMs, timeoutMs, listeningMs },
+          "STT watchdog: no STT activity detected — pipeline may be dead, triggering recovery",
+        );
+        deps.disconnectRoom();
+        stopChecking();
+        return;
+      }
 
-      // Stop checking after triggering recovery — the session is ending
-      stopChecking();
+      // Send session_hold early while data channel is alive
+      if (!_holdSent && silenceMs >= checkIntervalMs && listeningMs >= checkIntervalMs) {
+        deps.logger.info(
+          { silenceMs, timeoutMs },
+          "STT watchdog: sending early session_hold — data channel may degrade before timeout",
+        );
+        deps.publishEvent({
+          type: "session_hold",
+          reason: "stt_watchdog",
+        });
+        _holdSent = true;
+      }
       return;
     }
 
-    // Send session_hold early — the data channel may die before the full
-    // timeout elapses (DTLS timeout after track unpublish).  Send the hold
-    // event on the first check that detects silence so the client gets it
-    // while the transport is still alive.  The actual disconnect happens
-    // later when the full timeout fires.
-    if (!_holdSent && silenceMs >= checkIntervalMs && listeningMs >= checkIntervalMs) {
-      deps.logger.info(
-        { silenceMs, timeoutMs },
-        "STT watchdog: sending early session_hold — data channel may degrade before timeout",
-      );
-      deps.publishEvent({
-        type: "session_hold",
-        reason: "stt_watchdog",
-      });
-      _holdSent = true;
+    // Mode 2: STT never started but audio track is subscribed (dead pipeline from start)
+    if (_audioTrackSubscribedMs > 0) {
+      const trackAgeMs = now - _audioTrackSubscribedMs;
+
+      if (trackAgeMs >= timeoutMs && listeningMs >= timeoutMs) {
+        deps.logger.warn(
+          { trackAgeMs, timeoutMs, listeningMs },
+          "STT watchdog: audio track subscribed but STT never activated — pipeline failed to start, triggering recovery",
+        );
+        deps.publishEvent({
+          type: "session_hold",
+          reason: "stt_watchdog_never_started",
+        });
+        deps.disconnectRoom();
+        stopChecking();
+      }
     }
   };
 
@@ -196,8 +220,8 @@ export function createSttWatchdog(
         { timeoutMs, checkIntervalMs },
         "STT watchdog activated",
       );
-      // If the agent is already listening, start checking
-      if (_agentListening && _sttEverActive) {
+      // Start checking if conditions are met
+      if (_agentListening && (_sttEverActive || _audioTrackSubscribedMs > 0)) {
         startChecking();
       }
     },
@@ -211,26 +235,35 @@ export function createSttWatchdog(
           {},
           "STT watchdog: first STT activity received — monitoring enabled",
         );
-        // Now that STT has been active, start the check interval
-        // if we're currently activated and listening
         if (_activated && _agentListening) {
           startChecking();
         }
       }
     },
 
+    onAudioTrackSubscribed() {
+      // Only record the first audio track subscription
+      if (_audioTrackSubscribedMs > 0) return;
+      _audioTrackSubscribedMs = Date.now();
+      deps.logger.debug(
+        {},
+        "STT watchdog: audio track subscribed — monitoring for STT startup",
+      );
+      if (_activated && _agentListening && !_sttEverActive) {
+        startChecking();
+      }
+    },
+
     onAgentListening() {
       _agentListening = true;
       _listeningStartMs = Date.now();
-      if (_activated && _sttEverActive) {
+      if (_activated && (_sttEverActive || _audioTrackSubscribedMs > 0)) {
         startChecking();
       }
     },
 
     onAgentBusy() {
       _agentListening = false;
-      // Don't stop the interval — just skip checks via the guard in check()
-      // This avoids unnecessary start/stop churn during rapid state changes.
     },
 
     dispose() {

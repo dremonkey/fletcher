@@ -375,6 +375,60 @@ describe("createSttWatchdog", () => {
   });
 
   // -------------------------------------------------------------------------
+  // Mode 2: STT never started (dead pipeline from the start)
+  // -------------------------------------------------------------------------
+
+  it("triggers recovery when audio track is subscribed but STT never activates", async () => {
+    ctx = createTestDeps();
+    watchdog = createSttWatchdog(ctx.deps, TEST_TIMEOUT_MS, TEST_CHECK_INTERVAL_MS);
+
+    // Audio track subscribed, activated, listening — but NO onSttActivity()
+    watchdog.onAudioTrackSubscribed();
+    watchdog.activate();
+    watchdog.onAgentListening();
+
+    await sleep(TEST_TIMEOUT_MS + TEST_CHECK_INTERVAL_MS * 2);
+
+    expect(ctx.getDisconnectCount()).toBe(1);
+    expect(ctx.publishedEvents.some((e) => e.type === "session_hold")).toBe(true);
+  });
+
+  it("does NOT trigger 'never started' if no audio track is subscribed", async () => {
+    ctx = createTestDeps();
+    watchdog = createSttWatchdog(ctx.deps, TEST_TIMEOUT_MS, TEST_CHECK_INTERVAL_MS);
+
+    // Activated and listening, but no audio track and no STT
+    watchdog.activate();
+    watchdog.onAgentListening();
+
+    await sleep(TEST_TIMEOUT_MS + TEST_CHECK_INTERVAL_MS * 2);
+
+    expect(ctx.getDisconnectCount()).toBe(0);
+  });
+
+  it("cancels 'never started' timer when STT activity arrives", async () => {
+    ctx = createTestDeps();
+    watchdog = createSttWatchdog(ctx.deps, TEST_TIMEOUT_MS, TEST_CHECK_INTERVAL_MS);
+
+    watchdog.onAudioTrackSubscribed();
+    watchdog.activate();
+    watchdog.onAgentListening();
+
+    // STT activates before timeout — should NOT trigger recovery
+    await sleep(TEST_TIMEOUT_MS / 2);
+    watchdog.onSttActivity();
+
+    // Wait past the original timeout
+    await sleep(TEST_TIMEOUT_MS);
+
+    // Keep feeding activity to prevent normal watchdog from firing
+    watchdog.onSttActivity();
+    await sleep(TEST_CHECK_INTERVAL_MS);
+
+    expect(ctx.getDisconnectCount()).toBe(0);
+  });
+
+  // -------------------------------------------------------------------------
   // Default constants
   // -------------------------------------------------------------------------
 

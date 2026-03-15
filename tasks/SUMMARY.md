@@ -46,6 +46,7 @@ The voice agent audio pipeline — STT, TTS, voice detection, and agent dispatch
 - [ ] 040: Guard Audio Track Restart When Muted 📋 — skip `restartTrack()` on device change when mic is muted; prevents network handoffs from reclaiming mic and blocking OS keyboard STT ([BUG-009](../docs/field-tests/20260310-buglog.md))
 - [ ] 041: Fix SDK ICE Reconnect Loop After Agent Idle ⚠️ — repeated ICE drops every ~25s after agent idle disconnect; duplicate reconnect events; UI stuck in Reconnecting; agent dispatch fails on coincident disconnect ([BUG-010](../docs/field-tests/20260310-buglog.md))
 - [ ] 042: Review BRAIN_MAX_WAIT_MS with Hold Mode 📋 — consider increasing/removing brain timeout now that hold mode handles idle detection; currently destructive (kills response) on legitimate long-thinking operations
+- [ ] 073: STT Pipeline Survives Track Resubscription ⚠️ — SDK `AudioRecognition`/`MultiInputStream` dies on track unpublish/republish (mic toggle); agent becomes deaf; Option A: mute instead of unpublish; BUG-027c/d ([field test](../docs/field-tests/20260315-buglog.md))
 
 **Implemented:**
 - VoiceAgent wired to `@livekit/agents` SDK (deepgram.STT, cartesia.TTS, voice.AgentSession)

@@ -941,6 +941,9 @@ export default defineAgent({
           trackParticipant?.kind !== ParticipantKind.AGENT
         ) {
           sendBootstrap?.();
+          // Notify watchdog that user audio is available — if STT never
+          // activates within the timeout, the pipeline failed to start.
+          sttWatchdog.onAudioTrackSubscribed();
         }
       },
     );
