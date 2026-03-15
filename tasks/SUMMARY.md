@@ -256,6 +256,7 @@ Complete UI redesign: TUI-inspired, 8-bit, brutalist aesthetic. Chat-first layou
 - [ ] 070: Suppress Agent Disconnect in Text Mode 📋 — when user is in text input mode (not voice mode), suppress hold disconnect system event entirely; relay still handles chat
 - [ ] 071: Hold Mode — Tappable Resume Action 📋 — add visual cue to mic button when on hold (slow amber pulse); makes "tap to resume" discoverable without new UI elements
 - [ ] 072: Bootstrap "Connecting" State 📋 — show visual indicator during bootstrap (agent emits `bootstrap` start/end events); suppress pondering during setup; auto-dismiss on end or 10s timeout (BUG-031)
+- [ ] 074: Network/Room Info Lost on Mid-Session Join 📋 — preserve initial session metadata (room/network) when switching rooms without app restart; additive system events; [BUG-035](../docs/field-tests/20260315-buglog.md)
 - [x] 038a: Fix Artifact Clump Regression After Agent Reconnect ✅ — `_lastAgentSegmentId` reset on disconnect; artifacts now correctly distributed across messages ([BUG-004](../docs/field-tests/20260310-buglog.md))
 - [x] 038b: Verbose ACP Tool Feedback ✅ — verbose ACP mode; `tool_call`/`tool_call_update` parsing; inline ToolCallCard in chat transcript
 - [x] 058: Token Usage Display ✅ — `AcpUsageUpdate` parsing; `TOK: 35K / 1M` metric in DiagnosticsBar; color thresholds at 75%/90%
