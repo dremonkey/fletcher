@@ -84,6 +84,13 @@ class AgentPresenceService extends ChangeNotifier {
   void onAgentDisconnected({bool holdMode = false}) {
     if (!_enabled) return;
     _holdMode = holdMode;
+    // When hold mode is active and we're already agentAbsent (TrackUnsubscribed
+    // raced ahead of ParticipantDisconnected), emit the hold event directly
+    // since _transitionTo will no-op on same-state. (TASK-069)
+    if (holdMode && _state == AgentPresenceState.agentAbsent) {
+      _emitTransitionEvent(AgentPresenceState.agentPresent, AgentPresenceState.agentAbsent);
+      return;
+    }
     _transitionTo(AgentPresenceState.agentAbsent);
   }
 
