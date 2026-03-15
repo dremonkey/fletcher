@@ -428,7 +428,7 @@ Split the single voice-agent pipeline into two distinct modes — **Voice Mode**
 
 **Depends on:** Epic 4 (Ganglia session keys), Epic 17 (Text Input), Epic 20 (Agent Dispatch), Epic 24 (Relay)
 
-### 24. [WebRTC ACP Relay](./24-webrtc-acp-relay)
+### 24. [WebRTC ACP Relay](./24-webrtc-acp-relay) ✅
 Lightweight LiveKit participant that bridges mobile data channel messages to ACP agent subprocesses over stdio. Enables text-mode conversations without the voice pipeline. Foundation for dual-mode architecture (Epic 22).
 
 **Tasks:**
