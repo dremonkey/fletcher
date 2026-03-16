@@ -267,6 +267,83 @@ void main() {
     });
 
     // -------------------------------------------------------------------------
+    // agent_thought_chunk — carries streamed thinking/reasoning text
+    // -------------------------------------------------------------------------
+
+    group('agent_thought_chunk', () {
+      test('returns AcpThinkingDelta for text content', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'agent_thought_chunk',
+            'content': {'type': 'text', 'text': 'Let me think about this...'},
+          },
+        };
+        expect(
+          AcpUpdateParser.parse(params),
+          AcpThinkingDelta('Let me think about this...'),
+        );
+      });
+
+      test('returns AcpThinkingDelta for empty string', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'agent_thought_chunk',
+            'content': {'type': 'text', 'text': ''},
+          },
+        };
+        expect(AcpUpdateParser.parse(params), AcpThinkingDelta(''));
+      });
+
+      test('returns null when content is missing', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'agent_thought_chunk',
+          },
+        };
+        expect(AcpUpdateParser.parse(params), isNull);
+      });
+
+      test('returns null for non-text content type', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'agent_thought_chunk',
+            'content': {'type': 'image', 'data': 'abc='},
+          },
+        };
+        expect(AcpUpdateParser.parse(params), isNull);
+      });
+
+      test('returns null when text is not a string', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'agent_thought_chunk',
+            'content': {'type': 'text', 'text': 42},
+          },
+        };
+        expect(AcpUpdateParser.parse(params), isNull);
+      });
+
+      test('AcpThinkingDelta equality works', () {
+        const a = AcpThinkingDelta('thinking');
+        const b = AcpThinkingDelta('thinking');
+        const c = AcpThinkingDelta('other');
+        expect(a, equals(b));
+        expect(a, isNot(equals(c)));
+      });
+
+      test('AcpThinkingDelta is distinct from AcpTextDelta', () {
+        const thinking = AcpThinkingDelta('hello');
+        const text = AcpTextDelta('hello');
+        expect(thinking, isNot(equals(text)));
+      });
+    });
+
+    // -------------------------------------------------------------------------
     // available_commands_update — emitted on session/new and on changes
     // -------------------------------------------------------------------------
 

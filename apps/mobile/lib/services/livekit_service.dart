@@ -170,6 +170,8 @@ class LiveKitService extends ChangeNotifier {
 
   // Accumulated text for the in-progress agent message from relay (chat mode).
   String _relayAgentMessageText = '';
+  // Accumulated thinking/reasoning text from relay (chat mode).
+  String _relayThinkingText = '';
 
   // Speech detection via audio levels when agent is absent (Epic 20).
   // Counts consecutive frames above threshold to confirm speech.
@@ -1716,19 +1718,24 @@ class LiveKitService extends ChangeNotifier {
 
     final replayEntries = <TranscriptEntry>[];
     String currentAgentText = '';
+    String currentThinkingText = '';
     int turnIndex = 0;
 
     void finalizeAgentTurn() {
-      if (currentAgentText.isNotEmpty) {
+      if (currentAgentText.isNotEmpty || currentThinkingText.isNotEmpty) {
+        final text = currentThinkingText.isNotEmpty
+            ? '<think>$currentThinkingText</think>$currentAgentText'
+            : currentAgentText;
         replayEntries.add(TranscriptEntry(
           id: 'replay-agent-$turnIndex',
           role: TranscriptRole.agent,
-          text: currentAgentText,
+          text: text,
           isFinal: true,
           timestamp: DateTime.now(),
           origin: MessageOrigin.text,
         ));
         currentAgentText = '';
+        currentThinkingText = '';
         turnIndex++;
       }
     }
@@ -1749,6 +1756,9 @@ class LiveKitService extends ChangeNotifier {
             origin: MessageOrigin.text,
           ));
           turnIndex++;
+
+        case RelayThinkingDelta(:final text):
+          currentThinkingText += text;
 
         case RelayContentDelta(:final text):
           currentAgentText += text;
@@ -1827,19 +1837,34 @@ class LiveKitService extends ChangeNotifier {
     final messageId = 'relay-${DateTime.now().millisecondsSinceEpoch}';
 
     _relayAgentMessageText = '';
+    _relayThinkingText = '';
 
     // Show thinking indicator
     _updateState(isAgentThinking: true);
 
+    String buildTranscriptText() {
+      if (_relayThinkingText.isEmpty) return _relayAgentMessageText;
+      return '<think>$_relayThinkingText</think>$_relayAgentMessageText';
+    }
+
     final stream = relay.sendPrompt(text);
     await for (final event in stream) {
       switch (event) {
+        case RelayThinkingDelta(:final text):
+          _relayThinkingText += text;
+          _upsertTranscript(
+            segmentId: messageId,
+            role: TranscriptRole.agent,
+            text: buildTranscriptText(),
+            isFinal: false,
+          );
+
         case RelayContentDelta(:final text):
           _relayAgentMessageText += text;
           _upsertTranscript(
             segmentId: messageId,
             role: TranscriptRole.agent,
-            text: _relayAgentMessageText,
+            text: buildTranscriptText(),
             isFinal: false,
           );
           // Hide thinking after first content arrives
@@ -1851,12 +1876,13 @@ class LiveKitService extends ChangeNotifier {
           _upsertTranscript(
             segmentId: messageId,
             role: TranscriptRole.agent,
-            text: _relayAgentMessageText,
+            text: buildTranscriptText(),
             isFinal: true,
           );
           _updateState(isAgentThinking: false);
 
           _relayAgentMessageText = '';
+          _relayThinkingText = '';
 
         case RelayPromptError(:final code, :final message):
           debugPrint('[Relay] Prompt error: $code $message');
@@ -1871,6 +1897,7 @@ class LiveKitService extends ChangeNotifier {
           ));
 
           _relayAgentMessageText = '';
+          _relayThinkingText = '';
 
         case RelayUsageUpdate(:final used, :final size):
           _state = _state.copyWith(
@@ -2323,6 +2350,7 @@ class LiveKitService extends ChangeNotifier {
     _relayChatService?.dispose();
     _relayChatService = null;
     _relayAgentMessageText = '';
+    _relayThinkingText = '';
     _sessionBound = false;
     _room?.unregisterTextStreamHandler('lk.transcription');
     _listener?.dispose();

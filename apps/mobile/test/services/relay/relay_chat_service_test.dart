@@ -283,6 +283,73 @@ void main() {
       expect((events[0] as RelayContentDelta).text, 'kept');
     });
 
+    test('emits RelayThinkingDelta for agent_thought_chunk', () async {
+      final events = <RelayChatEvent>[];
+      final stream = service.sendPrompt('Hi');
+      stream.listen(events.add);
+
+      // Thinking chunks arrive before content
+      service.handleMessage(encode({
+        'jsonrpc': '2.0',
+        'method': 'session/update',
+        'params': {
+          'sessionId': 'sess_abc',
+          'update': {
+            'sessionUpdate': 'agent_thought_chunk',
+            'content': {'type': 'text', 'text': 'Let me think...'},
+          },
+        },
+      }));
+      service.handleMessage(encode({
+        'jsonrpc': '2.0',
+        'method': 'session/update',
+        'params': {
+          'sessionId': 'sess_abc',
+          'update': {
+            'sessionUpdate': 'agent_thought_chunk',
+            'content': {'type': 'text', 'text': ' about this.'},
+          },
+        },
+      }));
+      service.handleMessage(encode(contentChunk('The answer is 42.')));
+      service.handleMessage(encode(promptResult(1)));
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(events, hasLength(4));
+      expect(events[0], isA<RelayThinkingDelta>());
+      expect((events[0] as RelayThinkingDelta).text, 'Let me think...');
+      expect(events[1], isA<RelayThinkingDelta>());
+      expect((events[1] as RelayThinkingDelta).text, ' about this.');
+      expect(events[2], isA<RelayContentDelta>());
+      expect((events[2] as RelayContentDelta).text, 'The answer is 42.');
+      expect(events[3], isA<RelayPromptComplete>());
+    });
+
+    test('ignores empty agent_thought_chunk text', () async {
+      final events = <RelayChatEvent>[];
+      final stream = service.sendPrompt('Hi');
+      stream.listen(events.add);
+
+      service.handleMessage(encode({
+        'jsonrpc': '2.0',
+        'method': 'session/update',
+        'params': {
+          'sessionId': 'sess_abc',
+          'update': {
+            'sessionUpdate': 'agent_thought_chunk',
+            'content': {'type': 'text', 'text': ''},
+          },
+        },
+      }));
+      service.handleMessage(encode(promptResult(1)));
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(events, hasLength(1));
+      expect(events[0], isA<RelayPromptComplete>());
+    });
+
     test('ignores empty text in agent_message_chunk', () async {
       final events = <RelayChatEvent>[];
       final stream = service.sendPrompt('Hi');

@@ -142,6 +142,24 @@ final class AcpUserMessage extends AcpUpdate {
   String toString() => 'AcpUserMessage(${text.length} chars)';
 }
 
+/// A thinking/reasoning chunk from an `agent_thought_chunk` update.
+/// Same wire format as `agent_message_chunk` but carries model reasoning.
+final class AcpThinkingDelta extends AcpUpdate {
+  final String text;
+
+  const AcpThinkingDelta(this.text);
+
+  @override
+  bool operator ==(Object other) =>
+      other is AcpThinkingDelta && other.text == text;
+
+  @override
+  int get hashCode => text.hashCode;
+
+  @override
+  String toString() => 'AcpThinkingDelta(${text.length} chars)';
+}
+
 /// A recognized but non-renderable update.
 ///
 /// Covers: `available_commands_update`, `plan`, unknown future kinds, and
@@ -190,6 +208,10 @@ abstract final class AcpUpdateParser {
 
     if (kind == 'agent_message_chunk') {
       return _parseAgentMessageChunk(kind, update);
+    }
+
+    if (kind == 'agent_thought_chunk') {
+      return _parseThoughtChunk(update);
     }
 
     if (kind == 'user_message') {
@@ -243,6 +265,15 @@ abstract final class AcpUpdateParser {
     return AcpUserMessage(textParts.join(''));
   }
 
+  static AcpUpdate? _parseThoughtChunk(Map<String, dynamic> update) {
+    final content = update['content'];
+    if (content is! Map<String, dynamic>) return null;
+    if (content['type'] != 'text') return null;
+    final text = content['text'];
+    if (text is! String) return null;
+    return AcpThinkingDelta(text);
+  }
+
   static AcpUpdate? _parseAgentMessageChunk(
     String kind,
     Map<String, dynamic> update,
@@ -255,21 +286,12 @@ abstract final class AcpUpdateParser {
 
     final contentType = content['type'];
 
-    // DIAG: log every content type we see to trace <think> tag pipeline
     if (contentType != 'text') {
-      debugPrint('[AcpUpdateParser] agent_message_chunk non-text content: '
-          'type=$contentType, keys=${content.keys.toList()}');
       return AcpNonContentUpdate(kind);
     }
 
     final text = content['text'];
     if (text is! String) return null;
-
-    // DIAG: flag if text contains <think> tags
-    if (text.contains('<think')) {
-      debugPrint('[AcpUpdateParser] <think> tag found in text chunk! '
-          'len=${text.length} start="${text.substring(0, text.length.clamp(0, 80))}"');
-    }
 
     return AcpTextDelta(text);
   }

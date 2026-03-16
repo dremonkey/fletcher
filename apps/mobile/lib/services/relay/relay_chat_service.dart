@@ -18,6 +18,12 @@ class RelayContentDelta extends RelayChatEvent {
   RelayContentDelta(this.text);
 }
 
+/// A thinking/reasoning delta from an `agent_thought_chunk` ACP event.
+class RelayThinkingDelta extends RelayChatEvent {
+  final String text;
+  RelayThinkingDelta(this.text);
+}
+
 /// The `session/prompt` completed successfully.
 class RelayPromptComplete extends RelayChatEvent {
   final String stopReason;
@@ -227,24 +233,10 @@ class RelayChatService {
   void _handleSessionUpdate(Map<String, dynamic> params) {
     final update = AcpUpdateParser.parse(params);
 
-    // DIAG: log every ACP update to trace <think> tag pipeline
-    final kind = (params['update'] as Map<String, dynamic>?)?['sessionUpdate'];
-    if (update is AcpTextDelta) {
-      final hasThinkTag = update.text.contains('<think');
-      if (hasThinkTag) {
-        debugPrint('[RelayChatService] AcpTextDelta with <think> tag! '
-            'text="${update.text.substring(0, update.text.length.clamp(0, 80))}"');
-      }
-    } else if (update is AcpNonContentUpdate) {
-      debugPrint('[RelayChatService] Non-content update dropped: '
-          'kind=${update.kind}, raw sessionUpdate=$kind');
-    } else if (update == null) {
-      debugPrint('[RelayChatService] AcpUpdateParser returned null '
-          'for sessionUpdate=$kind');
-    }
-
     if (update is AcpTextDelta && update.text.isNotEmpty) {
       _activeStream?.add(RelayContentDelta(update.text));
+    } else if (update is AcpThinkingDelta && update.text.isNotEmpty) {
+      _activeStream?.add(RelayThinkingDelta(update.text));
     } else if (update is AcpUserMessage) {
       _activeStream?.add(RelayUserMessage(update.text));
     } else if (update is AcpUsageUpdate) {
