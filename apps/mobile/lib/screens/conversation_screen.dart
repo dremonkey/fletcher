@@ -9,6 +9,7 @@ import '../theme/tui_widgets.dart';
 import '../widgets/artifact_viewer.dart';
 import '../widgets/chat_transcript.dart';
 import '../widgets/diagnostics_bar.dart';
+import '../widgets/sub_agent_chip.dart';
 import '../widgets/voice_control_bar.dart';
 
 class ConversationScreen extends StatefulWidget {
@@ -37,6 +38,7 @@ class _ConversationScreenState extends State<ConversationScreen>
     WidgetsBinding.instance.addObserver(this);
     _liveKitService.addListener(_onStateChanged);
     _liveKitService.healthService.addListener(_onStateChanged);
+    _liveKitService.subAgentService.addListener(_onStateChanged);
     _connect();
   }
 
@@ -78,8 +80,38 @@ class _ConversationScreenState extends State<ConversationScreen>
     WidgetsBinding.instance.removeObserver(this);
     _liveKitService.removeListener(_onStateChanged);
     _liveKitService.healthService.removeListener(_onStateChanged);
+    _liveKitService.subAgentService.removeListener(_onStateChanged);
     _liveKitService.dispose();
     super.dispose();
+  }
+
+  Widget? _buildTrailingWidgets(BuildContext context, ConversationState state) {
+    final hasSubAgents = _liveKitService.subAgentService.hasAgents;
+    final hasArtifacts = state.artifacts.isNotEmpty;
+
+    if (!hasSubAgents && !hasArtifacts) return null;
+
+    final children = <Widget>[];
+
+    if (hasSubAgents) {
+      children.add(SubAgentChip(service: _liveKitService.subAgentService));
+    }
+
+    if (hasArtifacts) {
+      if (children.isNotEmpty) {
+        children.add(const SizedBox(width: AppSpacing.sm));
+      }
+      children.add(TuiButton(
+        label: 'ARTIFACTS: ${state.artifacts.length}',
+        onPressed: () => showArtifactsListModal(
+          context,
+          artifacts: state.artifacts,
+        ),
+      ));
+    }
+
+    if (children.length == 1) return children.first;
+    return Row(mainAxisSize: MainAxisSize.min, children: children);
   }
 
   @override
@@ -99,15 +131,7 @@ class _ConversationScreenState extends State<ConversationScreen>
               vadConfidence: state.userAudioLevel,
               errorMessage: state.errorMessage,
               diagnostics: state.diagnostics,
-              trailing: state.artifacts.isNotEmpty
-                  ? TuiButton(
-                      label: 'ARTIFACTS: ${state.artifacts.length}',
-                      onPressed: () => showArtifactsListModal(
-                        context,
-                        artifacts: state.artifacts,
-                      ),
-                    )
-                  : null,
+              trailing: _buildTrailingWidgets(context, state),
             ),
 
             // Error/reconnecting inline banner

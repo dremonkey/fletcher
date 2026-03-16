@@ -1,7 +1,7 @@
-/// Sub-agent visibility data model.
-///
-/// Mirrors the relay's SubAgentInfo type. Received via the "sub-agents"
-/// data channel topic as full snapshots.
+// Sub-agent visibility data model.
+//
+// Mirrors the relay's SubAgentInfo type. Received via the "sub-agents"
+// data channel topic as full snapshots.
 
 enum SubAgentStatus {
   running,
