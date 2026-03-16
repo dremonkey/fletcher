@@ -100,6 +100,9 @@ Session listing and switching uses a **slash command** (`/sessions`) rather than
 - [x] **TASK-079: Parse `<think>` / `<final>` tags in agent messages** -- Streaming-aware parser holds partial tags at XML boundaries, routes `<think>` to collapsible ThinkingBlock and `<final>` to visible response. 45 tests (30 parser + 15 widget).
 - [ ] **TASK-080: Session browsing and switching** -- Client-side session index (since session/list is unimplemented server-side), `/sessions` slash command, session cards, relay hot-swap. Deferred until 081 + 077 land.
 
+- [ ] **TASK-082: ACP thinking chunk passthrough** -- Patch OpenClaw's stream filter + config to emit `agent_thought_chunk` updates to ACP clients. Add `AcpThinkingDelta` parser + `RelayThinkingDelta` event on mobile. Unblocks ThinkingBlock widget (TASK-079). Upstream OpenClaw issue pending.
+- [ ] **TASK-083: Remove XML tag parser — render thinking from deltas** -- Delete `agent_text_parser.dart` and its 45 tests. Render ThinkingBlock directly from structured `TranscriptEntry.thinking` field instead of XML `<think>` tag roundtrip. Depends on 082.
+
 Candidate follow-up tasks:
 - Client-side message parsing: strip OpenClaw metadata preamble from user turns
 - Resume-aware bootstrap (agent adjusts greeting on resume)
