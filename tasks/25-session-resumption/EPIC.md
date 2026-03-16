@@ -97,7 +97,7 @@ Session listing and switching uses a **slash command** (`/sessions`) rather than
 - [x] **TASK-076: Client-side slash command interceptor** -- In `sendTextMessage()`, intercept `/`-prefixed input and route to a command registry instead of sending to agent/relay. Ships with `/help` as proof-of-life. This is the foundation for all TASK-022 macros.
 - [ ] **TASK-081: Session key schema + client→relay protocol** -- Decouple session key from room name. Client owns the key (format: `agent:main:relay:<identity>:<conversationId>`), tells relay which key to use. Relay passes it through instead of deriving. Foundation for both resumption and multi-session.
 - [ ] **TASK-077: Resume last session on reconnect** -- Client stores last session key, sends it on reconnect (via TASK-081 protocol), requests session/load, populates transcript. Depends on 081, 079.
-- [ ] **TASK-079: Parse `<think>` / `<final>` tags in agent messages** -- Render agent reasoning as a collapsible block (collapsed by default) and extract `<final>` as the visible response. Applies to both live streaming and session/load replay.
+- [x] **TASK-079: Parse `<think>` / `<final>` tags in agent messages** -- Streaming-aware parser holds partial tags at XML boundaries, routes `<think>` to collapsible ThinkingBlock and `<final>` to visible response. 45 tests (30 parser + 15 widget).
 - [ ] **TASK-080: Session browsing and switching** -- Client-side session index (since session/list is unimplemented server-side), `/sessions` slash command, session cards, relay hot-swap. Deferred until 081 + 077 land.
 
 Candidate follow-up tasks:

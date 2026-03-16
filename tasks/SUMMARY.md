@@ -449,6 +449,7 @@ Session management improvements: slash-command interception, room/session decoup
 
 **Tasks:**
 - [x] 076: Slash Command Interceptor ✅ — `/`-prefix interception in sendTextMessage(), CommandRegistry with async handlers, `/help` built-in, CommandResultCard inline widget; 15 tests
+- [x] 079: Parse `<think>`/`<final>` Tags ✅ — streaming-aware parser with partial tag holding; ThinkingBlock widget (collapsible, tap-to-expand); integrated into chat transcript; 45 tests (30 parser + 15 widget)
 
 ### 26. [Voice Mode Consolidation](./26-voice-mode) 🔄
 Consolidated index of ~41 voice tasks from 10 epics. Single place to prioritize voice work holistically. First task removes auto-dispatch so voice agent joins only on demand.

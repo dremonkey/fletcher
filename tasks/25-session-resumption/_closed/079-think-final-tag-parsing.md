@@ -1,7 +1,7 @@
 # Task 079: Parse `<think>` / `<final>` Tags in Agent Messages
 
 **Epic:** 25 — Session Resumption
-**Status:** [ ]
+**Status:** [x]
 **Depends on:** none
 **Blocks:** none (but prerequisite for clean session/load replay)
 
@@ -11,6 +11,7 @@ Parse OpenClaw's `<think>` and `<final>` XML tags from agent message text so tha
 - Thinking content (`<think>...</think>`) renders as a collapsible container — one summary line by default, expandable to full reasoning on tap
 - Final content (`<final>...</final>`) renders as the normal agent response text
 - Raw text with no tags renders as-is (backward compatible)
+- **During live streaming, partial tags are held (not rendered) until confirmed** — no raw `<think>` or `<final>` tags ever flash in the UI
 
 This applies to **both** live `session/update` streaming **and** `session/load` replay.
 
@@ -67,40 +68,120 @@ relay or the model. Reasons:
 - Parsing at render time handles both live streaming and session/load replay
 - If the tag format changes, only one widget needs updating
 
+### Streaming-aware parsing (key design decision)
+
+During live streaming, the accumulated text grows chunk by chunk. The parser
+must handle partial tags at string boundaries without leaking raw XML to the UI:
+
+```
+Streaming progression (parser called on each render with full accumulated text):
+═══════════════════════════════════════════════════════════════════════════════
+
+Chunk 3:  "<"               → HOLD — could be start of tag
+Chunk 4:  "<thi"            → HOLD — partial match for <think>
+Chunk 5:  "<think>"         → Tag confirmed → thinkingState: inProgress
+Chunk 8:  "<think>The user" → thinking: "The user" (streaming)
+Chunk 12: "...</think>"     → thinkingState: complete
+Chunk 14: "...</think> <"   → HOLD — could be start of <final>
+Chunk 16: "...<final>"      → Start accumulating visible text
+Chunk 20: "...<final>You introduced yourself" → visible streams in
+Chunk 25: "...<final>.....</final>" → complete
+
+State machine:
+═══════════════
+
+  ┌─────────┐   "<" detected    ┌──────────┐  confirmed    ┌──────────────┐
+  │  PLAIN  │ ──────────────▶   │ HOLDING  │ ──────────▶   │ TAG ROUTED   │
+  │ (render)│                   │ (buffer) │               │ (component)  │
+  └─────────┘   ◀──────────────  └──────────┘               └──────────────┘
+                  not a known tag     │
+                                      │ partial match
+                                      ▼
+                                 keep holding
+```
+
+The parser is **stateless** — it re-parses the full accumulated string on each
+render. The "holding" behavior comes from stripping partial tag matches from the
+end of the string before returning.
+
 ## Implementation
 
 ### 1. Tag parser utility (`apps/mobile/lib/utils/agent_text_parser.dart`)
 
-New file. Pure function, no Flutter dependency:
+New file. Pure Dart function, no Flutter dependency:
 
 ```dart
+enum ThinkingState { none, inProgress, complete }
+
 class ParsedAgentText {
-  final String? thinking;  // null if no <think> block
-  final String visible;    // <final> content, or full text if no tags
+  final String? thinking;          // content inside <think>, null if none/empty
+  final ThinkingState thinkingState;
+  final String visible;            // content inside <final>, or outside tags
+
+  const ParsedAgentText({
+    this.thinking,
+    this.thinkingState = ThinkingState.none,
+    this.visible = '',
+  });
 }
 
 ParsedAgentText parseAgentText(String raw) { ... }
 ```
 
-Rules:
-- Extract content between `<think>` and `</think>` → `thinking`
-- Extract content between `<final>` and `</final>` → `visible`
-- If no `<final>` tags, use everything outside `<think>` blocks as `visible`
-- If no tags at all, `thinking = null`, `visible = raw` (backward compatible)
-- Handle partial/malformed tags gracefully (treat as plain text)
-- Strip leading/trailing whitespace from both fields
+**Parsing rules (in order):**
+
+1. Look for `<think>` in the string
+   - Not found → check for partial tag at end (see rule 6), return `thinkingState: none`, `visible: raw` (minus any held suffix)
+2. `<think>` found, look for `</think>`
+   - Not found → `thinkingState: inProgress`, `thinking: content after <think>` (trimmed), `visible: ""`
+   - Found → `thinkingState: complete`, `thinking: content between tags` (trimmed). If trimmed content is empty, set `thinking: null`
+3. After `</think>`, look for `<final>` in remainder
+   - Not found → check for partial tag at end of remainder, `visible: remainder text` (minus any held suffix, trimmed)
+4. `<final>` found, look for `</final>`
+   - Not found → `visible: content after <final>` (trimmed, streaming)
+   - Found → `visible: content between tags` (trimmed)
+5. **Partial tag holding:** If the string ends with a prefix of any known tag (`<think>`, `</think>`, `<final>`, `</final>`), strip that suffix from whatever field it would appear in. Known tag prefixes to check: `<`, `<t`, `<th`, `<thi`, `<thin`, `<think`, `</`, `</t`, `</th`, `</thi`, `</thin`, `</think`, `<f`, `<fi`, `<fin`, `<fina`, `<final`, `</f`, `</fi`, `</fin`, `</fina`, `</final`.
+6. **Graceful fallback:** If tags are malformed (e.g., nested `<think>`, stray `<`, etc.), treat as plain text — `thinkingState: none`, `visible: raw`
+
+**Helper function for partial tag stripping:**
+
+```dart
+/// Strips a trailing partial tag match from [text].
+/// Returns the text with the partial suffix removed.
+/// Known tags: <think>, </think>, <final>, </final>
+String _stripPartialTag(String text) {
+  const tags = ['<think>', '</think>', '<final>', '</final>'];
+  for (final tag in tags) {
+    // Check if text ends with any prefix of this tag (length 1 to tag.length-1)
+    for (int len = tag.length - 1; len >= 1; len--) {
+      if (text.endsWith(tag.substring(0, len))) {
+        return text.substring(0, text.length - len);
+      }
+    }
+  }
+  return text;
+}
+```
 
 ### 2. Thinking block widget (`apps/mobile/lib/widgets/thinking_block.dart`)
 
-New widget. Collapsible container for agent reasoning:
+New StatefulWidget. Two modes based on `ThinkingState`:
 
+**In-progress mode** (`thinkingState == inProgress`):
+```
+  ◆ thinking ···
+```
+Single line, not expandable. Uses `AppTypography.overline` + `AppColors.textSecondary`.
+The `···` indicates streaming. No content shown (reasoning still arriving).
+
+**Complete mode** (`thinkingState == complete`):
 ```
   ┌──────────────────────────────────────────┐
   │ ◆ thinking ··· "The user asked for..."   │  ← collapsed (default)
   └──────────────────────────────────────────┘
 
   ┌──────────────────────────────────────────┐
-  │ ◆ thinking                               │  ← expanded (on tap)
+  │ ▼ thinking                               │  ← expanded (on tap)
   │                                          │
   │ The user (identified as Fletcher) asked  │
   │ for a one-sentence summary of the inter- │
@@ -110,57 +191,145 @@ New widget. Collapsible container for agent reasoning:
   └──────────────────────────────────────────┘
 ```
 
-Design:
-- Collapsed: single line with `◆ thinking` label + truncated preview (ellipsized)
-- Expanded: full text, wrapped
-- Tap to toggle
-- Style: `AppColors.textSecondary` text, `AppTypography.overline` for label,
-  `AppTypography.body` with `fontStyle: FontStyle.italic` for content
-- No border/card — this sits inline within the agent message `TuiCard`
-- Subtle visual separation: dimmer text color than the main response
+**Widget API:**
+```dart
+class ThinkingBlock extends StatefulWidget {
+  const ThinkingBlock({
+    super.key,
+    required this.text,
+    required this.state,
+  });
+
+  final String? text;             // thinking content (may be null in inProgress)
+  final ThinkingState state;      // inProgress or complete
+}
+```
+
+**Design rules:**
+- Collapsed (default): `◆ thinking` label + truncated preview in quotes (ellipsized, max 1 line)
+- Expanded: `▼ thinking` label + full text wrapped, `fontStyle: FontStyle.italic`
+- Tap to toggle (only when `state == complete`)
+- `GestureDetector` for tap handler
+- Style: `AppColors.textSecondary` for all text, `AppTypography.overline` for label, `AppTypography.body.copyWith(fontStyle: FontStyle.italic)` for content
+- No border/card — sits inline within the agent message `TuiCard`
+- Collapsed indicator: `◆` (diamond). Expanded indicator: `▼` (down triangle)
+- `SizedBox(height: AppSpacing.xs)` between ThinkingBlock and visible text
 
 ### 3. Update `_TranscriptMessage` (`apps/mobile/lib/widgets/chat_transcript.dart`)
 
 In `_TranscriptMessage.build()` (line ~368), for agent messages:
 
 ```dart
-// Current (line 402-410):
-Text(entry.text, style: ...)
+// Current (lines 402-410):
+Text(
+  entry.text,
+  style: AppTypography.body.copyWith(
+    fontStyle: entry.isFinal ? FontStyle.normal : FontStyle.italic,
+    color: entry.isFinal ? AppColors.textPrimary : AppColors.textSecondary,
+  ),
+),
 
 // New:
-if (isAgent) {
-  final parsed = parseAgentText(entry.text);
-  Column(children: [
-    if (parsed.thinking != null) ThinkingBlock(text: parsed.thinking!),
-    Text(parsed.visible, style: ...),
-  ])
-} else {
-  Text(entry.text, style: ...)  // user messages unchanged
-}
+if (isAgent) ...[
+  () {
+    final parsed = parseAgentText(entry.text);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (parsed.thinkingState != ThinkingState.none)
+          ThinkingBlock(text: parsed.thinking, state: parsed.thinkingState),
+        if (parsed.thinkingState != ThinkingState.none && parsed.visible.isNotEmpty)
+          const SizedBox(height: AppSpacing.xs),
+        if (parsed.visible.isNotEmpty)
+          Text(
+            parsed.visible,
+            style: AppTypography.body.copyWith(
+              fontStyle: entry.isFinal ? FontStyle.normal : FontStyle.italic,
+              color: entry.isFinal ? AppColors.textPrimary : AppColors.textSecondary,
+            ),
+          ),
+      ],
+    );
+  }(),
+] else ...[
+  Text(
+    entry.text,
+    style: AppTypography.body.copyWith(
+      fontStyle: entry.isFinal ? FontStyle.normal : FontStyle.italic,
+      color: entry.isFinal ? AppColors.textPrimary : AppColors.textSecondary,
+    ),
+  ),
+],
+```
+
+Add imports at top of file:
+```dart
+import '../utils/agent_text_parser.dart';
+import 'thinking_block.dart';
 ```
 
 ### 4. Tests
 
-- `apps/mobile/test/utils/agent_text_parser_test.dart` — unit tests:
-  - `<think>reasoning</think> <final>response</final>` → both fields
-  - `<final>response only</final>` → thinking null, visible = response
-  - `<think>reasoning</think> plain text after` → thinking + visible = plain text
-  - No tags at all → thinking null, visible = raw
-  - Empty `<think></think>` → thinking null (treat empty as absent)
-  - Nested or malformed tags → graceful fallback to raw
-  - Whitespace trimming
-- `apps/mobile/test/widgets/thinking_block_test.dart` — widget tests:
-  - Renders collapsed by default (single line, truncated)
-  - Expands on tap, collapses on second tap
-  - Long text truncated in collapsed state
+#### `apps/mobile/test/utils/agent_text_parser_test.dart`
+
+Unit tests for `parseAgentText()`:
+
+**Complete messages (session/load replay or final render):**
+- `<think>reasoning</think> <final>response</final>` → `thinking: "reasoning"`, `thinkingState: complete`, `visible: "response"`
+- `<final>response only</final>` → `thinking: null`, `thinkingState: none`, `visible: "response only"`
+- `<think>reasoning</think> plain text after` → `thinking: "reasoning"`, `thinkingState: complete`, `visible: "plain text after"`
+- No tags at all → `thinking: null`, `thinkingState: none`, `visible: raw`
+- Empty `<think></think>` → `thinking: null`, `thinkingState: complete`, `visible: ...`
+
+**Streaming progression (simulating chunk accumulation):**
+- `<think>reasoning so far` (unclosed think) → `thinkingState: inProgress`, `thinking: "reasoning so far"`, `visible: ""`
+- `<think>reasoning</think> <final>partial response` (unclosed final) → `thinkingState: complete`, `thinking: "reasoning"`, `visible: "partial response"`
+- `<think>reasoning</think> ` (think complete, no final yet) → `thinkingState: complete`, `thinking: "reasoning"`, `visible: ""`
+
+**Partial tag holding:**
+- String ending with `<` → held (not in visible)
+- String ending with `<thi` → held
+- String ending with `</think> <fin` → held (not in visible)
+- `<think>reasoning</think> <` → `thinkingState: complete`, `visible: ""` (the `<` is held)
+
+**Edge cases:**
+- Whitespace trimming on both fields
+- Nested or malformed tags → graceful fallback to raw
+- Empty string → `visible: ""`
+
+#### `apps/mobile/test/widgets/thinking_block_test.dart`
+
+Widget tests:
+- **Complete mode:** Renders collapsed by default (single line, `◆` icon, truncated preview)
+- **Complete mode:** Expands on tap (shows full text, `▼` icon)
+- **Complete mode:** Collapses on second tap
+- **Complete mode:** Long text truncated with ellipsis when collapsed
+- **In-progress mode:** Shows `◆ thinking ···` with no expand behavior
+- **In-progress mode:** Tap does nothing (not expandable)
+
+## Not in scope
+
+- **Multiple `<think>` blocks per message** — OpenClaw sends exactly one per turn. YAGNI.
+- **Tag parsing in relay or model layer** — parse at render time only; relay stays transparent.
+- **Custom tag registry** — only `<think>` and `<final>` are supported. If new tags arrive, update the parser.
+- **Persistent expand/collapse state** — resets on rebuild. Not worth the state management for a diagnostic feature.
+
+## Relates to
+
+- `tasks/25-session-resumption/EPIC.md` — parent epic
+- `tasks/25-session-resumption/_closed/075-spike-session-load.md` — spike data informing tag format
+- `apps/mobile/lib/widgets/chat_transcript.dart` — integration point
+- `apps/mobile/lib/widgets/thinking_spinner.dart` — related but distinct (spinner = waiting for response, ThinkingBlock = showing reasoning content)
 
 ## Acceptance criteria
 
-- [ ] Agent messages with `<think>` tags show a collapsible thinking block above the response
-- [ ] Agent messages with `<final>` tags show only the final content as the main response
-- [ ] Agent messages with no tags render identically to today (no regression)
-- [ ] Thinking block is collapsed by default, shows one-line preview
-- [ ] Tapping thinking block expands to show full reasoning text
-- [ ] Works for both live streaming and session/load replay
-- [ ] Parser handles partial/malformed tags gracefully
-- [ ] All unit and widget tests pass
+- [x] Agent messages with `<think>` tags show a collapsible thinking block above the response
+- [x] Agent messages with `<final>` tags show only the final content as the main response
+- [x] Agent messages with no tags render identically to today (no regression)
+- [x] Thinking block is collapsed by default, shows one-line preview with `◆` indicator
+- [x] Tapping thinking block expands to show full reasoning text with `▼` indicator
+- [x] During live streaming, partial `<think>`/`<final>` tags are never visible — held until confirmed
+- [x] Streaming shows `◆ thinking ···` indicator while `<think>` block is still receiving content
+- [x] Works for both live streaming and session/load replay
+- [x] Parser handles partial/malformed tags gracefully (fallback to raw text)
+- [x] All unit and widget tests pass (30 parser + 15 widget = 45 total)
