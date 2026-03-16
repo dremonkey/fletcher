@@ -49,7 +49,7 @@ See `075-spike-results.md` for full details. Key findings:
 - **`session/list` is not implemented** — returns -32601 despite being advertised. Client-side session index needed for browsing.
 - **`--session` flag required** — OpenClaw ACP needs `--session agent:main:<channel>:<id>` to bind to a thread. Without it, prompts fail with ACP_SESSION_INIT_FAILED.
 - **Content parsing needed** — user turns wrapped in OpenClaw metadata preamble; agent turns may contain `<think>`/`<final>` tags
-- **Session key must be identity-based** — currently room-based (`agent:main:relay:<roomName>`), needs to be `agent:main:relay:<participantIdentity>` for resumption across room reconnects
+- **Session key must be client-owned** — currently room-based (`agent:main:relay:<roomName>`), needs to be client-specified for resumption across room reconnects. Identity-only (1:1) is insufficient — key format must support multiple conversations per identity.
 
 ## Related Work
 
@@ -95,9 +95,10 @@ Session listing and switching uses a **slash command** (`/sessions`) rather than
 
 - [x] **TASK-075: Spike -- session/load + session/list fidelity** -- Results in `075-spike-results.md`. session/load works great (user+agent turns, <100ms, cross-process). session/list returns Method not found despite being advertised.
 - [x] **TASK-076: Client-side slash command interceptor** -- In `sendTextMessage()`, intercept `/`-prefixed input and route to a command registry instead of sending to agent/relay. Ships with `/help` as proof-of-life. This is the foundation for all TASK-022 macros.
-- [ ] **TASK-077: Resume current session on reconnect** -- Decouple session key from room name (identity-based instead), wire session/load into reconnect flow so transcript restores automatically after background disconnect.
+- [ ] **TASK-081: Session key schema + client→relay protocol** -- Decouple session key from room name. Client owns the key (format: `agent:main:relay:<identity>:<conversationId>`), tells relay which key to use. Relay passes it through instead of deriving. Foundation for both resumption and multi-session.
+- [ ] **TASK-077: Resume last session on reconnect** -- Client stores last session key, sends it on reconnect (via TASK-081 protocol), requests session/load, populates transcript. Depends on 081, 079.
 - [ ] **TASK-079: Parse `<think>` / `<final>` tags in agent messages** -- Render agent reasoning as a collapsible block (collapsed by default) and extract `<final>` as the visible response. Applies to both live streaming and session/load replay.
-- [ ] **TASK-080: Session browsing and switching** -- Client-side session index (since session/list is unimplemented server-side), `/sessions` slash command, session cards, relay hot-swap. Deferred until TASK-077 lands. Requires full session/room decoupling.
+- [ ] **TASK-080: Session browsing and switching** -- Client-side session index (since session/list is unimplemented server-side), `/sessions` slash command, session cards, relay hot-swap. Deferred until 081 + 077 land.
 
 Candidate follow-up tasks:
 - Client-side message parsing: strip OpenClaw metadata preamble from user turns

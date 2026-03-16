@@ -2,7 +2,7 @@
 
 **Epic:** 25 — Session Resumption
 **Status:** [ ]
-**Depends on:** 077 (resume current session — identity-based session keys must land first)
+**Depends on:** 081 (session key schema — multi-conversation key format), 077 (resume current session)
 **Blocks:** none
 
 ## Goal
@@ -22,22 +22,19 @@ implementation, we maintain our own session index.
 
 ### Session vs Room decoupling
 
-TASK-077 decouples the session key from the room name so the same
-participant always gets the same conversation. But for session *switching*,
-we need additional decoupling:
+TASK-081 decouples the session key from the room name and establishes a
+client-owned key format that supports multiple conversations per identity:
 
 ```
-  CURRENT (after TASK-077):
-    One participant identity → one session key → one conversation
-    (1:1 mapping, no way to have multiple conversations)
+  Key format: agent:main:relay:<participantIdentity>:<conversationId>
 
-  NEEDED:
-    One participant identity → multiple session keys → multiple conversations
-    User can create a "new session" or switch back to a previous one
+  Examples:
+    agent:main:relay:device-abc123:default    (first/default conversation)
+    agent:main:relay:device-abc123:conv-2     (second conversation)
 ```
 
-This means the `--session` flag passed to `openclaw acp` can't just be
-derived from participant identity — it needs to be an explicit choice.
+TASK-077 uses this to resume the last conversation. This task adds the ability
+to create new conversations and switch between existing ones.
 
 ### Architecture
 
@@ -115,9 +112,9 @@ When OpenClaw ships `session/list`, we can:
 
 ## Deferred
 
-**Why deferred:** Depends on TASK-077 shipping first (identity-based session keys).
-Also a lower priority than core session resumption — browsing is a power-user
-feature, resumption is the basic UX fix.
+**Why deferred:** Depends on TASK-081 (session key schema) and TASK-077 (resume)
+shipping first. Also a lower priority than core session resumption — browsing is
+a power-user feature, resumption is the basic UX fix.
 
 **Revisit when:** TASK-077 is complete AND either (a) OpenClaw ships `session/list`
 or (b) users report needing multiple conversations.
