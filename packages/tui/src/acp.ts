@@ -53,6 +53,16 @@ export async function interactWithAcp(): Promise<void> {
   const backend = resolveAcpBackend();
   p.log.info(`ACP backend: ${backend.label}`);
 
+  // OpenClaw requires --session <key> to bind the subprocess to a thread.
+  // Without it, prompts fail with ACP_SESSION_INIT_FAILED.
+  const sessionKeyInput = await p.text({
+    message: "Session key (OpenClaw thread binding):",
+    placeholder: "agent:main:tui:default",
+    defaultValue: "agent:main:tui:default",
+  });
+  if (p.isCancel(sessionKeyInput)) cancelled();
+  const sessionKey = (sessionKeyInput as string).trim();
+
   // --- Initialize ACP client ---
   const s = p.spinner();
   s.start("Initializing ACP subprocess");
@@ -62,7 +72,7 @@ export async function interactWithAcp(): Promise<void> {
   try {
     client = new AcpClient({
       command: backend.command,
-      args: backend.args,
+      args: [...backend.args, "--session", sessionKey],
       logger: acpLogger,
     });
     initResult = await client.initialize();
@@ -73,8 +83,9 @@ export async function interactWithAcp(): Promise<void> {
     return;
   }
 
-  // Show capabilities
-  p.log.info(`Capabilities: ${JSON.stringify(initResult.capabilities, null, 2)}`);
+  // Show capabilities (OpenClaw uses agentCapabilities, not capabilities)
+  const agentCaps = (initResult as Record<string, unknown>).agentCapabilities;
+  p.log.info(`Agent capabilities: ${JSON.stringify(agentCaps, null, 2)}`);
 
   // Collect session/update notifications for display
   let updateLog: SessionUpdateParams[] = [];

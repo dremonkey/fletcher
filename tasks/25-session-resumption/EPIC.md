@@ -92,16 +92,17 @@ Session listing and switching uses a **slash command** (`/sessions`) rather than
 
 ## Tasks
 
-- [ ] **TASK-075: Spike -- session/load + session/list fidelity** -- Call `session/load` on an existing multi-turn session, log the full replay, and map what's included (user turns, agent turns, tool calls, artifacts) vs. what's missing. Also test `session/list`. Results determine scope of remaining tasks.
+- [x] **TASK-075: Spike -- session/load + session/list fidelity** -- Results in `075-spike-results.md`. session/load works great (user+agent turns, <100ms, cross-process). session/list returns Method not found despite being advertised.
 - [x] **TASK-076: Client-side slash command interceptor** -- In `sendTextMessage()`, intercept `/`-prefixed input and route to a command registry instead of sending to agent/relay. Ships with `/help` as proof-of-life. This is the foundation for all TASK-022 macros.
-- [ ] **TASK-077: `/sessions` command + session list rendering** -- Wire `/sessions` to relay `session/list`, render results as tappable `SessionCard` widgets inline in the chat stream. Tap = immediate session switch.
+- [ ] **TASK-077: `/sessions` command + session list rendering** -- **BLOCKED: session/list not implemented server-side.** Scope reduced: focus on resume-current-session via session/load rather than browse-all-sessions.
 
-Candidate follow-up tasks (pending spike results):
-- Wire `session/load` for transcript replay on session switch
+Candidate follow-up tasks (informed by spike results):
+- Wire `session/load` for transcript replay on reconnect (relay already has this for BUG-022; mobile needs to request it)
+- Client-side message parsing: strip OpenClaw metadata preamble from user turns, handle `<think>`/`<final>` tags in agent turns
 - Resume-aware bootstrap (agent adjusts greeting on resume)
 - `[SES]` macro button in TASK-022 macro grid
 - SQLite cache for instant transcript display while server loads (optimization)
 
 ## Status
 
-**Epic Status:** [ ] PLANNING (spike first)
+**Epic Status:** [~] IN PROGRESS (spike complete, session/load validated)
