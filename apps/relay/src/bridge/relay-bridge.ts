@@ -10,6 +10,8 @@ import type { RoomManager } from "../livekit/room-manager";
 import type { SessionUpdateParams, SessionConfigOption, ConfigOptionValue, ConfigOptionGroup } from "@fletcher/acp-client";
 import { INTERNAL_ERROR, RATE_LIMITED } from "../rpc/errors";
 import { rootLogger, type Logger } from "../utils/logger";
+import { createSubAgentProvider, type SubAgentProvider } from "../sub-agents/index";
+import type { OpenClawProvider } from "../sub-agents/openclaw-provider";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -79,6 +81,9 @@ export class RelayBridge {
   private forwardFailures = 0;
   private static readonly MAX_CONSECUTIVE_FAILURES = 3;
 
+  /** Sub-agent visibility provider (Claude Code, OpenClaw, etc.). */
+  private subAgentProvider: SubAgentProvider | null = null;
+
   /**
    * WORKAROUND: BUG-022 / BUG-024 / openclaw/openclaw#40693
    * Content-based catch-up dedup for detecting and recovering from
@@ -145,7 +150,10 @@ export class RelayBridge {
     // 3. Negotiate session config options (best-effort)
     await this.negotiateSessionConfig(result.configOptions);
 
-    // 3. Register data handler for mobile -> ACP forwarding
+    // 3. Start sub-agent visibility provider
+    this.startSubAgentProvider();
+
+    // 4. Register data handler for mobile -> ACP forwarding
     this.options.roomManager.onDataReceived(
       "relay",
       (rn, data, participantIdentity) => {
@@ -211,6 +219,9 @@ export class RelayBridge {
         if (text) this.forwardedAgentText += text;
       }
 
+      // Feed update to sub-agent provider (OpenClaw extracts tool_call events)
+      this.feedSubAgentUpdate(params);
+
       if (this.activeRequestSource === "voice-acp") {
         this.forwardToVoiceAgent({ jsonrpc: "2.0", method: "session/update", params });
       } else {
@@ -236,6 +247,8 @@ export class RelayBridge {
    */
   async stop(): Promise<void> {
     this.started = false;
+    this.subAgentProvider?.stop();
+    this.subAgentProvider = null;
     await this.acpClient.shutdown();
   }
 
@@ -247,6 +260,63 @@ export class RelayBridge {
   /** The ACP session ID, or null if not yet started. */
   getSessionId(): string | null {
     return this.sessionId;
+  }
+
+  // -------------------------------------------------------------------------
+  // Sub-agent visibility
+  // -------------------------------------------------------------------------
+
+  /**
+   * Start the sub-agent provider based on acpCommand.
+   * Pushes snapshots to the Flutter app via the "sub-agents" data channel topic.
+   */
+  private startSubAgentProvider(): void {
+    if (!this.sessionId) return;
+
+    const provider = createSubAgentProvider(this.options.acpCommand, {
+      sessionId: this.sessionId,
+      cwd: process.cwd(),
+      logger: this.log.child({ component: "sub-agents" }),
+    });
+
+    if (!provider) {
+      this.log.debug(
+        { event: "no_subagent_provider", acpCommand: this.options.acpCommand },
+        "no sub-agent provider for this ACP command",
+      );
+      return;
+    }
+
+    this.subAgentProvider = provider;
+    provider.start((agents) => {
+      if (!this.started) return;
+      this.options.roomManager
+        .sendToRoomOnTopic(this.options.roomName, "sub-agents", {
+          type: "sub_agent_snapshot",
+          agents,
+        })
+        .catch((err) => {
+          this.log.debug(
+            { event: "subagent_snapshot_send_failed", error: (err as Error).message },
+            "failed to send sub-agent snapshot",
+          );
+        });
+    });
+
+    this.log.info(
+      { event: "subagent_provider_started", provider: provider.name },
+      `sub-agent provider: ${provider.name}`,
+    );
+  }
+
+  /**
+   * Forward an ACP session/update to the OpenClaw provider if active.
+   * The OpenClaw provider passively captures sub-agent events from the update stream.
+   */
+  private feedSubAgentUpdate(params: SessionUpdateParams): void {
+    if (!this.subAgentProvider) return;
+    if (this.subAgentProvider.name !== "openclaw") return;
+    (this.subAgentProvider as OpenClawProvider).handleSessionUpdate(params);
   }
 
   /** Whether the ACP subprocess needs re-initialization. */
