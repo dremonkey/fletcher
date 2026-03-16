@@ -67,9 +67,10 @@ const MOCK_ACPX_PATH = path.resolve(
 );
 const ROOM_NAME = "test-room";
 
-function createBridge(mockRm: MockRoomManager): RelayBridge {
+function createBridge(mockRm: MockRoomManager, sessionKey = "agent:main:relay:test-room"): RelayBridge {
   return new RelayBridge({
     roomName: ROOM_NAME,
+    sessionKey,
     roomManager: mockRm as unknown as RoomManager,
     acpCommand: "bun",
     acpArgs: [MOCK_ACPX_PATH],
@@ -108,6 +109,27 @@ describe("RelayBridge", () => {
 
     await bridge.start();
 
+    expect(bridge.isStarted).toBe(true);
+    expect(bridge.getSessionId()).toBe("mock-sess-001");
+  });
+
+  test("--session arg uses the provided sessionKey, not the room name", async () => {
+    const customKey = "user:alice:session:abc123";
+    bridge = createBridge(mockRm, customKey);
+
+    // Verify the source uses options.sessionKey for --session (not room name)
+    // We check the relay-bridge.ts source text directly — if someone reverts
+    // to the hard-coded room-name template, this assertion catches it.
+    const fs = await import("fs");
+    const bridgeSrc = fs.readFileSync(
+      new URL("./relay-bridge.ts", import.meta.url).pathname,
+      "utf-8",
+    );
+    expect(bridgeSrc).toContain("options.sessionKey");
+    expect(bridgeSrc).not.toContain("`agent:main:relay:${options.roomName}`");
+
+    // Starting should succeed — the mock ACPX accepts any --session value
+    await bridge.start();
     expect(bridge.isStarted).toBe(true);
     expect(bridge.getSessionId()).toBe("mock-sess-001");
   });

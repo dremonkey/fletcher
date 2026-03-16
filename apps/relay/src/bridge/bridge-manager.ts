@@ -2,6 +2,14 @@
  * BridgeManager — manages per-room RelayBridge instances.
  *
  * Each room gets one bridge (one ACPX subprocess + one ACP session).
+ *
+ * Lifecycle:
+ *  1. addRoom()      — joins the LiveKit room, waits for session/bind
+ *  2. session/bind   — client sends sessionKey; bridge is created and started
+ *  3. removeRoom()   — stops bridge and leaves room
+ *
+ * A 30-second bind timeout applies: if no session/bind arrives the relay
+ * leaves the room automatically.
  */
 
 import { RelayBridge } from "./relay-bridge";
@@ -16,15 +24,23 @@ export interface BridgeManagerOptions {
   departureGraceMs?: number;
   rejoinMaxRetries?: number;
   rejoinBaseDelayMs?: number;
+  /** How long to wait for session/bind before cleaning up the room. Default: 30_000 ms. */
+  bindTimeoutMs?: number;
+}
+
+interface PendingBind {
+  timer: ReturnType<typeof setTimeout>;
 }
 
 export class BridgeManager {
   private bridges = new Map<string, RelayBridge>();
+  private pendingBinds = new Map<string, PendingBind>();
   private idleTimer: ReturnType<typeof setInterval> | null = null;
   private discoveryTimer: ReturnType<typeof setInterval> | null = null;
   private log: Logger;
   private rejoinMaxRetries: number;
   private rejoinBaseDelayMs: number;
+  private bindTimeoutMs: number;
 
   constructor(
     private roomManager: RoomManager,
@@ -36,25 +52,132 @@ export class BridgeManager {
     this.log = logger ?? rootLogger.child({ component: "bridge-manager" });
     this.rejoinMaxRetries = options?.rejoinMaxRetries ?? 3;
     this.rejoinBaseDelayMs = options?.rejoinBaseDelayMs ?? 1_000;
+    this.bindTimeoutMs = options?.bindTimeoutMs ?? 30_000;
 
     this.roomManager.onRoomDisconnected((roomName, reason) => {
       this.handleRoomDisconnected(roomName, reason);
     });
+
+    // Single global handler for the "relay" topic — handles session/bind and
+    // routes other methods to the appropriate bridge once one exists.
+    this.roomManager.onDataReceived("relay", (roomName, data, participantIdentity) => {
+      this.handleRelayMessage(roomName, data, participantIdentity);
+    });
   }
 
   /**
-   * Create a bridge for a room: join the room, then start the bridge.
-   * Idempotent — if a bridge already exists for the room, returns without action.
+   * Join a LiveKit room and wait for a session/bind message from the client.
+   * Idempotent — if a bridge or pending bind already exists for the room, returns without action.
    */
   async addRoom(roomName: string): Promise<void> {
-    if (this.bridges.has(roomName)) return;
+    if (this.bridges.has(roomName) || this.pendingBinds.has(roomName)) return;
 
     // Join the LiveKit room first
     await this.roomManager.joinRoom(roomName);
 
-    // Create and start the bridge with a room-scoped logger
+    // Start bind timeout
+    const timer = setTimeout(() => {
+      this.handleBindTimeout(roomName);
+    }, this.bindTimeoutMs);
+
+    if (timer && typeof timer === "object" && "unref" in timer) {
+      (timer as NodeJS.Timeout).unref();
+    }
+
+    this.pendingBinds.set(roomName, { timer });
+    this.log.info({ event: "room_added_pending_bind", roomName });
+  }
+
+  /**
+   * Remove a bridge: stop the bridge and leave the room.
+   * Also cleans up any pending bind state.
+   */
+  async removeRoom(roomName: string): Promise<void> {
+    // Clean up pending bind if exists
+    const pending = this.pendingBinds.get(roomName);
+    if (pending) {
+      clearTimeout(pending.timer);
+      this.pendingBinds.delete(roomName);
+    }
+
+    const bridge = this.bridges.get(roomName);
+    if (!bridge && !pending) return; // nothing to clean up
+
+    if (bridge) {
+      await bridge.stop();
+      this.bridges.delete(roomName);
+    }
+    await this.roomManager.leaveRoom(roomName);
+    this.log.info({ event: "room_removed", roomName });
+  }
+
+  // -------------------------------------------------------------------------
+  // session/bind handling
+  // -------------------------------------------------------------------------
+
+  /**
+   * Route incoming "relay" topic messages. session/bind is handled here;
+   * all other methods (session/prompt, session/cancel) are handled by the
+   * RelayBridge's own data handler once a bridge exists.
+   */
+  private handleRelayMessage(roomName: string, data: unknown, _participantIdentity: string): void {
+    if (typeof data !== "object" || data === null) return;
+    const msg = data as { method?: string; id?: number | string; params?: Record<string, unknown> };
+
+    if (msg.method === "session/bind") {
+      this.handleSessionBind(roomName, msg).catch((err) => {
+        this.log.error({ event: "session_bind_error", roomName, err });
+      });
+    }
+    // Other methods (session/prompt, session/cancel, voice-acp, etc.) are
+    // handled by RelayBridge's own onDataReceived handlers registered in start().
+  }
+
+  /**
+   * Handle a session/bind JSON-RPC message from the mobile client.
+   * Creates and starts a RelayBridge with the client-specified session key.
+   */
+  private async handleSessionBind(
+    roomName: string,
+    msg: { id?: number | string; params?: Record<string, unknown> },
+  ): Promise<void> {
+    const sessionKey = msg.params?.sessionKey as string | undefined;
+
+    // Duplicate bind — already has a bridge; respond with current state
+    if (this.bridges.has(roomName)) {
+      await this.roomManager.sendToRoom(roomName, {
+        jsonrpc: "2.0",
+        id: msg.id,
+        result: { sessionKey, bound: true },
+      });
+      return;
+    }
+
+    // Not pending — shouldn't happen, but handle gracefully
+    if (!this.pendingBinds.has(roomName)) {
+      this.log.warn({ event: "bind_unexpected", roomName }, "session/bind for unknown room");
+      return;
+    }
+
+    // Validate session key
+    if (!sessionKey || typeof sessionKey !== "string") {
+      await this.roomManager.sendToRoom(roomName, {
+        jsonrpc: "2.0",
+        id: msg.id,
+        error: { code: -32602, message: "Missing or invalid sessionKey" },
+      });
+      return;
+    }
+
+    // Clear bind timeout
+    const pending = this.pendingBinds.get(roomName)!;
+    clearTimeout(pending.timer);
+    this.pendingBinds.delete(roomName);
+
+    // Create and start bridge with client-specified session key
     const bridge = new RelayBridge({
       roomName,
+      sessionKey,
       roomManager: this.roomManager,
       acpCommand: this.acpCommand,
       acpArgs: this.acpArgs,
@@ -63,20 +186,32 @@ export class BridgeManager {
 
     this.bridges.set(roomName, bridge);
     await bridge.start();
-    this.log.info({ event: "room_added", roomName });
+
+    // Send bind response
+    await this.roomManager.sendToRoom(roomName, {
+      jsonrpc: "2.0",
+      id: msg.id,
+      result: { sessionKey, bound: true },
+    });
+
+    this.log.info({ event: "session_bound", roomName, sessionKey });
   }
 
   /**
-   * Remove a bridge: stop the bridge and leave the room.
+   * Called when the bind timeout fires — clean up the room if no bind arrived.
    */
-  async removeRoom(roomName: string): Promise<void> {
-    const bridge = this.bridges.get(roomName);
-    if (!bridge) return;
+  private handleBindTimeout(roomName: string): void {
+    if (!this.pendingBinds.has(roomName)) return;
 
-    await bridge.stop();
-    this.bridges.delete(roomName);
-    await this.roomManager.leaveRoom(roomName);
-    this.log.info({ event: "room_removed", roomName });
+    this.pendingBinds.delete(roomName);
+    this.log.warn(
+      { event: "bind_timeout", roomName },
+      "No session/bind received within timeout — cleaning up room",
+    );
+
+    this.roomManager.leaveRoom(roomName).catch((err) => {
+      this.log.error({ event: "bind_timeout_cleanup_failed", roomName, err });
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -106,10 +241,10 @@ export class BridgeManager {
   }
 
   /**
-   * Check if a room already has a bridge.
+   * Check if a room already has a bridge OR is pending bind.
    */
   hasRoom(roomName: string): boolean {
-    return this.bridges.has(roomName);
+    return this.bridges.has(roomName) || this.pendingBinds.has(roomName);
   }
 
   /**
@@ -131,6 +266,12 @@ export class BridgeManager {
    */
   async shutdownAll(): Promise<void> {
     this.stopDiscoveryTimer();
+
+    // Clear all pending bind timers
+    for (const [, pending] of this.pendingBinds) {
+      clearTimeout(pending.timer);
+    }
+    this.pendingBinds.clear();
 
     const stops = Array.from(this.bridges.entries()).map(
       async ([roomName, bridge]) => {
@@ -155,6 +296,13 @@ export class BridgeManager {
       { event: "room_disconnected", roomName, reason },
       "Room disconnected unexpectedly, will attempt rejoin",
     );
+
+    // Clear any pending bind for this room (no need to cancel timer — disconnect already fired)
+    if (this.pendingBinds.has(roomName)) {
+      const pending = this.pendingBinds.get(roomName)!;
+      clearTimeout(pending.timer);
+      this.pendingBinds.delete(roomName);
+    }
 
     // Stop + delete the stale bridge (fire-and-forget)
     const bridge = this.bridges.get(roomName);

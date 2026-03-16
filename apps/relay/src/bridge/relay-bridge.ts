@@ -17,6 +17,8 @@ import { rootLogger, type Logger } from "../utils/logger";
 
 export interface RelayBridgeOptions {
   roomName: string;
+  /** Session key passed to ACP subprocess via --session flag. */
+  sessionKey: string;
   roomManager: RoomManager;
   acpCommand: string;
   acpArgs?: string[];
@@ -104,7 +106,7 @@ export class RelayBridge {
       args: [
         ...(options.acpArgs ?? []),
         "--session",
-        `agent:main:relay:${options.roomName}`,
+        options.sessionKey,
       ],
       logger: this.log.child({ component: "acp" }),
     });
