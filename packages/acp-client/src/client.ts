@@ -19,6 +19,8 @@ import type {
   SessionListResult,
   SessionLoadParams,
   SessionUpdateParams,
+  SetConfigOptionParams,
+  SetConfigOptionResult,
 } from "./types.js";
 import type { JsonRpcResponse } from "./rpc.js";
 
@@ -223,6 +225,27 @@ export class AcpClient {
   }
 
   /**
+   * Set a session config option.
+   *
+   * ACP spec: https://agentclientprotocol.com/rfds/session-config-options
+   *
+   * Returns the full updated configOptions array so the client can replace
+   * its state entirely.
+   */
+  async sessionSetConfigOption(params: SetConfigOptionParams): Promise<SetConfigOptionResult> {
+    this.log.info(
+      { event: "set_config_option", configId: params.configId, value: params.value },
+      `setting config ${params.configId}=${params.value}`,
+    );
+    const result = (await this.request("session/set_config_option", params)) as SetConfigOptionResult;
+    this.log.info(
+      { event: "set_config_option_result", configCount: result.configOptions?.length ?? 0 },
+      "config option set",
+    );
+    return result;
+  }
+
+  /**
    * Cancel the current session prompt.
    * This is a notification — no response is expected.
    */
@@ -383,11 +406,6 @@ export class AcpClient {
   /** Parse a JSON-RPC line and route it. */
   private handleLine(line: string): void {
     this.log.debug({ raw: line }, "acp raw stdout");
-
-    // DIAG: flag any line containing <think at the raw stdio level
-    if (line.includes("<think")) {
-      this.log.info({ event: "raw_think_tag", snippet: line.substring(0, 200) }, "raw stdout contains <think> tag");
-    }
 
     let msg: Record<string, unknown>;
     try {

@@ -85,6 +85,65 @@ export interface SessionNewParams {
 
 export interface SessionNewResult {
   sessionId: string;
+  /** Initial session configuration options if supported by the agent. */
+  configOptions?: SessionConfigOption[];
+}
+
+// ---------------------------------------------------------------------------
+// Config options
+//
+// ACP spec: https://agentclientprotocol.com/rfds/session-config-options
+//
+// Agents advertise configOptions in session/new response. Clients discover
+// available options, then use session/set_config_option to change values.
+// The agent MUST always have defaults — clients may ignore config entirely.
+// ---------------------------------------------------------------------------
+
+/** A single-value dropdown config option advertised by the agent. */
+export interface SessionConfigOption {
+  /** Unique identifier for this option (e.g. "mode", "model"). */
+  id: string;
+  /** Human-readable name. */
+  name: string;
+  /** Optional description. */
+  description?: string;
+  /**
+   * Semantic category hint. Known categories:
+   * - "mode" — session mode selector
+   * - "model" — model selector
+   * - "thought_level" — thought/reasoning level selector
+   * - "_*" — custom categories (prefixed with underscore)
+   */
+  category?: string;
+  type: "select";
+  /** Currently selected option value ID. */
+  currentValue: string;
+  /** Available options (flat list or grouped). */
+  options: ConfigOptionValue[] | ConfigOptionGroup[];
+}
+
+export interface ConfigOptionValue {
+  value: string;
+  name: string;
+  description?: string;
+}
+
+export interface ConfigOptionGroup {
+  group: string;
+  options: ConfigOptionValue[];
+}
+
+export interface SetConfigOptionParams {
+  sessionId: string;
+  /** The config option ID to change. */
+  configId: string;
+  /** The option value ID to set. */
+  value: string;
+}
+
+export interface SetConfigOptionResult {
+  /** Full updated config options array (replace client state entirely). */
+  configOptions: SessionConfigOption[];
 }
 
 // ---------------------------------------------------------------------------

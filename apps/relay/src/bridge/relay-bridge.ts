@@ -7,7 +7,7 @@
 
 import { AcpClient, AcpError } from "@fletcher/acp-client";
 import type { RoomManager } from "../livekit/room-manager";
-import type { SessionUpdateParams } from "@fletcher/acp-client";
+import type { SessionUpdateParams, SessionConfigOption, ConfigOptionValue, ConfigOptionGroup } from "@fletcher/acp-client";
 import { INTERNAL_ERROR, RATE_LIMITED } from "../rpc/errors";
 import { rootLogger, type Logger } from "../utils/logger";
 
@@ -120,8 +120,9 @@ export class RelayBridge {
    * Start the bridge:
    * 1. Initialize ACP subprocess
    * 2. Create a session via session/new
-   * 3. Register data handler for incoming mobile messages
-   * 4. Register ACP update handler to forward to mobile
+   * 3. Negotiate session config (thought_level, etc.)
+   * 4. Register data handler for incoming mobile messages
+   * 5. Register ACP update handler to forward to mobile
    */
   async start(): Promise<void> {
     const { roomName } = this.options;
@@ -141,6 +142,9 @@ export class RelayBridge {
     this.sessionId = result.sessionId;
     this.log.info({ event: "acp_initialized", sessionId: this.sessionId });
 
+    // 3. Negotiate session config options (best-effort)
+    await this.negotiateSessionConfig(result.configOptions);
+
     // 3. Register data handler for mobile -> ACP forwarding
     this.options.roomManager.onDataReceived(
       "relay",
@@ -159,34 +163,14 @@ export class RelayBridge {
       },
     );
 
-    // 4. Register ACP update handler — route to the topic that owns the active request
+    // 5. Register ACP update handler — route to the topic that owns the active request
     this.acpClient.onUpdate((params: SessionUpdateParams) => {
       this.log.debug({ event: "acp_update_received", params }, "← acp session/update");
 
-      // DIAG: log every ACP update kind to trace <think> tag pipeline
-      const _update = (params as any).update;
-      const _kind = _update?.sessionUpdate;
-      if (_kind === "agent_message_chunk") {
-        const ct = _update?.content?.type;
-        const textSnippet = typeof _update?.content?.text === "string"
-          ? _update.content.text.substring(0, 80)
-          : typeof _update?.content?.thinking === "string"
-            ? _update.content.thinking.substring(0, 80)
-            : "(no text/thinking)";
-        const hasThinkTag = typeof _update?.content?.text === "string"
-          && _update.content.text.includes("<think");
-        this.log.info(
-          { event: "acp_chunk_type", contentType: ct, snippet: textSnippet, hasThinkTag },
-          "agent_message_chunk content type",
-        );
-      } else {
-        this.log.info(
-          { event: "acp_update_kind", kind: _kind },
-          `ACP update: ${_kind}`,
-        );
-      }
+      const updateKind = (params as any).update?.sessionUpdate;
+      this.log.info({ event: "acp_update_kind", kind: updateKind }, `ACP update: ${updateKind}`);
 
-      const isAgentChunk = (params as any).update?.sessionUpdate === "agent_message_chunk";
+      const isAgentChunk = updateKind === "agent_message_chunk";
 
       // WORKAROUND: BUG-022 / BUG-024 — content-based catch-up dedup
       // During loadSession replay, compare accumulated text against what was
@@ -313,6 +297,119 @@ export class RelayBridge {
     this.sessionId = result.sessionId;
     this.needsReinit = false;
     this.log.info({ event: "acp_reinit_complete", sessionId: this.sessionId }, "ACP re-initialized");
+
+    await this.negotiateSessionConfig(result.configOptions);
+  }
+
+  // -------------------------------------------------------------------------
+  // Session config negotiation
+  //
+  // ACP spec: https://agentclientprotocol.com/rfds/session-config-options
+  //
+  // After session/new, the agent may advertise configOptions. We inspect
+  // them and set desired values. This is best-effort — if the agent doesn't
+  // support a category, we skip it silently.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Inspect configOptions from session/new response and set desired values.
+   * Fails silently — config negotiation must never block session startup.
+   *
+   * Desired values are loaded from `acp-session-config.json` at the relay
+   * package root. The file maps ACP config categories to desired values:
+   * ```json
+   * { "thought_level": "high" }
+   * ```
+   */
+  private async negotiateSessionConfig(configOptions?: SessionConfigOption[]): Promise<void> {
+    if (!configOptions?.length || !this.sessionId) return;
+
+    this.log.info(
+      { event: "config_options_available", options: configOptions.map((o) => ({ id: o.id, category: o.category, currentValue: o.currentValue })) },
+      `agent advertises ${configOptions.length} config option(s)`,
+    );
+
+    const desiredConfig = RelayBridge.loadDesiredConfig();
+
+    for (const option of configOptions) {
+      const desiredValue = option.category
+        ? desiredConfig[option.category]
+        : undefined;
+
+      if (!desiredValue) continue;
+      if (option.currentValue === desiredValue) {
+        this.log.debug(
+          { event: "config_already_set", configId: option.id, value: desiredValue },
+          `${option.id} already set to ${desiredValue}`,
+        );
+        continue;
+      }
+
+      // Check if the desired value is available in the option's values
+      const flatValues = this.flattenConfigValues(option.options);
+      const match = flatValues.find((v) => v.value === desiredValue);
+      if (!match) {
+        // Try a fuzzy match — e.g. the agent might use "max" instead of "high"
+        this.log.debug(
+          { event: "config_value_not_found", configId: option.id, desired: desiredValue, available: flatValues.map((v) => v.value) },
+          `desired value "${desiredValue}" not available for ${option.id}, skipping`,
+        );
+        continue;
+      }
+
+      try {
+        await this.acpClient.sessionSetConfigOption({
+          sessionId: this.sessionId,
+          configId: option.id,
+          value: desiredValue,
+        });
+        this.log.info(
+          { event: "config_set", configId: option.id, value: desiredValue },
+          `set ${option.id}=${desiredValue}`,
+        );
+      } catch (err) {
+        this.log.warn(
+          { event: "config_set_failed", configId: option.id, value: desiredValue, error: (err as Error).message },
+          `failed to set ${option.id}=${desiredValue} — continuing`,
+        );
+      }
+    }
+  }
+
+  /** Cache for loaded desired config — loaded once per process. */
+  private static desiredConfigCache: Record<string, string> | null = null;
+
+  /**
+   * Load desired ACP session config from `acp-session-config.json`.
+   * Returns an empty object if the file doesn't exist or is malformed.
+   */
+  private static loadDesiredConfig(): Record<string, string> {
+    if (RelayBridge.desiredConfigCache) return RelayBridge.desiredConfigCache;
+
+    try {
+      const { resolve } = require("node:path");
+      const { readFileSync } = require("node:fs");
+      const configPath = resolve(import.meta.dir, "..", "..", "acp-session-config.json");
+      const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
+        RelayBridge.desiredConfigCache = raw as Record<string, string>;
+        return RelayBridge.desiredConfigCache;
+      }
+    } catch {
+      // File missing or malformed — use empty config
+    }
+    RelayBridge.desiredConfigCache = {};
+    return RelayBridge.desiredConfigCache;
+  }
+
+  /** Flatten grouped or ungrouped option values into a flat array. */
+  private flattenConfigValues(options: ConfigOptionValue[] | ConfigOptionGroup[]): ConfigOptionValue[] {
+    if (!options?.length) return [];
+    // Check if first element is a group (has `group` key) or a value (has `value` key)
+    if ("group" in options[0]) {
+      return (options as ConfigOptionGroup[]).flatMap((g) => g.options);
+    }
+    return options as ConfigOptionValue[];
   }
 
   // -------------------------------------------------------------------------
