@@ -12,6 +12,7 @@ import 'agent_dispatch_service.dart';
 import 'command_registry.dart';
 import 'agent_presence_service.dart';
 import 'relay/relay_chat_service.dart';
+import 'sub_agent_service.dart';
 import 'connectivity_service.dart';
 import 'disconnect_reason.dart' as dr;
 import 'health_service.dart';
@@ -154,6 +155,9 @@ class LiveKitService extends ChangeNotifier {
   // Relay chat service for chat-mode text conversations (Epic 22).
   // Created lazily when room connects; disposed on disconnect.
   RelayChatService? _relayChatService;
+
+  // Sub-agent visibility service (Epic 27).
+  final SubAgentService subAgentService = SubAgentService();
 
   /// Whether session/bind has been acknowledged by the relay.
   bool _sessionBound = false;
@@ -941,7 +945,12 @@ class LiveKitService extends ChangeNotifier {
 
   /// Handles data received from the voice agent or relay via data channel.
   void _handleDataReceived(DataReceivedEvent event) {
-    // Route by topic: ganglia-events (voice agent) or relay (chat mode)
+    // Route by topic: sub-agents, relay (chat mode), or ganglia-events (voice)
+    if (event.topic == 'sub-agents') {
+      subAgentService.handleMessage(event.data);
+      return;
+    }
+
     if (event.topic == 'relay') {
       // Intercept session/bind response before forwarding to RelayChatService.
       // The bind response has { result: { bound: true, sessionKey: ... } }.
@@ -2367,6 +2376,7 @@ class LiveKitService extends ChangeNotifier {
     _networkRestoreSub = null;
     _relayChatService?.dispose();
     _relayChatService = null;
+    subAgentService.clear();
     _relayAgentMessageText = '';
     _relayThinkingText = '';
     _sessionBound = false;
