@@ -34,8 +34,22 @@ Register `POST /fletcher/rooms/join` via `api.registerHttpRoute()` in the `openc
 1. Look up device by `deviceId` in the plugin's device store — return 404 if not found
 2. Verify Ed25519 signature against stored public key
 3. Check timestamp is within 60 seconds (anti-replay)
-4. Generate LiveKit `AccessToken` with room join grant
-5. Return `200 { "token": "<jwt>" }`
+4. **Derive session key from device identity** — if `deviceId` matches the Hub's owner device (the device that first paired), assign `sessionKey: "main"`; otherwise assign `sessionKey: "guest_{deviceId}"`
+5. Generate LiveKit `AccessToken` with room join grant and **embed `sessionKey` in JWT metadata**
+6. Return `200 { "token": "<jwt>" }`
+
+### Session Key Derivation (Server-Side)
+
+The Hub derives the session key at token issuance time — the relay and mobile client never choose it themselves. This eliminates a class of spoofing attacks where a malicious client claims `sessionKey: "main"` to hijack the owner's conversation context.
+
+**Why server-side?** Inspired by [MobVibe](https://github.com/Eric-Song-Nop/mobvibe)'s auth architecture, where the gateway verifies device identity via registered Ed25519 public keys and the client never self-asserts its access level. MobVibe's CLI daemon registers a keypair on setup; the gateway verifies every connection against stored public keys before granting access. We adapt the same principle: the Hub is the sole authority on device→role mapping, and the session key is a server-derived claim, not a client-provided input.
+
+**How it works:**
+- Hub device store tracks which device is the "owner" (first device registered, or explicitly designated)
+- On room join, Hub checks `deviceId` against owner record
+- Session key is embedded in the LiveKit JWT `metadata` field as JSON: `{"sessionKey": "main"}` or `{"sessionKey": "guest_device_abc123"}`
+- Relay reads `sessionKey` from the joining participant's JWT metadata — never from data channel messages
+- This replaces the current flow where mobile sends `session/bind` with a self-asserted session key
 
 ### Dependencies (Hub)
 - `livekit-server-sdk` — AccessToken generation
@@ -55,3 +69,6 @@ Register `POST /fletcher/rooms/join` via `api.registerHttpRoute()` in the `openc
 - [ ] Stale timestamp (>60s) returns 401
 - [ ] Generated token grants roomJoin, canPublish, canSubscribe
 - [ ] Token identity matches the deviceId
+- [ ] Owner device gets JWT with `metadata: {"sessionKey": "main"}`
+- [ ] Non-owner device gets JWT with `metadata: {"sessionKey": "guest_{deviceId}"}`
+- [ ] Device store tracks which device is the owner (first registered or explicitly set)
