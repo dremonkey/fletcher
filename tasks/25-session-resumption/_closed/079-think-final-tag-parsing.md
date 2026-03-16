@@ -351,13 +351,37 @@ but contradicted by all 5 levels of diagnostic evidence. The raw stdout check is
 definitive — if `<think>` appeared anywhere in the JSON-RPC line (even as a field value),
 the `raw_think_tag` log would have fired.
 
+**Root cause confirmed — OpenClaw `stripReasoningTagsFromText()` (2026-03-15):**
+
+OpenClaw issue [#37696](https://github.com/openclaw/openclaw/issues/37696) describes
+the exact mechanism. OpenClaw's delivery pipeline runs `stripReasoningTagsFromText()`
+with two modes:
+
+- `"strict"` — strips all `<think>` blocks. **Used by ALL channels including ACP.**
+- `"preserve"` — keeps thinking content. **Used only by the web UI.**
+
+This is why `<think>` tags are visible in OpenClaw's web interface but never reach
+Fletcher. ACP is treated as a channel and gets strict-mode stripping before the text
+is emitted to the subprocess stdout.
+
+**Related OpenClaw issues:**
+- [#37696](https://github.com/openclaw/openclaw/issues/37696) — unclosed `<think>`
+  drops entire response (describes `stripReasoningTagsFromText()` and its two modes)
+- [#26466](https://github.com/openclaw/openclaw/issues/26466) — thinking content leaks
+  when `Think: off` (inverse problem — strict mode not applied correctly)
+- [#40393](https://github.com/openclaw/openclaw/issues/40393) — `thinking` setting not
+  wired through for ACP spawn (related but different — setting vs content)
+- [#47439](https://github.com/openclaw/openclaw/issues/47439) — feature request to
+  route reasoning output to a separate channel
+
+**No existing issue requests ACP to forward thinking content.** We need to file one.
+
 **Next steps:**
-- This is an OpenClaw-side issue: ACP protocol needs to forward thinking content
-- Options: (a) OpenClaw passes `<think>` tags through in `content.text` verbatim,
-  (b) OpenClaw sends a separate `content.type: "thinking"` chunk, or
-  (c) OpenClaw adds a new `sessionUpdate` kind for thinking
-- Our parser and widget are ready for option (a) today
-- Options (b)/(c) would require updates to `acp_update_parser.dart`
+- File upstream issue requesting ACP `"preserve"` mode or structured thinking chunks
+- Options: (a) OpenClaw passes `<think>` tags through in `content.text` verbatim
+  (our parser is ready today), (b) OpenClaw sends `content.type: "thinking"` chunks
+  (cleaner, requires `acp_update_parser.dart` update), (c) new `sessionUpdate` kind
+- Until upstream fix lands, thinking UI is blocked — parser/widget work but have no input
 
 **Diagnostic logging commit:** `e248a57` — kept in place for future debugging
 
