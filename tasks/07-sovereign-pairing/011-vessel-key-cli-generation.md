@@ -5,8 +5,9 @@
 - **Priority:** High
 - **Owner:** Unassigned
 - **Created:** 2026-03-08
+- **Updated:** 2026-03-16 (plan review refinements)
 - **Phase:** Phase 1 — Hub Plugin
-- **Depends On:** None (first in chain)
+- **Depends On:** Spike A (OpenClaw plugin API verification)
 
 ## Spec Reference
 - [Vessel Key Pairing Spec](../../docs/specs/vessel-key-pairing-spec.md) — payload format, token lifecycle
@@ -20,22 +21,30 @@ The Hub needs a way to initiate pairing with mobile devices. This requires an Op
 
 ### Part 1: Plugin Scaffold
 
-Create the `openclaw-plugin-fletcher` package with:
+Create `packages/openclaw-plugin-fletcher/` with:
 
 1. **Plugin manifest** — name, version, lifecycle hooks (`onLoad`, `onUnload`)
-2. **Token store** — in-memory map of pairing tokens with expiry and single-use flag (SQLite for durability later)
-3. **Device store** — persistent storage of registered device identities (deviceId, publicKey, hubId, createdAt)
-4. **Plugin lifecycle** — initialize stores on load, clean up on unload
+2. **Token store (SQLite)** — pairing tokens with expiry and single-use flag. SQLite with WAL mode for durability and crash safety. No in-memory fallback — a Hub restart during the 15-min pairing window must not lose the token.
+3. **Device store (SQLite)** — registered device identities (deviceId, publicKey, hubId, createdAt, isOwner, revokedAt). Queryable by deviceId for signature verification (TASK-012).
+4. **Plugin lifecycle** — initialize SQLite on load, run migrations, clean up on unload
 
 ### Part 2: Vessel Key CLI Command
 
 Register `vessel-key generate` via the OpenClaw plugin CLI API:
 
-1. Generate a pairing token with 15-minute expiry
+1. Generate a pairing token (`pair_<32-hex>`) with 15-minute expiry
 2. Construct Vessel Key JSON payload (version, hubIdentity, network, auth, services)
 3. Render the JSON as a QR code in the terminal
 4. Also print the raw JSON for manual copy/paste fallback
-5. Store the pairing token for later validation by TASK-010
+5. Store the pairing token in SQLite for later validation by TASK-010
+
+### Part 3: Admin CLI Commands
+
+Register additional admin commands:
+
+- `vessel-key list-devices` — show all registered devices with last-auth timestamp and revocation status
+- `vessel-key list-tokens` — show active (non-expired, non-revoked) pairing tokens (for debugging)
+- `vessel-key cleanup` — remove expired tokens and orphaned devices (no successful auth within 24h of registration)
 
 ### Vessel Key Payload
 ```json
@@ -43,23 +52,39 @@ Register `vessel-key generate` via the OpenClaw plugin CLI API:
   "version": "1.0",
   "hubIdentity": { "name": "<hub_name>", "deviceId": "<hub_id>" },
   "network": { "gatewayUrl": "https://...", "tailscaleIp": "100.64.x.x" },
-  "auth": { "pairingToken": "pair_<random>", "tokenExpiry": <unix_ts>, "hubPublicKey": "ed25519:..." },
+  "auth": { "pairingToken": "pair_<random>", "tokenExpiry": 1709851500000, "hubPublicKey": "ed25519:..." },
   "services": { "livekit": { "url": "wss://..." } }
 }
 ```
 
+**Note:** `tokenExpiry` is Unix milliseconds (not seconds). This aligns with JS `Date.now()` and Dart `DateTime.now().millisecondsSinceEpoch`.
+
 ### Dependencies
 - `qrcode-terminal` — QR rendering for CLI
-- `nanoid` or `crypto.randomBytes` — Token generation
+- `crypto.randomBytes` — Token generation
+- `better-sqlite3` or OpenClaw's built-in persistence API — SQLite storage
+
+## Implementation Notes
+
+- Plugin lives at `packages/openclaw-plugin-fletcher/` in the Fletcher monorepo (workspace auto-discovery via `packages/*` glob)
+- **Pre-req:** Spike A must verify that OpenClaw's plugin API supports `registerHttpRoute()`, `registerCommand()`, and data persistence. If the API differs from assumptions, this task needs redesign.
+- Logging: Use `pino` with child loggers per component (`pairing`, `device-store`, `token-store`) per CLAUDE.md standards
+- SQLite schema should include a `schema_version` table for future migrations
+- Token store should use atomic compare-and-swap for revocation (prevents concurrent registration race condition)
 
 ## Acceptance Criteria
-- [ ] `openclaw-plugin-fletcher` package exists with valid plugin manifest
-- [ ] Token store supports create, lookup, and revoke operations
-- [ ] Device store supports create and lookup by deviceId
+- [ ] `openclaw-plugin-fletcher` package exists at `packages/openclaw-plugin-fletcher/` with valid plugin manifest
+- [ ] SQLite database created on plugin load with token and device tables
+- [ ] Token store supports create, lookup, and atomic revoke operations
+- [ ] Device store supports create, lookup by deviceId, and soft-delete (revocation)
 - [ ] `vessel-key generate` command is registered via plugin CLI API
 - [ ] `--name` flag sets the Hub identity name
 - [ ] QR code renders in terminal output
 - [ ] Raw JSON is also printed below the QR code
-- [ ] Pairing token has 15-minute expiry
-- [ ] Token is stored for later validation by TASK-010
+- [ ] Pairing token has 15-minute expiry (in milliseconds)
+- [ ] Token is stored in SQLite for later validation by TASK-010
 - [ ] Gateway URL and LiveKit URL are sourced from Hub config
+- [ ] `vessel-key list-devices` shows registered devices
+- [ ] `vessel-key list-tokens` shows active pairing tokens
+- [ ] `vessel-key cleanup` removes expired tokens
+- [ ] All stores survive Hub restart (SQLite persistence verified)
