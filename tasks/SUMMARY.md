@@ -477,6 +477,17 @@ Rewrite the Fletcher Relay from TypeScript/Bun to Go or Rust, producing a single
 - [ ] 008: Build & distribution (cross-compile, release binaries)
 - [ ] 009: Integration test against existing Flutter app + OpenClaw
 
+### 27. [End-to-End Encryption](./27-e2ee) 📋
+Content-level encryption for cloud-hosted LiveKit deployments. Data channel traffic (chat, ACP, artifacts) encrypted with NaCl-secretbox using device keys from sovereign pairing. Voice E2EE is architecturally moot — if you want private voice, run the full pipeline locally (STT + TTS + LLM). Architecture validated by [MobVibe](https://github.com/Eric-Song-Nop/mobvibe)'s content-blind relay pattern.
+
+**Tasks:**
+- [ ] 085: Derive shared content key during sovereign pairing
+- [ ] 086: Encrypt relay data channel messages
+- [ ] 087: Encrypt mobile data channel messages
+- [ ] 088: Encrypt voice-acp data channel (voice agent ↔ relay)
+
+**Depends on:** Epic 7 (Sovereign Pairing — device Ed25519 keys)
+
 ## Development Path
 
 1. **Phase 1: Infrastructure** ✅
