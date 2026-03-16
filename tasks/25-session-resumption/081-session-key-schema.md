@@ -65,40 +65,42 @@ in `addRoom()` triggered by the webhook. The webhook fires *after* the mobile
 has joined the room. The webhook payload includes `event.participant.identity`
 and `event.participant.metadata`.
 
-### Approaches considered
+### Approach: Data channel handshake (`session/bind`)
 
-**A) Participant metadata (recommended):**
-Mobile sets participant metadata with the desired session key before or during
-connect. The relay reads it from `event.participant.metadata` in the webhook
-handler and passes it to `RelayBridge`. LiveKit delivers metadata reliably as
-part of the participant join event.
+The session key is an application-level concern — it belongs in the Fletcher
+protocol between mobile and relay, not in LiveKit transport (tokens, metadata).
 
-```dart
-  // Mobile: set metadata before connect
-  final meta = jsonEncode({"sessionKey": "agent:main:relay:device-XYZ:conv-1"});
-  await room.connect(url, token, connectOptions: ConnectOptions(
-    // metadata is set via the token, not ConnectOptions
-  ));
+Alternatives considered and rejected:
+- **Participant metadata** — race condition (webhook fires before `setMetadata()`)
+  and ties application state to LiveKit transport layer.
+- **HTTP param on token request** — couples session identity to auth tokens,
+  meaning a new token (and possibly new room connection) is needed just to switch
+  conversations. Wrong layer.
+- **Room metadata** — shared/mutable, not ideal for per-participant binding.
+
+**Chosen: Data channel handshake.** Mobile sends `session/bind` as its first
+data channel message. Relay defers ACP spawn until it receives the bind.
+
+```
+  [Mobile]                    [LiveKit]              [Relay]
+     |                           |                      |
+     |-- room.connect() ------->|                      |
+     |                           |-- webhook ---------->|
+     |                           |              addRoom(roomName)
+     |                           |              joinRoom (relay joins)
+     |                           |              WAIT for session/bind ← NEW
+     |                           |                      |
+     |-- session/bind ---------->|--------------------->|
+     |   {sessionKey: "..."}     |              RelayBridge(sessionKey)
+     |                           |              bridge.start()
+     |                           |              Bun.spawn(openclaw acp --session ...)
+     |                           |                      |
+     |-- session/prompt -------->|--------------------->|
 ```
 
-Note: Participant metadata is typically set via the token (server-side) or via
-`localParticipant.setMetadata()` after connect. If set via token, the token
-server needs to accept a `sessionKey` param. If set after connect, there's a
-race with the webhook.
-
-**B) Data channel handshake:**
-Mobile sends a `session/bind` message as its first data channel message.
-Relay defers ACP spawn until it receives the bind message. Adds latency
-(relay waits for client) but is clean and explicit.
-
-**C) HTTP param on token request:**
-Mobile passes `sessionKey` as a query param to `GET /token`. Token server
-embeds it in participant metadata. Relay reads from webhook. Clean but
-requires token server changes.
-
-**D) Room metadata:**
-Mobile sets room metadata. Relay reads it. But room metadata is shared
-and mutable — not ideal for per-participant session binding.
+Latency cost is ~50ms (one data channel round trip) — negligible given
+session/load itself is <100ms. And it enables session switching later (TASK-080)
+by just sending another `session/bind` without reconnecting.
 
 ## Implementation
 
@@ -119,24 +121,60 @@ through. The mobile app generates and manages conversation IDs.
 For TASK-077 (resume), the mobile only ever uses one conversation ID (e.g.,
 `default`). TASK-080 (browsing) adds the ability to create/switch IDs.
 
-### 2. Choose communication mechanism
+### 2. Data channel `session/bind` message
 
-**Decision needed:** How does the client tell the relay which session key to use?
-See approaches A-D above. The choice affects timing, complexity, and which
-components need changes.
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "session/bind",
+  "id": 1,
+  "params": { "sessionKey": "agent:main:relay:device-abc123:default" }
+}
+```
 
-### 3. Relay: accept client-specified session key
+Response (after ACP subprocess is ready):
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": { "sessionKey": "agent:main:relay:device-abc123:default", "bound": true }
+}
+```
 
-In `webhook.ts`, extract the session key from whatever mechanism is chosen
-and pass it to `addRoom()`. In `bridge-manager.ts`, thread it to
-`RelayBridge`. In `relay-bridge.ts`, use the client-specified key instead
-of deriving from room name.
+### 3. Relay: defer ACP spawn until `session/bind`
+
+In `bridge-manager.ts`, `addRoom()` joins the room and registers data channel
+handlers but does NOT spawn `RelayBridge` yet. When `session/bind` arrives,
+the relay creates the `RelayBridge` with the client-specified key and starts it.
+
+```typescript
+  // bridge-manager.ts (after)
+  async addRoom(roomName: string): Promise<void> {
+    await this.roomManager.joinRoom(roomName);
+    // Register handler for session/bind — bridge created on bind
+    this.roomManager.onDataMessage(roomName, (msg) => {
+      if (msg.method === "session/bind") {
+        this.bindSession(roomName, msg.params.sessionKey);
+      }
+    });
+  }
+
+  private async bindSession(roomName: string, sessionKey: string): Promise<void> {
+    const bridge = new RelayBridge({ roomName, sessionKey, ... });
+    this.bridges.set(roomName, bridge);
+    await bridge.start();
+  }
+```
+
+### 4. Relay: accept client-specified session key
+
+In `relay-bridge.ts`, use the client-specified key directly:
 
 ```typescript
   // relay-bridge.ts (after)
   constructor(private options: RelayBridgeOptions) {
-    const sessionKey = options.sessionKey   // client-specified
-      ?? `agent:main:relay:${options.roomName}`;  // fallback
+    const sessionKey = options.sessionKey   // from session/bind
+      ?? `agent:main:relay:${options.roomName}`;  // fallback (old clients)
 
     this.acpClient = new AcpClient({
       command: options.acpCommand,
@@ -146,7 +184,7 @@ of deriving from room name.
   }
 ```
 
-### 4. Mobile: generate and store session key
+### 5. Mobile: generate and store session key
 
 ```dart
   class SessionKeyManager {
@@ -166,7 +204,24 @@ of deriving from room name.
   }
 ```
 
-### 5. Fallback behavior
+### 6. Mobile: send `session/bind` on connect
+
+After room connect succeeds and data channel is open, send `session/bind`
+as the first message before any `session/prompt`:
+
+```dart
+  // In LiveKitService, after successful room connect
+  final sessionKey = await SessionKeyManager.getCurrentKey(deviceId);
+  _sendDataChannelMessage({
+    "jsonrpc": "2.0",
+    "method": "session/bind",
+    "id": _nextId(),
+    "params": {"sessionKey": sessionKey},
+  });
+  // Wait for bind response before sending prompts
+```
+
+### 7. Fallback behavior
 
 If the relay cannot determine a client-specified session key (e.g., no
 metadata, old client version), fall back to the current room-name-based key
@@ -182,14 +237,15 @@ with a warning log. This maintains backward compatibility.
 - [ ] Same session key is sent across multiple room reconnects
 - [ ] Different conversation IDs produce different OpenClaw threads (verified with session/load)
 
+## Decisions
+
+1. **Communication mechanism: B (data channel handshake).** Session keys are
+   application-level state, not transport-level. Keeping them in the Fletcher
+   data channel protocol (not in tokens or LiveKit metadata) means session
+   switching works without reconnecting.
+
 ## Open questions
 
-1. Which communication mechanism (A/B/C/D)? Recommendation: **B (data channel
-   handshake)** — most explicit, no token server changes, clean separation of
-   concerns. The latency cost (~50ms) is negligible given session/load is <100ms.
-   But if we already need token server changes for other reasons, **C (HTTP param)**
-   is cleaner.
-
-2. Should the `conversationId` be human-readable (e.g., `default`, `conv-2`) or
+1. Should the `conversationId` be human-readable (e.g., `default`, `conv-2`) or
    opaque (timestamp, UUID)? Recommendation: timestamp-based for uniqueness,
    with `default` as the special first-conversation sentinel.
