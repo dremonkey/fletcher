@@ -19,6 +19,12 @@ class RelayContentDelta extends RelayChatEvent {
 }
 
 /// A thinking/reasoning delta from an `agent_thought_chunk` ACP event.
+///
+/// ACP spec: https://agentclientprotocol.com/protocol/schema#param-agent-thought-chunk
+///
+/// **Status (2026-03):** OpenClaw's ACP bridge does not yet emit
+/// `agent_thought_chunk`. This event type is implemented per the ACP spec
+/// for forward compatibility.
 class RelayThinkingDelta extends RelayChatEvent {
   final String text;
   RelayThinkingDelta(this.text);

@@ -283,12 +283,19 @@ void main() {
       expect((events[0] as RelayContentDelta).text, 'kept');
     });
 
-    test('emits RelayThinkingDelta for agent_thought_chunk', () async {
+    // ACP spec: agent_thought_chunk carries model reasoning/thinking.
+    // Wire format mirrors agent_message_chunk with different discriminator.
+    // https://agentclientprotocol.com/protocol/schema#param-agent-thought-chunk
+    //
+    // As of 2026-03, OpenClaw does not emit this update kind.
+    // Tests verify spec-compliance for forward compatibility.
+
+    test('emits RelayThinkingDelta for agent_thought_chunk (ACP spec)', () async {
       final events = <RelayChatEvent>[];
       final stream = service.sendPrompt('Hi');
       stream.listen(events.add);
 
-      // Thinking chunks arrive before content
+      // ACP: thinking chunks arrive before content chunks in a turn
       service.handleMessage(encode({
         'jsonrpc': '2.0',
         'method': 'session/update',
@@ -324,6 +331,60 @@ void main() {
       expect(events[2], isA<RelayContentDelta>());
       expect((events[2] as RelayContentDelta).text, 'The answer is 42.');
       expect(events[3], isA<RelayPromptComplete>());
+    });
+
+    test('handles thought-only response (no content chunks)', () async {
+      // Edge case: agent thinks but produces no visible output
+      final events = <RelayChatEvent>[];
+      final stream = service.sendPrompt('Hi');
+      stream.listen(events.add);
+
+      service.handleMessage(encode({
+        'jsonrpc': '2.0',
+        'method': 'session/update',
+        'params': {
+          'sessionId': 'sess_abc',
+          'update': {
+            'sessionUpdate': 'agent_thought_chunk',
+            'content': {'type': 'text', 'text': 'Analyzing...'},
+          },
+        },
+      }));
+      service.handleMessage(encode(promptResult(1)));
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(events, hasLength(2));
+      expect(events[0], isA<RelayThinkingDelta>());
+      expect((events[0] as RelayThinkingDelta).text, 'Analyzing...');
+      expect(events[1], isA<RelayPromptComplete>());
+    });
+
+    test('agent_thought_chunk with _meta field works (ACP spec)', () async {
+      // ACP spec: _meta is reserved metadata — must not affect parsing
+      final events = <RelayChatEvent>[];
+      final stream = service.sendPrompt('Hi');
+      stream.listen(events.add);
+
+      service.handleMessage(encode({
+        'jsonrpc': '2.0',
+        'method': 'session/update',
+        'params': {
+          'sessionId': 'sess_abc',
+          'update': {
+            'sessionUpdate': 'agent_thought_chunk',
+            'content': {'type': 'text', 'text': 'reasoning'},
+            '_meta': {'model': 'claude-opus', 'source': 'extended-thinking'},
+          },
+        },
+      }));
+      service.handleMessage(encode(promptResult(1)));
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(events, hasLength(2));
+      expect(events[0], isA<RelayThinkingDelta>());
+      expect((events[0] as RelayThinkingDelta).text, 'reasoning');
     });
 
     test('ignores empty agent_thought_chunk text', () async {

@@ -142,8 +142,26 @@ final class AcpUserMessage extends AcpUpdate {
   String toString() => 'AcpUserMessage(${text.length} chars)';
 }
 
-/// A thinking/reasoning chunk from an `agent_thought_chunk` update.
-/// Same wire format as `agent_message_chunk` but carries model reasoning.
+/// A thinking/reasoning chunk from an `agent_thought_chunk` session update.
+///
+/// ACP spec: https://agentclientprotocol.com/protocol/schema#param-agent-thought-chunk
+///
+/// Wire format is identical to `agent_message_chunk` — a `ContentBlock` with
+/// `{ type: "text", text: "..." }` — but uses the `"agent_thought_chunk"`
+/// discriminator to distinguish model reasoning from visible output.
+///
+/// ```json
+/// {
+///   "sessionUpdate": "agent_thought_chunk",
+///   "content": { "type": "text", "text": "Let me reason about..." },
+///   "_meta": {}
+/// }
+/// ```
+///
+/// **Status (2026-03):** OpenClaw's ACP bridge does not yet emit this update
+/// kind (documented as "Unsupported" in their compatibility matrix). This
+/// parser is implemented per the ACP spec for forward compatibility.
+/// See: https://docs.openclaw.ai/cli/acp#compatibility-matrix
 final class AcpThinkingDelta extends AcpUpdate {
   final String text;
 
@@ -191,6 +209,7 @@ final class AcpNonContentUpdate extends AcpUpdate {
 ///
 /// Returns:
 /// - [AcpTextDelta] for `agent_message_chunk` with `{ type: "text", text }`
+/// - [AcpThinkingDelta] for `agent_thought_chunk` with `{ type: "text", text }`
 /// - [AcpUsageUpdate] for `usage_update` with `used` and `size` fields
 /// - [AcpToolCallUpdate] for `tool_call` and `tool_call_update` kinds
 /// - [AcpNonContentUpdate] for all other recognized or unknown kinds,

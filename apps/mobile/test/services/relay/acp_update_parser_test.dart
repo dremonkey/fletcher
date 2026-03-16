@@ -268,10 +268,20 @@ void main() {
 
     // -------------------------------------------------------------------------
     // agent_thought_chunk — carries streamed thinking/reasoning text
+    //
+    // ACP spec: https://agentclientprotocol.com/protocol/schema#param-agent-thought-chunk
+    //
+    // Wire format mirrors agent_message_chunk — same ContentBlock structure,
+    // different sessionUpdate discriminator. Carries model reasoning that
+    // should be displayed separately from visible output.
+    //
+    // As of 2026-03, OpenClaw's ACP bridge does not emit this update kind.
+    // Tests verify spec-compliance for forward compatibility.
     // -------------------------------------------------------------------------
 
     group('agent_thought_chunk', () {
       test('returns AcpThinkingDelta for text content', () {
+        // ACP spec: agent_thought_chunk with text ContentBlock
         final params = {
           'sessionId': 'sess_abc123',
           'update': {
@@ -296,6 +306,40 @@ void main() {
         expect(AcpUpdateParser.parse(params), AcpThinkingDelta(''));
       });
 
+      test('returns AcpThinkingDelta for multi-line reasoning', () {
+        // Thought chunks often contain structured reasoning with newlines
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'agent_thought_chunk',
+            'content': {
+              'type': 'text',
+              'text': 'Step 1: Parse the input\nStep 2: Validate\nStep 3: Return',
+            },
+          },
+        };
+        expect(
+          AcpUpdateParser.parse(params),
+          AcpThinkingDelta(
+            'Step 1: Parse the input\nStep 2: Validate\nStep 3: Return',
+          ),
+        );
+      });
+
+      test('ignores _meta field per ACP spec (parser does not require it)', () {
+        // ACP spec: _meta is reserved metadata that implementations MUST NOT
+        // make assumptions about. Parser should work with or without it.
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'agent_thought_chunk',
+            'content': {'type': 'text', 'text': 'reasoning'},
+            '_meta': {'source': 'extended-thinking', 'model': 'claude-opus'},
+          },
+        };
+        expect(AcpUpdateParser.parse(params), AcpThinkingDelta('reasoning'));
+      });
+
       test('returns null when content is missing', () {
         final params = {
           'sessionId': 'sess_abc123',
@@ -306,12 +350,35 @@ void main() {
         expect(AcpUpdateParser.parse(params), isNull);
       });
 
+      test('returns null when content is not an object', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'agent_thought_chunk',
+            'content': 'bare string',
+          },
+        };
+        expect(AcpUpdateParser.parse(params), isNull);
+      });
+
       test('returns null for non-text content type', () {
+        // ACP ContentBlock is a union — only text is meaningful for thought
         final params = {
           'sessionId': 'sess_abc123',
           'update': {
             'sessionUpdate': 'agent_thought_chunk',
             'content': {'type': 'image', 'data': 'abc='},
+          },
+        };
+        expect(AcpUpdateParser.parse(params), isNull);
+      });
+
+      test('returns null when text field is missing', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'agent_thought_chunk',
+            'content': {'type': 'text'},
           },
         };
         expect(AcpUpdateParser.parse(params), isNull);
@@ -337,9 +404,11 @@ void main() {
       });
 
       test('AcpThinkingDelta is distinct from AcpTextDelta', () {
+        // Same text content, different update kind — must be distinguishable
         const thinking = AcpThinkingDelta('hello');
         const text = AcpTextDelta('hello');
         expect(thinking, isNot(equals(text)));
+        expect(thinking.runtimeType, isNot(text.runtimeType));
       });
     });
 
