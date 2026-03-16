@@ -15,6 +15,16 @@
 Despite advertising `sessionCapabilities.list: {}` in the initialize response,
 `session/list` returns **Method not found** (JSON-RPC error -32601).
 
+Tested with all param variants per the ACP spec
+(https://agentclientprotocol.com/rfds/session-list):
+- `session/list({})` — Method not found
+- `session/list({ cwd: "/home/ahanyu/code/fletcher" })` — Method not found
+- `session/list({ cwd: "~" })` — Method not found
+
+The issue is that the RPC handler is unimplemented server-side, not a
+missing parameter. Our types now match the spec (cwd, cursor, pagination)
+so we're ready when OpenClaw ships it.
+
 ```
 AcpError: "Method not found": session/list
   code: -32601

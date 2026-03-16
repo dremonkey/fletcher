@@ -95,10 +95,11 @@ Session listing and switching uses a **slash command** (`/sessions`) rather than
 - [x] **TASK-075: Spike -- session/load + session/list fidelity** -- Results in `075-spike-results.md`. session/load works great (user+agent turns, <100ms, cross-process). session/list returns Method not found despite being advertised.
 - [x] **TASK-076: Client-side slash command interceptor** -- In `sendTextMessage()`, intercept `/`-prefixed input and route to a command registry instead of sending to agent/relay. Ships with `/help` as proof-of-life. This is the foundation for all TASK-022 macros.
 - [ ] **TASK-077: `/sessions` command + session list rendering** -- **BLOCKED: session/list not implemented server-side.** Scope reduced: focus on resume-current-session via session/load rather than browse-all-sessions.
+- [ ] **TASK-079: Parse `<think>` / `<final>` tags in agent messages** -- Render agent reasoning as a collapsible block (collapsed by default) and extract `<final>` as the visible response. Applies to both live streaming and session/load replay.
 
 Candidate follow-up tasks (informed by spike results):
 - Wire `session/load` for transcript replay on reconnect (relay already has this for BUG-022; mobile needs to request it)
-- Client-side message parsing: strip OpenClaw metadata preamble from user turns, handle `<think>`/`<final>` tags in agent turns
+- Client-side message parsing: strip OpenClaw metadata preamble from user turns
 - Resume-aware bootstrap (agent adjusts greeting on resume)
 - `[SES]` macro button in TASK-022 macro grid
 - SQLite cache for instant transcript display while server loads (optimization)

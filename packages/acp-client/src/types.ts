@@ -117,20 +117,33 @@ export interface SessionCancelParams {
 // List (session discovery)
 // ---------------------------------------------------------------------------
 
-/** Params for session/list — empty for now. */
+/**
+ * Params for session/list.
+ * ACP spec: https://agentclientprotocol.com/rfds/session-list
+ */
 export interface SessionListParams {
-  [key: string]: unknown;
+  /** Filter sessions by working directory. */
+  cwd?: string;
+  /** Opaque cursor for pagination (from previous response's nextCursor). */
+  cursor?: string;
 }
 
-/** Result from session/list — shape TBD by spike, keep loose. */
+/**
+ * Result from session/list.
+ * ACP spec: https://agentclientprotocol.com/rfds/session-list
+ */
 export interface SessionListResult {
   sessions: SessionListEntry[];
-  [key: string]: unknown;
+  /** Opaque cursor for next page. Absent = final page. */
+  nextCursor?: string;
 }
 
 export interface SessionListEntry {
   sessionId: string;
-  [key: string]: unknown;
+  cwd: string;
+  title?: string;
+  updatedAt?: string;
+  _meta?: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------
