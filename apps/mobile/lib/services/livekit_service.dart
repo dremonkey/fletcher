@@ -422,7 +422,7 @@ class LiveKitService extends ChangeNotifier {
       // Check if agent is already in the room
       final hasAgent = _room!.remoteParticipants.isNotEmpty;
       debugPrint('[Fletcher] Room joined: participants=${_room!.remoteParticipants.length} agent=$hasAgent');
-      healthService.updateAgentPresent(present: hasAgent);
+      healthService.updateAgentPresent(present: hasAgent, voiceModeActive: _voiceModeActive);
 
       // Populate diagnostics with session info
       final agentId = hasAgent
@@ -494,7 +494,7 @@ class LiveKitService extends ChangeNotifier {
       _updateState(status: ConversationStatus.reconnecting);
       healthService.updateRoomReconnecting();
       // Emit room reconnecting system event (task 020)
-      // Suppress during background disconnect to avoid UX noise (TASK-082 / BUG-037)
+      // Suppress during background disconnect or when app is in background to avoid UX noise (TASK-082 / BUG-037)
       if (!_backgroundDisconnected) {
         _emitSystemEvent(SystemEvent(
           id: 'room-reconnect-${DateTime.now().millisecondsSinceEpoch}',
@@ -587,9 +587,9 @@ class LiveKitService extends ChangeNotifier {
       final reason = event.reason ?? DisconnectReason.unknown;
       debugPrint('[Fletcher] Disconnected: $reason');
       _lastLoggedReconnectAttempt = 0;
-      healthService.updateAgentPresent(present: false);
+      healthService.updateAgentPresent(present: false, voiceModeActive: _voiceModeActive);
       // Emit room disconnected system event (task 020)
-      // Suppress during background disconnect to avoid UX noise (TASK-082 / BUG-037)
+      // Suppress during background disconnect or when app is in background to avoid UX noise (TASK-082 / BUG-037)
       if (!_backgroundDisconnected) {
         _emitSystemEvent(SystemEvent(
           id: 'room-disconnect-${DateTime.now().millisecondsSinceEpoch}',
@@ -689,7 +689,7 @@ class LiveKitService extends ChangeNotifier {
         ));
         return;
       }
-      healthService.updateAgentPresent(present: remaining > 0);
+      healthService.updateAgentPresent(present: remaining > 0, voiceModeActive: _voiceModeActive);
       // Clear agent identity if no agents remain
       if (remaining == 0) {
         // When hold mode or mode switch is active, clear the reconnecting
@@ -1434,6 +1434,8 @@ class LiveKitService extends ChangeNotifier {
       if (!_isMuted) await toggleMute(); // existing removePublishedTrack path
       // 3. Disable agent presence — no agent needed in text mode (TASK-078)
       agentPresenceService.disable();
+      // 4. Update health: agent absence is expected in text mode
+      healthService.updateAgentPresent(present: false, voiceModeActive: false);
     } else if (next == TextInputMode.voiceFirst) {
       // --- Text → Voice ---
       _modeSwitchActive = false;
@@ -2027,6 +2029,7 @@ class LiveKitService extends ChangeNotifier {
     }
 
     // Voice mode: existing 10-minute timeout (user may switch back quickly)
+    _backgroundDisconnected = true;
     debugPrint('[Fletcher] Voice mode backgrounded — starting ${_backgroundTimeout.inMinutes}min timeout');
     _backgroundMinutesRemaining = _backgroundTimeout.inMinutes;
 

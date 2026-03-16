@@ -126,13 +126,22 @@ class HealthService extends ChangeNotifier {
     );
   }
 
-  void updateAgentPresent({required bool present}) {
-    _updateCheck(
-      'agent_present',
-      status: present ? HealthCheckStatus.ok : HealthCheckStatus.warning,
-      detail: present ? 'Connected' : 'No agent in room',
-      suggestion: present ? null : 'Start the voice agent (livekit-agent)',
-    );
+  void updateAgentPresent({required bool present, bool voiceModeActive = true}) {
+    if (!present && !voiceModeActive) {
+      // Agent absence is expected in text-only mode (TASK-078)
+      _updateCheck(
+        'agent_present',
+        status: HealthCheckStatus.ok,
+        detail: 'Not needed (text mode)',
+      );
+    } else {
+      _updateCheck(
+        'agent_present',
+        status: present ? HealthCheckStatus.ok : HealthCheckStatus.warning,
+        detail: present ? 'Connected' : 'No agent in room',
+        suggestion: present ? null : 'Enter voice mode to dispatch agent',
+      );
+    }
   }
 
   // --- Local validation checks ---

@@ -121,6 +121,29 @@ void main() {
     });
   });
 
+  group('updateAgentPresent', () {
+    test('warning when absent and voice mode active', () {
+      service.updateAgentPresent(present: false, voiceModeActive: true);
+      final check = _findCheck('agent_present');
+      expect(check.status, HealthCheckStatus.warning);
+      expect(check.detail, 'No agent in room');
+    });
+
+    test('ok when absent and voice mode inactive', () {
+      service.updateAgentPresent(present: false, voiceModeActive: false);
+      final check = _findCheck('agent_present');
+      expect(check.status, HealthCheckStatus.ok);
+      expect(check.detail, 'Not needed (text mode)');
+    });
+
+    test('ok when present regardless of voice mode', () {
+      service.updateAgentPresent(present: true, voiceModeActive: false);
+      final check = _findCheck('agent_present');
+      expect(check.status, HealthCheckStatus.ok);
+      expect(check.detail, 'Connected');
+    });
+  });
+
   group('refresh', () {
     test('preserves network check state across refresh', () {
       service.updateNetworkStatus(online: false);
