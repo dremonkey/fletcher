@@ -104,31 +104,56 @@ by just sending another `session/bind` without reconnecting.
 
 ## Implementation
 
-### 1. Session key format
+### 1. Naming scheme: shared word pair, different suffixes
+
+Room names and session names share a random word pair from the existing
+`RoomNameGenerator` word lists (adjective-noun, ~10,000+ combos). The suffix
+distinguishes them:
 
 ```
-  agent:main:relay:<participantIdentity>:<conversationId>
+  Word pair: "singing-triforce"
+
+  Room name (disposable transport):
+    singing-triforce-4abc           (word pair + 4-char alphanumeric)
+    singing-triforce-9f2e           (new room on reconnect, same session)
+
+  Session name (durable conversation):
+    singing-triforce-20260316       (word pair + YYYYMMDD)
+```
+
+This gives:
+- **Human-readable session names** — presentable in TASK-080's session browser
+- **Debuggable correlation** — "singing-triforce" links rooms to their session
+- **Date-namespaced uniqueness** — same word pair on different days = different
+  sessions. Same-day collision is astronomically unlikely (~1 in 10,000); if it
+  happens, regenerate the word pair and retry.
+
+### 2. Session key format
+
+The full `--session` key passed to OpenClaw ACP:
+
+```
+  agent:main:relay:<sessionName>
 
   Examples:
-    agent:main:relay:device-abc123:default    (first/default conversation)
-    agent:main:relay:device-abc123:conv-2     (second conversation)
-    agent:main:relay:device-abc123:1710523200 (timestamp-based ID)
+    agent:main:relay:singing-triforce-20260316
+    agent:main:relay:jade-beacon-20260317
 ```
 
-The `conversationId` is opaque to the relay — it just passes the full key
-through. The mobile app generates and manages conversation IDs.
+The key is opaque to both the relay and OpenClaw — they just pass it through.
+The mobile app generates and manages session names.
 
-For TASK-077 (resume), the mobile only ever uses one conversation ID (e.g.,
-`default`). TASK-080 (browsing) adds the ability to create/switch IDs.
+For TASK-077 (resume), the mobile stores the current session name and reuses it.
+TASK-080 (browsing) adds the ability to create new sessions and switch.
 
-### 2. Data channel `session/bind` message
+### 3. Data channel `session/bind` message
 
 ```json
 {
   "jsonrpc": "2.0",
   "method": "session/bind",
   "id": 1,
-  "params": { "sessionKey": "agent:main:relay:device-abc123:default" }
+  "params": { "sessionKey": "agent:main:relay:singing-triforce-20260316" }
 }
 ```
 
@@ -137,11 +162,11 @@ Response (after ACP subprocess is ready):
 {
   "jsonrpc": "2.0",
   "id": 1,
-  "result": { "sessionKey": "agent:main:relay:device-abc123:default", "bound": true }
+  "result": { "sessionKey": "agent:main:relay:singing-triforce-20260316", "bound": true }
 }
 ```
 
-### 3. Relay: defer ACP spawn until `session/bind`
+### 4. Relay: defer ACP spawn until `session/bind`
 
 In `bridge-manager.ts`, `addRoom()` joins the room and registers data channel
 handlers but does NOT spawn `RelayBridge` yet. When `session/bind` arrives,
@@ -166,7 +191,7 @@ the relay creates the `RelayBridge` with the client-specified key and starts it.
   }
 ```
 
-### 4. Relay: accept client-specified session key
+### 5. Relay: accept client-specified session key
 
 In `relay-bridge.ts`, use the client-specified key directly:
 
@@ -184,34 +209,68 @@ In `relay-bridge.ts`, use the client-specified key directly:
   }
 ```
 
-### 5. Mobile: generate and store session key
+### 6. Mobile: refactor name generator + generate session names
+
+Refactor `RoomNameGenerator` to expose the shared word pair, then build
+session names and room names from it:
+
+```dart
+  class NameGenerator {
+    /// Generate a random word pair (adjective-noun)
+    static String generateWordPair() => '${_randomAdj()}-${_randomNoun()}';
+
+    /// Room name: word pair + 4-char alphanumeric (disposable)
+    static String generateRoomName() {
+      final pair = generateWordPair();
+      final suffix = _random4CharAlphanumeric();
+      return '$pair-$suffix';
+    }
+
+    /// Session name: word pair + YYYYMMDD (durable)
+    static String generateSessionName() {
+      final pair = generateWordPair();
+      final date = DateFormat('yyyyMMdd').format(DateTime.now());
+      return '$pair-$date';
+    }
+  }
+```
+
+### 7. Mobile: store and send session key
 
 ```dart
   class SessionKeyManager {
     static const _keyPref = 'fletcher_session_key';
+    static const _prefix = 'agent:main:relay:';
 
-    /// Get or create the current session key
-    static Future<String> getCurrentKey(String deviceId) async {
+    /// Get stored session key, or create a new one
+    static Future<String> getCurrentKey() async {
       final prefs = await SharedPreferences.getInstance();
       final stored = prefs.getString(_keyPref);
       if (stored != null) return stored;
 
-      // First time: create default session
-      final key = 'agent:main:relay:$deviceId:default';
+      final key = '$_prefix${NameGenerator.generateSessionName()}';
+      await prefs.setString(_keyPref, key);
+      return key;
+    }
+
+    /// Create a new session (for TASK-080 "new conversation")
+    static Future<String> createNewSession() async {
+      final prefs = await SharedPreferences.getInstance();
+      final key = '$_prefix${NameGenerator.generateSessionName()}';
       await prefs.setString(_keyPref, key);
       return key;
     }
   }
 ```
 
-### 6. Mobile: send `session/bind` on connect
+### 8. Mobile: send `session/bind` on connect
 
 After room connect succeeds and data channel is open, send `session/bind`
 as the first message before any `session/prompt`:
 
 ```dart
   // In LiveKitService, after successful room connect
-  final sessionKey = await SessionKeyManager.getCurrentKey(deviceId);
+  final sessionKey = await SessionKeyManager.getCurrentKey();
   _sendDataChannelMessage({
     "jsonrpc": "2.0",
     "method": "session/bind",
@@ -221,7 +280,7 @@ as the first message before any `session/prompt`:
   // Wait for bind response before sending prompts
 ```
 
-### 7. Fallback behavior
+### 9. Fallback behavior
 
 If the relay cannot determine a client-specified session key (e.g., no
 metadata, old client version), fall back to the current room-name-based key
@@ -239,13 +298,13 @@ with a warning log. This maintains backward compatibility.
 
 ## Decisions
 
-1. **Communication mechanism: B (data channel handshake).** Session keys are
-   application-level state, not transport-level. Keeping them in the Fletcher
-   data channel protocol (not in tokens or LiveKit metadata) means session
-   switching works without reconnecting.
+1. **Communication mechanism: data channel handshake (`session/bind`).** Session
+   keys are application-level state, not transport-level. Keeping them in the
+   Fletcher data channel protocol (not in tokens or LiveKit metadata) means
+   session switching works without reconnecting.
 
-## Open questions
-
-1. Should the `conversationId` be human-readable (e.g., `default`, `conv-2`) or
-   opaque (timestamp, UUID)? Recommendation: timestamp-based for uniqueness,
-   with `default` as the special first-conversation sentinel.
+2. **Naming scheme: shared word pair with different suffixes.** Room names and
+   session names share a random `adjective-noun` pair from `RoomNameGenerator`
+   word lists. Room suffix is 4-char alphanumeric (disposable). Session suffix
+   is `YYYYMMDD` (durable, date-namespaced). Human-readable, debuggable, and
+   presentable in session browser UI.

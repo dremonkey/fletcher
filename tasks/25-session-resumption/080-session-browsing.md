@@ -68,7 +68,8 @@ The relay needs to support session switching mid-connection:
 The client-side index tracks:
 ```dart
 class SessionRecord {
-  final String sessionKey;    // e.g., "agent:main:relay:device-XYZ:conv-1"
+  final String sessionKey;    // e.g., "agent:main:relay:singing-triforce-20260316"
+  final String displayName;   // e.g., "singing-triforce" (word pair, human-readable)
   final String? title;        // From session_info_update.title (auto-generated)
   final DateTime createdAt;
   final DateTime lastActivity;
