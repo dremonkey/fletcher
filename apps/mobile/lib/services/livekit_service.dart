@@ -494,14 +494,17 @@ class LiveKitService extends ChangeNotifier {
       _updateState(status: ConversationStatus.reconnecting);
       healthService.updateRoomReconnecting();
       // Emit room reconnecting system event (task 020)
-      _emitSystemEvent(SystemEvent(
-        id: 'room-reconnect-${DateTime.now().millisecondsSinceEpoch}',
-        type: SystemEventType.room,
-        status: SystemEventStatus.error,
-        message: 'disconnected \u00B7 reconnecting...',
-        timestamp: DateTime.now(),
-        prefix: '\u2715',
-      ));
+      // Suppress during background disconnect to avoid UX noise (TASK-082 / BUG-037)
+      if (!_backgroundDisconnected) {
+        _emitSystemEvent(SystemEvent(
+          id: 'room-reconnect-${DateTime.now().millisecondsSinceEpoch}',
+          type: SystemEventType.room,
+          status: SystemEventStatus.error,
+          message: 'disconnected \u00B7 reconnecting...',
+          timestamp: DateTime.now(),
+          prefix: '\u2715',
+        ));
+      }
       // Buffer mic audio during reconnection (BUG-027)
       _reconnectBuffer?.reset();
       _reconnectBuffer = PreConnectAudioBuffer(_room!);
@@ -586,14 +589,17 @@ class LiveKitService extends ChangeNotifier {
       _lastLoggedReconnectAttempt = 0;
       healthService.updateAgentPresent(present: false);
       // Emit room disconnected system event (task 020)
-      _emitSystemEvent(SystemEvent(
-        id: 'room-disconnect-${DateTime.now().millisecondsSinceEpoch}',
-        type: SystemEventType.room,
-        status: SystemEventStatus.error,
-        message: 'disconnected \u00B7 $reason',
-        timestamp: DateTime.now(),
-        prefix: '\u2715',
-      ));
+      // Suppress during background disconnect to avoid UX noise (TASK-082 / BUG-037)
+      if (!_backgroundDisconnected) {
+        _emitSystemEvent(SystemEvent(
+          id: 'room-disconnect-${DateTime.now().millisecondsSinceEpoch}',
+          type: SystemEventType.room,
+          status: SystemEventStatus.error,
+          message: 'disconnected \u00B7 $reason',
+          timestamp: DateTime.now(),
+          prefix: '\u2715',
+        ));
+      }
       // Clean up reconnect buffer — room is disconnecting, can't send via it
       await _reconnectBuffer?.reset();
       _reconnectBuffer = null;
