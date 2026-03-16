@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/room_name_generator.dart';
 
 /// Persists the last room name and connection timestamp so the client can
 /// decide whether to rejoin an existing room or create a new one.
@@ -12,6 +13,8 @@ class SessionStorage {
   static const _keyRoomName = 'fletcher_last_room';
   static const _keyConnectedAt = 'fletcher_last_connected_at';
   static const _keyTextOnlyMode = 'fletcher_text_only_mode';
+  static const _keySessionKey = 'fletcher_session_key';
+  static const _sessionKeyPrefix = 'agent:main:relay:';
 
   /// Cached device ID — the hardware ID never changes at runtime.
   static String? _cachedDeviceId;
@@ -103,5 +106,33 @@ class SessionStorage {
   static Future<bool> getTextOnlyMode() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_keyTextOnlyMode) ?? false;
+  }
+
+  /// Get stored session key, or create and persist a new one.
+  ///
+  /// The session key format is `agent:main:relay:<sessionName>` where
+  /// sessionName is a word pair + YYYYMMDD date suffix.
+  static Future<String> getSessionKey() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getString(_keySessionKey);
+    if (stored != null) {
+      debugPrint('[SessionStorage] Session key: $stored (stored)');
+      return stored;
+    }
+
+    final key = '$_sessionKeyPrefix${NameGenerator.generateSessionName()}';
+    await prefs.setString(_keySessionKey, key);
+    debugPrint('[SessionStorage] Session key: $key (new)');
+    return key;
+  }
+
+  /// Create a new session key, replacing any existing one.
+  /// Used for "new conversation" (TASK-080).
+  static Future<String> createNewSessionKey() async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = '$_sessionKeyPrefix${NameGenerator.generateSessionName()}';
+    await prefs.setString(_keySessionKey, key);
+    debugPrint('[SessionStorage] New session key: $key');
+    return key;
   }
 }

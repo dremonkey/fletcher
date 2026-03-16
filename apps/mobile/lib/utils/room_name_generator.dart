@@ -1,16 +1,13 @@
 import 'dart:math';
 
-/// Generates memorable two-word room names from curated word lists.
-///
-/// Each call to [generate] picks one adjective and one noun at random,
-/// returning `adjective-noun` (e.g. `jade-beacon`, `frost-summit`).
+/// Generates memorable word-pair names for rooms and sessions.
 ///
 /// Word lists contain 100+ entries each, giving 10,000+ unique combinations
 /// — sufficient for single-user usage without collision detection.
 ///
 /// Sprinkled with obscure references to classic NES-era Nintendo games
 /// (Zelda, Mario, Metroid, Kid Icarus, etc.) for extra flavor.
-abstract final class RoomNameGenerator {
+abstract final class NameGenerator {
   static final _random = Random();
 
   static const _adjectives = [
@@ -67,10 +64,44 @@ abstract final class RoomNameGenerator {
   /// Returns the noun word list (exposed for testing).
   static List<String> get nouns => List.unmodifiable(_nouns);
 
-  /// Generate a random two-word room name: `word1-word2`.
-  static String generate() {
+  /// Generate a random word pair (adjective-noun).
+  static String generateWordPair() {
     final adj = _adjectives[_random.nextInt(_adjectives.length)];
     final noun = _nouns[_random.nextInt(_nouns.length)];
     return '$adj-$noun';
   }
+
+  /// Generate a room name: word pair + 4-char alphanumeric suffix.
+  /// Room names are disposable transport identifiers.
+  static String generateRoomName() {
+    final pair = generateWordPair();
+    final suffix = _random4CharAlphanumeric();
+    return '$pair-$suffix';
+  }
+
+  /// Generate a session name: word pair + YYYYMMDD suffix.
+  /// Session names are durable conversation identifiers.
+  static String generateSessionName() {
+    final pair = generateWordPair();
+    final now = DateTime.now();
+    final date =
+        '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    return '$pair-$date';
+  }
+
+  /// The old generate() method — keep for backward compat during transition.
+  /// Equivalent to generateWordPair() (old format was just "adj-noun").
+  @Deprecated('Use generateRoomName() instead')
+  static String generate() {
+    return generateWordPair();
+  }
+
+  static String _random4CharAlphanumeric() {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    return List.generate(4, (_) => chars[_random.nextInt(chars.length)]).join();
+  }
 }
+
+/// Backward-compatible alias. Use [NameGenerator] for new code.
+@Deprecated('Use NameGenerator instead')
+typedef RoomNameGenerator = NameGenerator;

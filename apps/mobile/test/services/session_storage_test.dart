@@ -11,6 +11,82 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  group('getSessionKey', () {
+    test('generates and stores key on first call', () async {
+      final key = await SessionStorage.getSessionKey();
+
+      expect(key.isNotEmpty, isTrue);
+      // Verify it was persisted
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('fletcher_session_key'), equals(key));
+    });
+
+    test('returns the same key on second call (persistence)', () async {
+      final key1 = await SessionStorage.getSessionKey();
+      final key2 = await SessionStorage.getSessionKey();
+      expect(key2, equals(key1));
+    });
+
+    test('session key starts with agent:main:relay: prefix', () async {
+      final key = await SessionStorage.getSessionKey();
+      expect(key.startsWith('agent:main:relay:'), isTrue,
+          reason: 'Key "$key" must start with agent:main:relay:');
+    });
+
+    test('session key format matches agent:main:relay:adj-noun-YYYYMMDD', () async {
+      final key = await SessionStorage.getSessionKey();
+      // Format: agent:main:relay:<adj>-<noun>-<YYYYMMDD>
+      expect(
+        key,
+        matches(RegExp(r'^agent:main:relay:[a-z]+-[a-z]+-\d{8}$')),
+        reason: 'Key "$key" does not match expected format',
+      );
+    });
+
+    test('returns existing key from prefs when already stored', () async {
+      const existingKey = 'agent:main:relay:jade-beacon-20260315';
+      SharedPreferences.setMockInitialValues({
+        'fletcher_session_key': existingKey,
+      });
+
+      final key = await SessionStorage.getSessionKey();
+      expect(key, equals(existingKey));
+    });
+  });
+
+  group('createNewSessionKey', () {
+    test('creates and returns a new key', () async {
+      final key = await SessionStorage.createNewSessionKey();
+
+      expect(key.isNotEmpty, isTrue);
+      expect(key.startsWith('agent:main:relay:'), isTrue);
+    });
+
+    test('replaces existing key', () async {
+      const existingKey = 'agent:main:relay:jade-beacon-20260315';
+      SharedPreferences.setMockInitialValues({
+        'fletcher_session_key': existingKey,
+      });
+
+      final newKey = await SessionStorage.createNewSessionKey();
+      // New key should be persisted
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('fletcher_session_key'), equals(newKey));
+    });
+
+    test('subsequent getSessionKey returns the newly created key', () async {
+      // First establish a key
+      await SessionStorage.getSessionKey();
+
+      // Create a new one
+      final newKey = await SessionStorage.createNewSessionKey();
+
+      // getSessionKey should now return the new key
+      final retrieved = await SessionStorage.getSessionKey();
+      expect(retrieved, equals(newKey));
+    });
+  });
+
   group('saveSession', () {
     test('persists room name and timestamp', () async {
       await SessionStorage.saveSession('fletcher-1234567890');

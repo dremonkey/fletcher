@@ -150,6 +150,9 @@ class LiveKitService extends ChangeNotifier {
   // Created lazily when room connects; disposed on disconnect.
   RelayChatService? _relayChatService;
 
+  /// Whether session/bind has been acknowledged by the relay.
+  bool _sessionBound = false;
+
   // Accumulated text for the in-progress agent message from relay (chat mode).
   String _relayAgentMessageText = '';
 
@@ -280,13 +283,13 @@ class LiveKitService extends ChangeNotifier {
     }
   }
 
-  /// Generate a memorable two-word room name: `word1-word2`.
+  /// Generate a memorable room name: `word1-word2-XXXX`.
   /// When E2E_TEST_MODE=true in .env, uses e2e- prefix so the voice agent
   /// detects automated tests and uses a minimal system prompt, reducing token
   /// consumption. (TASK-022, TASK-029)
   String _generateRoomName() {
     final isE2e = dotenv.env['E2E_TEST_MODE']?.toLowerCase() == 'true';
-    final name = RoomNameGenerator.generate();
+    final name = NameGenerator.generateRoomName();
     return isE2e ? 'e2e-$name' : name;
   }
 
@@ -403,6 +406,10 @@ class LiveKitService extends ChangeNotifier {
       debugPrint('[Fletcher] Connected to room');
       _localParticipant = _room!.localParticipant;
       _initRelayChatService();
+
+      // Send session/bind as the first data channel message (TASK-081).
+      // Must happen before any session/prompt.
+      await _sendSessionBind();
 
       // Update ROOM event to success with room name (task 020)
       final roomDisplayName = _currentRoomName ?? 'room';
@@ -890,6 +897,25 @@ class LiveKitService extends ChangeNotifier {
   void _handleDataReceived(DataReceivedEvent event) {
     // Route by topic: ganglia-events (voice agent) or relay (chat mode)
     if (event.topic == 'relay') {
+      // Intercept session/bind response before forwarding to RelayChatService.
+      // The bind response has { result: { bound: true, sessionKey: ... } }.
+      try {
+        final decoded =
+            jsonDecode(utf8.decode(event.data)) as Map<String, dynamic>;
+        if (decoded['jsonrpc'] == '2.0' &&
+            decoded.containsKey('result') &&
+            decoded['result'] is Map) {
+          final result = decoded['result'] as Map;
+          if (result.containsKey('bound') && result['bound'] == true) {
+            _sessionBound = true;
+            debugPrint(
+                '[Fletcher] Session bound: ${result['sessionKey']}');
+            return;
+          }
+        }
+      } catch (_) {
+        // Not valid JSON or not a bind response — fall through to RelayChatService
+      }
       _relayChatService?.handleMessage(event.data);
       return;
     }
@@ -1536,6 +1562,11 @@ class LiveKitService extends ChangeNotifier {
     // agent is terminated; relay is the only path. In voice mode, even
     // if soft-muted, text goes to the agent (if present).
     if (isTextMode) {
+      // Gate prompts behind bind completion (TASK-081).
+      if (!_sessionBound) {
+        debugPrint('[Fletcher] Prompt blocked — session not yet bound');
+        return;
+      }
       await _sendViaRelay(trimmed);
       return;
     }
@@ -1591,6 +1622,26 @@ class LiveKitService extends ChangeNotifier {
         if (participant == null) return;
         await participant.publishData(data, reliable: true, topic: 'relay');
       },
+    );
+  }
+
+  /// Send session/bind to the relay as the first data channel message.
+  /// Must be called after room.connect() and before any session/prompt.
+  Future<void> _sendSessionBind() async {
+    final sessionKey = await SessionStorage.getSessionKey();
+    debugPrint('[Fletcher] Sending session/bind: $sessionKey');
+
+    final data = utf8.encode(jsonEncode({
+      'jsonrpc': '2.0',
+      'method': 'session/bind',
+      'id': DateTime.now().millisecondsSinceEpoch,
+      'params': {'sessionKey': sessionKey},
+    }));
+
+    await _room?.localParticipant?.publishData(
+      data,
+      reliable: true,
+      topic: 'relay',
     );
   }
 
@@ -2119,6 +2170,7 @@ class LiveKitService extends ChangeNotifier {
     _relayChatService?.dispose();
     _relayChatService = null;
     _relayAgentMessageText = '';
+    _sessionBound = false;
     _room?.unregisterTextStreamHandler('lk.transcription');
     _listener?.dispose();
     await _room?.disconnect();
