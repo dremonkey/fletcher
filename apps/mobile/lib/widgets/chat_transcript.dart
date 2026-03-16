@@ -9,9 +9,11 @@ import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/tui_widgets.dart';
+import '../utils/agent_text_parser.dart';
 import 'artifact_viewer.dart';
 import 'command_result_card.dart';
 import 'system_event_card.dart';
+import 'thinking_block.dart';
 import 'thinking_spinner.dart';
 import 'tool_call_card.dart';
 
@@ -399,15 +401,45 @@ class _TranscriptMessage extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          Text(
-            entry.text,
-            style: AppTypography.body.copyWith(
-              fontStyle: entry.isFinal ? FontStyle.normal : FontStyle.italic,
-              color: entry.isFinal
-                  ? AppColors.textPrimary
-                  : AppColors.textSecondary,
+          if (isAgent) ...[
+            () {
+              final parsed = parseAgentText(entry.text);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (parsed.thinkingState != ThinkingState.none)
+                    ThinkingBlock(
+                      text: parsed.thinking,
+                      state: parsed.thinkingState,
+                    ),
+                  if (parsed.thinkingState != ThinkingState.none &&
+                      parsed.visible.isNotEmpty)
+                    const SizedBox(height: AppSpacing.xs),
+                  if (parsed.visible.isNotEmpty)
+                    Text(
+                      parsed.visible,
+                      style: AppTypography.body.copyWith(
+                        fontStyle:
+                            entry.isFinal ? FontStyle.normal : FontStyle.italic,
+                        color: entry.isFinal
+                            ? AppColors.textPrimary
+                            : AppColors.textSecondary,
+                      ),
+                    ),
+                ],
+              );
+            }(),
+          ] else ...[
+            Text(
+              entry.text,
+              style: AppTypography.body.copyWith(
+                fontStyle: entry.isFinal ? FontStyle.normal : FontStyle.italic,
+                color: entry.isFinal
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary,
+              ),
             ),
-          ),
+          ],
           // Inline artifact buttons
           if (artifacts.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
