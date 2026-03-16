@@ -41,6 +41,15 @@ class RelayUsageUpdate extends RelayChatEvent {
   RelayUsageUpdate(this.used, this.size);
 }
 
+/// A user message replayed during `session/load`.
+class RelayUserMessage extends RelayChatEvent {
+  final String text;
+  RelayUserMessage(this.text);
+}
+
+/// The `session/load` replay completed successfully.
+class RelayLoadComplete extends RelayChatEvent {}
+
 /// A tool call event from a `tool_call` or `tool_call_update` ACP event.
 ///
 /// Emitted only when verbose mode is active (`verbose: true` in `session/new`).
@@ -132,6 +141,41 @@ class RelayChatService {
     return _activeStream!.stream;
   }
 
+  /// Whether a session/load replay is in progress.
+  bool _isLoading = false;
+
+  /// Whether the service is currently replaying session history.
+  bool get isLoading => _isLoading;
+
+  /// Request session history replay from the relay via `session/load`.
+  ///
+  /// Returns a stream of [RelayChatEvent]s containing replayed user and
+  /// agent messages. The stream closes with [RelayLoadComplete] when done.
+  ///
+  /// Must not be called while a prompt is in-flight.
+  Stream<RelayChatEvent> sendSessionLoad() {
+    if (_activeStream != null) {
+      assert(false, 'sendSessionLoad called while a stream is active');
+      return Stream.value(
+        RelayPromptError(-1, 'A stream is already active'),
+      );
+    }
+
+    final id = _idGen.next();
+    _activeRequestId = id;
+    _activeStream = StreamController<RelayChatEvent>();
+    _isLoading = true;
+
+    final request = JsonRpcRequest(
+      id: id,
+      method: 'session/load',
+      params: {},
+    );
+    publish(request.encode());
+
+    return _activeStream!.stream;
+  }
+
   /// Cancel the in-flight prompt. The relay will resolve the pending
   /// `session/prompt` with `stopReason: "cancelled"`.
   void cancelPrompt() {
@@ -182,8 +226,27 @@ class RelayChatService {
 
   void _handleSessionUpdate(Map<String, dynamic> params) {
     final update = AcpUpdateParser.parse(params);
+
+    // DIAG: log every ACP update to trace <think> tag pipeline
+    final kind = (params['update'] as Map<String, dynamic>?)?['sessionUpdate'];
+    if (update is AcpTextDelta) {
+      final hasThinkTag = update.text.contains('<think');
+      if (hasThinkTag) {
+        debugPrint('[RelayChatService] AcpTextDelta with <think> tag! '
+            'text="${update.text.substring(0, update.text.length.clamp(0, 80))}"');
+      }
+    } else if (update is AcpNonContentUpdate) {
+      debugPrint('[RelayChatService] Non-content update dropped: '
+          'kind=${update.kind}, raw sessionUpdate=$kind');
+    } else if (update == null) {
+      debugPrint('[RelayChatService] AcpUpdateParser returned null '
+          'for sessionUpdate=$kind');
+    }
+
     if (update is AcpTextDelta && update.text.isNotEmpty) {
       _activeStream?.add(RelayContentDelta(update.text));
+    } else if (update is AcpUserMessage) {
+      _activeStream?.add(RelayUserMessage(update.text));
     } else if (update is AcpUsageUpdate) {
       _activeStream?.add(RelayUsageUpdate(update.used, update.size));
     } else if (update is AcpToolCallUpdate) {
@@ -193,13 +256,17 @@ class RelayChatService {
         status: update.status,
       ));
     }
-    // Non-content updates and null (malformed) are silently ignored.
   }
 
   void _handlePromptResult(JsonRpcResponse response) {
+    final wasLoading = _isLoading;
+    _isLoading = false;
+
     if (response.isError) {
       final err = response.error!;
       _activeStream?.add(RelayPromptError(err.code, err.message));
+    } else if (wasLoading) {
+      _activeStream?.add(RelayLoadComplete());
     } else {
       final result = response.result as Map<String, dynamic>? ?? {};
       final stopReason = result['stopReason'] as String? ?? 'completed';

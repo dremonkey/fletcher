@@ -242,6 +242,43 @@ void main() {
     });
   });
 
+  group('session key persists across app restarts (TASK-077)', () {
+    test('session key survives SharedPreferences mock reinit', () async {
+      // Simulate first app launch — key is created
+      final key1 = await SessionStorage.getSessionKey();
+      expect(key1.isNotEmpty, isTrue);
+
+      // Read back from prefs (simulating app restart via mock persistence)
+      final prefs = await SharedPreferences.getInstance();
+      final storedKey = prefs.getString('fletcher_session_key');
+      expect(storedKey, equals(key1));
+
+      // Second call returns same key (persistence check)
+      final key2 = await SessionStorage.getSessionKey();
+      expect(key2, equals(key1));
+    });
+
+    test('session key is available for session/bind on reconnect', () async {
+      // Simulate: first launch creates key, app restarts, key is still there
+      const storedKey = 'agent:main:relay:swift-falcon-20260315';
+      SharedPreferences.setMockInitialValues({
+        'fletcher_session_key': storedKey,
+        'fletcher_last_room': 'swift-falcon-room',
+        'fletcher_last_connected_at': DateTime.now().millisecondsSinceEpoch,
+      });
+
+      // On reconnect, getSessionKey returns the stored key
+      final key = await SessionStorage.getSessionKey();
+      expect(key, equals(storedKey));
+
+      // And getRecentRoom returns the stored room (indicating reconnect)
+      final room = await SessionStorage.getRecentRoom(
+        stalenessThreshold: const Duration(seconds: 120),
+      );
+      expect(room, 'swift-falcon-room');
+    });
+  });
+
   group('save + get round-trip', () {
     test('saved session is immediately retrievable', () async {
       await SessionStorage.saveSession('fletcher-roundtrip');

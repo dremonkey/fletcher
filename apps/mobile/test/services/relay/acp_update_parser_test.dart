@@ -171,6 +171,102 @@ void main() {
     });
 
     // -------------------------------------------------------------------------
+    // user_message — replayed during session/load (TASK-077)
+    // -------------------------------------------------------------------------
+
+    group('user_message', () {
+      test('returns AcpUserMessage with text from prompt array', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'user_message',
+            'prompt': [
+              {'type': 'text', 'text': 'Hello, agent!'},
+            ],
+          },
+        };
+        expect(AcpUpdateParser.parse(params), AcpUserMessage('Hello, agent!'));
+      });
+
+      test('concatenates multiple text parts in prompt', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'user_message',
+            'prompt': [
+              {'type': 'text', 'text': 'Part 1. '},
+              {'type': 'text', 'text': 'Part 2.'},
+            ],
+          },
+        };
+        expect(
+          AcpUpdateParser.parse(params),
+          AcpUserMessage('Part 1. Part 2.'),
+        );
+      });
+
+      test('ignores non-text parts in prompt', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'user_message',
+            'prompt': [
+              {'type': 'image', 'data': 'iVBORw=='},
+              {'type': 'text', 'text': 'actual message'},
+            ],
+          },
+        };
+        expect(
+          AcpUpdateParser.parse(params),
+          AcpUserMessage('actual message'),
+        );
+      });
+
+      test('returns null when prompt is missing', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'user_message',
+            // no prompt field
+          },
+        };
+        expect(AcpUpdateParser.parse(params), isNull);
+      });
+
+      test('returns null when prompt is not a list', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'user_message',
+            'prompt': 'not a list',
+          },
+        };
+        expect(AcpUpdateParser.parse(params), isNull);
+      });
+
+      test('returns null when prompt has no text parts', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'user_message',
+            'prompt': [
+              {'type': 'image', 'data': 'abc='},
+            ],
+          },
+        };
+        expect(AcpUpdateParser.parse(params), isNull);
+      });
+
+      test('AcpUserMessage equality works', () {
+        const a = AcpUserMessage('hello');
+        const b = AcpUserMessage('hello');
+        const c = AcpUserMessage('world');
+        expect(a, equals(b));
+        expect(a, isNot(equals(c)));
+      });
+    });
+
+    // -------------------------------------------------------------------------
     // available_commands_update — emitted on session/new and on changes
     // -------------------------------------------------------------------------
 

@@ -430,6 +430,130 @@ void main() {
     });
   });
 
+  group('sendSessionLoad (TASK-077)', () {
+    /// A `session/update` with a `user_message` update (replay).
+    Map<String, dynamic> userMessage(String text) => {
+          'jsonrpc': '2.0',
+          'method': 'session/update',
+          'params': {
+            'sessionId': 'sess_abc',
+            'update': {
+              'sessionUpdate': 'user_message',
+              'prompt': [
+                {'type': 'text', 'text': text},
+              ],
+            },
+          },
+        };
+
+    /// A `session/load` result (closes the load stream).
+    Map<String, dynamic> loadResult(int id) => {
+          'jsonrpc': '2.0',
+          'id': id,
+          'result': {'loaded': true},
+        };
+
+    test('publishes session/load request', () {
+      service.sendSessionLoad();
+
+      expect(published, hasLength(1));
+      final json = jsonDecode(utf8.decode(published.first));
+      expect(json['jsonrpc'], '2.0');
+      expect(json['method'], 'session/load');
+      expect(json.containsKey('id'), isTrue);
+    });
+
+    test('marks isLoading during session/load', () {
+      expect(service.isLoading, isFalse);
+      service.sendSessionLoad();
+      expect(service.isLoading, isTrue);
+      expect(service.isBusy, isTrue);
+
+      service.handleMessage(encode(loadResult(1)));
+
+      expectLater(
+        Future.delayed(Duration.zero, () => service.isLoading),
+        completion(isFalse),
+      );
+    });
+
+    test('emits user messages and agent deltas during replay', () async {
+      final events = <RelayChatEvent>[];
+      final stream = service.sendSessionLoad();
+      stream.listen(events.add);
+
+      // Replay: user message → agent chunks → load complete
+      service.handleMessage(encode(userMessage('Hello')));
+      service.handleMessage(encode(contentChunk('Hi there!')));
+      service.handleMessage(encode(loadResult(1)));
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(events, hasLength(3));
+      expect(events[0], isA<RelayUserMessage>());
+      expect((events[0] as RelayUserMessage).text, 'Hello');
+      expect(events[1], isA<RelayContentDelta>());
+      expect((events[1] as RelayContentDelta).text, 'Hi there!');
+      expect(events[2], isA<RelayLoadComplete>());
+    });
+
+    test('emits RelayLoadComplete (not RelayPromptComplete) on load success', () async {
+      final events = <RelayChatEvent>[];
+      final stream = service.sendSessionLoad();
+      stream.listen(events.add);
+
+      service.handleMessage(encode(loadResult(1)));
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(events, hasLength(1));
+      expect(events[0], isA<RelayLoadComplete>());
+      expect(events[0], isNot(isA<RelayPromptComplete>()));
+    });
+
+    test('emits RelayPromptError on load failure', () async {
+      final events = <RelayChatEvent>[];
+      final stream = service.sendSessionLoad();
+      stream.listen(events.add);
+
+      service.handleMessage(encode({
+        'jsonrpc': '2.0',
+        'id': 1,
+        'error': {'code': -32000, 'message': 'load failed'},
+      }));
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(events, hasLength(1));
+      expect(events[0], isA<RelayPromptError>());
+      expect((events[0] as RelayPromptError).message, 'load failed');
+    });
+
+    test('multi-turn replay: interleaved user and agent messages', () async {
+      final events = <RelayChatEvent>[];
+      final stream = service.sendSessionLoad();
+      stream.listen(events.add);
+
+      // Turn 1
+      service.handleMessage(encode(userMessage('What is 2+2?')));
+      service.handleMessage(encode(contentChunk('4')));
+      // Turn 2
+      service.handleMessage(encode(userMessage('Thanks!')));
+      service.handleMessage(encode(contentChunk('You\'re welcome.')));
+      // Done
+      service.handleMessage(encode(loadResult(1)));
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(events, hasLength(5));
+      expect(events[0], isA<RelayUserMessage>());
+      expect(events[1], isA<RelayContentDelta>());
+      expect(events[2], isA<RelayUserMessage>());
+      expect(events[3], isA<RelayContentDelta>());
+      expect(events[4], isA<RelayLoadComplete>());
+    });
+  });
+
   group('session/update without active stream', () {
     test('ignores updates when no prompt is in-flight', () {
       // Should not crash

@@ -20,6 +20,7 @@ import 'reconnect_scheduler.dart';
 import 'session_storage.dart';
 import 'token_service.dart';
 import 'url_resolver.dart';
+import '../utils/preamble_stripper.dart';
 import '../utils/room_name_generator.dart';
 
 /// Max waveform samples (~30 samples at 100ms = 3s history)
@@ -49,6 +50,10 @@ class LiveKitService extends ChangeNotifier {
   /// and the mic is live. Stays true when muted via histogram tap (muteOnly).
   bool _voiceModeActive = false;
   bool get isVoiceModeActive => _voiceModeActive;
+
+  /// Whether session history is being replayed (TASK-077).
+  /// UI should suppress auto-scroll and thinking indicators during replay.
+  bool get isReplaying => _isReplaying;
 
   Timer? _audioLevelTimer;
   Timer? _statusClearTimer;
@@ -153,6 +158,16 @@ class LiveKitService extends ChangeNotifier {
   /// Whether session/bind has been acknowledged by the relay.
   bool _sessionBound = false;
 
+  /// Whether session/load should be sent after the next successful bind.
+  /// Set to true when reconnecting to an existing room (app restart with
+  /// recent session). NOT set during in-memory reconnects where the
+  /// transcript is already populated. (TASK-077)
+  bool _needsSessionLoad = false;
+
+  /// Whether a session/load replay is in progress. Used to suppress
+  /// auto-scroll and thinking spinners for historical messages. (TASK-077)
+  bool _isReplaying = false;
+
   // Accumulated text for the in-progress agent message from relay (chat mode).
   String _relayAgentMessageText = '';
 
@@ -213,8 +228,12 @@ class LiveKitService extends ChangeNotifier {
       final recentRoom = await SessionStorage.getRecentRoom(
         stalenessThreshold: stalenessThreshold,
       );
-      final roomName = recentRoom ?? _generateRoomName();
+      final roomName = recentRoom ?? await _generateRoomName();
       _currentRoomName = roomName;
+
+      // TASK-077: Load session history on reconnect (app restart with recent room)
+      // but NOT on first launch (fresh room).
+      _needsSessionLoad = recentRoom != null;
 
       debugPrint('[Fletcher] Room: $roomName (${recentRoom != null ? "reused" : "new"})');
 
@@ -283,19 +302,29 @@ class LiveKitService extends ChangeNotifier {
     }
   }
 
-  /// Generate a memorable room name: `word1-word2-XXXX`.
+  /// Generate a room name that shares the session's word pair.
+  ///
+  /// Session "amber-elm-20260315" → room "amber-elm-7x2q".
+  /// This makes it easy to visually correlate rooms with their session
+  /// in logs and dashboards.
+  ///
   /// When E2E_TEST_MODE=true in .env, uses e2e- prefix so the voice agent
   /// detects automated tests and uses a minimal system prompt, reducing token
   /// consumption. (TASK-022, TASK-029)
-  String _generateRoomName() {
+  Future<String> _generateRoomName() async {
+    final sessionKey = await SessionStorage.getSessionKey();
+    // Session key format: "agent:main:relay:amber-elm-20260315"
+    // Extract session name → extract word pair → build room name.
+    final sessionName = sessionKey.replaceFirst('agent:main:relay:', '');
+    final wordPair = NameGenerator.extractWordPair(sessionName);
+    final name = NameGenerator.generateRoomName(wordPair: wordPair);
     final isE2e = dotenv.env['E2E_TEST_MODE']?.toLowerCase() == 'true';
-    final name = NameGenerator.generateRoomName();
     return isE2e ? 'e2e-$name' : name;
   }
 
   /// Create a new room and connect to it (used for recovery after budget exhaustion).
   Future<void> _connectToNewRoom() async {
-    final roomName = _generateRoomName();
+    final roomName = await _generateRoomName();
     _currentRoomName = roomName;
 
     debugPrint('[Fletcher] Creating new room for recovery: $roomName');
@@ -407,9 +436,13 @@ class LiveKitService extends ChangeNotifier {
       _localParticipant = _room!.localParticipant;
       _initRelayChatService();
 
-      // Send session/bind as the first data channel message (TASK-081).
-      // Must happen before any session/prompt.
-      await _sendSessionBind();
+      // Send session/bind to the relay (TASK-081). Two paths:
+      // 1. Relay already in room (e.g., room discovery re-joined before us) → send now.
+      // 2. Relay joins after us (normal webhook flow) → ParticipantConnectedEvent handler sends it.
+      if (_hasRelayParticipant) {
+        _sendSessionBind();
+      }
+      // Otherwise, ParticipantConnectedEvent handler will send it when relay joins.
 
       // Update ROOM event to success with room name (task 020)
       final roomDisplayName = _currentRoomName ?? 'room';
@@ -634,8 +667,14 @@ class LiveKitService extends ChangeNotifier {
 
     _listener?.on<ParticipantConnectedEvent>((event) {
       debugPrint('[Fletcher] Remote participant connected: ${event.participant.identity}');
-      // Relay participant — emit relay-specific event, don't process as agent
+      // Relay participant — send session/bind now that relay is in the room,
+      // then emit relay-specific event. Don't process as agent.
       if (event.participant.identity?.startsWith('relay-') == true) {
+        // Send session/bind as the first data channel message (TASK-081).
+        // Must happen here (not in connect()) because the relay joins via
+        // webhook ~500ms after room.connect() — sending earlier means the
+        // message is lost (LiveKit doesn't buffer for late joiners).
+        _sendSessionBind();
         _emitSystemEvent(SystemEvent(
           id: 'relay-connected-${DateTime.now().millisecondsSinceEpoch}',
           type: SystemEventType.room,
@@ -684,16 +723,21 @@ class LiveKitService extends ChangeNotifier {
           .where((p) => p.identity?.startsWith('relay-') != true)
           .length ?? 0;
       debugPrint('[Fletcher] Remote participant disconnected: ${event.participant.identity} (remaining agents=$remaining)');
-      // Relay participant — emit relay-specific event, don't count toward agent presence
+      // Relay participant — emit relay-specific event, don't count toward agent presence.
+      // Suppress the event if we never bound to this relay (e.g., stale relay from
+      // a previous app process leaving the room as we join).
       if (event.participant.identity?.startsWith('relay-') == true) {
-        _emitSystemEvent(SystemEvent(
-          id: 'relay-disconnected-${DateTime.now().millisecondsSinceEpoch}',
-          type: SystemEventType.room,
-          status: SystemEventStatus.error,
-          message: 'relay disconnected',
-          timestamp: DateTime.now(),
-          prefix: '\u2715',
-        ));
+        if (_sessionBound) {
+          _sessionBound = false;
+          _emitSystemEvent(SystemEvent(
+            id: 'relay-disconnected-${DateTime.now().millisecondsSinceEpoch}',
+            type: SystemEventType.room,
+            status: SystemEventStatus.error,
+            message: 'relay disconnected',
+            timestamp: DateTime.now(),
+            prefix: '\u2715',
+          ));
+        }
         return;
       }
       healthService.updateAgentPresent(present: remaining > 0, voiceModeActive: _voiceModeActive);
@@ -910,6 +954,11 @@ class LiveKitService extends ChangeNotifier {
             _sessionBound = true;
             debugPrint(
                 '[Fletcher] Session bound: ${result['sessionKey']}');
+            // TASK-077: Load session history after bind on reconnect
+            if (_needsSessionLoad) {
+              _needsSessionLoad = false;
+              _loadSessionHistory();
+            }
             return;
           }
         }
@@ -1645,6 +1694,104 @@ class LiveKitService extends ChangeNotifier {
     );
   }
 
+  /// Load session history from the relay via `session/load` (TASK-077).
+  ///
+  /// Called after a successful session/bind on reconnect (app restart with
+  /// recent room). Replays the conversation as `session/update` notifications
+  /// and populates the transcript. Historical messages do not trigger
+  /// thinking spinners or auto-scroll.
+  Future<void> _loadSessionHistory() async {
+    final relay = _relayChatService;
+    if (relay == null) {
+      debugPrint('[Relay] Cannot load session — service not initialized');
+      return;
+    }
+    if (relay.isBusy) {
+      debugPrint('[Relay] Cannot load session — stream already active');
+      return;
+    }
+
+    debugPrint('[Fletcher] Loading session history (TASK-077)');
+    _isReplaying = true;
+
+    final replayEntries = <TranscriptEntry>[];
+    String currentAgentText = '';
+    int turnIndex = 0;
+
+    void finalizeAgentTurn() {
+      if (currentAgentText.isNotEmpty) {
+        replayEntries.add(TranscriptEntry(
+          id: 'replay-agent-$turnIndex',
+          role: TranscriptRole.agent,
+          text: currentAgentText,
+          isFinal: true,
+          timestamp: DateTime.now(),
+          origin: MessageOrigin.text,
+        ));
+        currentAgentText = '';
+        turnIndex++;
+      }
+    }
+
+    final stream = relay.sendSessionLoad();
+    await for (final event in stream) {
+      switch (event) {
+        case RelayUserMessage(:final text):
+          // Finalize any pending agent message before starting new user turn
+          finalizeAgentTurn();
+          final stripped = stripPreamble(text);
+          replayEntries.add(TranscriptEntry(
+            id: 'replay-user-$turnIndex',
+            role: TranscriptRole.user,
+            text: stripped,
+            isFinal: true,
+            timestamp: DateTime.now(),
+            origin: MessageOrigin.text,
+          ));
+          turnIndex++;
+
+        case RelayContentDelta(:final text):
+          currentAgentText += text;
+
+        case RelayLoadComplete():
+          finalizeAgentTurn();
+
+        case RelayPromptComplete():
+          finalizeAgentTurn();
+
+        case RelayPromptError(:final code, :final message):
+          debugPrint('[Relay] Session load error: $code $message');
+
+        case RelayUsageUpdate(:final used, :final size):
+          _state = _state.copyWith(
+            diagnostics: _state.diagnostics.copyWith(
+              tokenUsed: used,
+              tokenSize: size,
+            ),
+          );
+
+        case RelayToolCallEvent():
+          break; // Skip tool call events from history
+      }
+    }
+
+    // Batch-add all replay entries at once to avoid per-item auto-scroll
+    if (replayEntries.isNotEmpty) {
+      debugPrint('[Fletcher] Session loaded: ${replayEntries.length} messages');
+      _updateState(transcript: replayEntries);
+    }
+
+    _isReplaying = false;
+    _emitSystemEvent(SystemEvent(
+      id: 'session-loaded-${DateTime.now().millisecondsSinceEpoch}',
+      type: SystemEventType.room,
+      status: SystemEventStatus.success,
+      message: 'session restored \u00B7 ${replayEntries.length} messages',
+      timestamp: DateTime.now(),
+      prefix: '\u25B8',
+    ));
+  }
+
   /// Send user text through the relay (chat mode).
   ///
   /// Checks relay presence, starts streaming, and routes events into
@@ -1758,6 +1905,12 @@ class LiveKitService extends ChangeNotifier {
             _state = _state.copyWith(activeToolCalls: updated);
             notifyListeners();
           }
+
+        case RelayUserMessage():
+          break; // User messages are handled separately via _upsertTranscript
+
+        case RelayLoadComplete():
+          break; // Session load completion — no action needed in prompt stream
       }
     }
   }

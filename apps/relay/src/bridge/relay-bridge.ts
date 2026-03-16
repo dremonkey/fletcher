@@ -163,6 +163,29 @@ export class RelayBridge {
     this.acpClient.onUpdate((params: SessionUpdateParams) => {
       this.log.debug({ event: "acp_update_received", params }, "← acp session/update");
 
+      // DIAG: log every ACP update kind to trace <think> tag pipeline
+      const _update = (params as any).update;
+      const _kind = _update?.sessionUpdate;
+      if (_kind === "agent_message_chunk") {
+        const ct = _update?.content?.type;
+        const textSnippet = typeof _update?.content?.text === "string"
+          ? _update.content.text.substring(0, 80)
+          : typeof _update?.content?.thinking === "string"
+            ? _update.content.thinking.substring(0, 80)
+            : "(no text/thinking)";
+        const hasThinkTag = typeof _update?.content?.text === "string"
+          && _update.content.text.includes("<think");
+        this.log.info(
+          { event: "acp_chunk_type", contentType: ct, snippet: textSnippet, hasThinkTag },
+          "agent_message_chunk content type",
+        );
+      } else {
+        this.log.info(
+          { event: "acp_update_kind", kind: _kind },
+          `ACP update: ${_kind}`,
+        );
+      }
+
       const isAgentChunk = (params as any).update?.sessionUpdate === "agent_message_chunk";
 
       // WORKAROUND: BUG-022 / BUG-024 — content-based catch-up dedup
@@ -422,6 +445,33 @@ export class RelayBridge {
         .catch((err: Error) => {
           reqLog.error({ event: "acp_error", error: err.message });
           this.activeRequestSource = null;
+          const { errorCode, errorMessage } = classifyAcpError(err);
+          this.forwardToMobile({
+            jsonrpc: "2.0",
+            id: msg.id,
+            error: { code: errorCode, message: errorMessage },
+          });
+        });
+    } else if (msg.method === "session/load") {
+      reqLog.info({ event: "session_load_requested" });
+      this.ensureAcp()
+        .then(() =>
+          this.acpClient.sessionLoad({
+            sessionId: this.sessionId!,
+            cwd: process.cwd(),
+            mcpServers: [],
+          }),
+        )
+        .then(() => {
+          reqLog.info({ event: "session_load_complete" });
+          this.forwardToMobile({
+            jsonrpc: "2.0",
+            id: msg.id,
+            result: { loaded: true },
+          });
+        })
+        .catch((err: Error) => {
+          reqLog.error({ event: "session_load_error", error: err.message });
           const { errorCode, errorMessage } = classifyAcpError(err);
           this.forwardToMobile({
             jsonrpc: "2.0",

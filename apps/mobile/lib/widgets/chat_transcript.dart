@@ -80,7 +80,9 @@ class _ChatTranscriptState extends State<ChatTranscript> {
     final hasNewItems = newCount > _lastItemCount;
     _lastItemCount = newCount;
     setState(() {});
-    if (hasNewItems && !_userHasScrolledUp) {
+    // TASK-077: Suppress auto-scroll during session history replay.
+    // After replay completes, jump to bottom (no animation) once.
+    if (hasNewItems && !_userHasScrolledUp && !widget.service.isReplaying) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToBottom(animate: true);
       });
@@ -404,6 +406,12 @@ class _TranscriptMessage extends StatelessWidget {
           if (isAgent) ...[
             () {
               final parsed = parseAgentText(entry.text);
+              debugPrint('[ChatTranscript] parseAgentText: '
+                  'thinkingState=${parsed.thinkingState} '
+                  'thinking=${parsed.thinking != null ? '"${parsed.thinking!.substring(0, parsed.thinking!.length.clamp(0, 40))}..."' : 'null'} '
+                  'visible="${parsed.visible.substring(0, parsed.visible.length.clamp(0, 40))}..." '
+                  'rawLen=${entry.text.length} '
+                  'rawStart="${entry.text.substring(0, entry.text.length.clamp(0, 60))}"');
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

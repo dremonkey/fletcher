@@ -384,6 +384,11 @@ export class AcpClient {
   private handleLine(line: string): void {
     this.log.debug({ raw: line }, "acp raw stdout");
 
+    // DIAG: flag any line containing <think at the raw stdio level
+    if (line.includes("<think")) {
+      this.log.info({ event: "raw_think_tag", snippet: line.substring(0, 200) }, "raw stdout contains <think> tag");
+    }
+
     let msg: Record<string, unknown>;
     try {
       msg = JSON.parse(line);

@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 /// Parser for ACP `session/update` notification params.
 ///
 /// ACP spec: https://agentclientprotocol.com/protocol/prompt-turn.md
@@ -120,6 +122,26 @@ final class AcpToolCallUpdate extends AcpUpdate {
   String toString() => 'AcpToolCallUpdate(id: $id, title: $title, status: $status)';
 }
 
+/// A user message replayed during `session/load`.
+///
+/// Contains the full prompt text from the original user turn. The text may
+/// include an OpenClaw sender JSON preamble that callers should strip.
+final class AcpUserMessage extends AcpUpdate {
+  final String text;
+
+  const AcpUserMessage(this.text);
+
+  @override
+  bool operator ==(Object other) =>
+      other is AcpUserMessage && other.text == text;
+
+  @override
+  int get hashCode => text.hashCode;
+
+  @override
+  String toString() => 'AcpUserMessage(${text.length} chars)';
+}
+
 /// A recognized but non-renderable update.
 ///
 /// Covers: `available_commands_update`, `plan`, unknown future kinds, and
@@ -170,6 +192,10 @@ abstract final class AcpUpdateParser {
       return _parseAgentMessageChunk(kind, update);
     }
 
+    if (kind == 'user_message') {
+      return _parseUserMessage(update);
+    }
+
     if (kind == 'usage_update') {
       final used = update['used'];
       final size = update['size'];
@@ -201,17 +227,49 @@ abstract final class AcpUpdateParser {
     return AcpNonContentUpdate(kind);
   }
 
+  static AcpUpdate? _parseUserMessage(Map<String, dynamic> update) {
+    final prompt = update['prompt'];
+    if (prompt is! List) return null;
+
+    final textParts = <String>[];
+    for (final part in prompt) {
+      if (part is Map<String, dynamic> &&
+          part['type'] == 'text' &&
+          part['text'] is String) {
+        textParts.add(part['text'] as String);
+      }
+    }
+    if (textParts.isEmpty) return null;
+    return AcpUserMessage(textParts.join(''));
+  }
+
   static AcpUpdate? _parseAgentMessageChunk(
     String kind,
     Map<String, dynamic> update,
   ) {
     final content = update['content'];
-    if (content is! Map<String, dynamic>) return null;
+    if (content is! Map<String, dynamic>) {
+      debugPrint('[AcpUpdateParser] agent_message_chunk has no content map');
+      return null;
+    }
 
-    if (content['type'] != 'text') return AcpNonContentUpdate(kind);
+    final contentType = content['type'];
+
+    // DIAG: log every content type we see to trace <think> tag pipeline
+    if (contentType != 'text') {
+      debugPrint('[AcpUpdateParser] agent_message_chunk non-text content: '
+          'type=$contentType, keys=${content.keys.toList()}');
+      return AcpNonContentUpdate(kind);
+    }
 
     final text = content['text'];
     if (text is! String) return null;
+
+    // DIAG: flag if text contains <think> tags
+    if (text.contains('<think')) {
+      debugPrint('[AcpUpdateParser] <think> tag found in text chunk! '
+          'len=${text.length} start="${text.substring(0, text.length.clamp(0, 80))}"');
+    }
 
     return AcpTextDelta(text);
   }
