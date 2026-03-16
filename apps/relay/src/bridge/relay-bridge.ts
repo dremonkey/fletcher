@@ -316,9 +316,12 @@ export class RelayBridge {
    * Fails silently — config negotiation must never block session startup.
    *
    * Desired values are loaded from `acp-session-config.json` at the relay
-   * package root. The file maps ACP config categories to desired values:
+   * package root, keyed by target (ACP_COMMAND). Example:
    * ```json
-   * { "thought_level": "high" }
+   * {
+   *   "openclaw": { "thought_level": "adaptive" },
+   *   "claude":   { "thought_level": "high" }
+   * }
    * ```
    */
   private async negotiateSessionConfig(configOptions?: SessionConfigOption[]): Promise<void> {
@@ -329,7 +332,7 @@ export class RelayBridge {
       `agent advertises ${configOptions.length} config option(s)`,
     );
 
-    const desiredConfig = RelayBridge.loadDesiredConfig();
+    const desiredConfig = RelayBridge.loadDesiredConfig(this.options.acpCommand);
 
     for (const option of configOptions) {
       const desiredValue = option.category
@@ -376,30 +379,34 @@ export class RelayBridge {
     }
   }
 
-  /** Cache for loaded desired config — loaded once per process. */
-  private static desiredConfigCache: Record<string, string> | null = null;
+  /** Cache for loaded config file — loaded once per process. */
+  private static configFileCache: Record<string, Record<string, string>> | null = null;
 
   /**
-   * Load desired ACP session config from `acp-session-config.json`.
-   * Returns an empty object if the file doesn't exist or is malformed.
+   * Load desired ACP session config for a given target from `acp-session-config.json`.
+   *
+   * The file is keyed by target (the ACP_COMMAND value, e.g. "openclaw", "claude").
+   * Returns the target's config section, or an empty object if not found.
    */
-  private static loadDesiredConfig(): Record<string, string> {
-    if (RelayBridge.desiredConfigCache) return RelayBridge.desiredConfigCache;
-
-    try {
-      const { resolve } = require("node:path");
-      const { readFileSync } = require("node:fs");
-      const configPath = resolve(import.meta.dir, "..", "..", "acp-session-config.json");
-      const raw = JSON.parse(readFileSync(configPath, "utf-8"));
-      if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
-        RelayBridge.desiredConfigCache = raw as Record<string, string>;
-        return RelayBridge.desiredConfigCache;
+  private static loadDesiredConfig(target: string): Record<string, string> {
+    if (!RelayBridge.configFileCache) {
+      try {
+        const { resolve } = require("node:path");
+        const { readFileSync } = require("node:fs");
+        const configPath = resolve(import.meta.dir, "..", "..", "acp-session-config.json");
+        const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+        if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
+          RelayBridge.configFileCache = raw as Record<string, Record<string, string>>;
+        } else {
+          RelayBridge.configFileCache = {};
+        }
+      } catch {
+        // File missing or malformed — use empty config
+        RelayBridge.configFileCache = {};
       }
-    } catch {
-      // File missing or malformed — use empty config
     }
-    RelayBridge.desiredConfigCache = {};
-    return RelayBridge.desiredConfigCache;
+
+    return RelayBridge.configFileCache[target] ?? {};
   }
 
   /** Flatten grouped or ungrouped option values into a flat array. */

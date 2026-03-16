@@ -1,3 +1,6 @@
 {
-  "thought_level": "high"
+  "openclaw": {
+    "thought_level": "adaptive",
+    "agent_thought_chunk": "enabled"
+  }
 }
