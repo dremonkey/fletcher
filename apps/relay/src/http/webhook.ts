@@ -74,8 +74,18 @@ export function createWebhookHandler(
         return Response.json({ received: true });
       }
 
-      bridgeManager.scheduleRemoveRoom(roomName);
-      log.info({ roomName, identity: participant?.identity }, "Scheduled deferred teardown after participant left");
+      // BUG-036: Remove room immediately instead of scheduling a deferred teardown.
+      // This ensures that if the human rejoins, they get a fresh relay bridge
+      // and ACP session, which helps recover from state issues (like BUG-027c).
+      // Once Epic 25 (Session Restoration) is implemented, the relay will
+      // be able to restore the previous session state automatically.
+      try {
+        await bridgeManager.removeRoom(roomName);
+        log.info({ roomName, identity: participant?.identity }, "Removed room immediately after participant left");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        log.error({ roomName, error: message }, "Failed to remove room after participant left");
+      }
     }
 
     return Response.json({ received: true });

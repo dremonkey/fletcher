@@ -20,11 +20,9 @@ export interface BridgeManagerOptions {
 
 export class BridgeManager {
   private bridges = new Map<string, RelayBridge>();
-  private pendingTeardowns = new Map<string, Timer>();
   private idleTimer: ReturnType<typeof setInterval> | null = null;
   private discoveryTimer: ReturnType<typeof setInterval> | null = null;
   private log: Logger;
-  private departureGraceMs: number;
   private rejoinMaxRetries: number;
   private rejoinBaseDelayMs: number;
 
@@ -36,7 +34,6 @@ export class BridgeManager {
     options?: BridgeManagerOptions,
   ) {
     this.log = logger ?? rootLogger.child({ component: "bridge-manager" });
-    this.departureGraceMs = options?.departureGraceMs ?? 120_000;
     this.rejoinMaxRetries = options?.rejoinMaxRetries ?? 3;
     this.rejoinBaseDelayMs = options?.rejoinBaseDelayMs ?? 1_000;
 
@@ -50,7 +47,6 @@ export class BridgeManager {
    * Idempotent — if a bridge already exists for the room, returns without action.
    */
   async addRoom(roomName: string): Promise<void> {
-    this.cancelPendingTeardown(roomName);
     if (this.bridges.has(roomName)) return;
 
     // Join the LiveKit room first
@@ -74,8 +70,6 @@ export class BridgeManager {
    * Remove a bridge: stop the bridge and leave the room.
    */
   async removeRoom(roomName: string): Promise<void> {
-    this.cancelPendingTeardown(roomName);
-
     const bridge = this.bridges.get(roomName);
     if (!bridge) return;
 
@@ -86,62 +80,29 @@ export class BridgeManager {
   }
 
   // -------------------------------------------------------------------------
-  // Deferred teardown (departure grace period)
+  // DEPRECATED: Deferred teardown (BUG-036)
   // -------------------------------------------------------------------------
 
-  /**
-   * Schedule a deferred teardown for a room. If the participant reconnects
-   * before the grace period expires, the teardown can be cancelled.
-   * Deduplicates — calling again for the same room is a no-op.
-   */
+  /** @deprecated Removed in favor of immediate teardown. */
   scheduleRemoveRoom(roomName: string): void {
-    if (this.pendingTeardowns.has(roomName)) return;
-
-    this.log.info(
-      { event: "teardown_scheduled", roomName, graceMs: this.departureGraceMs },
-      "Deferred teardown scheduled",
-    );
-
-    const timer = setTimeout(async () => {
-      this.pendingTeardowns.delete(roomName);
-      this.log.info({ event: "teardown_executing", roomName }, "Grace period expired, removing room");
-      await this.removeRoom(roomName);
-    }, this.departureGraceMs);
-
-    // Don't prevent process exit
-    if (timer && typeof timer === "object" && "unref" in timer) {
-      (timer as NodeJS.Timeout).unref();
-    }
-
-    this.pendingTeardowns.set(roomName, timer);
+    this.removeRoom(roomName).catch((err) => {
+      this.log.error({ event: "immediate_teardown_failed", roomName, err }, "Immediate teardown failed");
+    });
   }
 
-  /**
-   * Cancel a pending deferred teardown for a room.
-   * Returns true if a pending teardown was cancelled, false otherwise.
-   */
-  cancelPendingTeardown(roomName: string): boolean {
-    const timer = this.pendingTeardowns.get(roomName);
-    if (!timer) return false;
-
-    clearTimeout(timer);
-    this.pendingTeardowns.delete(roomName);
-    this.log.info({ event: "teardown_cancelled", roomName }, "Deferred teardown cancelled");
-    return true;
+  /** @deprecated Always returns false. */
+  cancelPendingTeardown(_roomName: string): boolean {
+    return false;
   }
 
-  /**
-   * Check if a room has a pending deferred teardown.
-   */
-  hasPendingTeardown(roomName: string): boolean {
-    return this.pendingTeardowns.has(roomName);
+  /** @deprecated Always returns false. */
+  hasPendingTeardown(_roomName: string): boolean {
+    return false;
   }
 
-  /**
-   * Return all room names with pending teardowns (for observability).
-   */
+  /** @deprecated Always returns empty array. */
   getPendingTeardowns(): string[] {
-    return Array.from(this.pendingTeardowns.keys());
+    return [];
   }
 
   /**
@@ -169,11 +130,6 @@ export class BridgeManager {
    * Shut down all bridges and disconnect from all rooms.
    */
   async shutdownAll(): Promise<void> {
-    // Clear all pending deferred teardowns
-    for (const [roomName, timer] of this.pendingTeardowns) {
-      clearTimeout(timer);
-    }
-    this.pendingTeardowns.clear();
     this.stopDiscoveryTimer();
 
     const stops = Array.from(this.bridges.entries()).map(
@@ -206,9 +162,6 @@ export class BridgeManager {
       this.bridges.delete(roomName);
       bridge.stop().catch(() => {});
     }
-
-    // Cancel any pending teardown for this room
-    this.cancelPendingTeardown(roomName);
 
     this.rejoinWithBackoff(roomName, 0);
   }
