@@ -17,6 +17,7 @@ Start with the system overview, then follow the links based on what you need to 
 | 7 | [Infrastructure](infrastructure.md) | Docker Compose, LiveKit config, Nix flake, Tailscale, environment variable reference |
 | 8 | [Developer Workflow](developer-workflow.md) | TUI launcher, manual workflow, testing, startup sequence |
 | 9 | [Network Connectivity](network-connectivity.md) | Tailscale-aware URL resolution, CGNAT detection, health diagnostics |
+| 10 | [Mic Grab Protection](009-mic-grab-protection.md) | BUG-009: device-change guard when muted, two mute modes, pending-change deferral |
 
 ## Quick Reference
 

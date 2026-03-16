@@ -1210,13 +1210,19 @@ class LiveKitService extends ChangeNotifier {
   Future<void> _refreshAudioTrack() async {
     if (_isRefreshingAudio || _localParticipant == null) return;
 
-    // BUG-009: Skip track restart entirely when muted. The mic is unpublished;
-    // there is no track to restart and running the refresh would hold
-    // _isRefreshingAudio for ~1s, silently dropping any subsequent device events.
+    // BUG-009: When fully muted (track unpublished via removePublishedTrack),
+    // skip the restart — there is no track to restart and running the refresh
+    // would hold _isRefreshingAudio for ~1s, silently dropping subsequent
+    // device events. For soft-mute (muteOnly), the track is still published
+    // and disabled — proceed with refresh so audio routing stays correct.
     if (_isMuted) {
-      debugPrint('[Fletcher] Device change while muted — skipping audio track restart (BUG-009)');
-      _pendingDeviceChange = true;
-      return;
+      final pub = _localParticipant!.audioTrackPublications.firstOrNull;
+      if (pub?.track == null) {
+        debugPrint('[Fletcher] Device change while muted — skipping audio track restart (BUG-009)');
+        _pendingDeviceChange = true;
+        return;
+      }
+      debugPrint('[Fletcher] Device change while soft-muted — refreshing audio track');
     }
 
     _isRefreshingAudio = true;
@@ -1554,6 +1560,15 @@ class LiveKitService extends ChangeNotifier {
     } else {
       _updateState(status: ConversationStatus.idle);
       await _localParticipant?.setMicrophoneEnabled(true);
+      // BUG-009: If a device change fired while soft-muted and was handled by
+      // _refreshAudioTrack (track was still published), the flag may already be
+      // clear. But if it slipped through, clear it — setMicrophoneEnabled(true)
+      // on a re-enabled track doesn't call getUserMedia, but restartTrack()
+      // during the refresh already picked up the new device.
+      if (_pendingDeviceChange) {
+        debugPrint('[Fletcher] Clearing pending device change after soft-unmute (BUG-009)');
+        _pendingDeviceChange = false;
+      }
     }
     // _voiceModeActive stays unchanged — histograms remain visible
   }
