@@ -8,6 +8,9 @@ Beyond the audio pipeline, Fletcher sends structured metadata from the voice age
 |---------|-----------|-----------|---------|
 | `lk.transcription` | LiveKit Text Streams | Agent → Client | Real-time transcription of user and agent speech |
 | `ganglia-events` | LiveKit Data Channel | Bidirectional | Status events, artifacts, content events (Agent → Client); control commands (Client → Agent) |
+| `relay` | LiveKit Data Channel | Bidirectional | ACP JSON-RPC 2.0 (chat mode: session/prompt, session/update, etc.) |
+| `voice-acp` | LiveKit Data Channel | Bidirectional | ACP JSON-RPC 2.0 (voice agent ↔ relay bridge) |
+| `sub-agents` | LiveKit Data Channel | Relay → Client | Sub-agent visibility snapshots (Epic 27) |
 
 ## Transcription Streams
 
@@ -301,6 +304,48 @@ The interceptor automatically creates artifacts based on tool type:
 | Any failing tool | `ErrorArtifact` |
 
 Language detection for code artifacts uses file extension mapping (`.ts` → TypeScript, `.dart` → Dart, etc.).
+
+## Sub-Agent Visibility (Epic 27)
+
+The relay monitors backend sub-agents (Claude Code file watchers, OpenClaw tool call events) and pushes full snapshots to the Flutter client on the `sub-agents` topic.
+
+### Architecture
+
+```
+Flutter App ◄── "sub-agents" topic ── Relay ◄── SubAgentProvider (per backend)
+```
+
+The relay creates a `SubAgentProvider` based on `ACP_COMMAND`:
+- **`claude`** — `ClaudeCodeProvider`: watches `~/.claude/projects/{projectId}/{sessionId}/subagents/agent-*.jsonl` via `fs.watch()`
+- **`openclaw`** — `OpenClawProvider`: passively captures `tool_call_begin/end` and `subagent_start/end` from ACP session/update events
+
+### Wire Format
+
+```typescript
+interface SubAgentSnapshot {
+  type: "sub_agent_snapshot";
+  agents: SubAgentInfo[];
+}
+
+interface SubAgentInfo {
+  id: string;              // Agent ID
+  task: string;            // First user message (truncated to 120 chars)
+  status: "running" | "completed" | "error" | "timeout";
+  startedAt: number;       // Epoch ms
+  lastActivityAt: number;  // Epoch ms
+  completedAt: number | null;
+  durationMs: number;
+  model?: string;          // e.g. "claude-sonnet-4-6"
+  tokens?: number;
+  lastOutput?: string;     // Truncated to 200 chars
+}
+```
+
+Full snapshots (not diffs) — typically 0–5 agents, <500 bytes each. Debounced at 500ms on the relay side.
+
+### Client-Side
+
+`SubAgentService` (ChangeNotifier) parses snapshots and exposes the agent list. The `SubAgentChip` in `DiagnosticsBar` shows `SUB: 2▸` for running agents; tapping opens the `SubAgentPanel` bottom sheet with status, task, duration, and model per agent.
 
 ## Related Documents
 

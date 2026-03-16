@@ -477,6 +477,20 @@ Rewrite the Fletcher Relay from TypeScript/Bun to Go or Rust, producing a single
 - [ ] 008: Build & distribution (cross-compile, release binaries)
 - [ ] 009: Integration test against existing Flutter app + OpenClaw
 
+### 28. [Sub-Agent Visibility](./28-sub-agent-visibility) ✅
+Monitor backend sub-agents and display their status in the Flutter app. Relay watches for sub-agent activity (Claude Code filesystem, OpenClaw events) and pushes snapshots to Flutter via data channel.
+
+**Tasks:**
+- [x] 085: Sub-agent data model, provider interface, and registry
+- [x] 086: Claude Code filesystem provider (JSONL watcher)
+- [x] 087: OpenClaw passive provider (session/update events)
+- [x] 088: Relay bridge integration
+- [x] 089: Flutter SubAgentService + data model
+- [x] 090: Flutter sub-agent UI widgets (chip, card, panel)
+- [x] 091: Architecture docs + task tracking
+
+**Depends on:** Epic 22 (Dual-Mode), Epic 24 (Relay)
+
 ### 27. [End-to-End Encryption](./27-e2ee) 📋
 Content-level encryption for cloud-hosted LiveKit deployments. Data channel traffic (chat, ACP, artifacts) encrypted with NaCl-secretbox using device keys from sovereign pairing. Voice E2EE is architecturally moot — if you want private voice, run the full pipeline locally (STT + TTS + LLM). Architecture validated by [MobVibe](https://github.com/Eric-Song-Nop/mobvibe)'s content-blind relay pattern.
 
