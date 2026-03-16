@@ -2256,7 +2256,8 @@ class LiveKitService extends ChangeNotifier {
   /// Called when the app is backgrounded (AppLifecycleState.paused).
   /// In chat mode, disconnects immediately to avoid relay churn (TASK-074 / BUG-034).
   /// In voice mode, starts a 10-minute countdown that disconnects on expiry.
-  /// Screen-locked means the user may be talking via earbuds, so we skip both.
+  /// Screen-locked in voice mode means the user may be talking via earbuds, so
+  /// we skip the timeout. Chat mode always disconnects regardless of lock state.
   void onAppBackgrounded({required bool isScreenLocked}) {
     debugPrint('[Fletcher] onAppBackgrounded called — room=${_room != null ? 'connected' : 'NULL'}, isScreenLocked=$isScreenLocked');
     if (_room == null) return;

@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:livekit_client/livekit_client.dart' show Room;
 import 'package:fletcher/services/livekit_service.dart';
 
 // ---------------------------------------------------------------------------
@@ -128,18 +129,20 @@ void main() {
       expect(svc.disconnectCalled, isFalse);
     });
 
-    test('does nothing when screen is locked — chat mode', () {
+    test('disconnects in chat mode even when screen is locked (BUG-042)', () {
       svc.voiceModeActiveForTest = false; // chat mode
-      // isScreenLocked=true causes early return before mode check.
+      svc.roomForTest = Room(); // need a non-null room to pass null guard
+      // Chat mode always disconnects — screen lock only protects voice mode.
       svc.onAppBackgrounded(isScreenLocked: true);
 
-      expect(svc.backgroundDisconnectedForTest, isFalse,
-          reason: 'screen lock bypasses all background logic regardless of mode');
-      expect(svc.disconnectCalled, isFalse);
+      expect(svc.backgroundDisconnectedForTest, isTrue,
+          reason: 'chat mode must disconnect regardless of screen lock state');
+      expect(svc.disconnectCalled, isTrue);
     });
 
     test('does nothing when screen is locked — voice mode', () {
       svc.voiceModeActiveForTest = true; // voice mode
+      svc.roomForTest = Room(); // need a non-null room to pass null guard
       svc.onAppBackgrounded(isScreenLocked: true);
 
       expect(svc.backgroundDisconnectedForTest, isFalse);

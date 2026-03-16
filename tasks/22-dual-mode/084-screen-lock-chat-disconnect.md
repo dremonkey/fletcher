@@ -165,11 +165,11 @@ Add a new test: "chat mode disconnects immediately even with screen locked" — 
 
 ## Acceptance Criteria
 
-- [ ] Chat mode + screen locked → disconnects immediately (no early return)
-- [ ] Chat mode + screen unlocked → disconnects immediately (unchanged)
-- [ ] Voice mode + screen locked → stays connected (unchanged)
-- [ ] Voice mode + screen unlocked → 10-minute timeout (unchanged)
-- [ ] Unit test updated for new screen lock behavior in chat mode
+- [x] Chat mode + screen locked → disconnects immediately (no early return)
+- [x] Chat mode + screen unlocked → disconnects immediately (unchanged)
+- [x] Voice mode + screen locked → stays connected (unchanged)
+- [x] Voice mode + screen unlocked → 10-minute timeout (unchanged)
+- [x] Unit test updated for new screen lock behavior in chat mode
 - [ ] Field-verify: no relay cycling when phone locked overnight in chat mode
 
 ## Files
