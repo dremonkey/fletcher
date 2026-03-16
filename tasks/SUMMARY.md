@@ -420,7 +420,7 @@ Split the single voice-agent pipeline into two distinct modes — **Voice Mode**
 - [~] 066: Bridge Async Agent Messages to Mobile 🔄 — workaround implemented: `session/load` catch-up with chunk dedup detects zero-text `end_turn` and replays missed sub-agent results; verified against real OpenClaw; needs field test ([BUG-022](../docs/field-tests/20260313-buglog.md))
 - [x] 067: Fix Large Payload Delivery Failure in Relay ✅ — content-based text dedup replaces broken count-based skipCount; INFO-level delivery diagnostics; BUG-024 regression test ([BUG-024](../docs/field-tests/20260314-buglog.md))
 
-- [ ] 084: Screen Lock Chat Disconnect 📋 — `isScreenLocked` guard prevents chat-mode disconnect; relay idles 30m then cycles; fix: reorder guards so chat mode always disconnects ([BUG-042](../docs/field-tests/20260316-buglog.md))
+- [ ] 084: Screen Lock Chat Disconnect ✅ — `isScreenLocked` guard prevents chat-mode disconnect; relay idles 30m then cycles; fix: reorder guards so chat mode always disconnects ([BUG-042](../docs/field-tests/20260316-buglog.md))
 
 **Backlog (deferred — chat mode MVP works without these):**
 - [ ] 043: Pluggable TTS Engine Abstraction — `TtsEngine` interface + native/Cartesia/Gemini impls

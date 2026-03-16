@@ -1,7 +1,7 @@
 # TASK-084: Disconnect in chat mode regardless of screen lock state (BUG-042)
 
 **Epic:** 22 — Dual-Mode Architecture
-**Status:** [ ]
+**Status:** [x]
 **Depends on:** none
 **Blocks:** none
 **Bug ref:** BUG-042

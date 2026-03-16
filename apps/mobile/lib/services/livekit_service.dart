@@ -2260,17 +2260,19 @@ class LiveKitService extends ChangeNotifier {
   void onAppBackgrounded({required bool isScreenLocked}) {
     debugPrint('[Fletcher] onAppBackgrounded called — room=${_room != null ? 'connected' : 'NULL'}, isScreenLocked=$isScreenLocked');
     if (_room == null) return;
-    if (isScreenLocked) {
-      debugPrint('[Fletcher] Screen locked — skipping background timeout');
-      return;
-    }
 
-    // Chat mode: disconnect immediately — no reason to keep room alive when
-    // the user can't interact. Preserves transcripts for UI on resume.
+    // Chat mode: always disconnect immediately — can't interact with a
+    // backgrounded or locked screen. Keeps room alive = relay idle churn. (BUG-042)
     if (!_voiceModeActive) {
       debugPrint('[Fletcher] Chat mode backgrounded — disconnecting immediately');
       _backgroundDisconnected = true;
       disconnect(preserveTranscripts: true);
+      return;
+    }
+
+    // Voice mode: screen lock means earbuds in use — stay connected
+    if (isScreenLocked) {
+      debugPrint('[Fletcher] Voice mode screen locked — skipping background timeout');
       return;
     }
 
