@@ -102,31 +102,65 @@ Latency cost is ~50ms (one data channel round trip) — negligible given
 session/load itself is <100ms. And it enables session switching later (TASK-080)
 by just sending another `session/bind` without reconnecting.
 
+## Not in scope
+
+- **Old-client fallback** — no old clients; mono-repo ships mobile + relay together
+- **Session switching mid-connection** (TASK-080) — deferred
+- **`session/load` integration** — that's TASK-077
+- **SQLite persistence** — SharedPreferences sufficient for one session key
+- **Separate `SessionKeyManager` class** — merged into `SessionStorage` (review decision 2A)
+
 ## Implementation
 
 ### 1. Naming scheme: shared word pair, different suffixes
 
-Room names and session names share a random word pair from the existing
-`RoomNameGenerator` word lists (adjective-noun, ~10,000+ combos). The suffix
-distinguishes them:
+Refactor `RoomNameGenerator` → `NameGenerator` (`apps/mobile/lib/utils/room_name_generator.dart`).
+Keep existing word lists. Expose shared word pair, then build session + room names:
 
 ```
   Word pair: "singing-triforce"
 
   Room name (disposable transport):
     singing-triforce-4abc           (word pair + 4-char alphanumeric)
-    singing-triforce-9f2e           (new room on reconnect, same session)
 
   Session name (durable conversation):
     singing-triforce-20260316       (word pair + YYYYMMDD)
 ```
 
-This gives:
-- **Human-readable session names** — presentable in TASK-080's session browser
-- **Debuggable correlation** — "singing-triforce" links rooms to their session
-- **Date-namespaced uniqueness** — same word pair on different days = different
-  sessions. Same-day collision is astronomically unlikely (~1 in 10,000); if it
-  happens, regenerate the word pair and retry.
+```dart
+  abstract final class NameGenerator {
+    static final _random = Random();
+    // ... existing word lists ...
+
+    /// Generate a random word pair (adjective-noun)
+    static String generateWordPair() {
+      final adj = _adjectives[_random.nextInt(_adjectives.length)];
+      final noun = _nouns[_random.nextInt(_nouns.length)];
+      return '$adj-$noun';
+    }
+
+    /// Room name: word pair + 4-char alphanumeric (disposable)
+    static String generateRoomName() {
+      final pair = generateWordPair();
+      final suffix = _random4CharAlphanumeric();
+      return '$pair-$suffix';
+    }
+
+    /// Session name: word pair + YYYYMMDD (durable)
+    static String generateSessionName() {
+      final pair = generateWordPair();
+      final date = DateFormat('yyyyMMdd').format(DateTime.now());
+      return '$pair-$date';
+    }
+
+    static String _random4CharAlphanumeric() {
+      const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+      return List.generate(4, (_) => chars[_random.nextInt(chars.length)]).join();
+    }
+  }
+```
+
+Update all imports: `RoomNameGenerator.generate()` → `NameGenerator.generateRoomName()`.
 
 ### 2. Session key format
 
@@ -141,12 +175,36 @@ The full `--session` key passed to OpenClaw ACP:
 ```
 
 The key is opaque to both the relay and OpenClaw — they just pass it through.
-The mobile app generates and manages session names.
 
-For TASK-077 (resume), the mobile stores the current session name and reuses it.
-TASK-080 (browsing) adds the ability to create new sessions and switch.
+### 3. Mobile: session key persistence in SessionStorage
 
-### 3. Data channel `session/bind` message
+Add to `SessionStorage` (`apps/mobile/lib/services/session_storage.dart`):
+
+```dart
+  static const _keySessionKey = 'fletcher_session_key';
+  static const _sessionKeyPrefix = 'agent:main:relay:';
+
+  /// Get stored session key, or create a new one.
+  static Future<String> getSessionKey() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getString(_keySessionKey);
+    if (stored != null) return stored;
+
+    final key = '$_sessionKeyPrefix${NameGenerator.generateSessionName()}';
+    await prefs.setString(_keySessionKey, key);
+    return key;
+  }
+
+  /// Create a new session key (for TASK-080 "new conversation").
+  static Future<String> createNewSessionKey() async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = '$_sessionKeyPrefix${NameGenerator.generateSessionName()}';
+    await prefs.setString(_keySessionKey, key);
+    return key;
+  }
+```
+
+### 4. Data channel `session/bind` message
 
 ```json
 {
@@ -166,135 +224,110 @@ Response (after ACP subprocess is ready):
 }
 ```
 
-### 4. Relay: defer ACP spawn until `session/bind`
+### 5. Relay: defer ACP spawn + 30s bind timeout
 
-In `bridge-manager.ts`, `addRoom()` joins the room and registers data channel
-handlers but does NOT spawn `RelayBridge` yet. When `session/bind` arrives,
-the relay creates the `RelayBridge` with the client-specified key and starts it.
+In `bridge-manager.ts`, split `addRoom()` into join + wait:
+
+```
+  addRoom(roomName)
+    ├── joinRoom(roomName)
+    ├── register "relay" topic handler for session/bind
+    ├── start 30s bind timeout
+    │     └── on timeout: leaveRoom + log warning
+    └── track room as "pending bind" (joined but no bridge)
+
+  handleSessionBind(roomName, sessionKey, msgId)
+    ├── clear bind timeout
+    ├── create RelayBridge({ roomName, sessionKey, ... })
+    ├── bridge.start()
+    ├── bridges.set(roomName, bridge)
+    └── send session/bind response to mobile
+```
+
+State machine for a room:
+```
+  ┌──────────┐   addRoom()    ┌──────────────┐  session/bind  ┌────────┐
+  │  absent   │ ─────────────▶ │ pending_bind │ ──────────────▶ │ bound  │
+  └──────────┘                └──────────────┘                └────────┘
+                                     │                              │
+                                     │ 30s timeout                  │ removeRoom()
+                                     ▼                              ▼
+                              ┌──────────────┐                ┌────────┐
+                              │   cleaned up │                │ removed│
+                              └──────────────┘                └────────┘
+```
+
+Edge cases:
+- **prompt before bind** — relay checks `bridges.has(roomName)`. If no bridge,
+  respond with JSON-RPC error `{ code: -32011, message: "Session not bound" }`
+- **duplicate bind** — idempotent: if bridge exists, respond with current key
+- **bind timeout** — 30s timer; on fire: leaveRoom, delete pending state, log warning
+
+### 6. Relay: accept client-specified session key
+
+In `relay-bridge.ts`, add `sessionKey` to `RelayBridgeOptions`:
 
 ```typescript
-  // bridge-manager.ts (after)
-  async addRoom(roomName: string): Promise<void> {
-    await this.roomManager.joinRoom(roomName);
-    // Register handler for session/bind — bridge created on bind
-    this.roomManager.onDataMessage(roomName, (msg) => {
-      if (msg.method === "session/bind") {
-        this.bindSession(roomName, msg.params.sessionKey);
-      }
-    });
-  }
-
-  private async bindSession(roomName: string, sessionKey: string): Promise<void> {
-    const bridge = new RelayBridge({ roomName, sessionKey, ... });
-    this.bridges.set(roomName, bridge);
-    await bridge.start();
+  export interface RelayBridgeOptions {
+    roomName: string;
+    sessionKey: string;           // ← NEW: from session/bind
+    roomManager: RoomManager;
+    acpCommand: string;
+    acpArgs?: string[];
+    logger?: Logger;
   }
 ```
 
-### 5. Relay: accept client-specified session key
-
-In `relay-bridge.ts`, use the client-specified key directly:
+Use it directly in the constructor:
 
 ```typescript
-  // relay-bridge.ts (after)
   constructor(private options: RelayBridgeOptions) {
-    const sessionKey = options.sessionKey   // from session/bind
-      ?? `agent:main:relay:${options.roomName}`;  // fallback (old clients)
-
+    // ...
     this.acpClient = new AcpClient({
       command: options.acpCommand,
-      args: [...(options.acpArgs ?? []), "--session", sessionKey],
-      ...
+      args: [
+        ...(options.acpArgs ?? []),
+        "--session",
+        options.sessionKey,       // ← was: `agent:main:relay:${options.roomName}`
+      ],
+      logger: this.log.child({ component: "acp" }),
     });
   }
 ```
 
-### 6. Mobile: refactor name generator + generate session names
+### 7. Mobile: send `session/bind` on connect
 
-Refactor `RoomNameGenerator` to expose the shared word pair, then build
-session names and room names from it:
-
-```dart
-  class NameGenerator {
-    /// Generate a random word pair (adjective-noun)
-    static String generateWordPair() => '${_randomAdj()}-${_randomNoun()}';
-
-    /// Room name: word pair + 4-char alphanumeric (disposable)
-    static String generateRoomName() {
-      final pair = generateWordPair();
-      final suffix = _random4CharAlphanumeric();
-      return '$pair-$suffix';
-    }
-
-    /// Session name: word pair + YYYYMMDD (durable)
-    static String generateSessionName() {
-      final pair = generateWordPair();
-      final date = DateFormat('yyyyMMdd').format(DateTime.now());
-      return '$pair-$date';
-    }
-  }
-```
-
-### 7. Mobile: store and send session key
+In `LiveKitService`, after room connect and data channel ready, send
+`session/bind` as the first message before any `session/prompt`:
 
 ```dart
-  class SessionKeyManager {
-    static const _keyPref = 'fletcher_session_key';
-    static const _prefix = 'agent:main:relay:';
-
-    /// Get stored session key, or create a new one
-    static Future<String> getCurrentKey() async {
-      final prefs = await SharedPreferences.getInstance();
-      final stored = prefs.getString(_keyPref);
-      if (stored != null) return stored;
-
-      final key = '$_prefix${NameGenerator.generateSessionName()}';
-      await prefs.setString(_keyPref, key);
-      return key;
-    }
-
-    /// Create a new session (for TASK-080 "new conversation")
-    static Future<String> createNewSession() async {
-      final prefs = await SharedPreferences.getInstance();
-      final key = '$_prefix${NameGenerator.generateSessionName()}';
-      await prefs.setString(_keyPref, key);
-      return key;
-    }
-  }
-```
-
-### 8. Mobile: send `session/bind` on connect
-
-After room connect succeeds and data channel is open, send `session/bind`
-as the first message before any `session/prompt`:
-
-```dart
-  // In LiveKitService, after successful room connect
-  final sessionKey = await SessionKeyManager.getCurrentKey();
-  _sendDataChannelMessage({
+  // In connect(), after room.connect() succeeds
+  final sessionKey = await SessionStorage.getSessionKey();
+  await _publishOnRelay({
     "jsonrpc": "2.0",
     "method": "session/bind",
-    "id": _nextId(),
+    "id": _nextBindId(),
     "params": {"sessionKey": sessionKey},
   });
-  // Wait for bind response before sending prompts
+  // RelayChatService should not send prompts until bind response received
 ```
 
-### 9. Fallback behavior
-
-If the relay cannot determine a client-specified session key (e.g., no
-metadata, old client version), fall back to the current room-name-based key
-with a warning log. This maintains backward compatibility.
+Gate `RelayChatService.sendPrompt()` behind a bind-complete flag so the user
+can't fire a prompt before the session is bound.
 
 ## Acceptance criteria
 
-- [ ] Session key format documented and agreed
-- [ ] Client-to-relay communication mechanism chosen and implemented
-- [ ] Relay accepts client-specified session key
-- [ ] Relay falls back to room-name-based key with warning if client key absent
-- [ ] Mobile generates and stores session key
-- [ ] Same session key is sent across multiple room reconnects
-- [ ] Different conversation IDs produce different OpenClaw threads (verified with session/load)
+- [ ] `NameGenerator` produces room names (`adj-noun-4chr`) and session names (`adj-noun-YYYYMMDD`)
+- [ ] `SessionStorage.getSessionKey()` returns stored key or generates new one
+- [ ] Mobile sends `session/bind` as first data channel message after room connect
+- [ ] Relay defers ACP spawn until `session/bind` received
+- [ ] Relay creates RelayBridge with client-specified sessionKey
+- [ ] 30s bind timeout cleans up room if no bind arrives
+- [ ] `session/prompt` before bind returns JSON-RPC error
+- [ ] Duplicate `session/bind` is idempotent
+- [ ] Same session key persists across room reconnects
+- [ ] Relay tests: bind success, bind timeout, prompt-before-bind, duplicate bind (~8-10 tests)
+- [ ] Mobile tests: NameGenerator format, SessionStorage key persistence (~5 tests)
 
 ## Decisions
 
