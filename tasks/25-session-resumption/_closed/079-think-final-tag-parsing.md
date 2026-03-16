@@ -321,6 +321,46 @@ Widget tests:
 - `apps/mobile/lib/widgets/chat_transcript.dart` — integration point
 - `apps/mobile/lib/widgets/thinking_spinner.dart` — related but distinct (spinner = waiting for response, ThinkingBlock = showing reasoning content)
 
+## Field-test findings (2026-03-15)
+
+**Problem:** `<think>` tags never appear in the mobile UI despite OpenClaw having
+reasoning/thinking enabled. The `ThinkingBlock` widget and `parseAgentText()` parser
+work correctly in unit tests, but never trigger in production.
+
+**Root cause investigation — full pipeline trace:**
+
+Diagnostic logging was added at every stage of the pipeline:
+
+| Level | Component | What we checked | Result |
+|-------|-----------|----------------|--------|
+| 1 | `acp-client` raw stdout | `line.includes("<think")` on every line from subprocess | **Never fired** |
+| 2 | `relay-bridge.ts` | `contentType`, `hasThinkTag`, all `sessionUpdate` kinds | Every chunk: `type: "text"`, `hasThinkTag: false` |
+| 3 | `acp_update_parser.dart` | Non-text content types, `<think>` in text | No non-text types, no think tags |
+| 4 | `relay_chat_service.dart` | Dropped non-content updates, `<think>` detection | No think-related drops |
+| 5 | `chat_transcript.dart` | `parseAgentText()` output | `thinkingState: none` on every render |
+
+**Conclusion:** OpenClaw is NOT sending thinking content over the ACP protocol at all.
+The `<think>` tags that OpenClaw logs internally are consumed and stripped before the
+ACP subprocess emits `agent_message_chunk` notifications. No `content.thinking` field,
+no separate `sessionUpdate` kind, no raw XML tags — thinking content simply doesn't
+leave the subprocess.
+
+**OpenClaw's self-diagnosis (hallucination):** When asked, OpenClaw claimed it "upgrades"
+`<think>` tags into a structured `content.thinking` JSON field. This is plausible-sounding
+but contradicted by all 5 levels of diagnostic evidence. The raw stdout check is
+definitive — if `<think>` appeared anywhere in the JSON-RPC line (even as a field value),
+the `raw_think_tag` log would have fired.
+
+**Next steps:**
+- This is an OpenClaw-side issue: ACP protocol needs to forward thinking content
+- Options: (a) OpenClaw passes `<think>` tags through in `content.text` verbatim,
+  (b) OpenClaw sends a separate `content.type: "thinking"` chunk, or
+  (c) OpenClaw adds a new `sessionUpdate` kind for thinking
+- Our parser and widget are ready for option (a) today
+- Options (b)/(c) would require updates to `acp_update_parser.dart`
+
+**Diagnostic logging commit:** `e248a57` — kept in place for future debugging
+
 ## Acceptance criteria
 
 - [x] Agent messages with `<think>` tags show a collapsible thinking block above the response
