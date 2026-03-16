@@ -57,11 +57,17 @@ ParsedAgentText parseAgentText(String raw) {
   const finalOpen = '<final>';
   const finalClose = '</final>';
 
-  // --- Step 1: Look for <think> ---
-  final thinkStart = raw.indexOf(thinkOpen);
+  // --- Step 1: Look for <think> anchored at the start of the message ---
+  // Only recognize <think> when it begins the message (after optional
+  // whitespace). Literal mentions of <think> mid-text (e.g., agent
+  // discussing the feature) are NOT structural tags. (BUG-038)
+  final trimmed = raw.trimLeft();
+  final thinkStart =
+      trimmed.startsWith(thinkOpen) ? raw.indexOf(thinkOpen) : -1;
   if (thinkStart == -1) {
-    // No <think> tag — check for standalone <final> tag (no think block).
-    final finalOnlyStart = raw.indexOf(finalOpen);
+    // No anchored <think> — check for standalone <final> at the start.
+    final finalOnlyStart =
+        trimmed.startsWith(finalOpen) ? raw.indexOf(finalOpen) : -1;
     if (finalOnlyStart != -1) {
       final finalOnlyContentStart = finalOnlyStart + finalOpen.length;
       final finalOnlyCloseIdx = raw.indexOf(finalClose, finalOnlyContentStart);

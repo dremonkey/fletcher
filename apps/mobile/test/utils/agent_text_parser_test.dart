@@ -208,13 +208,53 @@ void main() {
         expect(result.visible, equals(''));
       });
 
-      test('text before <think> tag is ignored (tag takes priority)', () {
-        // If there's text before <think>, we still detect the think tag.
-        // The text before <think> is not in the output (undefined behavior
-        // per spec — malformed input, but we should not crash).
-        final result = parseAgentText('prefix text <think>R</think> <final>V</final>');
+      test('text before <think> tag — treated as plain text (BUG-038)', () {
+        // <think> mid-text is a literal mention, NOT a structural tag.
+        // The parser should return raw text as visible with no thinking.
+        final result =
+            parseAgentText('prefix text <think>R</think> <final>V</final>');
+        expect(result.thinkingState, equals(ThinkingState.none));
+        expect(result.thinking, isNull);
+        expect(
+          result.visible,
+          equals('prefix text <think>R</think> <final>V</final>'),
+        );
+      });
+
+      test('<think> with leading whitespace is still recognized', () {
+        final result =
+            parseAgentText('  <think>reasoning</think> <final>answer</final>');
         expect(result.thinkingState, equals(ThinkingState.complete));
-        expect(result.visible, equals('V'));
+        expect(result.thinking, equals('reasoning'));
+        expect(result.visible, equals('answer'));
+      });
+
+      test('BUG-038 regression: literal <think> mention in prose', () {
+        // The agent discusses the <think> feature in its response text.
+        // This should NOT trigger the think-tag parser.
+        const raw = 'Epic 25: We implemented Slash commands and `<think>` tag '
+            'parsing, but the core engine for Seamless Resumption is next.';
+        final result = parseAgentText(raw);
+        expect(result.thinkingState, equals(ThinkingState.none));
+        expect(result.thinking, isNull);
+        expect(result.visible, equals(raw));
+      });
+
+      test('BUG-038 regression: <think> in markdown backticks mid-text', () {
+        const raw =
+            'The parser handles `<think>` and `<final>` tags at render time.';
+        final result = parseAgentText(raw);
+        expect(result.thinkingState, equals(ThinkingState.none));
+        expect(result.thinking, isNull);
+        expect(result.visible, equals(raw));
+      });
+
+      test('standalone <final> mid-text is treated as plain text', () {
+        const raw = 'We added <final>output</final> tag support.';
+        final result = parseAgentText(raw);
+        expect(result.thinkingState, equals(ThinkingState.none));
+        expect(result.thinking, isNull);
+        expect(result.visible, equals(raw));
       });
     });
   });
