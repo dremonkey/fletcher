@@ -15,6 +15,9 @@ import type {
   SessionPromptParams,
   SessionPromptResult,
   SessionCancelParams,
+  SessionListParams,
+  SessionListResult,
+  SessionLoadParams,
   SessionUpdateParams,
 } from "./types.js";
 import type { JsonRpcResponse } from "./rpc.js";
@@ -228,7 +231,20 @@ export class AcpClient {
   }
 
   /**
-   * WORKAROUND: BUG-022 / openclaw/openclaw#40693
+   * List available sessions.
+   * Requires the `listSessions` capability (advertised in initialize response).
+   */
+  async sessionList(params: SessionListParams = {}): Promise<SessionListResult> {
+    this.log.info({ event: "session_list" }, "listing sessions");
+    const result = (await this.request("session/list", params)) as SessionListResult;
+    this.log.info({ event: "session_list_result", count: result.sessions?.length ?? 0 }, "sessions listed");
+    return result;
+  }
+
+  /**
+   * Load/replay session history as session/update notifications.
+   *
+   * Also used as WORKAROUND for BUG-022 / openclaw/openclaw#40693:
    * ACP sessions spawned via sessions_spawn never trigger the auto-announce
    * flow, so sub-agent results are invisible to the relay. session/load
    * replays the full session history as session/update notifications,
@@ -236,14 +252,8 @@ export class AcpClient {
    *
    * ACP spec: https://agentclientprotocol.com/protocol/session-setup
    * Requires the `loadSession` capability (advertised in initialize response).
-   *
-   * TODO(BUG-022): Remove once openclaw/openclaw#40693 is fixed and merged.
    */
-  async sessionLoad(params: {
-    sessionId: string;
-    cwd: string;
-    mcpServers: unknown[];
-  }): Promise<void> {
+  async sessionLoad(params: SessionLoadParams): Promise<void> {
     this.log.info({ event: "session_load", sessionId: params.sessionId }, "loading session history");
     await this.request("session/load", params);
   }

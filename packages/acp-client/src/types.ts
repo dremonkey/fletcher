@@ -114,6 +114,36 @@ export interface SessionCancelParams {
 }
 
 // ---------------------------------------------------------------------------
+// List (session discovery)
+// ---------------------------------------------------------------------------
+
+/** Params for session/list — empty for now. */
+export interface SessionListParams {
+  [key: string]: unknown;
+}
+
+/** Result from session/list — shape TBD by spike, keep loose. */
+export interface SessionListResult {
+  sessions: SessionListEntry[];
+  [key: string]: unknown;
+}
+
+export interface SessionListEntry {
+  sessionId: string;
+  [key: string]: unknown;
+}
+
+// ---------------------------------------------------------------------------
+// Load (session history replay)
+// ---------------------------------------------------------------------------
+
+export interface SessionLoadParams {
+  sessionId: string;
+  cwd: string;
+  mcpServers: unknown[];
+}
+
+// ---------------------------------------------------------------------------
 // Update (notification from agent)
 //
 // OpenClaw ACP sends session/update with a singular `update` field

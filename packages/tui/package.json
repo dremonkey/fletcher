@@ -10,6 +10,7 @@
     "dev": "bun run src/index.ts"
   },
   "dependencies": {
-    "@clack/prompts": "^1.0.1"
+    "@clack/prompts": "^1.0.1",
+    "@fletcher/acp-client": "workspace:*"
   }
 }

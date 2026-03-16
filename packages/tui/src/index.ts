@@ -19,6 +19,7 @@ import { manageSkills } from "./skills";
 import { startServices, installShutdownHandler, generateToken } from "./services";
 import { deployToDevice, startApkBuildInBackground } from "./mobile";
 import { testRelay } from "./relay";
+import { interactWithAcp } from "./acp";
 
 // Load .env into process.env on startup
 for (const [k, v] of Object.entries(loadEnv())) {
@@ -35,7 +36,8 @@ while (true) {
       { value: "config", label: "Manage configuration", hint: "view and edit environment variables" },
       { value: "skills", label: "Install Claude Code skills", hint: "symlink skills -> .claude/commands/" },
       { value: "deploy", label: "Deploy to mobile device", hint: "build APK and push to emulator/device" },
-      { value: "relay", label: "Test relay", hint: "send a message through the ACP bridge" },
+      { value: "acp", label: "Interact with ACP", hint: "session/new, prompt, list, load — direct ACP client" },
+      { value: "relay", label: "Test relay", hint: "send a message through the relay HTTP bridge" },
       { value: "quit", label: "Quit" },
     ],
   });
@@ -53,6 +55,11 @@ while (true) {
 
   if (action === "skills") {
     await manageSkills();
+    continue;
+  }
+
+  if (action === "acp") {
+    await interactWithAcp();
     continue;
   }
 

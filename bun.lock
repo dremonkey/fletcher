@@ -81,6 +81,7 @@
       },
       "dependencies": {
         "@clack/prompts": "^1.0.1",
+        "@fletcher/acp-client": "workspace:*",
       },
     },
   },
