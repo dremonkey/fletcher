@@ -82,3 +82,6 @@ apps/mobile/lib/
 - [ ] "Unpair" button in settings clears all secure storage and returns to pairing screen
 - [ ] Unpair shows confirmation dialog before proceeding
 - [ ] VesselKey model has `fromJson` factory with validation
+- [ ] Token expiry comparison uses `DateTime.now().millisecondsSinceEpoch` (NOT `/ 1000`) against `auth.tokenExpiry` (milliseconds)
+- [ ] `network.gatewayUrl` is required; `network.tailscaleIp` is optional (fallback degrades gracefully)
+- [ ] iOS `NSCameraUsageDescription` in Info.plist is set to appropriate string

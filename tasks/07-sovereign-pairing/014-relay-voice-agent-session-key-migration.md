@@ -1,85 +1,90 @@
-# TASK-014: Relay + Voice Agent Session Key Migration
+# TASK-014: Voice Agent Session Key Migration (JWT Metadata)
 
 ## Status
 - **Status:** Open
 - **Priority:** High
 - **Owner:** Unassigned
 - **Created:** 2026-03-16
-- **Phase:** Phase 4 — Session Key Migration
-- **Depends On:** TASK-012 (room join endpoint embeds sessionKey in JWT), TASK-013 (mobile no longer sends session/bind)
+- **Updated:** 2026-03-16 (eng-manager review: re-scoped to voice agent only)
+- **Phase:** Phase 4 — Voice Agent Session Key Migration
+- **Depends On:** TASK-012 (room join endpoint embeds sessionKey in JWT)
 
 ## Problem
 
-After Epic 7, the Hub derives `sessionKey` server-side and embeds it in the LiveKit JWT metadata. But the relay currently **requires** `session/bind` from the mobile client to create a bridge (see `apps/relay/src/bridge/bridge-manager.ts`), and the voice agent uses `FLETCHER_OWNER_IDENTITY` env var for session routing (see `packages/livekit-agent-ganglia/src/session-routing.ts`). Both must be updated to consume the new JWT-metadata-based session keys.
+After Epic 7, the Hub derives `sessionKey` server-side and embeds it in the LiveKit JWT metadata. But the voice agent currently uses the `FLETCHER_OWNER_IDENTITY` env var for session routing (see `packages/livekit-agent-ganglia/src/session-routing.ts`). The voice agent must be updated to consume the new JWT-metadata-based session keys.
 
-This is a **breaking protocol change** that must be handled with backwards compatibility.
+**Important:** This task does NOT modify the relay. The relay continues using `session/bind` for conversation thread binding (see Architecture Decision 10 in EPIC.md). The JWT metadata `sessionKey` ("main" / "guest_...") and the relay's conversation thread key (`agent:main:relay:<session-name>`) are independent systems serving different purposes.
 
 ## Solution
 
-### Part 1: Relay Migration
+### Part 1: Voice Agent Migration
 
-Update `apps/relay/src/bridge/bridge-manager.ts`:
+Add a new function `resolveSessionKeyFromMetadata(participant)` to `packages/livekit-agent-ganglia/src/session-routing.ts`:
 
-1. When a participant joins, read `sessionKey` from `participant.metadata` (JSON: `{"sessionKey": "main"}`)
-2. If metadata contains `sessionKey`, create the bridge immediately — no need to wait for `session/bind`
-3. **Backwards compatibility:** If metadata does NOT contain `sessionKey` (pre-Epic-7 client), fall back to waiting for `session/bind` as before. This allows gradual rollout.
-4. Remove the `session/bind` wait timeout for participants that have JWT metadata (they'll never send it)
-5. Update all existing `session/bind` tests to cover both paths (metadata-first and bind-fallback)
+1. Read `participant.metadata` (string)
+2. If present and valid JSON containing a `sessionKey` field, map it to a `SessionKey`:
+   - `"main"` → `{ type: "owner", key: "main" }`
+   - `"guest_{deviceId}"` → `{ type: "guest", key: "guest_{deviceId}" }`
+3. Return `undefined` if metadata is absent, empty, or not valid JSON (no throw)
 
-### Part 2: Voice Agent Migration
+In `apps/voice-agent/src/agent.ts` (around the `waitForDeviceParticipant` resolution):
+1. Call `resolveSessionKeyFromMetadata(participant)`
+2. If it returns a SessionKey, use it
+3. If it returns undefined, fall back to `resolveSessionKeySimple()` with `FLETCHER_OWNER_IDENTITY`
+4. Log which resolution path was used at `debug` level
 
-Update `packages/livekit-agent-ganglia/src/session-routing.ts`:
+### Part 2: Relay — No Changes Needed
 
-1. `resolveSessionKey()` should check `participant.metadata` for a `sessionKey` field first
-2. If metadata contains `sessionKey`, use it directly (no comparison against `FLETCHER_OWNER_IDENTITY`)
-3. **Backwards compatibility:** If metadata does NOT contain `sessionKey`, fall back to the existing `FLETCHER_OWNER_IDENTITY` env var comparison
-4. Log which resolution path was used (metadata vs env-var) at `debug` level
+The relay continues using `session/bind` for conversation thread binding. The JWT metadata `sessionKey` ("main" / "guest_...") serves a different purpose (owner/guest routing) than the relay's conversation thread key (`agent:main:relay:<session-name>`).
+
+These are independent systems:
+- **Voice agent owner/guest routing** (JWT metadata) → determines OpenClaw session scope
+- **Relay conversation thread binding** (`session/bind`) → determines ACP subprocess session identity, enables session resumption (Epic 25, TASK-081)
+
+The relay MAY optionally read JWT metadata in the future to differentiate owner vs guest behavior, but this is not needed for MVP.
 
 ### Part 3: Deprecation Path
 
 Once all clients are post-Epic-7:
-1. Remove `session/bind` handling from relay entirely
-2. Remove `FLETCHER_OWNER_IDENTITY` env var from voice agent
-3. Remove `session/bind` from `data-channel-protocol.md`
+1. Remove `FLETCHER_OWNER_IDENTITY` env var from voice agent (replaced by JWT metadata)
+2. Update `session-routing.md` to remove the env-var-based owner detection section
 
-This cleanup is deferred until all active clients have been updated.
+NOTE: `session/bind` is NOT deprecated. It continues to serve relay conversation thread binding (Epic 25, TASK-081).
 
 ## Architecture Impact
 
 ```
 BEFORE (current):
-  Mobile ──session/bind──> Relay ──reads sessionKey──> Bridge
-  Mobile ──connects──> LiveKit ──participant identity──> Voice Agent
-  Voice Agent ──compares vs FLETCHER_OWNER_IDENTITY──> SessionKey
+  Voice Agent: compares participant identity vs FLETCHER_OWNER_IDENTITY → SessionKey
+  Relay: waits for session/bind → conversation thread key → ACP subprocess
 
 AFTER (Epic 7):
-  Hub ──embeds sessionKey in JWT metadata──> LiveKit JWT
-  Mobile ──connects with JWT──> LiveKit ──participant.metadata──> Relay
-  Relay ──reads sessionKey from metadata──> Bridge (no session/bind needed)
-  Voice Agent ──reads sessionKey from metadata──> SessionKey (no env var needed)
+  Voice Agent: reads sessionKey from participant.metadata (JWT claim) → SessionKey
+               falls back to FLETCHER_OWNER_IDENTITY if metadata absent
+  Relay: unchanged — still uses session/bind → conversation thread key → ACP subprocess
 
-TRANSITION (backwards-compatible):
-  Relay: check metadata FIRST → if missing, wait for session/bind
-  Voice Agent: check metadata FIRST → if missing, use FLETCHER_OWNER_IDENTITY
+KEY INSIGHT: Two independent session key systems coexist:
+  JWT metadata sessionKey  ──→ voice agent owner/guest routing
+  session/bind thread key  ──→ relay conversation persistence
 ```
 
 ## Files Modified
 
-- `apps/relay/src/bridge/bridge-manager.ts` — Session key resolution from JWT metadata
-- `apps/relay/src/bridge/bridge-manager.spec.ts` — Tests for both resolution paths
-- `packages/livekit-agent-ganglia/src/session-routing.ts` — Metadata-first resolution
-- `packages/livekit-agent-ganglia/src/session-routing.spec.ts` — Tests for metadata path
-- `docs/architecture/data-channel-protocol.md` — Document `session/bind` deprecation
-- `docs/architecture/session-routing.md` — Document JWT-metadata resolution
+- `packages/livekit-agent-ganglia/src/session-routing.ts` — Add `resolveSessionKeyFromMetadata()`
+- `packages/livekit-agent-ganglia/src/session-routing.spec.ts` — Tests for metadata-first path
+- `apps/voice-agent/src/agent.ts` — Use metadata-first resolution, fall back to env var
+- `docs/architecture/session-routing.md` — Document JWT-metadata resolution as primary path
+- `docs/architecture/data-channel-protocol.md` — Add clarifying note that `session/bind` is for relay thread binding (not deprecated by Epic 7)
 
 ## Acceptance Criteria
-- [ ] Relay reads `sessionKey` from participant JWT metadata when available
-- [ ] Relay creates bridge without waiting for `session/bind` when metadata is present
-- [ ] Relay falls back to `session/bind` for pre-Epic-7 participants (backwards compatible)
+- [ ] `resolveSessionKeyFromMetadata()` correctly parses JWT metadata `sessionKey` field
+- [ ] `resolveSessionKeyFromMetadata()` returns undefined for missing/invalid metadata (no throw)
+- [ ] `resolveSessionKeyFromMetadata()` maps `"main"` to `{ type: "owner", key: "main" }`
+- [ ] `resolveSessionKeyFromMetadata()` maps `"guest_{deviceId}"` to `{ type: "guest", key: "guest_{deviceId}" }`
 - [ ] Voice agent reads `sessionKey` from `participant.metadata` when available
 - [ ] Voice agent falls back to `FLETCHER_OWNER_IDENTITY` comparison when metadata is absent
 - [ ] Both resolution paths are logged at debug level (which path was used)
-- [ ] Existing `session/bind` tests still pass (fallback path)
-- [ ] New tests cover the metadata-first path
-- [ ] `data-channel-protocol.md` updated to document `session/bind` deprecation
+- [ ] Existing session routing tests still pass (fallback path)
+- [ ] New tests cover the metadata-first path (valid metadata, invalid JSON, empty string, null)
 - [ ] `session-routing.md` updated to document JWT-metadata resolution
+- [ ] `data-channel-protocol.md` updated to clarify `session/bind` is for relay thread binding (not deprecated)

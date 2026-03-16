@@ -40,7 +40,7 @@ Compute and store the clock offset: `clockOffset = serverTime - DateTime.now().m
 
 ### Step 4: Secure Credential Storage
 Store in `FlutterSecureStorage` (iOS Keychain / Android Keystore):
-- `device_id` — Hub-assigned deviceId (e.g., `device_f1e2d3c4b5a6`)
+- `device_id` — Hub-assigned deviceId (e.g., `device_f1e2d3c4b5a69788` — 16 hex chars)
 - `device_private_key` — Ed25519 private key seed (base64)
 - `agent_name` — returned by Hub (display name for the AI in the chat UI)
 - `hub_gateway_url`, `hub_tailscale_ip`, `hub_public_key`, `livekit_url`
@@ -60,7 +60,11 @@ Do NOT store Hub credentials in `SessionStorage` (which uses SharedPreferences).
 - **FlutterSecureStorage** (CredentialStorage): Secrets — private key, Hub URL, deviceId, clock offset
 
 ### FlutterSecureStorage Configuration
-- Set `resetOnError: false` on Android to prevent silent data deletion on decryption failure (which would cause unexpected unpair after OS upgrades). Handle errors explicitly instead.
+- **Android:** Set `resetOnError: false` to prevent silent data deletion on decryption failure (which would cause unexpected unpair after OS upgrades). Handle errors explicitly instead.
+- **iOS:** Use `KeychainAccessibility.first_unlock` (accessible after first device unlock). Do NOT use `when_unlocked_this_device_only` — it would prevent the app from loading credentials during background reconnection.
+
+### Keypair Lifecycle on Failure
+On registration failure (network error, 401, etc.), do NOT persist the keypair. Generate a fresh keypair on retry. This avoids orphaned keys in secure storage.
 
 ### Error Handling
 - **Network timeout:** Show "Cannot reach your Hub. Check network connection." with retry button.

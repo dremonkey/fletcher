@@ -35,7 +35,7 @@ Authorization: `Bearer <pairing_token>`
 ### Behavior
 1. Validate pairing token against SQLite token store (check expiry, single-use flag)
 2. **Atomically revoke the pairing token** (compare-and-swap: if token is still valid, mark as used in the same transaction). This prevents concurrent registration race conditions where two devices scan the same QR.
-3. Generate `device_<16-hex>` device ID
+3. Generate `device_<16-hex>` device ID (`randomBytes(8).toString('hex')` — 8 bytes = 16 hex chars)
 4. Determine owner status: first device registered becomes "owner" (gets `sessionKey: "main"`)
 5. Store device identity (deviceId, publicKey, hubId, createdAt, isOwner) in SQLite device store
 6. Return `201 { "deviceId": "device_...", "agentName": "Glitch", "serverTime": 1709850600000 }`
@@ -45,7 +45,7 @@ The `serverTime` field (Unix milliseconds) allows the client to compute a clock 
 ### Error Responses
 - `401` — Invalid, expired, or already-used pairing token
 - `400` — Missing required fields (publicKey, deviceModel, os, appVersion)
-- `409` — Public key already registered (device re-pairing; return existing deviceId)
+- `409` — Exact same `publicKey` already registered (idempotent retry: returns existing deviceId + agentName). This handles the case where the client's 201 response was lost due to network failure. Note: if a *different* public key was registered using the same pairing token, the token is already revoked and the client gets 401.
 - `500` — Internal error (SQLite write failure, etc.) with `requestId` for log correlation
 
 ### Device Revocation

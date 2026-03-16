@@ -5,7 +5,7 @@
 - **Priority:** High
 - **Owner:** Unassigned
 - **Created:** 2026-03-08
-- **Updated:** 2026-03-16 (plan review refinements)
+- **Updated:** 2026-03-16 (plan review + eng-manager refinements)
 - **Phase:** Phase 3 — Managed Connection
 - **Depends On:** TASK-009, TASK-012
 
@@ -36,17 +36,17 @@ Integrate with Epic 9's TCP-race URL resolution (09-connectivity/008+018):
 2. Reuses the `UrlResolver` infrastructure already built for connectivity resilience
 3. 2-second timeout before falling back to the slower path
 
+**Fallback if UrlResolver is not available:** If Epic 9 tasks 008+018 are not yet field-verified, use a simple sequential fallback: try LAN URL with 2s timeout, then try Tailscale IP.
+
 ### LiveKitService Update
-Update `joinRoom()` / `connectWithDynamicRoom()` to use `HubAuthService` for token acquisition instead of the current `TokenService`. This replaces the `bun run token:generate` flow with automatic, authenticated connections.
+Update `joinRoom()` / `connectWithDynamicRoom()` to use `HubAuthService` for token acquisition instead of the current `TokenService`.
 
-The current `TokenService` is no longer needed after this task. Remove it or gate it behind an unpaired-mode check for development convenience.
+**TokenService gating (not removal):** Gate `TokenService` behind an unpaired-mode check. When Hub credentials exist in `CredentialStorage`, use `HubAuthService`. Otherwise, fall back to `TokenService` for development convenience (developers who haven't set up the Hub plugin can continue working with `bun run token:generate`). Eventually `TokenService` can be removed when all developers use paired mode.
 
-### Session Key from JWT (No More Client-Side Assertion)
-The Hub now embeds `sessionKey` in the LiveKit JWT metadata at token issuance time (see TASK-012). The mobile client **no longer sends `session/bind`** with a self-asserted session key. Instead:
-1. Mobile obtains JWT from Hub (which derives session key server-side based on device identity)
-2. Mobile connects to LiveKit room with Hub-issued JWT
-3. Relay and voice agent read `sessionKey` from the participant's JWT metadata (see TASK-014)
-4. Remove `session/bind` send from mobile data channel protocol
+### Session Key from JWT (Server-Derived Owner/Guest Routing)
+The Hub now embeds `sessionKey` in the LiveKit JWT metadata at token issuance time (see TASK-012). The voice agent reads owner/guest routing from JWT metadata instead of `FLETCHER_OWNER_IDENTITY` (see TASK-014). However, the mobile client **continues sending `session/bind`** to the relay for conversation thread binding (the `agent:main:relay:<session-name>` key from Epic 25). These are independent session key systems:
+1. JWT metadata `sessionKey` ("main" / "guest_...") → voice agent owner/guest routing
+2. `session/bind` data channel (`agent:main:relay:<session-name>`) → relay conversation thread persistence
 
 ### Device Identity
 After pairing, use the Hub-assigned `deviceId` (from `CredentialStorage`) as the LiveKit participant identity. This replaces the hardware-derived `device-<ANDROID_ID>`.
@@ -65,10 +65,12 @@ After pairing, use the Hub-assigned `deviceId` (from `CredentialStorage`) as the
 - [ ] LiveKit room connection uses Hub-issued token
 - [ ] Network fallback: LAN URL tried first, Tailscale IP as backup via TCP race
 - [ ] Fallback timeout is 2 seconds (matches existing `UrlResolver` pattern)
+- [ ] Sequential fallback works if UrlResolver is unavailable
 - [ ] Participant identity in LiveKit is the Hub-assigned `deviceId`
 - [ ] Connection works on both local network and Tailscale
-- [ ] Mobile does NOT send `session/bind` — session key comes from JWT metadata
-- [ ] `session/bind` send code is removed from mobile data channel protocol
+- [ ] Mobile continues sending `session/bind` to relay for conversation thread binding
+- [ ] JWT metadata provides owner/guest routing to voice agent (no mobile change needed for this)
+- [ ] `TokenService` is gated behind unpaired-mode check (not removed)
 - [ ] Auth errors show specific user-facing messages (401 vs 403 vs 404)
 - [ ] Hub unreachable shows network diagnostic info
 - [ ] Room name follows `fletcher-$deviceId` pattern

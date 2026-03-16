@@ -19,11 +19,13 @@ All pairing data stays local. The Hub never phones home.
 - [Vessel Key Pairing Spec](../../docs/specs/vessel-key-pairing-spec.md) — payload format, registration flow, auth handshake
 - [Phase 1 MVP Spec](../../docs/specs/phase-1-mvp-spec.md) — end-to-end implementation plan
 
+**WARNING — Timestamp units:** The older specs above use Unix **seconds** for timestamps. Tasks 008–014 supersede those specs — all timestamps are Unix **milliseconds**. Do not copy timestamp logic from the older specs.
+
 ## Architecture Decisions
 
 These decisions are final and should not be revisited during implementation:
 
-1. **Server-side session key derivation.** The Hub derives `sessionKey` from device identity at token-issuance time. The mobile client and relay never choose or assert their own session key. This eliminates spoofing attacks where a malicious client claims `sessionKey: "main"`.
+1. **Server-side session key derivation.** The Hub derives `sessionKey` from device identity at token-issuance time. The mobile client never chooses or asserts its own owner/guest routing key. This eliminates spoofing attacks where a malicious client claims `sessionKey: "main"`.
 
 2. **Ed25519 for device auth** (not shared secrets, not JWTs). Devices hold private keys; Hub stores public keys. No secret crosses the wire after pairing.
 
@@ -37,31 +39,39 @@ These decisions are final and should not be revisited during implementation:
 
 7. **Timestamps in milliseconds everywhere.** Both Vessel Key `tokenExpiry` and room-join `timestamp` fields use Unix milliseconds. Aligns with JS `Date.now()` and Dart `DateTime.now().millisecondsSinceEpoch`.
 
-8. **Hub-assigned deviceId is the participant identity.** After pairing, `device_<hex>` from the Hub replaces the hardware-derived `device-<ANDROID_ID>` for all LiveKit connections. The mobile app checks secure storage first, falls back to hardware ID only when unpaired.
+8. **Hub-assigned deviceId is the participant identity.** After pairing, `device_<16-hex>` from the Hub replaces the hardware-derived `device-<ANDROID_ID>` for all LiveKit connections. The mobile app checks secure storage first, falls back to hardware ID only when unpaired.
 
 9. **Plugin lives at `packages/openclaw-plugin-fletcher/`** inside the Fletcher monorepo (auto-discovered by workspace glob). Can be extracted to its own repo later when the plugin API stabilizes.
+
+10. **Two distinct session key concepts coexist.** The voice agent uses JWT-metadata `sessionKey` (values: `"main"` or `"guest_{deviceId}"`) for owner/guest routing to the OpenClaw brain. The relay uses `session/bind` data channel message with a conversation-thread key (format: `agent:main:relay:<session-name>`) for OpenClaw conversation persistence. These are independent systems serving different purposes. Epic 7 introduces the first; Epic 25 (TASK-081) introduced the second. Neither replaces the other.
 
 ## Pre-Implementation Requirements
 
 Before starting any task, these two spikes must be completed:
 
 ### Spike A: OpenClaw Plugin API Verification
+
 Verify that the OpenClaw plugin SDK supports:
 - `api.registerHttpRoute()` for HTTP endpoints
 - `api.registerCommand()` for CLI extensions
 - Data persistence (SQLite or equivalent) accessible to plugins
 - Plugin discovery and loading at runtime
 
-Build a minimal "hello world" plugin that registers one route and one command. If the API doesn't work as assumed, Phase 1 tasks need redesign.
+Build a minimal "hello world" plugin that registers one route and one command. **Go/no-go decision point:** If the plugin API is insufficient, the fallback is a standalone HTTP server at `packages/fletcher-hub/` instead of a plugin (changes deployment model but not the pairing protocol).
+
+Also determine: where is the OpenClaw plugin SDK documented? What is the actual API surface (not assumed)?
 
 ### Spike B: Cross-Platform Ed25519 Interop Test
-Write a test that:
-1. Generates an Ed25519 keypair in Dart (`cryptography` package)
-2. Signs a challenge string (`deviceId:roomName:timestamp`)
-3. Verifies the signature in TypeScript (`@noble/ed25519`)
-4. Also: generates in TypeScript, verifies in Dart
 
-If the libraries produce incompatible key/signature formats, switch libraries before building the pipeline. Also verify Ed25519-to-X25519 conversion works in Dart (needed for Epic 27 E2EE key agreement).
+Produce a `tests/crypto-interop/` directory with:
+1. A Dart test that generates an Ed25519 keypair, signs the challenge format `deviceId:roomName:timestamp`, and writes `fixtures/dart-signed.json` (publicKey, challenge, signature — all base64)
+2. A TypeScript test that reads the Dart fixture and verifies the signature using `@noble/ed25519`
+3. Vice versa: TypeScript generates + signs, Dart verifies
+4. Verify that `utf8.encode(challenge)` in Dart and `Buffer.from(challenge)` in Node.js produce identical byte sequences
+5. Document the exact byte format of the private key (32-byte seed vs 64-byte expanded key) and verify `Ed25519().newKeyPairFromSeed()` roundtrip in Dart
+6. Verify Ed25519-to-X25519 conversion works in Dart `cryptography` package (needed for Epic 27 E2EE key agreement)
+
+Both tests should be runnable in CI.
 
 ## Tasks
 
@@ -69,8 +79,8 @@ If the libraries produce incompatible key/signature formats, switch libraries be
 
 Build `openclaw-plugin-fletcher` at `packages/openclaw-plugin-fletcher/` — an OpenClaw plugin that provides vessel key generation, device registration, and room join endpoints.
 
-- [ ] **011: OpenClaw Plugin Scaffold + Vessel Key Generation** — Create the plugin package; implement `vessel-key generate` CLI command with QR output and 15-min pairing tokens. SQLite-backed token and device stores.
-- [ ] **010: Device Registration Endpoint** — `POST /fletcher/devices/register` via `api.registerHttpRoute()`; validate pairing token, store device identity, revoke token. Includes device revocation CLI command. Registration response includes `agentName` and server timestamp (for clock offset calculation).
+- [ ] **011: OpenClaw Plugin Scaffold + Vessel Key Generation** — Create the plugin package; implement `vessel-key generate` CLI command with QR output and 15-min pairing tokens. SQLite-backed token and device stores. Plugin config includes `agentName`.
+- [ ] **010: Device Registration Endpoint** — `POST /fletcher/devices/register` via `api.registerHttpRoute()`; validate pairing token, store device identity, revoke token atomically. Includes device revocation CLI command. Registration response includes `agentName` and server timestamp (for clock offset calculation).
 - [ ] **012: Room Join Endpoint** — `POST /fletcher/rooms/join` via `api.registerHttpRoute()`; Ed25519 signature verification, server-side session key derivation, LiveKit token generation with `sessionKey` in JWT metadata.
 
 ### Phase 2: Mobile Client
@@ -84,13 +94,13 @@ QR scanning and device identity on the Flutter app. Can be built in parallel wit
 
 Replace the current `bun run token:generate` flow with authenticated, automatic connections.
 
-- [ ] **013: Mobile Managed Connection** — `HubAuthService` with Ed25519 auth; network fallback integrates with Epic 9's TCP-race URL resolution (TASK-008/018). Removes `session/bind` from mobile client.
+- [ ] **013: Mobile Managed Connection** — `HubAuthService` with Ed25519 auth; network fallback integrates with Epic 9's TCP-race URL resolution. `TokenService` gated behind unpaired-mode check for dev convenience.
 
-### Phase 4: Session Key Migration
+### Phase 4: Voice Agent Session Key Migration
 
-Update relay and voice agent to consume server-derived session keys from JWT metadata. This is a **breaking protocol change** that replaces the `session/bind` data channel message.
+Update voice agent to consume server-derived session keys from JWT metadata. Relay is **unchanged** — continues using `session/bind` for conversation thread binding (per Architecture Decision 10).
 
-- [ ] **014: Relay + Voice Agent Session Key Migration** — Relay reads `sessionKey` from participant JWT metadata instead of waiting for `session/bind`. Voice agent reads `sessionKey` from `participant.metadata` instead of comparing against `FLETCHER_OWNER_IDENTITY` env var. Backwards-compatible: handles pre-Epic-7 participants gracefully.
+- [ ] **014: Voice Agent Session Key Migration** — Voice agent reads `sessionKey` from `participant.metadata` (JWT claim from Hub) instead of comparing against `FLETCHER_OWNER_IDENTITY` env var. Backwards-compatible: falls back to env var for pre-Epic-7 participants. Relay is unchanged.
 
 ## Status Summary
 
@@ -100,7 +110,7 @@ Update relay and voice agent to consume server-derived session keys from JWT met
 | 1 | Hub Plugin (011, 010, 012) | Not started |
 | 2 | Mobile Client (008, 009) | Not started |
 | 3 | Managed Connection (013) | Not started |
-| 4 | Session Key Migration (014) | Not started |
+| 4 | Voice Agent Migration (014) | Not started |
 
 ## Dependencies
 
@@ -117,24 +127,45 @@ Update relay and voice agent to consume server-derived session keys from JWT met
      ├── needs 010 (registration endpoint must exist)
      └→ 013 (managed connection)
          └── needs 012 (room join endpoint must exist)
-             └→ 014 (relay + voice agent migration)
-                 └── needs 013 (mobile no longer sends session/bind)
+
+014 (voice agent migration)
+ └── needs 012 (JWT metadata format must be defined)
+ └── can parallel with 013
 ```
 
-- **Epic 9 (Connectivity):** TASK-013 reuses the TCP-race URL resolution from 09-connectivity/008+018.
-- **OpenClaw Plugin SDK:** Phase 1 tasks depend on the OpenClaw plugin API — verified by Spike A.
+- **Epic 9 (Connectivity):** TASK-013 reuses the TCP-race URL resolution from 09-connectivity/008+018. If UrlResolver is not yet field-verified, TASK-013 falls back to simple sequential resolution (try LAN with 2s timeout, then Tailscale).
+- **OpenClaw Plugin SDK:** Phase 1 tasks depend on the OpenClaw plugin API — verified by Spike A. Fallback: standalone HTTP server if plugin API is insufficient.
 - **Epic 27 (E2E Encryption):** Depends on Epic 7. Ed25519 keypairs from TASK-009 feed into X25519 key agreement for content encryption.
+
+## Execution Plan
+
+```
+Week 0 (Pre-work):
+  [Spike A: Plugin API Verification] ── CRITICAL GATE
+  [Spike B: Crypto Interop Test]     ── CRITICAL GATE (parallel with A)
+
+Week 1-2 (Phase 1 + Phase 2 in parallel):
+  LANE A (Hub Plugin):           011 → 010 → 012
+  LANE B (Mobile Client):       008, then 009 (blocked on Spike B + 008)
+  Integration tests:            009 + 010 (registration roundtrip)
+
+Week 3 (Phase 3 + Phase 4 in parallel):
+  013 (managed connection)       ── blocked on 009 + 012
+  014 (voice agent migration)    ── blocked on 012, parallel with 013
+
+Critical path: Spike A → 011 → 010 → 012 → 013 (full E2E flow)
+```
 
 ## Risks
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
-| OpenClaw plugin API doesn't match assumptions | Medium | Critical — redesign Phase 1 | Spike A before any implementation |
-| Ed25519 cross-platform signature incompatibility | Medium | Critical — blocks all auth | Spike B before TASK-009/012 |
+| OpenClaw plugin API doesn't match assumptions | Medium | Critical — redesign Phase 1 | Spike A with go/no-go + fallback to standalone server |
+| Ed25519 cross-platform signature incompatibility | Medium | Critical — blocks all auth | Spike B with fixture-based interop tests |
 | Hub clock skew >120s from mobile device | Medium | High — all auth fails | Server returns timestamp; client computes offset |
-| Relay update not coordinated with mobile update | Medium | High — session keys don't propagate | Phase 4 is backwards-compatible |
 | Self-hosted Hub behind self-signed HTTPS cert | High | Medium — cert validation fails on mobile | Document as known limitation; cert pinning in v2 |
 | FlutterSecureStorage data loss on OS upgrade | Low | High — user must re-pair | Blank-slate detection handles gracefully |
+| Epic 9 UrlResolver not field-verified | Low | Low — simple sequential fallback | TASK-013 has fallback path |
 
 ## Not In Scope
 
@@ -147,6 +178,7 @@ Explicitly deferred (do not add during implementation):
 - **Hub-to-Hub device migration** — not a use case for self-hosted
 - **Voice fingerprinting integration** (Epic 6) — separate identity layer
 - **Rate limiting on registration** — add if abuse is observed (not expected for self-hosted)
+- **Relay session key migration** — relay continues using `session/bind`; JWT metadata is voice-agent only
 
 ## Closed / Superseded Tasks
 

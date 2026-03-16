@@ -33,6 +33,8 @@ Register `POST /fletcher/rooms/join` via `api.registerHttpRoute()` in the `openc
 
 **Note:** `timestamp` is Unix milliseconds (aligns with JS `Date.now()` and Dart `DateTime.now().millisecondsSinceEpoch`).
 
+**WARNING:** The older specs (`vessel-key-pairing-spec.md`, `phase-1-mvp-spec.md`, `07-sovereign-pairing.md`) use Unix SECONDS for timestamps and a 60-second window. This task supersedes those specs — all timestamps are Unix MILLISECONDS with a 120-second window. Do not copy timestamp logic from the older specs.
+
 ### Behavior
 1. Look up device by `deviceId` in the plugin's device store — return 404 if not found
 2. Check device is not revoked (`revokedAt` is null) — return 403 if revoked
@@ -52,8 +54,8 @@ The Hub derives the session key at token issuance time — the relay and mobile 
 - Hub device store tracks which device is the "owner" (first device registered, or explicitly designated)
 - On room join, Hub checks `deviceId` against owner record
 - Session key is embedded in the LiveKit JWT `metadata` field as JSON: `{"sessionKey": "main"}` or `{"sessionKey": "guest_device_abc123"}`
-- Relay reads `sessionKey` from the joining participant's JWT metadata — never from data channel messages (see TASK-014)
-- Voice agent reads `sessionKey` from `participant.metadata` — never from `FLETCHER_OWNER_IDENTITY` env var (see TASK-014)
+- Voice agent reads `sessionKey` from `participant.metadata` — instead of comparing against `FLETCHER_OWNER_IDENTITY` env var (see TASK-014)
+- Relay is **unchanged** — continues using `session/bind` for conversation thread binding (see Architecture Decision 10 in EPIC.md). JWT metadata `sessionKey` is consumed only by the voice agent.
 
 ### Clock Skew Handling
 

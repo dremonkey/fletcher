@@ -59,10 +59,24 @@ Register additional admin commands:
 
 **Note:** `tokenExpiry` is Unix milliseconds (not seconds). This aligns with JS `Date.now()` and Dart `DateTime.now().millisecondsSinceEpoch`.
 
+### Plugin Configuration
+
+The plugin exposes these configuration values (from Hub environment or config file):
+- `agentName` — Display name for the AI in the chat UI (default: `"Glitch"`)
+- `gatewayUrl` — Hub's HTTPS gateway URL (sourced from Hub config)
+- `tailscaleIp` — Hub's Tailscale IP (optional)
+- `livekitUrl` — LiveKit server URL (sourced from Hub config)
+
+### QR Payload Size
+
+The Vessel Key JSON (minified) should stay under 400 bytes to ensure reliable scanning in low-light conditions. At 400+ bytes, the QR code requires version 12+ which is harder to scan reliably. If the payload exceeds 400 bytes:
+- Make `hubPublicKey` optional (it is not used in Phase 1 — no Hub signature verification yet)
+- Strip `metadata` fields from the QR payload (can be fetched post-registration)
+
 ### Dependencies
 - `qrcode-terminal` — QR rendering for CLI
 - `crypto.randomBytes` — Token generation
-- `better-sqlite3` or OpenClaw's built-in persistence API — SQLite storage
+- Use OpenClaw's persistence API if available (verified by Spike A); otherwise `better-sqlite3` with WAL mode
 
 ## Implementation Notes
 
@@ -84,7 +98,11 @@ Register additional admin commands:
 - [ ] Pairing token has 15-minute expiry (in milliseconds)
 - [ ] Token is stored in SQLite for later validation by TASK-010
 - [ ] Gateway URL and LiveKit URL are sourced from Hub config
+- [ ] Vessel Key JSON (minified) is under 400 bytes (or `hubPublicKey` is omitted to fit)
+- [ ] `agentName` is configurable via plugin config (default: `"Glitch"`)
+- [ ] All stores survive Hub restart (SQLite persistence verified)
+
+### P2 — Admin CLI (nice to have, not gating for pairing flow)
 - [ ] `vessel-key list-devices` shows registered devices
 - [ ] `vessel-key list-tokens` shows active pairing tokens
 - [ ] `vessel-key cleanup` removes expired tokens
-- [ ] All stores survive Hub restart (SQLite persistence verified)
