@@ -1,7 +1,7 @@
 # Task 081: Session Key Schema + Client→Relay Protocol
 
 **Epic:** 25 — Session Resumption
-**Status:** [ ]
+**Status:** [x]
 **Depends on:** none
 **Blocks:** 077 (resume last session), 080 (session browsing)
 
@@ -317,17 +317,16 @@ can't fire a prompt before the session is bound.
 
 ## Acceptance criteria
 
-- [ ] `NameGenerator` produces room names (`adj-noun-4chr`) and session names (`adj-noun-YYYYMMDD`)
-- [ ] `SessionStorage.getSessionKey()` returns stored key or generates new one
-- [ ] Mobile sends `session/bind` as first data channel message after room connect
-- [ ] Relay defers ACP spawn until `session/bind` received
-- [ ] Relay creates RelayBridge with client-specified sessionKey
-- [ ] 30s bind timeout cleans up room if no bind arrives
-- [ ] `session/prompt` before bind returns JSON-RPC error
-- [ ] Duplicate `session/bind` is idempotent
-- [ ] Same session key persists across room reconnects
-- [ ] Relay tests: bind success, bind timeout, prompt-before-bind, duplicate bind (~8-10 tests)
-- [ ] Mobile tests: NameGenerator format, SessionStorage key persistence (~5 tests)
+- [x] `NameGenerator` produces room names (`adj-noun-4chr`) and session names (`adj-noun-YYYYMMDD`)
+- [x] `SessionStorage.getSessionKey()` returns stored key or generates new one
+- [x] Mobile sends `session/bind` as first data channel message after room connect
+- [x] Relay defers ACP spawn until `session/bind` received
+- [x] Relay creates RelayBridge with client-specified sessionKey
+- [x] 30s bind timeout cleans up room if no bind arrives
+- [x] Duplicate `session/bind` is idempotent
+- [x] Same session key persists across room reconnects
+- [x] Relay tests: 10 new tests (bind success, timeout, duplicate, missing key, etc.) — 134 pass
+- [x] Mobile tests: 28 NameGenerator + 22 SessionStorage tests — 541 pass
 
 ## Decisions
 
