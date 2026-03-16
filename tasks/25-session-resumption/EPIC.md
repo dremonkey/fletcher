@@ -17,7 +17,7 @@ A plan review (2026-03-15) mapped the existing architecture against the session 
 | Persistent session identity (`SessionKey`) | **Solved** -- identity-based, deterministic across rooms |
 | Server-side conversation history | **Solved** -- OpenClaw persists keyed by `session_key: "main"` |
 | Session history replay | **Implemented** -- `AcpClient.sessionLoad()` replays history as `session/update` notifications (used by relay for BUG-022 catch-up) |
-| Session listing | **Available** -- OpenClaw advertises `sessionCapabilities.list` in ACP initialize |
+| Session listing | **Unavailable** -- OpenClaw advertises `sessionCapabilities.list` but returns Method not found (-32601). Client-side index needed. |
 | Hold mode → agent resume | **Solved** -- `AgentPresenceService` + dispatch endpoint |
 | Mute/TTS preferences | **Solved** -- persisted via `SharedPreferences` |
 | Client-side transcript | **Gap** -- in-memory only, lost on disconnect |
@@ -41,14 +41,15 @@ This means:
 - **Multi-device works automatically** (same session key, different device)
 - **SQLite** (TASK-005) becomes an optimization (instant display cache, offline queue) rather than a prerequisite
 
-## Remaining Open Questions
+## Spike Results (TASK-075)
 
-These need the spike (TASK-075) to answer:
+See `075-spike-results.md` for full details. Key findings:
 
-- **What exactly does `session/load` replay?** Agent messages only? User messages too? Tool calls? Artifacts? The relay currently only processes `agent_message_chunk` updates -- the spike needs to log the full replay.
-- **What is the replay latency for long sessions?** A 50-turn session could be 50-100KB of JSON-RPC messages. Is this fast enough to feel instant?
-- **Does `session/list` work?** OpenClaw advertises the capability but it hasn't been wired or tested.
-- **Does the voice agent need resume-aware bootstrap?** Should the agent say "Welcome back" instead of its full system prompt injection? Or does the existing conversation context make this unnecessary?
+- **`session/load` works great** — replays both `user_message_chunk` and `agent_message_chunk` (one per turn), <100ms for 3-turn session, cross-process persistence confirmed
+- **`session/list` is not implemented** — returns -32601 despite being advertised. Client-side session index needed for browsing.
+- **`--session` flag required** — OpenClaw ACP needs `--session agent:main:<channel>:<id>` to bind to a thread. Without it, prompts fail with ACP_SESSION_INIT_FAILED.
+- **Content parsing needed** — user turns wrapped in OpenClaw metadata preamble; agent turns may contain `<think>`/`<final>` tags
+- **Session key must be identity-based** — currently room-based (`agent:main:relay:<roomName>`), needs to be `agent:main:relay:<participantIdentity>` for resumption across room reconnects
 
 ## Related Work
 
@@ -94,11 +95,11 @@ Session listing and switching uses a **slash command** (`/sessions`) rather than
 
 - [x] **TASK-075: Spike -- session/load + session/list fidelity** -- Results in `075-spike-results.md`. session/load works great (user+agent turns, <100ms, cross-process). session/list returns Method not found despite being advertised.
 - [x] **TASK-076: Client-side slash command interceptor** -- In `sendTextMessage()`, intercept `/`-prefixed input and route to a command registry instead of sending to agent/relay. Ships with `/help` as proof-of-life. This is the foundation for all TASK-022 macros.
-- [ ] **TASK-077: `/sessions` command + session list rendering** -- **BLOCKED: session/list not implemented server-side.** Scope reduced: focus on resume-current-session via session/load rather than browse-all-sessions.
+- [ ] **TASK-077: Resume current session on reconnect** -- Decouple session key from room name (identity-based instead), wire session/load into reconnect flow so transcript restores automatically after background disconnect.
 - [ ] **TASK-079: Parse `<think>` / `<final>` tags in agent messages** -- Render agent reasoning as a collapsible block (collapsed by default) and extract `<final>` as the visible response. Applies to both live streaming and session/load replay.
+- [ ] **TASK-080: Session browsing and switching** -- Client-side session index (since session/list is unimplemented server-side), `/sessions` slash command, session cards, relay hot-swap. Deferred until TASK-077 lands. Requires full session/room decoupling.
 
-Candidate follow-up tasks (informed by spike results):
-- Wire `session/load` for transcript replay on reconnect (relay already has this for BUG-022; mobile needs to request it)
+Candidate follow-up tasks:
 - Client-side message parsing: strip OpenClaw metadata preamble from user turns
 - Resume-aware bootstrap (agent adjusts greeting on resume)
 - `[SES]` macro button in TASK-022 macro grid
