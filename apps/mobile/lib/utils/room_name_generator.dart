@@ -73,10 +73,24 @@ abstract final class NameGenerator {
 
   /// Generate a room name: word pair + 4-char alphanumeric suffix.
   /// Room names are disposable transport identifiers.
-  static String generateRoomName() {
-    final pair = generateWordPair();
+  ///
+  /// When [wordPair] is provided, the room name shares that prefix
+  /// (e.g., session "amber-elm-20260315" → room "amber-elm-7x2q").
+  /// When omitted, a fresh random pair is generated.
+  static String generateRoomName({String? wordPair}) {
+    final pair = wordPair ?? generateWordPair();
     final suffix = _random4CharAlphanumeric();
     return '$pair-$suffix';
+  }
+
+  /// Extract the word pair prefix from a session name.
+  ///
+  /// Session names have the form "adj-noun-YYYYMMDD".
+  /// Returns the "adj-noun" portion.
+  static String extractWordPair(String sessionName) {
+    final lastDash = sessionName.lastIndexOf('-');
+    if (lastDash <= 0) return sessionName;
+    return sessionName.substring(0, lastDash);
   }
 
   /// Generate a session name: word pair + YYYYMMDD suffix.

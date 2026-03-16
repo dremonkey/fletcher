@@ -176,6 +176,53 @@ void main() {
       });
     });
 
+    group('generateRoomName(wordPair:)', () {
+      test('uses provided word pair instead of random', () {
+        final name = NameGenerator.generateRoomName(wordPair: 'amber-elm');
+        expect(name.startsWith('amber-elm-'), isTrue,
+            reason: 'Room name should start with provided word pair, got "$name"');
+      });
+
+      test('appends 4-char alphanumeric suffix to provided pair', () {
+        final name = NameGenerator.generateRoomName(wordPair: 'amber-elm');
+        final suffix = name.replaceFirst('amber-elm-', '');
+        expect(suffix, matches(RegExp(r'^[a-z0-9]{4}$')),
+            reason: 'Suffix "$suffix" must match [a-z0-9]{4}');
+      });
+
+      test('generates different suffixes for same word pair (probabilistic)', () {
+        final names = {
+          for (var i = 0; i < 10; i++)
+            NameGenerator.generateRoomName(wordPair: 'amber-elm')
+        };
+        expect(names.length, greaterThan(1),
+            reason: 'Expected different suffixes from 10 calls with same pair');
+      });
+    });
+
+    group('extractWordPair()', () {
+      test('extracts word pair from session name', () {
+        expect(NameGenerator.extractWordPair('amber-elm-20260315'),
+            equals('amber-elm'));
+      });
+
+      test('extracts word pair from room name', () {
+        expect(NameGenerator.extractWordPair('amber-elm-7x2q'),
+            equals('amber-elm'));
+      });
+
+      test('handles single-segment input gracefully', () {
+        expect(NameGenerator.extractWordPair('nohyphens'), equals('nohyphens'));
+      });
+
+      test('handles multi-word adjectives with hyphens in word list', () {
+        // Our word lists don't have hyphens, but extractWordPair strips
+        // only the last segment — so "foo-bar-baz-20260315" → "foo-bar-baz"
+        expect(NameGenerator.extractWordPair('foo-bar-baz-20260315'),
+            equals('foo-bar-baz'));
+      });
+    });
+
     group('E2E prefix pattern', () {
       test('e2e-prefixed room name matches e2e-adj-noun-XXXX format', () {
         final name = NameGenerator.generateRoomName();
