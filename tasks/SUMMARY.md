@@ -488,6 +488,22 @@ Content-level encryption for cloud-hosted LiveKit deployments. Data channel traf
 
 **Depends on:** Epic 7 (Sovereign Pairing — device Ed25519 keys)
 
+### 28. [Sub-Agent Visibility](./28-sub-agent-visibility) 📋
+Monitor backend sub-agents (Claude Code, OpenClaw) and display their status in the Flutter app. Provider framework on the relay watches for agent activity, pushes full snapshots via `"sub-agents"` data channel topic, Flutter renders chip indicator and detail panel.
+
+**Tasks:**
+- [ ] 085: Sub-agent data model, provider interface, and registry
+- [ ] 086: Claude Code filesystem provider (JSONL watcher)
+- [ ] 087: OpenClaw passive provider (session/update events)
+- [ ] 088: Relay bridge integration (wire providers into start/stop)
+- [ ] 089: Flutter SubAgentService + data model
+- [ ] 090: Flutter sub-agent UI widgets (chip, card, panel)
+- [ ] 091: Architecture docs + task tracking
+
+**Parallelism:** 085-088 (server) and 089-090 (client) can proceed in parallel.
+
+**Depends on:** Epic 24 (Relay), Epic 3 (Flutter App)
+
 ## Development Path
 
 1. **Phase 1: Infrastructure** ✅
