@@ -206,6 +206,8 @@ Bulletproof connection handling: survive network switches, Bluetooth changes, ai
 - [~] 022: E2E Test Room Convention 🔄 — `e2e-fletcher-` prefix when `E2E_TEST_MODE=true`; agent detects `e2e-*` rooms and uses minimal prompt; pending field verification
 - [ ] 023: Background Auto-Close Timer Regression 📋 — 10-min background timeout not firing on app switch; regression of task 019 ([BUG-028](../docs/field-tests/20260307-buglog.md))
 - [ ] 092: Background Resume Token Retry ⚠️ — `onAppResumed()` calls `connectWithDynamicRoom()` once with no retry; WiFi not ready after deep sleep causes all hosts to time out; add 3-attempt retry loop ([BUG-044](../docs/field-tests/20260316-buglog.md))
+- [ ] 093: Ghost Data Channel After Reconnect ⚠️ — `RoomReconnectedEvent` never re-validates relay binding; `_sessionBound` stays true from pre-reconnect; relay waits for bind that never comes; no prompt timeout on `RelayChatService` ([BUG-045](../docs/field-tests/20260316-buglog.md))
+- [ ] 094: Network Switch Mic Grab + Stuck Room ⚠️ — `PreConnectAudioBuffer.startRecording()` unconditionally grabs mic in chat mode; `_connectToNewRoom()` failure is terminal (no retry); error banner not tappable; `ConnectivityService` blind to WiFi→cellular interface switches ([BUG-046](../docs/field-tests/20260316-buglog.md))
 
 **Depends on:** Epic 3 (Flutter App)
 
@@ -456,6 +458,7 @@ Session management improvements: slash-command interception, room/session decoup
 **Tasks:**
 - [x] 076: Slash Command Interceptor ✅ — `/`-prefix interception in sendTextMessage(), CommandRegistry with async handlers, `/help` built-in, CommandResultCard inline widget; 15 tests
 - [x] 079: Parse `<think>`/`<final>` Tags ✅ — streaming-aware parser with partial tag holding; ThinkingBlock widget (collapsible, tap-to-expand); integrated into chat transcript; 45 tests (30 parser + 15 widget)
+- [ ] 095: Session Load Partial or Missing ⚠️ — `_needsSessionLoad` false on new room for continuing session (blank transcript); `user_message_chunk` not handled by parser (all turns merge into one agent message) ([BUG-047](../docs/field-tests/20260316-buglog.md))
 
 ### 26. [Voice Mode Consolidation](./26-voice-mode) 🔄
 Consolidated index of ~41 voice tasks from 10 epics. Single place to prioritize voice work holistically. First task removes auto-dispatch so voice agent joins only on demand.

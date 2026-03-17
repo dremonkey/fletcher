@@ -103,6 +103,8 @@ Session listing and switching uses a **slash command** (`/sessions`) rather than
 - [ ] **TASK-082: ACP thinking chunk passthrough** -- Patch OpenClaw's stream filter + config to emit `agent_thought_chunk` updates to ACP clients. Add `AcpThinkingDelta` parser + `RelayThinkingDelta` event on mobile. Unblocks ThinkingBlock widget (TASK-079). Upstream OpenClaw issue pending.
 - [ ] **TASK-083: Remove XML tag parser — render thinking from deltas** -- Delete `agent_text_parser.dart` and its 45 tests. Render ThinkingBlock directly from structured `TranscriptEntry.thinking` field instead of XML `<think>` tag roundtrip. Depends on 082.
 
+- [ ] **TASK-095: Fix session history load — partial or missing** -- Two root causes: (1) `_needsSessionLoad` is false when creating new room for continuing session (blank transcript); (2) `user_message_chunk` kind not handled by `AcpUpdateParser` so user turns silently dropped during replay (partial history). (BUG-047)
+
 Candidate follow-up tasks:
 - Client-side message parsing: strip OpenClaw metadata preamble from user turns
 - Resume-aware bootstrap (agent adjusts greeting on resume)
