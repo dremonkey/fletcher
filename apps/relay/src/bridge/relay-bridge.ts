@@ -342,9 +342,8 @@ export class RelayBridge {
     const desiredConfig = RelayBridge.loadDesiredConfig(this.options.acpCommand);
 
     for (const option of configOptions) {
-      const desiredValue = option.category
-        ? desiredConfig[option.category]
-        : undefined;
+      const key = option.category ?? option.id;
+      const desiredValue = desiredConfig[key];
 
       if (!desiredValue) continue;
       if (option.currentValue === desiredValue) {

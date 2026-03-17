@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fletcher/services/relay/relay_chat_service.dart';
 
@@ -503,6 +504,95 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(events, isEmpty);
       expect(service.isBusy, isTrue);
+    });
+  });
+
+  group('timeout reset (BUG-051)', () {
+    test('timeout resets on each incoming event', () {
+      fakeAsync((async) {
+        final shortService = RelayChatService(
+          publish: (data) async => published.add(data),
+          promptTimeout: const Duration(seconds: 5),
+        );
+
+        final events = <RelayChatEvent>[];
+        final stream = shortService.sendPrompt('Hi');
+        stream.listen(events.add);
+
+        // Advance 4s (just under timeout), then send a tool call event
+        async.elapse(const Duration(seconds: 4));
+        shortService.handleMessage(encode({
+          'jsonrpc': '2.0',
+          'method': 'session/update',
+          'params': {
+            'sessionId': 'sess_abc',
+            'update': {
+              'sessionUpdate': 'tool_call',
+              'id': 'tc_1',
+              'title': 'Read file',
+              'input': '{}',
+            },
+          },
+        }));
+
+        // Advance another 4s — would have timed out without reset
+        async.elapse(const Duration(seconds: 4));
+        expect(events.whereType<RelayPromptError>(), isEmpty,
+            reason: 'Timer should have been reset by tool_call event');
+
+        // Send content delta, advance again
+        shortService.handleMessage(encode(contentChunk('result')));
+        async.elapse(const Duration(seconds: 4));
+        expect(events.whereType<RelayPromptError>(), isEmpty,
+            reason: 'Timer should have been reset by content delta');
+
+        // Now let it actually time out
+        async.elapse(const Duration(seconds: 6));
+        expect(events.whereType<RelayPromptError>(), hasLength(1));
+
+        shortService.dispose();
+      });
+    });
+
+    test('tool calls keep prompt alive across 30s+ sequences', () {
+      fakeAsync((async) {
+        final service30 = RelayChatService(
+          publish: (data) async => published.add(data),
+          promptTimeout: const Duration(seconds: 30),
+        );
+
+        final events = <RelayChatEvent>[];
+        final stream = service30.sendPrompt('Hi');
+        stream.listen(events.add);
+
+        // Simulate 5 tool calls, each arriving 10s apart (50s total)
+        for (int i = 0; i < 5; i++) {
+          async.elapse(const Duration(seconds: 10));
+          service30.handleMessage(encode({
+            'jsonrpc': '2.0',
+            'method': 'session/update',
+            'params': {
+              'sessionId': 'sess_abc',
+              'update': {
+                'sessionUpdate': 'tool_call',
+                'id': 'tc_$i',
+                'title': 'Tool $i',
+                'input': '{}',
+              },
+            },
+          }));
+        }
+
+        // No timeout error despite 50s elapsed
+        expect(events.whereType<RelayPromptError>(), isEmpty);
+
+        // Complete normally
+        service30.handleMessage(encode(promptResult(1)));
+        async.elapse(Duration.zero);
+        expect(events.last, isA<RelayPromptComplete>());
+
+        service30.dispose();
+      });
     });
   });
 

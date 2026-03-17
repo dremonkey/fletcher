@@ -1945,8 +1945,8 @@ class LiveKitService extends ChangeNotifier {
     _relayAgentMessageText = '';
     _relayThinkingText = '';
 
-    // Show thinking indicator
-    _updateState(isAgentThinking: true);
+    // Clear stale tool calls from previous prompt and show thinking indicator
+    _updateState(isAgentThinking: true, activeToolCalls: const []);
 
     String buildTranscriptText() {
       if (_relayThinkingText.isEmpty) return _relayAgentMessageText;
@@ -1985,14 +1985,14 @@ class LiveKitService extends ChangeNotifier {
             text: buildTranscriptText(),
             isFinal: true,
           );
-          _updateState(isAgentThinking: false);
+          _updateState(isAgentThinking: false, activeToolCalls: const []);
 
           _relayAgentMessageText = '';
           _relayThinkingText = '';
 
         case RelayPromptError(:final code, :final message):
           debugPrint('[Relay] Prompt error: $code $message');
-          _updateState(isAgentThinking: false);
+          _updateState(isAgentThinking: false, activeToolCalls: const []);
           _emitSystemEvent(SystemEvent(
             id: 'relay-error-${DateTime.now().millisecondsSinceEpoch}',
             type: SystemEventType.agent,
@@ -2083,6 +2083,7 @@ class LiveKitService extends ChangeNotifier {
     bool? isAgentThinking,
     DiagnosticsInfo? diagnostics,
     List<CommandResult>? commandResults,
+    List<ToolCallInfo>? activeToolCalls,
   }) {
     _state = _state.copyWith(
       status: status,
@@ -2103,6 +2104,7 @@ class LiveKitService extends ChangeNotifier {
       isAgentThinking: isAgentThinking,
       diagnostics: diagnostics,
       commandResults: commandResults,
+      activeToolCalls: activeToolCalls,
     );
     notifyListeners();
   }

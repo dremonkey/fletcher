@@ -280,14 +280,19 @@ class RelayChatService {
     final update = AcpUpdateParser.parse(params);
 
     if (update is AcpTextDelta && update.text.isNotEmpty) {
+      _resetPromptTimer();
       _activeStream?.add(RelayContentDelta(update.text));
     } else if (update is AcpThinkingDelta && update.text.isNotEmpty) {
+      _resetPromptTimer();
       _activeStream?.add(RelayThinkingDelta(update.text));
     } else if (update is AcpUserMessage) {
+      _resetPromptTimer();
       _activeStream?.add(RelayUserMessage(update.text));
     } else if (update is AcpUsageUpdate) {
+      _resetPromptTimer();
       _activeStream?.add(RelayUsageUpdate(update.used, update.size));
     } else if (update is AcpToolCallUpdate) {
+      _resetPromptTimer();
       _activeStream?.add(RelayToolCallEvent(
         id: update.id,
         title: update.title,
@@ -299,6 +304,26 @@ class RelayChatService {
       debugPrint('[RelayChatService] Dropped non-content update during '
           'session/load: ${update.kind}');
     }
+  }
+
+  /// Reset the prompt timeout timer (BUG-051).
+  ///
+  /// Called on every valid incoming event during a prompt. This prevents the
+  /// timeout from firing while the agent is actively working (e.g., executing
+  /// tool calls that each take < 30s but collectively exceed the timeout).
+  void _resetPromptTimer() {
+    if (_promptTimer == null || _activeStream == null) return;
+    final id = _activeRequestId;
+    _promptTimer!.cancel();
+    _promptTimer = Timer(promptTimeout, () {
+      if (_activeStream != null && _activeRequestId == id) {
+        debugPrint('[RelayChatService] Prompt timed out after $promptTimeout');
+        _activeStream?.add(RelayPromptError(-32000, 'Prompt timed out'));
+        _activeStream?.close();
+        _activeStream = null;
+        _activeRequestId = null;
+      }
+    });
   }
 
   void _handlePromptResult(JsonRpcResponse response) {
