@@ -358,10 +358,9 @@ export class RelayBridge {
       const flatValues = this.flattenConfigValues(option.options);
       const match = flatValues.find((v) => v.value === desiredValue);
       if (!match) {
-        // Try a fuzzy match — e.g. the agent might use "max" instead of "high"
-        this.log.debug(
+        this.log.warn(
           { event: "config_value_not_found", configId: option.id, desired: desiredValue, available: flatValues.map((v) => v.value) },
-          `desired value "${desiredValue}" not available for ${option.id}, skipping`,
+          `desired value "${desiredValue}" not available for ${option.id}, skipping — check acp-session-config.json`,
         );
         continue;
       }
