@@ -150,12 +150,12 @@ void _update(List<ConnectivityResult> results) {
 
 ## Acceptance Criteria
 
-- [ ] Network switch in chat mode does NOT activate the microphone
-- [ ] Error banner is tappable and triggers reconnection
-- [ ] If new-room creation fails on budget exhaustion, at least one retry after 5s
-- [ ] WiFi→cellular switch triggers reconnect via ConnectivityService event
-- [ ] Existing voice-mode audio buffering (BUG-027) still works
-- [ ] PreConnectAudioBuffer is still created in voice mode when unmuted
+- [x] Network switch in chat mode does NOT activate the microphone
+- [x] Error banner is tappable and triggers reconnection
+- [x] If new-room creation fails on budget exhaustion, at least one retry after 5s
+- [x] WiFi→cellular switch triggers reconnect via ConnectivityService event
+- [x] Existing voice-mode audio buffering (BUG-027) still works
+- [x] PreConnectAudioBuffer is still created in voice mode when unmuted
 
 ## Files
 
@@ -168,4 +168,4 @@ void _update(List<ConnectivityResult> results) {
 - **Date:** 2026-03-16
 - **Priority:** HIGH
 - **Bug:** BUG-046
-- **Status:** RCA COMPLETE — ready for implementation
+- **Status:** COMPLETE

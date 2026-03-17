@@ -207,7 +207,7 @@ Bulletproof connection handling: survive network switches, Bluetooth changes, ai
 - [ ] 023: Background Auto-Close Timer Regression 📋 — 10-min background timeout not firing on app switch; regression of task 019 ([BUG-028](../docs/field-tests/20260307-buglog.md))
 - [ ] 092: Background Resume Token Retry ⚠️ — `onAppResumed()` calls `connectWithDynamicRoom()` once with no retry; WiFi not ready after deep sleep causes all hosts to time out; add 3-attempt retry loop ([BUG-044](../docs/field-tests/20260316-buglog.md))
 - [ ] 093: Ghost Data Channel After Reconnect ⚠️ — `RoomReconnectedEvent` never re-validates relay binding; `_sessionBound` stays true from pre-reconnect; relay waits for bind that never comes; no prompt timeout on `RelayChatService` ([BUG-045](../docs/field-tests/20260316-buglog.md))
-- [ ] 094: Network Switch Mic Grab + Stuck Room ⚠️ — `PreConnectAudioBuffer.startRecording()` unconditionally grabs mic in chat mode; `_connectToNewRoom()` failure is terminal (no retry); error banner not tappable; `ConnectivityService` blind to WiFi→cellular interface switches ([BUG-046](../docs/field-tests/20260316-buglog.md))
+- [x] 094: Network Switch Mic Grab + Stuck Room ⚠️ — `PreConnectAudioBuffer.startRecording()` unconditionally grabs mic in chat mode; `_connectToNewRoom()` failure is terminal (no retry); error banner not tappable; `ConnectivityService` blind to WiFi→cellular interface switches ([BUG-046](../docs/field-tests/20260316-buglog.md))
 
 **Depends on:** Epic 3 (Flutter App)
 

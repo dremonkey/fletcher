@@ -118,20 +118,25 @@ class _ConversationScreenState extends State<ConversationScreen>
                   horizontal: AppSpacing.base,
                   vertical: AppSpacing.xs,
                 ),
-                child: TuiCard(
-                  borderColor: state.status == ConversationStatus.reconnecting
-                      ? AppColors.healthYellow
-                      : AppColors.healthRed,
-                  child: Text(
-                    state.status == ConversationStatus.reconnecting
-                        ? 'Connection lost. Reconnecting...'
-                        : state.errorMessage ?? 'Connection error',
-                    style: AppTypography.body.copyWith(
-                      color: state.status == ConversationStatus.reconnecting
-                          ? AppColors.healthYellow
-                          : AppColors.healthRed,
+                child: GestureDetector(
+                  onTap: state.status == ConversationStatus.error
+                      ? () => _liveKitService.tryReconnect()
+                      : null,
+                  child: TuiCard(
+                    borderColor: state.status == ConversationStatus.reconnecting
+                        ? AppColors.healthYellow
+                        : AppColors.healthRed,
+                    child: Text(
+                      state.status == ConversationStatus.reconnecting
+                          ? 'Connection lost. Reconnecting...'
+                          : 'Tap to retry \u00B7 ${state.errorMessage ?? "Connection error"}',
+                      style: AppTypography.body.copyWith(
+                        color: state.status == ConversationStatus.reconnecting
+                            ? AppColors.healthYellow
+                            : AppColors.healthRed,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                    textAlign: TextAlign.center,
                   ),
                 ),
               ),

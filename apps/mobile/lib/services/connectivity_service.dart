@@ -61,6 +61,7 @@ class ConnectivityService extends ChangeNotifier {
   }
 
   void _update(List<ConnectivityResult> results) {
+    final previousResults = _currentResults;
     _currentResults = results;
     final online = !results.every((r) => r == ConnectivityResult.none);
 
@@ -69,7 +70,25 @@ class ConnectivityService extends ChangeNotifier {
       debugPrint('[Connectivity] ${online ? "Online" : "Offline"} ($results)');
       _onlineController.add(online);
       notifyListeners();
+    } else if (online && _isOnline && !_sameInterfaces(previousResults, results)) {
+      // Network interface changed while staying online (e.g. WiFi → cellular).
+      // Emit a synthetic offline→online pulse so reconnect logic triggers. (BUG-046)
+      debugPrint('[Connectivity] Interface switch: $previousResults → $results');
+      _onlineController.add(false);
+      _onlineController.add(true);
+      notifyListeners();
     }
+  }
+
+  /// Compare two connectivity result lists ignoring order.
+  bool _sameInterfaces(List<ConnectivityResult> a, List<ConnectivityResult> b) {
+    if (a.length != b.length) return false;
+    final sortedA = List<ConnectivityResult>.from(a)..sort((x, y) => x.index.compareTo(y.index));
+    final sortedB = List<ConnectivityResult>.from(b)..sort((x, y) => x.index.compareTo(y.index));
+    for (var i = 0; i < sortedA.length; i++) {
+      if (sortedA[i] != sortedB[i]) return false;
+    }
+    return true;
   }
 
   @override

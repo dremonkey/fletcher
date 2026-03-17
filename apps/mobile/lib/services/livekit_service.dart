@@ -158,6 +158,13 @@ class LiveKitService extends ChangeNotifier {
   /// Whether session/bind has been acknowledged by the relay.
   bool _sessionBound = false;
 
+  /// Retry timer for session/bind — retries up to [_maxBindAttempts] times
+  /// with [_bindRetryInterval] between attempts (BUG-045).
+  Timer? _bindRetryTimer;
+  int _bindAttempts = 0;
+  static const _maxBindAttempts = 3;
+  static const _bindRetryInterval = Duration(seconds: 10);
+
   /// Whether session/load should be sent after the next successful bind.
   /// Set to true when reconnecting to an existing room (app restart with
   /// recent session). NOT set during in-memory reconnects where the
@@ -233,9 +240,11 @@ class LiveKitService extends ChangeNotifier {
       final roomName = recentRoom ?? await _generateRoomName();
       _currentRoomName = roomName;
 
-      // TASK-077: Load session history on reconnect (app restart with recent room)
-      // but NOT on first launch (fresh room).
-      _needsSessionLoad = recentRoom != null;
+      // BUG-047: Load session history whenever a persisted session key exists,
+      // not just when the room is non-stale. Stale rooms (>120s) still have
+      // full conversation history in the ACP backend via the session key.
+      final hadExistingSession = await SessionStorage.hasSessionKey();
+      _needsSessionLoad = hadExistingSession;
 
       debugPrint('[Fletcher] Room: $roomName (${recentRoom != null ? "reused" : "new"})');
 
@@ -328,6 +337,7 @@ class LiveKitService extends ChangeNotifier {
   Future<void> _connectToNewRoom() async {
     final roomName = await _generateRoomName();
     _currentRoomName = roomName;
+    _needsSessionLoad = true; // ACP backend retains history for the session
 
     debugPrint('[Fletcher] Creating new room for recovery: $roomName');
 
@@ -548,9 +558,12 @@ class LiveKitService extends ChangeNotifier {
         ));
       }
       // Buffer mic audio during reconnection (BUG-027)
-      _reconnectBuffer?.reset();
-      _reconnectBuffer = PreConnectAudioBuffer(_room!);
-      _reconnectBuffer!.startRecording(timeout: const Duration(seconds: 60));
+      // Only buffer if voice mode is active — chat mode should not grab the mic (BUG-046)
+      if (_voiceModeActive && !_isMuted) {
+        _reconnectBuffer?.reset();
+        _reconnectBuffer = PreConnectAudioBuffer(_room!);
+        _reconnectBuffer!.startRecording(timeout: const Duration(seconds: 60));
+      }
     });
 
     _listener?.on<RoomAttemptReconnectEvent>((event) {
@@ -612,6 +625,16 @@ class LiveKitService extends ChangeNotifier {
         }
         await _reconnectBuffer!.reset();
         _reconnectBuffer = null;
+      }
+
+      // Re-validate relay binding after SDK reconnect (BUG-045).
+      // The data channel may have been replaced during reconnection, so the
+      // relay's previous bind state is stale. Reset and re-bind so the relay
+      // knows the client is alive. If the relay also disconnected and rejoined
+      // (new participant SID), ParticipantConnectedEvent will handle it.
+      _sessionBound = false;
+      if (_hasRelayParticipant) {
+        _sendSessionBind();
       }
 
       // After reconnection, refresh audio track to restore BT routing, but
@@ -954,6 +977,8 @@ class LiveKitService extends ChangeNotifier {
           final result = decoded['result'] as Map;
           if (result.containsKey('bound') && result['bound'] == true) {
             _sessionBound = true;
+            _bindRetryTimer?.cancel();
+            _bindRetryTimer = null;
             debugPrint(
                 '[Fletcher] Session bound: ${result['sessionKey']}');
             // TASK-077: Load session history after bind on reconnect
@@ -1693,7 +1718,45 @@ class LiveKitService extends ChangeNotifier {
 
   /// Send session/bind to the relay as the first data channel message.
   /// Must be called after room.connect() and before any session/prompt.
+  ///
+  /// Retries up to [_maxBindAttempts] times with [_bindRetryInterval]
+  /// between attempts. Gives up and emits a system error if all attempts
+  /// fail (BUG-045).
   Future<void> _sendSessionBind() async {
+    // Cancel any existing retry timer before starting fresh
+    _bindRetryTimer?.cancel();
+    _bindAttempts = 0;
+    await _sendSessionBindOnce();
+
+    // Schedule retry: if not bound within _bindRetryInterval, re-send
+    _bindRetryTimer = Timer.periodic(_bindRetryInterval, (timer) async {
+      if (_sessionBound) {
+        timer.cancel();
+        _bindRetryTimer = null;
+        return;
+      }
+      _bindAttempts++;
+      if (_bindAttempts >= _maxBindAttempts) {
+        timer.cancel();
+        _bindRetryTimer = null;
+        debugPrint('[Fletcher] session/bind failed after $_maxBindAttempts attempts');
+        _emitSystemEvent(SystemEvent(
+          id: 'bind-failed-${DateTime.now().millisecondsSinceEpoch}',
+          type: SystemEventType.room,
+          status: SystemEventStatus.error,
+          message: 'relay bind failed \u00B7 reconnect to retry',
+          timestamp: DateTime.now(),
+          prefix: '\u2715',
+        ));
+        return;
+      }
+      debugPrint('[Fletcher] session/bind retry ${_bindAttempts + 1}/$_maxBindAttempts');
+      await _sendSessionBindOnce();
+    });
+  }
+
+  /// Send a single session/bind message (no retry logic).
+  Future<void> _sendSessionBindOnce() async {
     final sessionKey = await SessionStorage.getSessionKey();
     debugPrint('[Fletcher] Sending session/bind: $sessionKey');
 
@@ -2181,6 +2244,14 @@ class LiveKitService extends ChangeNotifier {
         // a fresh agent dispatch from LiveKit.
         await disconnect(preserveTranscripts: true);
         await _connectToNewRoom();
+        // If new room also failed, retry once after delay (BUG-046)
+        if (_state.status == ConversationStatus.error) {
+          debugPrint('[Fletcher] New room failed — retrying once after 5s');
+          await Future.delayed(const Duration(seconds: 5));
+          if (connectivityService.isOnline) {
+            await _connectToNewRoom();
+          }
+        }
         return;
 
       case ReconnectPhase.fast:
