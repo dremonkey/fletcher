@@ -205,6 +205,7 @@ Bulletproof connection handling: survive network switches, Bluetooth changes, ai
 - [x] 021: Dynamic Room Names ✅ — dynamic `fletcher-<timestamp>` room names with token endpoint; client creates new room on budget exhaustion for seamless agent restart recovery; e2e tests 006-008 passing ([BUG-005](../docs/field-tests/20260306-buglog.md)) — **closed**
 - [~] 022: E2E Test Room Convention 🔄 — `e2e-fletcher-` prefix when `E2E_TEST_MODE=true`; agent detects `e2e-*` rooms and uses minimal prompt; pending field verification
 - [ ] 023: Background Auto-Close Timer Regression 📋 — 10-min background timeout not firing on app switch; regression of task 019 ([BUG-028](../docs/field-tests/20260307-buglog.md))
+- [ ] 092: Background Resume Token Retry ⚠️ — `onAppResumed()` calls `connectWithDynamicRoom()` once with no retry; WiFi not ready after deep sleep causes all hosts to time out; add 3-attempt retry loop ([BUG-044](../docs/field-tests/20260316-buglog.md))
 
 **Depends on:** Epic 3 (Flutter App)
 
