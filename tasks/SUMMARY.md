@@ -315,10 +315,13 @@ Move sensing capabilities (Wake Word, VAD, STT) to the edge device to improve pr
 **Note:** Task 031 (Local PiperTTS) has been promoted to its own epic (Epic 19: Local Piper TTS Integration) due to its strategic importance for COGS reduction and offline operation.
 
 ### 15. [Macro Shortcuts](./15-macro-shortcuts) 📋
-Customizable quick-action buttons for triggering skill-driven commands without voice input. 3×3 grid optimized for thumb-zone ergonomics.
+Customizable 3x3 quick-action button grid for one-tap command execution. Third input modality (voice -> text -> macros). Architecture: [macro-shortcuts.md](../docs/architecture/macro-shortcuts.md).
 
-**Tasks:**
-- [ ] 022: Macro Shortcut System 📋 — model, registry, TuiMacroCluster widget, action dispatcher, initial 9-macro dev set
+**Tasks (4 phases, MVP = Phase 1+2):**
+- [ ] 022: Macro Model & Registry Service 📋 — Macro model, CommandPool, MacroRegistry (ChangeNotifier), SharedPreferences persistence, defaults
+- [ ] 086: Macro Grid Widget & Action Dispatch 📋 — TuiMacroCluster 3x3 grid, ConversationScreen Stack integration, tap dispatch, collapse/expand, handedness
+- [ ] 087: ACP available_commands_update Parser 📋 — extend AcpUpdateParser, wire through RelayChatService to MacroRegistry command pool
+- [ ] 085: Macro Command Picker UI 📋 — bottom sheet picker, command list, label prompt, slot binding
 
 ### 16. [LiveKit Flutter SDK Issues](./livekit-flutter-sdk) 📋
 Upstream bugs and limitations in the `livekit_client` Flutter/Dart SDK that affect Fletcher's mobile client.
