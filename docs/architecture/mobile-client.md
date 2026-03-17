@@ -110,7 +110,9 @@ AGENT_PRESENT → (agent disconnected) → AGENT_ABSENT
 
 ### ConnectivityService
 
-Lightweight network state tracker. Listens to `Connectivity.onConnectivityChanged` and emits boolean state transitions (online/offline).
+Lightweight network state tracker. Listens to `Connectivity.onConnectivityChanged` and emits boolean state transitions (online/offline). Detects network interface switches (e.g. WiFi → cellular) while staying online and emits a synthetic offline→online pulse so reconnect logic triggers (BUG-046).
+
+Exposes a `ready` future that completes when the initial `checkConnectivity()` platform call finishes. Callers (e.g. `connectWithDynamicRoom()`) await this before reading `isOnline` to avoid acting on the stale default value during cold start (BUG-049).
 
 ### UrlResolver
 
@@ -183,6 +185,10 @@ sequenceDiagram
     participant Room as LiveKit Room
 
     App->>LK: connectWithDynamicRoom(lanUrl, tailscaleUrl, port, timeout)
+    LK->>LK: await ConnectivityService.ready (2s timeout)
+    opt Offline after ready
+        LK->>LK: Wait for online (5s timeout)
+    end
     LK->>SS: getRecentRoom(threshold=120s)
     alt Recent session
         SS-->>LK: "fletcher-1772820000000"
@@ -247,6 +253,7 @@ Fletcher uses two layers of reconnection:
 - **Phase 3 (recovery):** Budget exhausted → generate new room name → fetch fresh token → connect to new room. LiveKit dispatches a fresh agent to the new room.
 - **Network offline:** Pauses retries until `ConnectivityService` reports online, then resumes
 - **Non-transient disconnect:** Shows error state (room deleted, duplicate identity, participant removed, etc.)
+- **Cold start failure:** If the initial `connectWithDynamicRoom()` fails before `connect()` is reached (no cached credentials), `tryReconnect()` falls back to a fresh `connectWithDynamicRoom()` call instead of the credential-dependent `_reconnectRoom()` path (BUG-049).
 
 Transcripts are preserved across reconnects and room transitions via `disconnect(preserveTranscripts: true)`.
 

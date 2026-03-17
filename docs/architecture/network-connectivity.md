@@ -26,6 +26,10 @@ sequenceDiagram
         App->>App: Generate "fletcher-<timestamp>"
     end
 
+    App->>App: await ConnectivityService.ready (2s timeout)
+    opt Offline after ready
+        App->>App: Wait for online (5s timeout)
+    end
     App->>Resolver: resolveLivekitUrl(lanUrl, tailscaleUrl)
     Resolver->>Resolver: Race TCP to LAN vs Tailscale
     Resolver-->>App: Winner URL
@@ -104,8 +108,13 @@ URL resolution runs on every connection attempt, not just the initial one:
 
 1. **`connect()`**: Resolves URL before connecting. Caches `_tailscaleUrl` for reconnects.
 2. **`_doReconnectAttempt()`** (disconnect/sleep recovery): Passes cached `_tailscaleUrl` to `connect()`, which re-resolves the URL.
-3. **`_refreshAudioTrack()`** (Bluetooth/headphone change): Does **not** reconnect — uses `restartTrack()` to swap audio capture in-place. URL is unaffected.
-4. **`disconnect(preserveTranscripts: false)`**: Clears `_tailscaleUrl` alongside `_url` and `_token`.
+3. **`tryReconnect()`** (tap-to-retry / app resume): If cached `_url`/`_token` exist, resets the budget and calls `_reconnectRoom()`. If no credentials are cached (initial connection never succeeded — e.g. cold start failure), falls back to `connectWithDynamicRoom()` which includes network readiness checks and fresh URL resolution (BUG-049).
+4. **`_refreshAudioTrack()`** (Bluetooth/headphone change): Does **not** reconnect — uses `restartTrack()` to swap audio capture in-place. URL is unaffected.
+5. **`disconnect(preserveTranscripts: false)`**: Clears `_tailscaleUrl` alongside `_url` and `_token`.
+
+### Network Readiness on Cold Start
+
+On cold start, Android's network stack may not have functional routes when the Dart VM boots. `connectWithDynamicRoom()` waits for `ConnectivityService.ready` (up to 2 seconds) to ensure the initial platform connectivity check has completed, then checks `isOnline`. If offline, it waits up to 5 seconds for the network to come up before racing URLs. When the network is already up (the common case), both checks complete instantly with zero latency impact.
 
 ## Required Ports
 
