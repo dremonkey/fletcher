@@ -48,6 +48,9 @@ Authorization: `Bearer <pairing_token>`
 - Token storage can be in-memory for MVP, SQLite for durability
 - Device store should be queryable by deviceId for signature verification (TASK-012)
 
+## Architecture Doc Updates
+- **`infrastructure.md`** — Document `POST /fletcher/devices/register` endpoint. Note token-server becomes optional for paired devices.
+
 ## Acceptance Criteria
 - [ ] `POST /fletcher/devices/register` route registered via `api.registerHttpRoute()`
 - [ ] Valid pairing token + payload returns 201 with deviceId

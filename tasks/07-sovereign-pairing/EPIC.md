@@ -67,6 +67,34 @@ Replace the current `bun run token:generate` flow with authenticated, automatic 
 - **Epic 9 (Connectivity):** TASK-013 reuses the TCP-race URL resolution from 09-connectivity/008+018.
 - **OpenClaw Plugin SDK:** Phase 1 tasks depend on the OpenClaw plugin API (`api.registerHttpRoute()`, `api.registerCommand()`, stores).
 
+## Architecture Doc Updates
+
+Sovereign pairing changes fundamental assumptions in several architecture docs. Update these as each phase lands.
+
+### Phase 1 (Hub Plugin — 011, 010, 012)
+
+- **`system-overview.md`** — Add `openclaw-plugin-fletcher` to monorepo structure and package table. Note Hub plugin in deployment topology.
+- **`infrastructure.md`** — Document Hub plugin endpoints (`:18789/fletcher/*`). Note that token-server becomes optional for paired devices.
+- **`developer-workflow.md`** — Add `vessel-key generate` to manual workflow. Update TUI startup sequence if plugin changes the token flow.
+
+### Phase 2 (Mobile Client — 008, 009)
+
+- **`mobile-client.md`** — Add pairing screen and QR scanner to widget overview. Add `FlutterSecureStorage` credential storage to service architecture. Add new dependencies (`mobile_scanner`, `cryptography`, `flutter_secure_storage`).
+
+### Phase 3 (Managed Connection — 013)
+
+- **`session-routing.md`** — **Major rewrite.** Session key resolution moves from client-side (`resolveSessionKeySimple()` + `FLETCHER_OWNER_IDENTITY` env var) to server-side (Hub derives session key and embeds it in JWT metadata). Update Resolution Algorithm, Owner Detection, Agent Wiring diagram, and Wire Protocol sections.
+- **`mobile-client.md`** — Add `HubAuthService` to service diagram. Replace `TokenService` flow with Hub auth for paired devices. Update connection lifecycle diagram.
+- **`network-connectivity.md`** — Update connection flow diagram to show Hub auth path. Add paired-device flow alongside existing token-server flow.
+- **`voice-pipeline.md`** — Update startup sequence step 5 (session key now read from JWT metadata, not resolved locally).
+- **`brain-plugin.md`** — Update `setSessionKey()` calling pattern (session key sourced from JWT metadata).
+- **`infrastructure.md`** — Deprecate `FLETCHER_OWNER_IDENTITY` env var. Note `TOKEN_SERVER_PORT` becomes optional for paired devices.
+- **`data-channel-protocol.md`** — Verify and remove any `session/bind` references (mobile no longer self-asserts session key).
+
+### New Doc
+
+- **`sovereign-pairing.md`** — New architecture doc covering: pairing protocol, Vessel Key format, device registration, Ed25519 auth handshake, Hub plugin architecture, server-side session key derivation. Add to `docs/architecture/README.md` reading order.
+
 ## Closed / Superseded Tasks
 
 Tasks 001–007 from the original EPIC.md are retired:

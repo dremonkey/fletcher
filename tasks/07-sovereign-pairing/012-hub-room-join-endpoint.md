@@ -61,6 +61,12 @@ The Hub derives the session key at token issuance time — the relay and mobile 
 - The plugin context provides access to LiveKit API key/secret for token generation
 - Room names follow the `fletcher-<deviceId>` convention (Phase 1 simplicity)
 
+## Architecture Doc Updates
+- **`session-routing.md`** — **Major rewrite.** Document server-side session key derivation (Hub embeds `sessionKey` in JWT metadata). Replace client-side `resolveSessionKeySimple()` + `FLETCHER_OWNER_IDENTITY` resolution algorithm. Update Owner Detection, Agent Wiring diagram, and Wire Protocol sections.
+- **`voice-pipeline.md`** — Update startup sequence step 5: session key now read from participant JWT metadata, not resolved locally via `resolveSessionKeySimple()`.
+- **`brain-plugin.md`** — Update `setSessionKey()` calling pattern (voice agent reads session key from JWT metadata instead of resolving it).
+- **`infrastructure.md`** — Deprecate `FLETCHER_OWNER_IDENTITY` from env var reference. Document `POST /fletcher/rooms/join` endpoint.
+
 ## Acceptance Criteria
 - [ ] `POST /fletcher/rooms/join` route registered via `api.registerHttpRoute()`
 - [ ] Valid signature + timestamp returns 200 with LiveKit JWT

@@ -52,6 +52,12 @@ Register `vessel-key generate` via the OpenClaw plugin CLI API:
 - `qrcode-terminal` — QR rendering for CLI
 - `nanoid` or `crypto.randomBytes` — Token generation
 
+## Architecture Doc Updates
+- **`system-overview.md`** — Add `openclaw-plugin-fletcher` to monorepo structure, package table, and dependency graph
+- **`infrastructure.md`** — Document Hub plugin endpoints on gateway port (18789)
+- **`developer-workflow.md`** — Add `vessel-key generate` to manual workflow section
+- **`docs/architecture/README.md`** — Add new `sovereign-pairing.md` doc to reading order
+
 ## Acceptance Criteria
 - [ ] `openclaw-plugin-fletcher` package exists with valid plugin manifest
 - [ ] Token store supports create, lookup, and revoke operations

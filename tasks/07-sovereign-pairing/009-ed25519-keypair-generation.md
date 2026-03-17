@@ -41,6 +41,9 @@ Store in `FlutterSecureStorage` (iOS Keychain / Android Keystore):
 - `cryptography: ^2.7.0` — Pure Dart Ed25519
 - `flutter_secure_storage: ^9.0.0` — iOS Keychain + Android Keystore
 
+## Architecture Doc Updates
+- **`mobile-client.md`** — Add `FlutterSecureStorage` credential storage to service architecture (replaces `SharedPreferences` for device identity). Add `cryptography` and `flutter_secure_storage` to dependencies table.
+
 ## Acceptance Criteria
 - [ ] Ed25519 keypair is generated on device
 - [ ] Device registers with Hub via POST endpoint

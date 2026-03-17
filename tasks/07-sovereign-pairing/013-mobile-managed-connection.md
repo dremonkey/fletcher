@@ -44,6 +44,13 @@ The Hub now embeds `sessionKey` in the LiveKit JWT metadata at token issuance ti
 
 This follows the same trust model as [MobVibe](https://github.com/Eric-Song-Nop/mobvibe), where the relay/gateway is the identity authority and clients never self-assert their access level. The key difference: MobVibe verifies identity per-connection via signed Socket.io tokens; Fletcher verifies identity per-room-join via signed HTTP requests, with the session key baked into the resulting LiveKit JWT.
 
+## Architecture Doc Updates
+- **`mobile-client.md`** — Add `HubAuthService` to service diagram. Replace `TokenService` description with Hub auth flow for paired devices. Update connection lifecycle diagram.
+- **`network-connectivity.md`** — Update connection flow diagram to show Hub auth path alongside token-server path.
+- **`data-channel-protocol.md`** — Remove any `session/bind` references (mobile no longer self-asserts session key).
+- **`developer-workflow.md`** — Update manual workflow step 3 (token generation) to note paired devices use Hub auth instead.
+- **New: `sovereign-pairing.md`** — Write the full architecture doc covering pairing protocol, device registration, Ed25519 auth, and server-side session key derivation.
+
 ## Acceptance Criteria
 - [ ] `HubAuthService` generates valid Ed25519 signatures
 - [ ] Room token is obtained from Hub via authenticated request

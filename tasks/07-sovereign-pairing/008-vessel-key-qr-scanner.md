@@ -37,6 +37,9 @@ On app launch, check for existing pairing credentials in `FlutterSecureStorage`.
 - Include a manual entry fallback (text field for pasting Vessel Key JSON)
 - Camera permission handling: prompt on first scan attempt, show instructions if denied
 
+## Architecture Doc Updates
+- **`mobile-client.md`** — Add pairing screen and QR scanner to widget overview. Add `mobile_scanner` to dependencies table.
+
 ## Acceptance Criteria
 - [ ] App detects unpaired state on launch and shows pairing screen
 - [ ] QR scanner opens with camera preview
