@@ -1,6 +1,6 @@
 # TASK-096: Fix cold start connection failure and dead tap-to-retry
 
-**Status:** [ ] Open
+**Status:** [x] Complete
 **Priority:** HIGH
 **Bug refs:** BUG-049
 **Filed:** 2026-03-17
@@ -284,12 +284,12 @@ immediately diagnosable from the logs.
 
 ## Acceptance Criteria
 
-- [ ] Cold start with delayed network: app waits briefly and connects successfully
-- [ ] Cold start with failed connection: tap-to-retry triggers a fresh `connectWithDynamicRoom()`
-- [ ] Existing reconnect behavior unchanged: post-disconnect retry uses `_reconnectRoom()` as before
-- [ ] `_reconnectRoom()` null-credential path produces debug log output
-- [ ] `ConnectivityService.ready` completes after initial `checkConnectivity()`
-- [ ] No regression: app still connects in <2s when network is ready on start
+- [x] Cold start with delayed network: app waits briefly and connects successfully
+- [x] Cold start with failed connection: tap-to-retry triggers a fresh `connectWithDynamicRoom()`
+- [x] Existing reconnect behavior unchanged: post-disconnect retry uses `_reconnectRoom()` as before
+- [x] `_reconnectRoom()` null-credential path produces debug log output
+- [x] `ConnectivityService.ready` completes after initial `checkConnectivity()`
+- [x] No regression: app still connects in <2s when network is ready on start
 
 ## Files
 
@@ -300,4 +300,4 @@ immediately diagnosable from the logs.
 - **Date:** 2026-03-17
 - **Priority:** HIGH
 - **Bug:** BUG-049
-- **Status:** RCA COMPLETE — ready for implementation
+- **Status:** COMPLETE — all 4 fixes implemented

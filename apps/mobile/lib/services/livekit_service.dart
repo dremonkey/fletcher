@@ -219,6 +219,30 @@ class LiveKitService extends ChangeNotifier {
     // Load persisted text-only mode preference (TASK-030)
     _textOnlyMode = await SessionStorage.getTextOnlyMode();
 
+    // Wait for ConnectivityService to finish its initial platform check (BUG-049).
+    // On cold start, connectivity_plus may need 100-200ms to query the OS.
+    await connectivityService.ready.timeout(
+      const Duration(seconds: 2),
+      onTimeout: () {}, // proceed anyway if it takes too long
+    );
+
+    // If the device is offline, wait briefly for network to come up.
+    // On cold start, WiFi may take 1-3 seconds to become routable.
+    if (!connectivityService.isOnline) {
+      debugPrint('[Fletcher] Waiting for network before connecting...');
+      _updateState(
+        status: ConversationStatus.connecting,
+        errorMessage: 'Waiting for network...',
+      );
+      try {
+        await connectivityService.onConnectivityChanged
+            .firstWhere((online) => online)
+            .timeout(const Duration(seconds: 5));
+      } on TimeoutException {
+        debugPrint('[Fletcher] Network wait timed out — proceeding anyway');
+      }
+    }
+
     _updateState(status: ConversationStatus.connecting);
 
     // Emit boot sequence system events (task 020)
@@ -2192,6 +2216,7 @@ class LiveKitService extends ChangeNotifier {
   Future<void> _reconnectRoom() async {
     if (_reconnecting) return;
     if (_url == null || _token == null) {
+      debugPrint('[Fletcher] _reconnectRoom — no cached credentials (url=${_url != null} token=${_token != null})');
       _updateState(
         status: ConversationStatus.error,
         errorMessage: 'Disconnected from room',
@@ -2319,6 +2344,24 @@ class LiveKitService extends ChangeNotifier {
       debugPrint('[Fletcher] tryReconnect skipped — offline');
       return;
     }
+
+    // BUG-049: If we never successfully connected (cold start failure),
+    // _url/_token are null. Fall back to a full connection attempt using
+    // the stored URLs from the initial connectWithDynamicRoom() call.
+    if (_url == null || _token == null) {
+      if (_allUrls.isNotEmpty) {
+        debugPrint('[Fletcher] tryReconnect — no cached credentials, retrying full connect (BUG-049)');
+        await connectWithDynamicRoom(
+          urls: _allUrls,
+          tokenServerPort: _tokenServerPort,
+          departureTimeoutS: _departureTimeoutS,
+        );
+        return;
+      }
+      debugPrint('[Fletcher] tryReconnect — no URLs configured, cannot retry');
+      return;
+    }
+
     _reconnectScheduler.reset();
     _reconnecting = false;
     await _reconnectRoom();

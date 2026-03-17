@@ -34,6 +34,13 @@ class ConnectivityService extends ChangeNotifier {
   bool _isOnline = true;
   List<ConnectivityResult> _currentResults = [];
 
+  /// Completes when the initial connectivity check has finished (BUG-049).
+  final Completer<void> _ready = Completer<void>();
+
+  /// Completes when the initial connectivity check has finished.
+  /// Callers can await this to avoid reading stale [isOnline] state.
+  Future<void> get ready => _ready.future;
+
   /// Whether the device currently has any network connection.
   bool get isOnline => _isOnline;
 
@@ -52,12 +59,16 @@ class ConnectivityService extends ChangeNotifier {
   }
 
   Future<void> _init() async {
-    // Get initial state
-    final results = await _provider.checkConnectivity();
-    _update(results);
+    try {
+      // Get initial state
+      final results = await _provider.checkConnectivity();
+      _update(results);
 
-    // Listen for changes
-    _subscription = _provider.onConnectivityChanged.listen(_update);
+      // Listen for changes
+      _subscription = _provider.onConnectivityChanged.listen(_update);
+    } finally {
+      if (!_ready.isCompleted) _ready.complete();
+    }
   }
 
   void _update(List<ConnectivityResult> results) {
