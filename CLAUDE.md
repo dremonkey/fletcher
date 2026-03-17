@@ -125,7 +125,7 @@ tasks/
 ## PII & Privacy (IMPORTANT — public repo)
 This is a **public repository**. Never commit PII in plaintext.
 
-- **Raw logs** (`docs/field-tests/*.txt`): Encrypted via `git-crypt`. Safe to contain PII. Unlock with `git-crypt unlock ./git-crypt-key`.
+- **Raw logs** (`docs/field-tests/*.txt.gz`): Gzipped and encrypted via `git-crypt`. Safe to contain PII. Unlock with `git-crypt unlock ./git-crypt-key`, then `gunzip` to read.
 - **Buglogs** (`docs/field-tests/*-buglog.md`): Plaintext, publicly visible. **No real names** (use "tester" or initials), **no IP addresses**, **no device serials**. Sanitize log excerpts before pasting.
 - **Conversation transcripts**: Never paste full transcripts into public-facing files. Summarize or anonymize.
 - **Secrets**: Never commit API keys, tokens, or credentials. Use `.env` files (gitignored).

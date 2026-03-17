@@ -251,7 +251,10 @@ When the tester says the session is over (or you're asked to stop — e.g., "fie
    Then determine the filename from the first and last timestamps in the dump:
    - Parse the first log line's timestamp → `HHMM` start
    - Parse the last log line's timestamp → `HHMM` end
-   - Save to: `docs/field-tests/YYYYMMDD-client-HHMM-HHMM.txt`
+   - **Gzip the dump** and save to: `docs/field-tests/YYYYMMDD-client-HHMM-HHMM.txt.gz`
+     ```sh
+     gzip -c /tmp/fletcher-client-dump.log > docs/field-tests/YYYYMMDD-client-HHMM-HHMM.txt.gz
+     ```
    - If the dump is empty (logcat was not prepared, or buffer rotated), note it and skip.
 
 2. **Review the buglog** — Ensure all entries are complete with analysis and status.
@@ -271,7 +274,7 @@ This repo is **public**. Raw `.txt` log files are encrypted via git-crypt, but *
 - **Sanitize log excerpts.** When pasting log lines into buglogs, redact any PII (names, IPs, emails, phone numbers) with `[REDACTED]`.
 - **Conversation content.** Do not paste full user conversation transcripts into buglogs. Summarize what happened instead, or use anonymized excerpts.
 
-The encrypted `.txt` files (raw dumps) can contain PII since they're never visible in the public repo.
+The encrypted `.txt.gz` files (raw dumps) can contain PII since they're never visible in the public repo.
 
 ## Tips
 
@@ -286,7 +289,7 @@ The encrypted `.txt` files (raw dumps) can contain PII since they're never visib
 ## Files
 
 - Bug logs: `docs/field-tests/YYYYMMDD-buglog.md`
-- Client logs: `docs/field-tests/YYYYMMDD-client-HHMM-HHMM.txt`
+- Client logs: `docs/field-tests/YYYYMMDD-client-HHMM-HHMM.txt.gz` (gzipped — GitHub rejects files >100 MB)
 - Relay logs: `logs/relay-YYYY-MM-DD.log` (outside Docker, spawned by TUI)
 - Docker config: `docker-compose.yml`
 - Voice agent: `apps/voice-agent/src/agent.ts`
