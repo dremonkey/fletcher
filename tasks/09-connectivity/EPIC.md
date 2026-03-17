@@ -48,6 +48,7 @@ Fletcher runs over LiveKit WebRTC through a Tailscale tunnel. In the field, conn
 - [ ] **092: Background Resume Token Retry** — `onAppResumed()` calls `connectWithDynamicRoom()` once; WiFi not ready after deep sleep; add 3-attempt retry. (BUG-044)
 - [ ] **093: Ghost Data Channel After Reconnect** — `RoomReconnectedEvent` never re-validates relay binding; add re-bind, prompt timeout, heartbeat. (BUG-045)
 - [ ] **094: Network Switch Mic Grab + Stuck Room** — `PreConnectAudioBuffer` unconditionally grabs mic in chat mode; no retry after `_connectToNewRoom()` failure; `ConnectivityService` blind to interface switches. (BUG-046)
+- [ ] **096: Cold Start Connection Failure** — `connectWithDynamicRoom()` races URLs before network routes are functional; `tryReconnect()` dead with null credentials after initial failure. (BUG-049)
 
 ## Status Summary
 
