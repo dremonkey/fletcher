@@ -81,7 +81,7 @@ export class AcpClient {
 
   /**
    * Spawn the subprocess and start reading stdout.
-   * Does NOT send initialize — call initialize() for the full handshake.
+   * Does NOT send initialize -- call initialize() for the full handshake.
    */
   private spawn(): void {
     const { command, args = [], env } = this.options;
@@ -99,7 +99,7 @@ export class AcpClient {
     // Start reading stdout lines
     this.readLoopPromise = this.readLoop();
 
-    // Handle subprocess exit — wait for readLoop to drain stdout before
+    // Handle subprocess exit -- wait for readLoop to drain stdout before
     // rejecting pending requests, so responses written just before exit
     // are not silently dropped.
     this.proc.exited.then(async (code) => {
@@ -135,7 +135,7 @@ export class AcpClient {
       params,
     )) as InitializeResult;
 
-    // Send `initialized` notification (no id — it's a notification)
+    // Send `initialized` notification (no id -- it's a notification)
     this.sendNotification("initialized");
 
     this.log.info({ event: "acp_initialized" }, "ACP initialized");
@@ -179,11 +179,11 @@ export class AcpClient {
 
     if (!exited) {
       // Phase 3: Escalate to SIGKILL on the process group to catch children
-      this.log.warn({ event: "acp_sigkill", pid }, "SIGTERM ignored — escalating to SIGKILL");
+      this.log.warn({ event: "acp_sigkill", pid }, "SIGTERM ignored -- escalating to SIGKILL");
       try {
         process.kill(-pid, "SIGKILL");
       } catch {
-        // Process group kill failed — try direct SIGKILL
+        // Process group kill failed -- try direct SIGKILL
         try {
           proc.kill(9);
         } catch {
@@ -247,7 +247,7 @@ export class AcpClient {
 
   /**
    * Cancel the current session prompt.
-   * This is a notification — no response is expected.
+   * This is a notification -- no response is expected.
    */
   sessionCancel(params?: SessionCancelParams): void {
     this.sendNotification("session/cancel", params ?? {});
@@ -287,7 +287,7 @@ export class AcpClient {
 
   /**
    * Register a handler for session/update notifications from the agent.
-   * Returns an unsubscribe function — call it to remove the handler.
+   * Returns an unsubscribe function -- call it to remove the handler.
    */
   onUpdate(handler: UpdateHandler): () => void {
     this.updateHandlers.push(handler);
@@ -299,7 +299,7 @@ export class AcpClient {
 
   /**
    * Register a handler for when the ACP subprocess exits unexpectedly.
-   * Returns an unsubscribe function — call it to remove the handler.
+   * Returns an unsubscribe function -- call it to remove the handler.
    */
   onExit(handler: ExitHandler): () => void {
     this.exitHandlers.push(handler);
@@ -343,7 +343,18 @@ export class AcpClient {
     if (params !== undefined) {
       msg.params = params;
     }
-    this.send(msg);
+    try {
+      this.send(msg);
+    } catch (err) {
+      if (
+        method === "session/cancel" &&
+        (err as Error).message === "ACP subprocess not running"
+      ) {
+        // Safe to ignore cancel on dead process
+        return;
+      }
+      throw err;
+    }
   }
 
   /** Write a JSON message + newline to the subprocess stdin. */
@@ -411,7 +422,7 @@ export class AcpClient {
     try {
       msg = JSON.parse(line);
     } catch {
-      // Not valid JSON — ignore (could be debug output)
+      // Not valid JSON -- ignore (could be debug output)
       this.log.debug({ raw: line }, "acp stdout non-JSON (ignored)");
       return;
     }
