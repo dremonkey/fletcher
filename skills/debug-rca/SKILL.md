@@ -127,22 +127,61 @@ Write the revised theory and go back to step (b). Repeat until:
 
 Once you are confident in the root cause, write a comprehensive task file.
 
-#### a. Find or create the task file
+#### a. Check for existing task
 
-Check if a task file already exists:
+Check if a task file already exists for this bug:
 ```sh
+grep -rl 'BUG-NNN' tasks/
 find tasks/ -name '*relevant-keyword*'
 ```
 
-- **If it exists:** Update it with your findings. Preserve any still-valid content.
-- **If not:** Create a new one in the appropriate `tasks/` subdirectory.
+- **If it exists:** Update it with your findings. Preserve any still-valid content. Skip to step (c).
+- **If not:** Continue to step (b) to create a new one.
 
-#### b. Task file structure
+#### b. Create the task file
+
+**1. Find the next task number.** Task numbers are globally unique across all epics. Find the current highest:
+```sh
+find tasks/ -name '*.md' -not -name 'EPIC.md' -not -name 'SUMMARY.md' | grep -oP '/\K\d{3}(?=-)' | sort -n | tail -1
+```
+Increment by 1 to get the next number (e.g., if highest is `095`, use `096`). Zero-pad to 3 digits.
+
+**2. Choose the epic directory.** Pick the epic that owns the affected component:
+
+| Component area | Epic directory |
+|---------------|---------------|
+| LiveKit agent / voice pipeline | `tasks/02-livekit-agent/` |
+| Flutter app / UI | `tasks/03-flutter-app/` |
+| Ganglia plugin / brain bridge | `tasks/04-livekit-agent-plugin/` |
+| Latency / performance | `tasks/05-latency-optimization/` |
+| UI/UX / TUI | `tasks/07-ui-ux/` |
+| Network / connectivity | `tasks/09-connectivity/` |
+| Metrics / observability | `tasks/10-metrics/` |
+| Speaker isolation / audio | `tasks/11-speaker-isolation/` |
+| Text input / dual-mode | `tasks/22-dual-mode/` |
+| Relay / ACP | `tasks/24-webrtc-acp-relay/` |
+| Session resumption | `tasks/25-session-resumption/` |
+| Voice mode | `tasks/26-voice-mode/` |
+| E2EE / security | `tasks/27-e2ee/` |
+
+If no existing epic fits, place the task in the closest match and note it. Don't create a new epic directory.
+
+**3. Name the file:** `{NNN}-{kebab-case-slug}.md` (e.g., `096-fix-stt-reconnection-race.md`).
+
+**4. Write the task file** at `tasks/{XX-epic}/{NNN}-{slug}.md`.
+
+#### c. Task file structure
 
 The task file must contain these sections:
 
 ```markdown
-# Task: [imperative description]
+# TASK-{NNN}: [imperative description]
+
+**Status:** [ ] Open
+**Priority:** {CRITICAL|HIGH|MED|LOW}
+**Bug refs:** BUG-{NNN}
+**Filed:** {YYYY-MM-DD}
+**Buglog:** [`docs/field-tests/{YYYYMMDD}-buglog.md`](../../docs/field-tests/{YYYYMMDD}-buglog.md)
 
 ## Problem
 What goes wrong, from the user's perspective. Reference field test bug IDs.
@@ -155,6 +194,10 @@ Show your work:
 - The key insight that cracked it
 
 Include file paths, line numbers, and code quotes.
+
+## Root Cause
+One-paragraph summary of the confirmed root cause. This should be understandable
+without reading the full Investigation section.
 
 ## Proposed Fix
 Specific code changes, written as diffs or before/after snippets.
@@ -179,10 +222,13 @@ What could go wrong with the fix? Consider:
 List of files to modify.
 
 ## Status
-Date, priority, current status.
+- **Date:** {YYYY-MM-DD}
+- **Priority:** {CRITICAL|HIGH|MED|LOW}
+- **Bug:** BUG-{NNN}
+- **Status:** RCA COMPLETE — ready for implementation
 ```
 
-#### c. Verify completeness
+#### d. Verify completeness
 
 Before finishing, check:
 - [ ] Can someone implement the fix from this task file alone, without re-investigating?
@@ -191,24 +237,42 @@ Before finishing, check:
 - [ ] Are edge cases considered?
 - [ ] Is there a way to test the fix?
 
-### Phase 4: Link Task to Bug
+### Phase 4: Cross-Link Bug ↔ Task
 
-After creating or updating the task file, **update the buglog entry** to link back to it:
+After creating or updating the task file, link the bug and task bidirectionally.
 
-1. In the buglog file, add a `**Task:**` line to the relevant BUG-NNN entry:
+#### a. Update the buglog → task
+
+1. In the buglog file, add a `**Task:**` line to the relevant BUG-NNN entry (place it after the severity/frequency metadata, before Analysis):
    ```markdown
    **Task:** [`tasks/XX-epic/NNN-short-name.md`](../../tasks/XX-epic/NNN-short-name.md)
    ```
 
-2. If the bug entry has a "New Issues Identified" section at the bottom of the buglog, update its status from `OPEN` to `RCA COMPLETE` and replace the `**Proposed fix:**` with `**Root cause:**` (one-line summary) and the `**Task:**` link.
+2. If the bug entry has a "New Issues Identified" section at the bottom of the buglog, update its status from `OPEN` to `RCA COMPLETE` and replace `**Proposed fix:**` with `**Root cause:**` (one-line summary) and the `**Task:**` link.
 
-3. Update `tasks/SUMMARY.md` to include the new task in the relevant epic section.
+3. Update the bug's `**Status:**` to `RCA COMPLETE`.
+
+#### b. Update EPIC.md
+
+Open `tasks/{XX-epic}/EPIC.md` and add the new task to the task list under the appropriate phase:
+```markdown
+- [ ] **{NNN}: {Title}** — RCA for BUG-{NNN}; {one-line summary of fix}
+```
+
+If no phase fits, add it under the last active phase or create a "Bug Fixes" subsection.
+
+#### c. Update SUMMARY.md
+
+Open `tasks/SUMMARY.md` and add the new task under the relevant epic's `**Tasks:**` list:
+```markdown
+- [ ] {NNN}: {Title} — RCA for BUG-{NNN}
+```
 
 ### Phase 5: Commit
 
-Commit the task file and updated bug logs together:
+Commit the task file, updated buglog, EPIC.md, and SUMMARY.md together:
 ```
-docs(tasks): root-cause analysis for BUG-NNN — [short description]
+docs(field-tests): RCA for BUG-NNN — [short description]
 ```
 
 ## Anti-Patterns
