@@ -132,12 +132,12 @@ visible instead of silent.
 
 ## Acceptance Criteria
 
-- [ ] `user_message_chunk` from `session/load` produces `AcpUserMessage` entries
-- [ ] Session history loads correctly after app restart (>120s background in chat mode)
-- [ ] All turns (user + agent) appear in correct order after history load
-- [ ] `_connectToNewRoom()` triggers history load for existing sessions
-- [ ] `_loadSessionHistory()` errors don't leave `_isReplaying = true` forever
-- [ ] Unrecognized ACP update kinds during replay are logged (not silent)
+- [x] `user_message_chunk` from `session/load` produces `AcpUserMessage` entries
+- [x] Session history loads correctly after app restart (>120s background in chat mode)
+- [x] All turns (user + agent) appear in correct order after history load
+- [x] `_connectToNewRoom()` triggers history load for existing sessions
+- [x] `_loadSessionHistory()` errors don't leave `_isReplaying = true` forever
+- [x] Unrecognized ACP update kinds during replay are logged (not silent)
 
 ## Files
 
@@ -150,4 +150,4 @@ visible instead of silent.
 - **Date:** 2026-03-16
 - **Priority:** MED
 - **Bug:** BUG-047
-- **Status:** RCA COMPLETE — ready for implementation
+- **Status:** COMPLETE

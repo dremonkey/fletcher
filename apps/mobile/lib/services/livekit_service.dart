@@ -984,7 +984,11 @@ class LiveKitService extends ChangeNotifier {
             // TASK-077: Load session history after bind on reconnect
             if (_needsSessionLoad) {
               _needsSessionLoad = false;
-              _loadSessionHistory();
+              // BUG-047: Catch errors to prevent _isReplaying staying true forever
+              _loadSessionHistory().catchError((e) {
+                debugPrint('[Fletcher] Session history load failed: $e');
+                _isReplaying = false;
+              });
             }
             return;
           }
@@ -2441,6 +2445,8 @@ class LiveKitService extends ChangeNotifier {
     _relayAgentMessageText = '';
     _relayThinkingText = '';
     _sessionBound = false;
+    _bindRetryTimer?.cancel();
+    _bindRetryTimer = null;
     _room?.unregisterTextStreamHandler('lk.transcription');
     _listener?.dispose();
     await _room?.disconnect();

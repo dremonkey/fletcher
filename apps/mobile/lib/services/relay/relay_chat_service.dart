@@ -107,11 +107,19 @@ class RelayChatService {
   /// Callback to publish a raw payload on the `"relay"` data channel topic.
   final Future<void> Function(Uint8List data) publish;
 
+  /// Timeout for a prompt response. If no response arrives within this
+  /// duration, the stream is closed with an error event (BUG-045).
+  final Duration promptTimeout;
+
   final JsonRpcIdGenerator _idGen = JsonRpcIdGenerator();
   StreamController<RelayChatEvent>? _activeStream;
   int? _activeRequestId;
+  Timer? _promptTimer;
 
-  RelayChatService({required this.publish});
+  RelayChatService({
+    required this.publish,
+    this.promptTimeout = const Duration(seconds: 30),
+  });
 
   /// Whether a prompt is currently in-flight.
   bool get isBusy => _activeStream != null;
@@ -149,6 +157,19 @@ class RelayChatService {
       },
     );
     publish(request.encode());
+
+    // Start prompt timeout (BUG-045). If no response arrives within the
+    // timeout, close the stream with an error so the UI isn't stuck forever.
+    _promptTimer?.cancel();
+    _promptTimer = Timer(promptTimeout, () {
+      if (_activeStream != null && _activeRequestId == id) {
+        debugPrint('[RelayChatService] Prompt timed out after $promptTimeout');
+        _activeStream?.add(RelayPromptError(-32000, 'Prompt timed out'));
+        _activeStream?.close();
+        _activeStream = null;
+        _activeRequestId = null;
+      }
+    });
 
     return _activeStream!.stream;
   }
@@ -227,6 +248,8 @@ class RelayChatService {
 
   /// Clean up on dispose (e.g., room disconnect).
   void dispose() {
+    _promptTimer?.cancel();
+    _promptTimer = null;
     _activeStream?.close();
     _activeStream = null;
     _activeRequestId = null;
@@ -237,6 +260,23 @@ class RelayChatService {
   // -------------------------------------------------------------------------
 
   void _handleSessionUpdate(Map<String, dynamic> params) {
+    // Handle relay error notifications (BUG-045).
+    // When the ACP subprocess dies, the relay sends:
+    //   { "error": { "code": -32010, "message": "ACP connection lost" } }
+    final error = params['error'];
+    if (error is Map<String, dynamic>) {
+      final code = error['code'] as int? ?? -32000;
+      final message = error['message'] as String? ?? 'Unknown relay error';
+      debugPrint('[RelayChatService] Relay error notification: $code $message');
+      _activeStream?.add(RelayPromptError(code, message));
+      _activeStream?.close();
+      _promptTimer?.cancel();
+      _promptTimer = null;
+      _activeStream = null;
+      _activeRequestId = null;
+      return;
+    }
+
     final update = AcpUpdateParser.parse(params);
 
     if (update is AcpTextDelta && update.text.isNotEmpty) {
@@ -253,10 +293,17 @@ class RelayChatService {
         title: update.title,
         status: update.status,
       ));
+    } else if (update is AcpNonContentUpdate && _isLoading) {
+      // BUG-047: Log unrecognized update kinds during session/load replay
+      // so future parsing mismatches are visible instead of silent.
+      debugPrint('[RelayChatService] Dropped non-content update during '
+          'session/load: ${update.kind}');
     }
   }
 
   void _handlePromptResult(JsonRpcResponse response) {
+    _promptTimer?.cancel();
+    _promptTimer = null;
     final wasLoading = _isLoading;
     _isLoading = false;
 

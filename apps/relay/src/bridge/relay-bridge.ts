@@ -224,6 +224,13 @@ export class RelayBridge {
         this.log.warn({ event: "acp_died", exitCode: code }, "ACP subprocess died — will re-init on next message");
         this.needsReinit = true;
         this.sessionId = null;
+
+        // Notify mobile so the client can surface the error (BUG-045).
+        this.forwardToMobile({
+          jsonrpc: "2.0",
+          method: "session/update",
+          params: { error: { code: -32010, message: "ACP connection lost" } },
+        });
       }
     });
 
@@ -694,8 +701,11 @@ export class RelayBridge {
           if (this.forwardFailures >= RelayBridge.MAX_CONSECUTIVE_FAILURES) {
             this.log.error(
               { event: "forward_path_dead", consecutiveFailures: this.forwardFailures },
-              "Forward path appears dead — too many consecutive failures",
+              "Forward path appears dead — stopping bridge (BUG-045)",
             );
+            this.stop().catch((stopErr) => {
+              this.log.error({ event: "bridge_stop_failed", error: (stopErr as Error).message }, "Failed to stop bridge after dead forward path");
+            });
           }
         })
     );
@@ -737,8 +747,11 @@ export class RelayBridge {
           if (this.forwardFailures >= RelayBridge.MAX_CONSECUTIVE_FAILURES) {
             this.log.error(
               { event: "forward_path_dead", consecutiveFailures: this.forwardFailures },
-              "Forward path appears dead — too many consecutive failures",
+              "Forward path appears dead — stopping bridge (BUG-045)",
             );
+            this.stop().catch((stopErr) => {
+              this.log.error({ event: "bridge_stop_failed", error: (stopErr as Error).message }, "Failed to stop bridge after dead forward path");
+            });
           }
         })
     );

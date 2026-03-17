@@ -233,6 +233,10 @@ abstract final class AcpUpdateParser {
       return _parseThoughtChunk(update);
     }
 
+    if (kind == 'user_message_chunk') {
+      return _parseUserMessageChunk(update);
+    }
+
     if (kind == 'user_message') {
       return _parseUserMessage(update);
     }
@@ -282,6 +286,19 @@ abstract final class AcpUpdateParser {
     }
     if (textParts.isEmpty) return null;
     return AcpUserMessage(textParts.join(''));
+  }
+
+  /// Parse `user_message_chunk` — emitted during `session/load` replay.
+  ///
+  /// Uses the `content` ContentBlock structure (same as `agent_message_chunk`),
+  /// NOT the `prompt` array that `user_message` uses.
+  static AcpUpdate? _parseUserMessageChunk(Map<String, dynamic> update) {
+    final content = update['content'];
+    if (content is! Map<String, dynamic>) return null;
+    if (content['type'] != 'text') return null;
+    final text = content['text'];
+    if (text is! String) return null;
+    return AcpUserMessage(text);
   }
 
   static AcpUpdate? _parseThoughtChunk(Map<String, dynamic> update) {

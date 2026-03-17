@@ -108,6 +108,15 @@ class SessionStorage {
     return prefs.getBool(_keyTextOnlyMode) ?? false;
   }
 
+  /// Check whether a session key already exists in storage (without creating one).
+  ///
+  /// Returns `true` if a previous session key was persisted — meaning this is
+  /// a returning session, not a fresh first launch.
+  static Future<bool> hasSessionKey() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.containsKey(_keySessionKey);
+  }
+
   /// Get stored session key, or create and persist a new one.
   ///
   /// The session key format is `agent:main:relay:<sessionName>` where

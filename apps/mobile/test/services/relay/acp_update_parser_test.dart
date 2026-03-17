@@ -267,6 +267,120 @@ void main() {
     });
 
     // -------------------------------------------------------------------------
+    // user_message_chunk — replayed during session/load (BUG-047)
+    //
+    // Uses ContentBlock structure (like agent_message_chunk), NOT the prompt
+    // array that user_message uses. Emitted by OpenClaw's session/load.
+    // -------------------------------------------------------------------------
+
+    group('user_message_chunk', () {
+      test('returns AcpUserMessage with text from content block', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'user_message_chunk',
+            'content': {'type': 'text', 'text': 'What is the weather?'},
+          },
+        };
+        expect(
+          AcpUpdateParser.parse(params),
+          AcpUserMessage('What is the weather?'),
+        );
+      });
+
+      test('returns AcpUserMessage for empty string', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'user_message_chunk',
+            'content': {'type': 'text', 'text': ''},
+          },
+        };
+        expect(AcpUpdateParser.parse(params), AcpUserMessage(''));
+      });
+
+      test('returns AcpUserMessage for multi-line text', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'user_message_chunk',
+            'content': {'type': 'text', 'text': 'Line 1\nLine 2'},
+          },
+        };
+        expect(
+          AcpUpdateParser.parse(params),
+          AcpUserMessage('Line 1\nLine 2'),
+        );
+      });
+
+      test('returns null when content is missing', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'user_message_chunk',
+          },
+        };
+        expect(AcpUpdateParser.parse(params), isNull);
+      });
+
+      test('returns null when content is not an object', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'user_message_chunk',
+            'content': 'bare string',
+          },
+        };
+        expect(AcpUpdateParser.parse(params), isNull);
+      });
+
+      test('returns null for non-text content type', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'user_message_chunk',
+            'content': {'type': 'image', 'data': 'abc='},
+          },
+        };
+        expect(AcpUpdateParser.parse(params), isNull);
+      });
+
+      test('returns null when text field is missing', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'user_message_chunk',
+            'content': {'type': 'text'},
+          },
+        };
+        expect(AcpUpdateParser.parse(params), isNull);
+      });
+
+      test('returns null when text is not a string', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'user_message_chunk',
+            'content': {'type': 'text', 'text': 42},
+          },
+        };
+        expect(AcpUpdateParser.parse(params), isNull);
+      });
+
+      test('ignores _meta field (parser does not require it)', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'user_message_chunk',
+            'content': {'type': 'text', 'text': 'hello'},
+            '_meta': {},
+          },
+        };
+        expect(AcpUpdateParser.parse(params), AcpUserMessage('hello'));
+      });
+    });
+
+    // -------------------------------------------------------------------------
     // agent_thought_chunk — carries streamed thinking/reasoning text
     //
     // ACP spec: https://agentclientprotocol.com/protocol/schema#param-agent-thought-chunk
