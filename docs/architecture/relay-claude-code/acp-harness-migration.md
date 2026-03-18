@@ -29,10 +29,12 @@ The only runtime change is the ACP subprocess command:
 ACP_COMMAND=openclaw
 ACP_ARGS=acp
 
-# After
-ACP_COMMAND=claude
-ACP_ARGS=--acp    # TBD — exact flag determined in T29.2
+# After (using @zed-industries/claude-agent-acp adapter)
+ACP_COMMAND=claude-agent-acp
+ACP_ARGS=              # empty — the adapter is a pure stdio ACP server, no flags needed
 ```
+
+> **Note:** Claude Code CLI has no native ACP support (no `--acp` flag). The `claude-agent-acp` binary is a third-party Zed-maintained ACP adapter (`@zed-industries/claude-agent-acp` v0.22.1) that wraps `@anthropic-ai/claude-agent-sdk`. It is installed globally via npm.
 
 The `AcpClient` in `packages/acp-client/` spawns whatever binary `ACP_COMMAND` resolves to and communicates via newline-delimited JSON-RPC 2.0 over stdin/stdout. The transport is backend-agnostic.
 
@@ -81,7 +83,12 @@ T29.4 validates which behavior occurs. If Claude Code ignores `_meta`, conversat
 
 ### Environment Variables
 
-New requirement: `ANTHROPIC_API_KEY` must be set in the Relay's environment and inherited by the Claude Code subprocess. OpenClaw authenticates differently (it runs locally with its own auth). This is a deployment config addition, not a code change.
+New requirement: `ANTHROPIC_API_KEY` must be set in the Relay's environment and inherited by the `claude-agent-acp` subprocess. The Zed adapter authenticates via this key through `@anthropic-ai/claude-agent-sdk`. OpenClaw authenticates differently (it runs locally with its own auth). This is a deployment config addition, not a code change.
+
+```bash
+# Required when ACP_COMMAND=claude-agent-acp
+ANTHROPIC_API_KEY=sk-ant-...
+```
 
 ## 3. Component Impact Analysis
 
@@ -124,7 +131,7 @@ No code rollback required. No database migration. No mobile app update. The Rela
 
 ### Local Smoke Test (Phase 1)
 
-1. Set `ACP_COMMAND=claude`, start the Relay
+1. Set `ACP_COMMAND=claude-agent-acp`, start the Relay
 2. Verify `initialize` response contains valid `agentInfo` and `agentCapabilities`
 3. Verify `session/new` returns a `sessionId`
 4. Send a single-turn prompt from mobile, confirm streamed response

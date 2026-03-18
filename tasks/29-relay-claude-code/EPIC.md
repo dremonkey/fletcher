@@ -1,6 +1,6 @@
 # Epic 29: Relay Claude Code ACP Harness
 
-**Status:** Planning
+**Status:** In Progress
 **Priority:** High (blocks mobile reliability)
 **Vision:** [vision/relay-claude-code/VISION.md](../../vision/relay-claude-code/VISION.md)
 **PRD:** [vision/relay-claude-code/PRD.relay-acp-harness.md](../../vision/relay-claude-code/PRD.relay-acp-harness.md)
@@ -10,11 +10,15 @@
 
 Replace the Relay's ACP backend from `openclaw acp` to `claude` (Claude Code CLI) to eliminate 30-second mobile inactivity timeouts caused by missing tool-call events and malformed reasoning streams. The Relay is a transparent ACP bridge — this is a config-level swap, not a rewrite. Mobile UI, voice agent, and bridge protocol are untouched.
 
+## Key Discovery
+
+Claude Code CLI has **no native ACP support**. There is no `--acp` flag (GitHub issue #6686 was closed without implementation). Instead, we use `@zed-industries/claude-agent-acp` v0.22.1 — a Zed-maintained ACP adapter that wraps `@anthropic-ai/claude-agent-sdk`. The adapter is a self-contained stdio ACP server (no flags needed). Auth uses `ANTHROPIC_API_KEY` (not `CLAUDE_CODE_OAUTH_TOKEN`).
+
 ## Scope
 
 **In scope:**
-- Environment setup: `claude` binary, auth via `CLAUDE_CODE_OAUTH_TOKEN`
-- Determine Claude Code's ACP-mode flags
+- Environment setup: `claude-agent-acp` binary via `@zed-industries/claude-agent-acp`, auth via `ANTHROPIC_API_KEY`
+- ACP mode: no flags needed — the adapter is a pure stdio ACP server
 - Update `acp-session-config.json` for Claude Code compatibility
 - Validate ACP handshake (`initialize`, `session/new`)
 - Verify tool-call pulse events prevent 30s timeouts
@@ -31,9 +35,9 @@ Replace the Relay's ACP backend from `openclaw acp` to `claude` (Claude Code CLI
 
 ## Tasks
 
-- [ ] T29.1 — Environment setup: install `claude` CLI, verify `CLAUDE_CODE_OAUTH_TOKEN` auth in Relay environment
-- [ ] T29.2 — Determine Claude Code ACP mode flags (`--acp`, `--stdio`, etc.) and validate subprocess spawns
-- [ ] T29.3 — Update `acp-session-config.json` with Claude Code section; handle config negotiation based on `agentInfo.name`
+- [x] T29.1 — Environment setup: installed `claude-agent-acp` via `@zed-industries/claude-agent-acp`; auth via `ANTHROPIC_API_KEY`
+- [x] T29.2 — ACP mode flags: no flags needed — `claude-agent-acp` is a pure stdio ACP server; `ACP_COMMAND=claude-agent-acp ACP_ARGS=""`
+- [x] T29.3 — Session config: `agentInfo.name`-based config selection; `@zed-industries/claude-agent-acp` section added; 27 tests pass
 - [ ] T29.4 — Test `initialize` + `session/new` handshake with Claude Code; document `agentCapabilities` and `_meta` behavior
 - [ ] T29.5 — Verify tool-call pulse events (FR4): `tool_call` and `tool_call_update` during multi-tool conversations; zero 30s timeouts
 - [ ] T29.6 — Verify reasoning stream delivery (FR5): `agent_thought_chunk` events arrive during extended thinking
@@ -43,9 +47,9 @@ Replace the Relay's ACP backend from `openclaw acp` to `claude` (Claude Code CLI
 
 | Dependency | Status | Impact |
 |------------|--------|--------|
-| `claude` CLI binary (`@anthropic-ai/claude-code`) | Available | Core dependency — cannot proceed without it |
-| `CLAUDE_CODE_OAUTH_TOKEN` (or `ANTHROPIC_API_KEY`) | Available (`~/.zshrc`) | Claude Code subprocess fails to authenticate without it |
-| Claude Code ACP stdio mode | Must support JSON-RPC 2.0 over stdin/stdout | Cannot use as subprocess backend if unavailable |
+| `claude-agent-acp` binary (`@zed-industries/claude-agent-acp`) | Installed (v0.22.1) | ACP adapter — wraps `@anthropic-ai/claude-agent-sdk` |
+| `ANTHROPIC_API_KEY` | Required in env | Claude Agent SDK authenticates via this key |
+| ACP stdio mode via Zed adapter | Working | Adapter is a pure stdio ACP server — no flags needed |
 | Relay transparent forwarding (Epic 24) | Complete | Foundation — no changes needed |
 | Mobile ACP client (Epic 22, task 054) | Complete | Consumer — no changes needed |
 
@@ -53,8 +57,8 @@ Replace the Relay's ACP backend from `openclaw acp` to `claude` (Claude Code CLI
 
 ### Gate 1: Local Smoke Test (T29.1-T29.6)
 
-- [ ] `ACP_COMMAND=claude` spawns successfully and completes ACP handshake
-- [ ] Relay logs `agentInfo.name` identifying Claude Code at startup
+- [ ] `ACP_COMMAND=claude-agent-acp` spawns successfully and completes ACP handshake
+- [ ] Relay logs `agentInfo.name` = `"@zed-industries/claude-agent-acp"` at startup
 - [ ] Single-turn text prompt returns a streamed response to mobile
 - [ ] Multi-turn conversation with 3+ tool calls produces zero 30s timeouts
 - [ ] `session/cancel` from mobile cancels the in-flight prompt
@@ -62,6 +66,6 @@ Replace the Relay's ACP backend from `openclaw acp` to `claude` (Claude Code CLI
 
 ### Gate 2: Production Ready (T29.10)
 
-- [ ] `.env.example` updated with Claude Code configuration and auth notes (`CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`)
+- [ ] `.env.example` updated with Claude Code configuration and auth notes (`ANTHROPIC_API_KEY`)
 - [ ] Rollback procedure documented (switch `ACP_COMMAND` back to `openclaw`)
 - [ ] Team has run real conversations on Claude Code backend without issues
