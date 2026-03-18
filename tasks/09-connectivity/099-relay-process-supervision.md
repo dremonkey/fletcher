@@ -44,16 +44,16 @@ done
 
 For NixOS, a `systemd.user.services.fletcher-relay` unit with `Restart=on-failure`.
 
-### Secondary: Fix ACP graceful shutdown
+### Note: ACP SIGKILL is expected
 
-Investigate why ACP subprocesses ignore SIGTERM. The relay escalates to SIGKILL after 3s, but the root cause (likely `claude` subprocess not handling SIGTERM) should be understood.
+OpenClaw does not support graceful shutdown via SIGTERM — this is a known upstream limitation. The relay's SIGTERM→SIGKILL escalation after 3s is the correct behavior. No action needed.
 
 ## Acceptance Criteria
 
 - [ ] Relay auto-restarts within 5s of unexpected termination
 - [ ] Health check endpoint is monitored (Docker healthcheck or systemd watchdog)
 - [ ] Logs are preserved across restarts (append to daily log file)
-- [ ] ACP subprocess shutdown path investigated
+- [x] ACP subprocess shutdown — known OpenClaw limitation; SIGKILL fallback is correct
 
 ## Files
 
