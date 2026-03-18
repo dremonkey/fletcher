@@ -772,6 +772,125 @@ void main() {
     });
   });
 
+  group('prompt timeout (BUG-045)', () {
+    test('emits error and closes stream when no response arrives', () {
+      fakeAsync((async) {
+        final timeoutService = RelayChatService(
+          publish: (data) async => published.add(data),
+          promptTimeout: const Duration(seconds: 5),
+        );
+
+        final events = <RelayChatEvent>[];
+        final stream = timeoutService.sendPrompt('Hello');
+        stream.listen(events.add);
+
+        // No response arrives — advance past the timeout
+        async.elapse(const Duration(seconds: 6));
+
+        expect(events, hasLength(1));
+        expect(events[0], isA<RelayPromptError>());
+        final err = events[0] as RelayPromptError;
+        expect(err.code, -32000);
+        expect(err.message, contains('timed out'));
+
+        // Service should no longer be busy
+        expect(timeoutService.isBusy, isFalse);
+
+        timeoutService.dispose();
+      });
+    });
+
+    test('does not time out when response arrives in time', () {
+      fakeAsync((async) {
+        final timeoutService = RelayChatService(
+          publish: (data) async => published.add(data),
+          promptTimeout: const Duration(seconds: 5),
+        );
+
+        final events = <RelayChatEvent>[];
+        final stream = timeoutService.sendPrompt('Hello');
+        stream.listen(events.add);
+
+        // Response arrives before timeout
+        async.elapse(const Duration(seconds: 3));
+        timeoutService.handleMessage(encode(promptResult(1)));
+        async.elapse(const Duration(seconds: 3));
+
+        // Should have completed normally, no timeout error
+        expect(events.whereType<RelayPromptError>(), isEmpty);
+        expect(events, hasLength(1));
+        expect(events[0], isA<RelayPromptComplete>());
+
+        timeoutService.dispose();
+      });
+    });
+  });
+
+  group('relay error notification (BUG-045)', () {
+    test('session/update with error field closes stream with error', () async {
+      final events = <RelayChatEvent>[];
+      final stream = service.sendPrompt('Hi');
+      stream.listen(events.add);
+
+      // Relay sends an error notification via session/update (ACP death)
+      service.handleMessage(encode({
+        'jsonrpc': '2.0',
+        'method': 'session/update',
+        'params': {
+          'error': {
+            'code': -32010,
+            'message': 'ACP connection lost',
+          },
+        },
+      }));
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(events, hasLength(1));
+      expect(events[0], isA<RelayPromptError>());
+      final err = events[0] as RelayPromptError;
+      expect(err.code, -32010);
+      expect(err.message, 'ACP connection lost');
+
+      // Service should no longer be busy
+      expect(service.isBusy, isFalse);
+    });
+
+    test('relay error notification cancels prompt timer', () {
+      fakeAsync((async) {
+        final timeoutService = RelayChatService(
+          publish: (data) async => published.add(data),
+          promptTimeout: const Duration(seconds: 5),
+        );
+
+        final events = <RelayChatEvent>[];
+        final stream = timeoutService.sendPrompt('Hi');
+        stream.listen(events.add);
+
+        // Error arrives at 2s
+        async.elapse(const Duration(seconds: 2));
+        timeoutService.handleMessage(encode({
+          'jsonrpc': '2.0',
+          'method': 'session/update',
+          'params': {
+            'error': {
+              'code': -32010,
+              'message': 'ACP connection lost',
+            },
+          },
+        }));
+
+        // Advance past original timeout — should not see a second error
+        async.elapse(const Duration(seconds: 10));
+
+        expect(events.whereType<RelayPromptError>(), hasLength(1));
+        expect(timeoutService.isBusy, isFalse);
+
+        timeoutService.dispose();
+      });
+    });
+  });
+
   group('session/update without active stream', () {
     test('ignores updates when no prompt is in-flight', () {
       // Should not crash
