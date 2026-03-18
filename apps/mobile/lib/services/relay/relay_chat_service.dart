@@ -111,6 +111,16 @@ class RelayChatService {
   /// duration, the stream is closed with an error event (BUG-045).
   final Duration promptTimeout;
 
+  /// Callback for async/polled updates that arrive when no prompt is in-flight.
+  ///
+  /// WORKAROUND for BUG-022: The relay's session poller may forward new
+  /// agent messages between prompts. These arrive as normal `session/update`
+  /// notifications but there is no active stream to deliver them through.
+  /// This callback allows the LiveKitService to handle them directly.
+  ///
+  /// TODO(BUG-022): Remove once openclaw/openclaw#40693 is fixed.
+  void Function(RelayChatEvent event)? onAsyncUpdate;
+
   final JsonRpcIdGenerator _idGen = JsonRpcIdGenerator();
   StreamController<RelayChatEvent>? _activeStream;
   int? _activeRequestId;
@@ -119,6 +129,7 @@ class RelayChatService {
   RelayChatService({
     required this.publish,
     this.promptTimeout = const Duration(seconds: 30),
+    this.onAsyncUpdate,
   });
 
   /// Whether a prompt is currently in-flight.
@@ -280,14 +291,30 @@ class RelayChatService {
     final update = AcpUpdateParser.parse(params);
 
     if (update is AcpTextDelta && update.text.isNotEmpty) {
-      _resetPromptTimer();
-      _activeStream?.add(RelayContentDelta(update.text));
+      final event = RelayContentDelta(update.text);
+      if (_activeStream != null) {
+        _resetPromptTimer();
+        _activeStream!.add(event);
+      } else {
+        // BUG-022: Async/polled update — no prompt in flight
+        onAsyncUpdate?.call(event);
+      }
     } else if (update is AcpThinkingDelta && update.text.isNotEmpty) {
-      _resetPromptTimer();
-      _activeStream?.add(RelayThinkingDelta(update.text));
+      final event = RelayThinkingDelta(update.text);
+      if (_activeStream != null) {
+        _resetPromptTimer();
+        _activeStream!.add(event);
+      } else {
+        onAsyncUpdate?.call(event);
+      }
     } else if (update is AcpUserMessage) {
-      _resetPromptTimer();
-      _activeStream?.add(RelayUserMessage(update.text));
+      final event = RelayUserMessage(update.text);
+      if (_activeStream != null) {
+        _resetPromptTimer();
+        _activeStream!.add(event);
+      } else {
+        onAsyncUpdate?.call(event);
+      }
     } else if (update is AcpUsageUpdate) {
       _resetPromptTimer();
       _activeStream?.add(RelayUsageUpdate(update.used, update.size));

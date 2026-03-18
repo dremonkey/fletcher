@@ -1741,7 +1741,69 @@ class LiveKitService extends ChangeNotifier {
         if (participant == null) return;
         await participant.publishData(data, reliable: true, topic: 'relay');
       },
+      onAsyncUpdate: _handleAsyncRelayUpdate,
     );
+  }
+
+  /// Handle async/polled updates that arrive when no prompt is in-flight.
+  ///
+  /// WORKAROUND for BUG-022: The relay's session poller forwards new agent
+  /// messages between prompts. These need to be added directly to the
+  /// transcript since there is no active prompt stream to deliver them.
+  ///
+  /// Dedup: uses content-hash-based segment IDs so duplicate deliveries
+  /// (e.g., same message via both live stream and poll) are naturally
+  /// deduplicated by [_upsertTranscript].
+  ///
+  /// TODO(BUG-022): Remove once openclaw/openclaw#40693 is fixed.
+  void _handleAsyncRelayUpdate(RelayChatEvent event) {
+    switch (event) {
+      case RelayContentDelta(:final text):
+        // Build a deterministic ID from a content hash to enable dedup.
+        // If the same text was already delivered via live stream, the
+        // _upsertTranscript call will update the existing entry instead
+        // of creating a duplicate.
+        final messageId = 'poll-${text.hashCode.toRadixString(16)}';
+
+        // Check if this message already exists in the transcript (dedup)
+        final existing = _state.transcript.any((e) =>
+          e.id == messageId ||
+          (e.role == TranscriptRole.agent && e.text == text && e.isFinal)
+        );
+        if (existing) {
+          debugPrint('[Fletcher] Polled message already in transcript — skipping');
+          return;
+        }
+
+        debugPrint('[Fletcher] Async agent message received via poll '
+            '(${text.length} chars)');
+        _upsertTranscript(
+          segmentId: messageId,
+          role: TranscriptRole.agent,
+          text: text,
+          isFinal: true,
+        );
+
+      case RelayUserMessage(:final text):
+        final messageId = 'poll-user-${text.hashCode.toRadixString(16)}';
+        final existing = _state.transcript.any((e) =>
+          e.id == messageId ||
+          (e.role == TranscriptRole.user && e.text == text && e.isFinal)
+        );
+        if (existing) return;
+
+        _upsertTranscript(
+          segmentId: messageId,
+          role: TranscriptRole.user,
+          text: text,
+          isFinal: true,
+        );
+
+      default:
+        // Other async events (thinking, usage, tool calls) are not
+        // meaningful outside a prompt context — ignore them.
+        break;
+    }
   }
 
   /// Send session/bind to the relay as the first data channel message.

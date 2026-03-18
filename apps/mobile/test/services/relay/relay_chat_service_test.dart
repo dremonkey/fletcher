@@ -892,9 +892,93 @@ void main() {
   });
 
   group('session/update without active stream', () {
-    test('ignores updates when no prompt is in-flight', () {
+    test('ignores updates when no prompt is in-flight and no callback', () {
       // Should not crash
       service.handleMessage(encode(contentChunk('orphan')));
+    });
+  });
+
+  group('async/polled updates (BUG-022)', () {
+    test('onAsyncUpdate fires for content delta when no prompt in-flight', () {
+      final asyncEvents = <RelayChatEvent>[];
+      service.onAsyncUpdate = (event) => asyncEvents.add(event);
+
+      // No prompt in-flight — send a content delta
+      service.handleMessage(encode(contentChunk('polled content')));
+
+      expect(asyncEvents, hasLength(1));
+      expect(asyncEvents[0], isA<RelayContentDelta>());
+      expect((asyncEvents[0] as RelayContentDelta).text, 'polled content');
+    });
+
+    test('onAsyncUpdate fires for user message when no prompt in-flight', () {
+      final asyncEvents = <RelayChatEvent>[];
+      service.onAsyncUpdate = (event) => asyncEvents.add(event);
+
+      service.handleMessage(encode({
+        'jsonrpc': '2.0',
+        'method': 'session/update',
+        'params': {
+          'sessionId': 'sess_abc',
+          'update': {
+            'sessionUpdate': 'user_message',
+            'prompt': [
+              {'type': 'text', 'text': 'polled user msg'},
+            ],
+          },
+        },
+      }));
+
+      expect(asyncEvents, hasLength(1));
+      expect(asyncEvents[0], isA<RelayUserMessage>());
+      expect((asyncEvents[0] as RelayUserMessage).text, 'polled user msg');
+    });
+
+    test('onAsyncUpdate fires for thinking delta when no prompt in-flight', () {
+      final asyncEvents = <RelayChatEvent>[];
+      service.onAsyncUpdate = (event) => asyncEvents.add(event);
+
+      service.handleMessage(encode({
+        'jsonrpc': '2.0',
+        'method': 'session/update',
+        'params': {
+          'sessionId': 'sess_abc',
+          'update': {
+            'sessionUpdate': 'agent_thought_chunk',
+            'content': {'type': 'text', 'text': 'polled thought'},
+          },
+        },
+      }));
+
+      expect(asyncEvents, hasLength(1));
+      expect(asyncEvents[0], isA<RelayThinkingDelta>());
+      expect((asyncEvents[0] as RelayThinkingDelta).text, 'polled thought');
+    });
+
+    test('content delta goes to active stream when prompt is in-flight (not to onAsyncUpdate)', () async {
+      final asyncEvents = <RelayChatEvent>[];
+      service.onAsyncUpdate = (event) => asyncEvents.add(event);
+
+      final streamEvents = <RelayChatEvent>[];
+      final stream = service.sendPrompt('Hi');
+      stream.listen(streamEvents.add);
+
+      service.handleMessage(encode(contentChunk('streamed content')));
+      service.handleMessage(encode(promptResult(1)));
+
+      await Future<void>.delayed(Duration.zero);
+
+      // Content should go to the active stream, not onAsyncUpdate
+      expect(asyncEvents, isEmpty);
+      expect(streamEvents, hasLength(2));
+      expect(streamEvents[0], isA<RelayContentDelta>());
+      expect((streamEvents[0] as RelayContentDelta).text, 'streamed content');
+    });
+
+    test('onAsyncUpdate not called when callback is null', () {
+      // onAsyncUpdate is null by default — should not crash
+      service.handleMessage(encode(contentChunk('orphan')));
+      // No assertion needed — just verifying no throw
     });
   });
 }
