@@ -74,6 +74,9 @@ class LiveKitService extends ChangeNotifier {
   // Background disconnect for chat mode (TASK-074 / BUG-034)
   bool _backgroundDisconnected = false;
 
+  // Background reconnect retry guard (BUG-044)
+  bool _backgroundReconnecting = false;
+
   @visibleForTesting
   bool get backgroundDisconnectedForTest => _backgroundDisconnected;
 
@@ -82,8 +85,20 @@ class LiveKitService extends ChangeNotifier {
       _backgroundDisconnected = value;
 
   @visibleForTesting
+  bool get backgroundReconnectingForTest => _backgroundReconnecting;
+
+  @visibleForTesting
+  set backgroundReconnectingForTest(bool value) =>
+      _backgroundReconnecting = value;
+
+  @visibleForTesting
   // ignore: avoid_setters_without_getters
   set roomForTest(Room? room) => _room = room;
+
+  @visibleForTesting
+  // ignore: avoid_setters_without_getters
+  set stateStatusForTest(ConversationStatus status) =>
+      _state = _state.copyWith(status: status);
 
   @visibleForTesting
   // ignore: avoid_setters_without_getters
@@ -255,85 +270,112 @@ class LiveKitService extends ChangeNotifier {
       prefix: '\u25B8',
     ));
 
-    try {
-      // Determine room name: reuse recent session or generate new
-      final stalenessThreshold = Duration(seconds: departureTimeoutS);
-      final recentRoom = await SessionStorage.getRecentRoom(
-        stalenessThreshold: stalenessThreshold,
-      );
-      final roomName = recentRoom ?? await _generateRoomName();
-      _currentRoomName = roomName;
+    // BUG-049: Retry with backoff on cold start.
+    // Android's network stack may not have functional routes for 1-3s after
+    // Dart VM boot. Retry up to 3 times with increasing delays.
+    const maxAttempts = 3;
+    const retryDelays = [Duration(seconds: 2), Duration(seconds: 3)];
 
-      // BUG-047: Load session history whenever a persisted session key exists,
-      // not just when the room is non-stale. Stale rooms (>120s) still have
-      // full conversation history in the ACP backend via the session key.
-      final hadExistingSession = await SessionStorage.hasSessionKey();
-      _needsSessionLoad = hadExistingSession;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        // Determine room name: reuse recent session or generate new
+        final stalenessThreshold = Duration(seconds: departureTimeoutS);
+        final recentRoom = await SessionStorage.getRecentRoom(
+          stalenessThreshold: stalenessThreshold,
+        );
+        final roomName = recentRoom ?? await _generateRoomName();
+        _currentRoomName = roomName;
 
-      debugPrint('[Fletcher] Room: $roomName (${recentRoom != null ? "reused" : "new"})');
+        // BUG-047: Load session history whenever a persisted session key exists,
+        // not just when the room is non-stale. Stale rooms (>120s) still have
+        // full conversation history in the ACP backend via the session key.
+        final hadExistingSession = await SessionStorage.hasSessionKey();
+        _needsSessionLoad = hadExistingSession;
 
-      // Resolve URL (race all candidates)
-      final resolved = await resolveLivekitUrl(urls: urls);
+        debugPrint('[Fletcher] Room: $roomName (${recentRoom != null ? "reused" : "new"})');
 
-      // Update network event to success
-      _emitSystemEvent(SystemEvent(
-        id: 'network-boot',
-        type: SystemEventType.network,
-        status: SystemEventStatus.success,
-        message: _describeTransport(resolved.url),
-        timestamp: DateTime.now(),
-        prefix: '\u25B8',
-      ));
+        // Resolve URL (race all candidates)
+        final resolved = await resolveLivekitUrl(urls: urls);
 
-      // Extract all candidate hosts for token endpoint racing
-      final tokenHosts = urls
-          .map((u) => Uri.parse(u).host)
-          .where((h) => h.isNotEmpty)
-          .toList();
+        // Update network event to success
+        _emitSystemEvent(SystemEvent(
+          id: 'network-boot',
+          type: SystemEventType.network,
+          status: SystemEventStatus.success,
+          message: _describeTransport(resolved.url),
+          timestamp: DateTime.now(),
+          prefix: '\u25B8',
+        ));
 
-      // Fetch token (races all hosts, same as URL resolver)
-      final identity = await SessionStorage.getDeviceId();
-      final result = await fetchToken(
-        hosts: tokenHosts,
-        port: tokenServerPort,
-        roomName: roomName,
-        identity: identity,
-      );
+        // Extract all candidate hosts for token endpoint racing
+        final tokenHosts = urls
+            .map((u) => Uri.parse(u).host)
+            .where((h) => h.isNotEmpty)
+            .toList();
 
-      // Emit AGENT waiting event before connect (agent arrives after room join)
-      _emitSystemEvent(SystemEvent(
-        id: 'agent-boot',
-        type: SystemEventType.agent,
-        status: SystemEventStatus.pending,
-        message: 'waiting...',
-        timestamp: DateTime.now(),
-        prefix: '\u25B8',
-      ));
+        // Fetch token (races all hosts, same as URL resolver)
+        final identity = await SessionStorage.getDeviceId();
+        final result = await fetchToken(
+          hosts: tokenHosts,
+          port: tokenServerPort,
+          roomName: roomName,
+          identity: identity,
+        );
 
-      // Connect using the low-level connect method
-      await connect(
-        url: resolved.url,
-        token: result.token,
-      );
+        // Emit AGENT waiting event before connect (agent arrives after room join)
+        _emitSystemEvent(SystemEvent(
+          id: 'agent-boot',
+          type: SystemEventType.agent,
+          status: SystemEventStatus.pending,
+          message: 'waiting...',
+          timestamp: DateTime.now(),
+          prefix: '\u25B8',
+        ));
 
-      // Save session on successful connect
-      if (_state.status != ConversationStatus.error) {
-        await SessionStorage.saveSession(roomName);
+        // Connect using the low-level connect method
+        await connect(
+          url: resolved.url,
+          token: result.token,
+        );
+
+        // Save session on successful connect
+        if (_state.status != ConversationStatus.error) {
+          await SessionStorage.saveSession(roomName);
+        }
+
+        // Success — exit the retry loop
+        return;
+      } catch (e) {
+        final isLastAttempt = attempt >= maxAttempts;
+
+        if (isLastAttempt) {
+          debugPrint('[Fletcher] Dynamic room connection failed after $maxAttempts attempts: $e');
+          _emitSystemEvent(SystemEvent(
+            id: 'network-boot',
+            type: SystemEventType.network,
+            status: SystemEventStatus.error,
+            message: 'failed: $e',
+            timestamp: DateTime.now(),
+            prefix: '\u2715',
+          ));
+          _updateState(
+            status: ConversationStatus.error,
+            errorMessage: 'Connection failed: $e',
+          );
+        } else {
+          final delay = retryDelays[attempt - 1];
+          debugPrint('[Fletcher] Connection attempt $attempt/$maxAttempts failed: $e — retrying in ${delay.inSeconds}s');
+          _emitSystemEvent(SystemEvent(
+            id: 'network-boot',
+            type: SystemEventType.network,
+            status: SystemEventStatus.pending,
+            message: 'retry ${attempt + 1}/$maxAttempts in ${delay.inSeconds}s...',
+            timestamp: DateTime.now(),
+            prefix: '\u25B8',
+          ));
+          await Future.delayed(delay);
+        }
       }
-    } catch (e) {
-      debugPrint('[Fletcher] Dynamic room connection failed: $e');
-      _emitSystemEvent(SystemEvent(
-        id: 'network-boot',
-        type: SystemEventType.network,
-        status: SystemEventStatus.error,
-        message: 'failed: $e',
-        timestamp: DateTime.now(),
-        prefix: '\u2715',
-      ));
-      _updateState(
-        status: ConversationStatus.error,
-        errorMessage: 'Connection failed: $e',
-      );
     }
   }
 
@@ -2444,6 +2486,9 @@ class LiveKitService extends ChangeNotifier {
     debugPrint('[Fletcher] onAppBackgrounded called — room=${_room != null ? 'connected' : 'NULL'}, isScreenLocked=$isScreenLocked');
     if (_room == null) return;
 
+    // Cancel any in-progress background reconnect attempt (BUG-044)
+    _backgroundReconnecting = false;
+
     // Chat mode: always disconnect immediately — can't interact with a
     // backgrounded or locked screen. Keeps room alive = relay idle churn. (BUG-042)
     if (!_voiceModeActive) {
@@ -2492,11 +2537,7 @@ class LiveKitService extends ChangeNotifier {
     if (_backgroundDisconnected) {
       _backgroundDisconnected = false;
       debugPrint('[Fletcher] Resuming after background disconnect — reconnecting');
-      connectWithDynamicRoom(
-        urls: _allUrls,
-        tokenServerPort: _tokenServerPort,
-        departureTimeoutS: _departureTimeoutS,
-      );
+      _reconnectAfterBackground();
       return;
     }
 
@@ -2515,6 +2556,79 @@ class LiveKitService extends ChangeNotifier {
         notificationTitle: 'Fletcher',
         notificationText: 'Voice session active',
       );
+    }
+  }
+
+  /// Reconnect after a chat-mode background disconnect, with retries.
+  ///
+  /// Android WiFi often needs several seconds to re-associate after deep
+  /// sleep. A single connection attempt frequently fails because the radio
+  /// isn't ready yet. Retry up to 3 times with a 3-second pause between
+  /// attempts. If all retries fail, engage [tryReconnect] so the existing
+  /// reconnect infrastructure can pick it up. (BUG-044)
+  @visibleForTesting
+  Future<void> reconnectAfterBackground() => _reconnectAfterBackground();
+
+  Future<void> _reconnectAfterBackground() async {
+    const maxAttempts = 3;
+    const baseDelay = Duration(seconds: 3);
+
+    _backgroundReconnecting = true;
+
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      if (!_backgroundReconnecting) {
+        debugPrint('[Fletcher] Background reconnect cancelled');
+        return;
+      }
+
+      // Wait for network readiness before first attempt (BUG-044).
+      // On resume, WiFi may still be re-associating. Give it up to 2s.
+      if (attempt == 1 && !connectivityService.isOnline) {
+        debugPrint('[Fletcher] Waiting for network before background reconnect...');
+        try {
+          await connectivityService.onConnectivityChanged
+              .firstWhere((online) => online)
+              .timeout(const Duration(seconds: 2));
+        } on TimeoutException {
+          debugPrint('[Fletcher] Network wait timed out — proceeding anyway');
+        }
+      }
+
+      debugPrint('[Fletcher] Background reconnect attempt $attempt/$maxAttempts');
+      await connectWithDynamicRoom(
+        urls: _allUrls,
+        tokenServerPort: _tokenServerPort,
+        departureTimeoutS: _departureTimeoutS,
+      );
+
+      // Success — connected or at least not in error state
+      if (_state.status != ConversationStatus.error) {
+        _backgroundReconnecting = false;
+        return;
+      }
+
+      // Last attempt — don't sleep, fall through to engage tryReconnect
+      if (attempt >= maxAttempts) break;
+
+      // Bail if we went offline
+      if (!connectivityService.isOnline) {
+        debugPrint('[Fletcher] Went offline during background reconnect — aborting retries');
+        break;
+      }
+
+      // Exponential backoff: 3s, 6s
+      final delay = baseDelay * attempt;
+      debugPrint('[Fletcher] Retrying in ${delay.inSeconds}s...');
+      await Future.delayed(delay);
+    }
+
+    _backgroundReconnecting = false;
+
+    // If still in error state after all retries, engage the existing
+    // reconnect infrastructure so the user isn't stranded. (BUG-044)
+    if (_state.status == ConversationStatus.error) {
+      debugPrint('[Fletcher] Background reconnect exhausted — engaging tryReconnect');
+      await tryReconnect();
     }
   }
 

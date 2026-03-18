@@ -26,6 +26,42 @@ class MockConnectivityProvider implements ConnectivityProvider {
   }
 }
 
+/// A provider whose checkConnectivity() is delayed, simulating the slow
+/// platform channel call that occurs on Android cold start (BUG-049).
+class SlowConnectivityProvider implements ConnectivityProvider {
+  final StreamController<List<ConnectivityResult>> _controller =
+      StreamController<List<ConnectivityResult>>.broadcast();
+  final Completer<void> _gate = Completer<void>();
+  List<ConnectivityResult> _result;
+
+  SlowConnectivityProvider(this._result);
+
+  /// Call this to unblock checkConnectivity().
+  void unblock() {
+    if (!_gate.isCompleted) _gate.complete();
+  }
+
+  void setResult(List<ConnectivityResult> result) {
+    _result = result;
+    _controller.add(result);
+  }
+
+  @override
+  Future<List<ConnectivityResult>> checkConnectivity() async {
+    await _gate.future;
+    return _result;
+  }
+
+  @override
+  Stream<List<ConnectivityResult>> get onConnectivityChanged =>
+      _controller.stream;
+
+  void dispose() {
+    _controller.close();
+    if (!_gate.isCompleted) _gate.complete();
+  }
+}
+
 void main() {
   late MockConnectivityProvider mockProvider;
   late ConnectivityService service;
@@ -135,6 +171,63 @@ void main() {
       await Future.delayed(Duration.zero);
 
       expect(notified, isFalse);
+    });
+  });
+
+  group('ready future (BUG-049)', () {
+    test('completes after _init finishes', () async {
+      // The setUp already awaited a microtask, so ready should be done.
+      // But let's explicitly test that ready completes without timeout.
+      await service.ready; // Should not hang
+      expect(service.isOnline, isTrue);
+    });
+
+    test('completes before stream subscription starts', () async {
+      // Create a fresh service and immediately await ready
+      final freshMock = MockConnectivityProvider();
+      final freshService = ConnectivityService(provider: freshMock);
+
+      await freshService.ready;
+      expect(freshService.isOnline, isTrue);
+      expect(freshService.currentResults, [ConnectivityResult.wifi]);
+
+      freshService.dispose();
+      freshMock.dispose();
+    });
+
+    test('ready blocks until slow checkConnectivity completes', () async {
+      final slowMock = SlowConnectivityProvider([ConnectivityResult.wifi]);
+      final slowService = ConnectivityService(provider: slowMock);
+
+      var readyCompleted = false;
+      slowService.ready.then((_) => readyCompleted = true);
+
+      // Give microtasks a chance to run — ready should NOT be done yet
+      await Future.delayed(Duration.zero);
+      expect(readyCompleted, isFalse);
+
+      // Unblock the slow provider
+      slowMock.unblock();
+      await Future.delayed(Duration.zero);
+      await Future.delayed(Duration.zero); // extra pump for the completer
+
+      expect(readyCompleted, isTrue);
+      expect(slowService.isOnline, isTrue);
+
+      slowService.dispose();
+      slowMock.dispose();
+    });
+
+    test('ready completes even when checkConnectivity returns offline', () async {
+      final offlineMock = MockConnectivityProvider();
+      offlineMock._currentResult = [ConnectivityResult.none];
+      final offlineService = ConnectivityService(provider: offlineMock);
+
+      await offlineService.ready;
+      expect(offlineService.isOnline, isFalse);
+
+      offlineService.dispose();
+      offlineMock.dispose();
     });
   });
 }
