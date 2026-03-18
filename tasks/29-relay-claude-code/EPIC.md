@@ -39,8 +39,8 @@ Claude Code CLI has **no native ACP support**. There is no `--acp` flag (GitHub 
 - [x] T29.2 — ACP mode flags: no flags needed — `claude-agent-acp` is a pure stdio ACP server; `ACP_COMMAND=claude-agent-acp ACP_ARGS=""`
 - [x] T29.3 — Session config: `agentInfo.name`-based config selection; `@zed-industries/claude-agent-acp` section added; 27 tests pass
 - [ ] T29.4 — Test `initialize` + `session/new` handshake with Claude Code; document `agentCapabilities` and `_meta` behavior
-- [ ] T29.5 — Verify tool-call pulse events (FR4): `tool_call` and `tool_call_update` during multi-tool conversations; zero 30s timeouts
-- [ ] T29.6 — Verify reasoning stream delivery (FR5): `agent_thought_chunk` events arrive during extended thinking
+- [x] T29.5 — Verify tool-call pulse events (FR4): `tool_call` and `tool_call_update` during multi-tool conversations; zero 30s timeouts
+- [x] T29.6 — Verify reasoning stream delivery (FR5): `agent_thought_chunk` events arrive during extended thinking
 - [ ] T29.10 — Update `apps/relay/.env.example`, relay `CLAUDE.md`, and rollback procedure documentation
 
 ## Dependencies
@@ -60,9 +60,9 @@ Claude Code CLI has **no native ACP support**. There is no `--acp` flag (GitHub 
 - [ ] `ACP_COMMAND=claude-agent-acp` spawns successfully and completes ACP handshake
 - [ ] Relay logs `agentInfo.name` = `"@zed-industries/claude-agent-acp"` at startup
 - [ ] Single-turn text prompt returns a streamed response to mobile
-- [ ] Multi-turn conversation with 3+ tool calls produces zero 30s timeouts
+- [x] Multi-turn conversation with 3+ tool calls produces zero 30s timeouts
 - [ ] `session/cancel` from mobile cancels the in-flight prompt
-- [ ] `agent_thought_chunk` events observed during extended-thinking prompts
+- [x] `agent_thought_chunk` events observed during extended-thinking prompts
 
 ### Gate 2: Production Ready (T29.10)
 

@@ -507,8 +507,8 @@ Replace the Relay's ACP backend from `openclaw acp` to Claude Code via the `@zed
 - [x] T29.02: ACP mode flags — no flags needed; adapter is a pure stdio ACP server (`ACP_COMMAND=claude-agent-acp ACP_ARGS=""`)
 - [x] T29.03: Session config — `agentInfo.name`-based config selection; `@zed-industries/claude-agent-acp` section added; 27 tests pass
 - [ ] T29.04: Validate ACP handshake (`initialize`, `session/new`) with `claude-agent-acp`
-- [ ] T29.05: Verify tool-call pulse events (`tool_call`, `tool_call_update`) during multi-tool conversations
-- [ ] T29.06: Verify reasoning stream delivery (`agent_thought_chunk`)
+- [x] T29.05: Verify tool-call pulse events (`tool_call`, `tool_call_update`) during multi-tool conversations
+- [x] T29.06: Verify reasoning stream delivery (`agent_thought_chunk`)
 - [ ] T29.10: Update `.env.example`, relay docs, rollback procedure
 
 **Depends on:** Epic 24 (WebRTC ACP Relay), Epic 22 (Dual-Mode)
