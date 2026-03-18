@@ -290,14 +290,19 @@ immediately diagnosable from the logs.
 - [x] `_reconnectRoom()` null-credential path produces debug log output
 - [x] `ConnectivityService.ready` completes after initial `checkConnectivity()`
 - [x] No regression: app still connects in <2s when network is ready on start
+- [x] `connectWithDynamicRoom()` retries up to 3 times with backoff (2s, 3s) on cold start
+- [x] Tests added for retry utility (9 tests) and ConnectivityService.ready (4 tests)
 
 ## Files
 
-- `apps/mobile/lib/services/livekit_service.dart` — Fix 1 (tryReconnect fallback), Fix 3 (network wait), Fix 4 (logging)
+- `apps/mobile/lib/services/livekit_service.dart` — Fix 1 (tryReconnect fallback), Fix 3 (network wait), Fix 4 (logging), Fix 5 (retry with backoff)
 - `apps/mobile/lib/services/connectivity_service.dart` — Fix 2 (readiness future)
+- `apps/mobile/lib/utils/retry_with_backoff.dart` — Reusable retry utility
+- `apps/mobile/test/utils/retry_with_backoff_test.dart` — Tests for retry utility (9 tests)
+- `apps/mobile/test/services/connectivity_service_test.dart` — Tests for ready future (4 tests)
 
 ## Status
 - **Date:** 2026-03-17
 - **Priority:** HIGH
 - **Bug:** BUG-049
-- **Status:** COMPLETE — all 4 fixes implemented
+- **Status:** COMPLETE — all 5 fixes implemented, tests added
