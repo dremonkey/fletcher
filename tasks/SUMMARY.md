@@ -426,7 +426,7 @@ Split the single voice-agent pipeline into two distinct modes — **Voice Mode**
 - [x] 062: Voice Agent ACP Wiring ✅ — env validation updated; ACP defaults; OPENCLAW_API_KEY no longer required
 - [ ] 057: Relay-Side ACP Response Timeout 📋 — configurable timeout for hung ACP responses ([BUG-010](../docs/field-tests/20260312-buglog.md))
 - [x] 065: Fix Silent Message Loss in Relay→Mobile Path ✅ — add logging, publishData timeout, drop diagnostics ([BUG-020](../docs/field-tests/20260313-buglog.md))
-- [~] 066: Bridge Async Agent Messages to Mobile 🔄 — workaround implemented: `session/load` catch-up with chunk dedup detects zero-text `end_turn` and replays missed sub-agent results; verified against real OpenClaw; needs field test ([BUG-022](../docs/field-tests/20260313-buglog.md))
+- [~] 066: Bridge Async Agent Messages to Mobile 🔄 — workaround implemented: (1) `session/load` catch-up on zero-text `end_turn`, (2) periodic `SessionPoller` (30s interval, configurable via `RELAY_POLL_ENABLED`/`RELAY_POLL_INTERVAL_MS`), (3) mobile `onAsyncUpdate` callback with content-hash dedup; 22 new tests (14 poller + 5 mobile + 3 integration); needs field test ([BUG-022](../docs/field-tests/20260313-buglog.md))
 - [x] 067: Fix Large Payload Delivery Failure in Relay ✅ — content-based text dedup replaces broken count-based skipCount; INFO-level delivery diagnostics; BUG-024 regression test ([BUG-024](../docs/field-tests/20260314-buglog.md))
 
 - [ ] 084: Screen Lock Chat Disconnect ✅ — `isScreenLocked` guard prevents chat-mode disconnect; relay idles 30m then cycles; fix: reorder guards so chat mode always disconnects ([BUG-042](../docs/field-tests/20260316-buglog.md))

@@ -219,16 +219,35 @@ upstream fix lands.
 - [x] Trigger signal identified: `end_turn` + zero `agent_message_chunk` (0% false negatives, ~10% false positives — acceptable)
 - [x] Existing tests still pass (121/121 pass)
 - [x] `session/load` verified against real OpenClaw ACP server
+- [x] Session polling implemented — periodic `session/load` to catch async messages between prompts
+- [x] Mobile-side async message handling — `onAsyncUpdate` callback with content-hash dedup
+- [x] Tests for polling logic (14 SessionPoller tests) and mobile handling (5 async update tests)
 - [ ] Field test: confirm sub-agent result arrives on mobile via catch-up
 - [ ] Upstream fix lands (openclaw/openclaw#40693) → remove workaround code (grep `TODO(BUG-022)`)
 
 ## Files
 
-Workaround (commit `0ff20c5`):
+Session polling workaround:
+- `apps/relay/src/bridge/session-poller.ts` — `SessionPoller` class (periodic `session/load` + dedup)
+- `apps/relay/src/bridge/session-poller.spec.ts` — 14 tests (lifecycle, pause/resume, dedup, sync)
+- `apps/relay/src/bridge/relay-bridge.ts` — Poller integration (start/stop/pause/resume lifecycle)
+- `apps/relay/src/bridge/relay-bridge.spec.ts` — 3 additional integration tests for poller
+- `apps/mobile/lib/services/relay/relay_chat_service.dart` — `onAsyncUpdate` callback for polled messages
+- `apps/mobile/lib/services/livekit_service.dart` — `_handleAsyncRelayUpdate()` with content-hash dedup
+- `apps/mobile/test/services/relay/relay_chat_service_test.dart` — 5 async update tests
+
+Original catch-up workaround (commit `0ff20c5`):
 - `packages/acp-client/src/client.ts` — `sessionLoad()` method (ACP `session/load`)
 - `packages/acp-client/test/mock-acpx.ts` — `[no-echo]` + `session/load` mock support
 - `apps/relay/src/bridge/relay-bridge.ts` — Chunk counting, catch-up trigger, dedup
 - `apps/relay/src/bridge/relay-bridge.spec.ts` — 4 BUG-022 workaround tests
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RELAY_POLL_ENABLED` | `true` | Enable/disable session polling |
+| `RELAY_POLL_INTERVAL_MS` | `30000` | Polling interval in milliseconds |
 
 ## Related
 
