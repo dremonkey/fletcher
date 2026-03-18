@@ -211,19 +211,20 @@ _backgroundReconnecting = false;
 
 ## Acceptance Criteria
 
-- [ ] Resume from background after 5+ minutes succeeds within 3 retry attempts
-- [ ] If WiFi is truly unavailable, error state is reached after ~20s (3 attempts)
-- [ ] Re-backgrounding during retry cancels the retry cleanly
-- [ ] No duplicate connection attempts (only one retry loop at a time)
-- [ ] Existing reconnect behavior (WebSocket drops, `tryReconnect()`) unchanged
+- [x] Resume from background after 5+ minutes succeeds within 3 retry attempts
+- [x] If WiFi is truly unavailable, error state is reached after ~20s (3 attempts)
+- [x] Re-backgrounding during retry cancels the retry cleanly
+- [x] No duplicate connection attempts (only one retry loop at a time)
+- [x] Existing reconnect behavior (WebSocket drops, `tryReconnect()`) unchanged
 
 ## Files
 
 - `apps/mobile/lib/services/livekit_service.dart` — retry logic, cancellation
+- `apps/mobile/test/services/background_reconnect_retry_test.dart` — unit tests
 
 ## Status
 
-- **Date:** 2026-03-16
+- **Date:** 2026-03-17
 - **Priority:** HIGH
 - **Bug:** BUG-044
-- **Status:** RCA COMPLETE — ready for implementation
+- **Status:** [x] COMPLETE
