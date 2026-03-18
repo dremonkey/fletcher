@@ -11,6 +11,7 @@ export type {
   Logger,
   InitializeParams,
   InitializeResult,
+  AgentInfo,
   ClientInfo,
   SessionMeta,
   SessionNewParams,

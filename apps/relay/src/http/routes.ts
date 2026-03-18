@@ -180,7 +180,7 @@ async function handleRelayPrompt(
 
   const client = new AcpClient({
     command: ctx.acpCommand,
-    args: [...ctx.acpArgs, "--session", "agent:main:relay-test"],
+    args: [...ctx.acpArgs],
     logger: log.child({ component: "acp" }),
   });
 
@@ -199,7 +199,10 @@ async function handleRelayPrompt(
     const session = await client.sessionNew({
       cwd: process.cwd(),
       mcpServers: [],
-      _meta: { room_name: "cli-test" },
+      _meta: {
+        session_key: { type: "relay", key: "agent:main:relay-test" },
+        room_name: "cli-test",
+      },
     });
 
     // 4. Send prompt

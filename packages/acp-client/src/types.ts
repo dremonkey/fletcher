@@ -60,8 +60,16 @@ export interface InitializeParams {
   capabilities: Record<string, unknown>;
 }
 
+export interface AgentInfo {
+  name: string;
+  title?: string;
+  version?: string;
+  [key: string]: unknown;
+}
+
 export interface InitializeResult {
   capabilities: Record<string, unknown>;
+  agentInfo?: AgentInfo;
   [key: string]: unknown;
 }
 

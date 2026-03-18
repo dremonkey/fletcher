@@ -28,7 +28,7 @@ for await (const chunk of Bun.stdin.stream()) {
     const msg = JSON.parse(line);
 
     if (msg.method === "initialize") {
-      emit({ jsonrpc: "2.0", id: msg.id, result: { capabilities: {} } });
+      emit({ jsonrpc: "2.0", id: msg.id, result: { capabilities: {}, agentInfo: { name: "mock-acpx", version: "0.0.1" } } });
 
     } else if (msg.method === "session/new") {
       emit({ jsonrpc: "2.0", id: msg.id, result: { sessionId: SESSION_ID } });

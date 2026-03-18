@@ -18,7 +18,7 @@ import { SessionPoller } from "./session-poller";
 
 export interface RelayBridgeOptions {
   roomName: string;
-  /** Session key passed to ACP subprocess via --session flag. */
+  /** Session key passed to ACP agent via _meta.session_key in session/new. */
   sessionKey: string;
   roomManager: RoomManager;
   acpCommand: string;
@@ -81,6 +81,7 @@ export class RelayBridge {
   private acpClient: AcpClient;
   private log: Logger;
   private sessionId: string | null = null;
+  private agentName: string | null = null;
   private started = false;
   private needsReinit = false;
   private reinitializing: Promise<void> | null = null;
@@ -126,11 +127,7 @@ export class RelayBridge {
 
     this.acpClient = new AcpClient({
       command: options.acpCommand,
-      args: [
-        ...(options.acpArgs ?? []),
-        "--session",
-        options.sessionKey,
-      ],
+      args: options.acpArgs ?? [],
       logger: this.log.child({ component: "acp" }),
     });
 
@@ -157,13 +154,16 @@ export class RelayBridge {
     const { roomName } = this.options;
 
     // 1. Initialize ACP
-    await this.acpClient.initialize();
+    const initResult = await this.acpClient.initialize();
+    this.agentName = initResult.agentInfo?.name ?? null;
+    this.log.info({ event: "acp_agent_identified", agentName: this.agentName }, `ACP agent: ${this.agentName ?? "unknown"}`);
 
     // 2. Create session
     const result = await this.acpClient.sessionNew({
       cwd: process.cwd(),
       mcpServers: [],
       _meta: {
+        session_key: { type: "relay", key: this.options.sessionKey },
         room_name: roomName,
         verbose: true,
       },
@@ -327,12 +327,14 @@ export class RelayBridge {
     // (shutdown is a no-op if proc is already null)
     await this.acpClient.shutdown();
 
-    await this.acpClient.initialize();
+    const initResult = await this.acpClient.initialize();
+    this.agentName = initResult.agentInfo?.name ?? null;
 
     const result = await this.acpClient.sessionNew({
       cwd: process.cwd(),
       mcpServers: [],
       _meta: {
+        session_key: { type: "relay", key: this.options.sessionKey },
         room_name: roomName,
         verbose: true,
       },
@@ -381,7 +383,8 @@ export class RelayBridge {
       `agent advertises ${configOptions.length} config option(s)`,
     );
 
-    const desiredConfig = RelayBridge.loadDesiredConfig(this.options.acpCommand);
+    const configKey = this.agentName ?? this.options.acpCommand;
+    const desiredConfig = RelayBridge.loadDesiredConfig(configKey);
 
     for (const option of configOptions) {
       const key = option.category ?? option.id;
@@ -432,7 +435,7 @@ export class RelayBridge {
   /**
    * Load desired ACP session config for a given target from `acp-session-config.json`.
    *
-   * The file is keyed by target (the ACP_COMMAND value, e.g. "openclaw", "claude").
+   * The file is keyed by target (preferring agentInfo.name, falling back to ACP_COMMAND).
    * Returns the target's config section, or an empty object if not found.
    */
   private static loadDesiredConfig(target: string): Record<string, string> {

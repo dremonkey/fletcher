@@ -113,22 +113,20 @@ describe("RelayBridge", () => {
     expect(bridge.getSessionId()).toBe("mock-sess-001");
   });
 
-  test("--session arg uses the provided sessionKey, not the room name", async () => {
+  test("session key is passed via _meta.session_key, not as CLI arg", async () => {
     const customKey = "user:alice:session:abc123";
     bridge = createBridge(mockRm, customKey);
 
-    // Verify the source uses options.sessionKey for --session (not room name)
-    // We check the relay-bridge.ts source text directly — if someone reverts
-    // to the hard-coded room-name template, this assertion catches it.
+    // Verify the source uses options.sessionKey in _meta.session_key (not as --session CLI arg)
     const fs = await import("fs");
     const bridgeSrc = fs.readFileSync(
       new URL("./relay-bridge.ts", import.meta.url).pathname,
       "utf-8",
     );
     expect(bridgeSrc).toContain("options.sessionKey");
-    expect(bridgeSrc).not.toContain("`agent:main:relay:${options.roomName}`");
+    expect(bridgeSrc).toContain("session_key:");
+    expect(bridgeSrc).not.toContain('"--session"');
 
-    // Starting should succeed — the mock ACPX accepts any --session value
     await bridge.start();
     expect(bridge.isStarted).toBe(true);
     expect(bridge.getSessionId()).toBe("mock-sess-001");

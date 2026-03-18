@@ -3,5 +3,6 @@
     "thought_level": "adaptive",
     "agent_thought_chunk": "enabled",
     "verbose_level": "full"
-  }
+  },
+  "@zed-industries/claude-agent-acp": {}
 }
