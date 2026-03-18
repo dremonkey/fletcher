@@ -41,6 +41,7 @@ Claude Code CLI has **no native ACP support**. There is no `--acp` flag (GitHub 
 - [x] T29.4 — ACP handshake validated: initialize (92ms) + session/new (631ms), agentCapabilities/agentInfo documented
 - [x] T29.5 — Verify tool-call pulse events (FR4): 2 tool_call + 5 tool_call_update events, max gap 4.1s, zero 30s timeouts
 - [x] T29.6 — Verify reasoning stream delivery (FR5): 44 agent_thought_chunk events streamed in real time, zero <think> leaks
+- [ ] T29.7 — Configurable working directory: allowlist + presets for mobile-selectable cwd in session/new
 - [x] T29.10 — .env.example, CLAUDE.md, and rollback procedure documented
 
 ## Dependencies
