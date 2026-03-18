@@ -48,6 +48,33 @@ RELAY_IDLE_TIMEOUT_MS=1800000  # Idle room timeout (30 minutes)
 - `src/utils/url.ts` — URL helpers (ws→http conversion for RoomServiceClient)
 - `test/mock-acpx.ts` — Mock ACP agent for testing
 
+## Claude Code Backend (claude-agent-acp)
+
+The relay supports `@zed-industries/claude-agent-acp` as an alternative ACP backend to OpenClaw. This is Zed's ACP adapter wrapping the Claude Agent SDK.
+
+**Setup:**
+```bash
+npm install -g @zed-industries/claude-agent-acp
+export ACP_COMMAND=claude-agent-acp
+export ACP_ARGS=""  # no args needed
+```
+
+**Auth:** Inherits `CLAUDE_CODE_OAUTH_TOKEN` from the environment (set in `~/.zshrc`). Also accepts `ANTHROPIC_API_KEY`.
+
+**Key differences from OpenClaw:**
+- `agentInfo.name`: `"@zed-industries/claude-agent-acp"` (logged at startup)
+- Config options: `mode` (permission mode) and `model` (AI model selector) — no `thought_level`/`verbose_level`
+- Emits `tool_call`, `tool_call_update`, `agent_thought_chunk`, `agent_message_chunk` reliably
+- Session key passed via `_meta.session_key` in `session/new` (silently ignored — no cross-session persistence)
+- `initialized` notification triggers a stderr warning (harmless, drained silently)
+
+**Rollback to OpenClaw:**
+```bash
+export ACP_COMMAND=openclaw
+export ACP_ARGS=acp
+# Restart the relay — no code changes needed
+```
+
 ## Conventions
 
 - Data channel messages use ACP JSON-RPC 2.0 on topic `"relay"`
