@@ -150,6 +150,10 @@ if (_room?.connectionState != ConnectionState.disconnected) {
 - `apps/relay/src/bridge/bridge-manager.ts` — `scheduleRemoveRoom()`, `cancelPendingTeardown()` (already exist)
 - `apps/mobile/lib/services/livekit_service.dart` — `_doReconnectAttempt()` disconnect guard
 
+## Architecture
+
+See [Relay Lifecycle](../../docs/architecture/relay-lifecycle.md) for sequence diagrams covering the target state — happy path, network switch recovery (fast/slow), grace period expiry, ACP failure, and bind timeout.
+
 ## Status
 
 - **Date:** 2026-03-17

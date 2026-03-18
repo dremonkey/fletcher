@@ -19,6 +19,7 @@ Start with the system overview, then follow the links based on what you need to 
 | 9 | [Network Connectivity](network-connectivity.md) | Tailscale-aware URL resolution, CGNAT detection, health diagnostics |
 | 10 | [Mic Grab Protection](009-mic-grab-protection.md) | BUG-009: device-change guard when muted, two mute modes, pending-change deferral |
 | 11 | [Macro Shortcuts](macro-shortcuts.md) | Programmable 3x3 button grid, command pool, ACP discovery, dispatch flow |
+| 12 | [Relay Lifecycle](relay-lifecycle.md) | Room lifecycle, deferred teardown, health-gated re-bind, ACP failure recovery |
 
 ## Quick Reference
 
