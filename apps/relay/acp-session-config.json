@@ -2,6 +2,6 @@
   "openclaw": {
     "thought_level": "adaptive",
     "agent_thought_chunk": "enabled",
-    "verbose_level": "on"
+    "verbose_level": "full"
   }
 }
