@@ -10,6 +10,7 @@ import type { RoomManager } from "../livekit/room-manager";
 import type { SessionUpdateParams, SessionConfigOption, ConfigOptionValue, ConfigOptionGroup } from "@fletcher/acp-client";
 import { INTERNAL_ERROR, RATE_LIMITED } from "../rpc/errors";
 import { rootLogger, type Logger } from "../utils/logger";
+import { SessionPoller } from "./session-poller";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -24,6 +25,18 @@ export interface RelayBridgeOptions {
   acpArgs?: string[];
   /** Optional logger — defaults to rootLogger.child({ component: "relay-bridge", roomName }). */
   logger?: Logger;
+  /**
+   * Enable session polling to catch async agent messages between prompts.
+   * Default: read from RELAY_POLL_ENABLED env var, or true.
+   * TODO(BUG-022): Remove once openclaw/openclaw#40693 is fixed.
+   */
+  pollEnabled?: boolean;
+  /**
+   * Polling interval in milliseconds.
+   * Default: read from RELAY_POLL_INTERVAL_MS env var, or 30_000.
+   * TODO(BUG-022): Remove once openclaw/openclaw#40693 is fixed.
+   */
+  pollIntervalMs?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -80,6 +93,16 @@ export class RelayBridge {
   private static readonly MAX_CONSECUTIVE_FAILURES = 3;
 
   /**
+   * WORKAROUND: BUG-022 / openclaw/openclaw#40693
+   * Periodic poller that calls session/load to catch async agent messages
+   * that arrive between prompts (not pushed via ACP stdio).
+   * TODO(BUG-022): Remove once openclaw/openclaw#40693 is fixed.
+   */
+  private poller: SessionPoller | null = null;
+  private pollEnabled: boolean;
+  private pollIntervalMs: number;
+
+  /**
    * WORKAROUND: BUG-022 / BUG-024 / openclaw/openclaw#40693
    * Content-based catch-up dedup for detecting and recovering from
    * missing agent messages. See catchUpSession() for the full mechanism.
@@ -110,6 +133,12 @@ export class RelayBridge {
       ],
       logger: this.log.child({ component: "acp" }),
     });
+
+    // Poll config: options override env vars, which override defaults
+    this.pollEnabled = options.pollEnabled
+      ?? (process.env.RELAY_POLL_ENABLED !== "false"); // default: true
+    this.pollIntervalMs = options.pollIntervalMs
+      ?? Number(process.env.RELAY_POLL_INTERVAL_MS || 30_000);
   }
 
   // -------------------------------------------------------------------------
@@ -224,6 +253,7 @@ export class RelayBridge {
         this.log.warn({ event: "acp_died", exitCode: code }, "ACP subprocess died — will re-init on next message");
         this.needsReinit = true;
         this.sessionId = null;
+        this.stopPoller(); // Stop polling — ACP is dead
 
         // Notify mobile so the client can surface the error (BUG-045).
         this.forwardToMobile({
@@ -235,14 +265,21 @@ export class RelayBridge {
     });
 
     this.started = true;
+
+    // 6. Start session poller if enabled (BUG-022 workaround)
+    if (this.pollEnabled && this.sessionId) {
+      this.startPoller();
+    }
+
     this.log.info({ event: "bridge_started" });
   }
 
   /**
-   * Stop the bridge: shut down ACP subprocess.
+   * Stop the bridge: shut down ACP subprocess and poller.
    */
   async stop(): Promise<void> {
     this.started = false;
+    this.stopPoller();
     await this.acpClient.shutdown();
   }
 
@@ -306,6 +343,11 @@ export class RelayBridge {
     this.log.info({ event: "acp_reinit_complete", sessionId: this.sessionId }, "ACP re-initialized");
 
     await this.negotiateSessionConfig(result.configOptions);
+
+    // Restart poller with new session ID after re-init
+    if (this.pollEnabled && this.sessionId) {
+      this.startPoller();
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -487,6 +529,44 @@ export class RelayBridge {
   }
 
   // -------------------------------------------------------------------------
+  // Session poller (BUG-022 workaround)
+  // TODO(BUG-022): Remove once openclaw/openclaw#40693 is fixed.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Create and start the session poller. Called after session/new succeeds.
+   */
+  private startPoller(): void {
+    if (!this.pollEnabled || !this.sessionId) return;
+
+    this.poller = new SessionPoller({
+      acpClient: this.acpClient,
+      sessionId: this.sessionId,
+      intervalMs: this.pollIntervalMs,
+      logger: this.log.child({ component: "session-poller" }),
+      onNewMessages: (messages) => {
+        for (const msg of messages) {
+          this.forwardToMobile(msg);
+        }
+      },
+    });
+
+    // Sync the poller's dedup state with our forwardedAgentText
+    this.poller.syncForwardedText(() => this.forwardedAgentText);
+    this.poller.start();
+  }
+
+  /**
+   * Stop the session poller. Called on bridge stop or ACP death.
+   */
+  private stopPoller(): void {
+    if (this.poller) {
+      this.poller.stop();
+      this.poller = null;
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Message handling
   // -------------------------------------------------------------------------
 
@@ -519,6 +599,7 @@ export class RelayBridge {
       reqLog.info({ event: "mobile_prompt_received", promptText });
       this.activeRequestSource = "relay";
       this.promptChunkCount = 0; // BUG-022: reset per-prompt chunk counter
+      this.poller?.pause(); // Pause polling during prompt processing
 
       // Lazy re-init if ACP subprocess died, then send prompt
       this.ensureAcp()
@@ -530,6 +611,7 @@ export class RelayBridge {
           const stopReason = (result as any).stopReason;
           reqLog.info({ event: "mobile_prompt_completed", stopReason });
           this.activeRequestSource = null;
+          this.poller?.resume(); // Resume polling after prompt completes
           this.forwardToMobile({
             jsonrpc: "2.0",
             id: msg.id,
@@ -554,6 +636,7 @@ export class RelayBridge {
         .catch((err: Error) => {
           reqLog.error({ event: "acp_error", error: err.message });
           this.activeRequestSource = null;
+          this.poller?.resume(); // Resume polling even on error
           const { errorCode, errorMessage } = classifyAcpError(err);
           this.forwardToMobile({
             jsonrpc: "2.0",
@@ -619,6 +702,7 @@ export class RelayBridge {
       const promptText = extractPromptText(msg.params?.prompt);
       reqLog.info({ event: "voice_acp_prompt_received", promptText });
       this.activeRequestSource = "voice-acp";
+      this.poller?.pause(); // Pause polling during prompt processing
 
       // Lazy re-init if ACP subprocess died, then send prompt
       this.ensureAcp()
@@ -629,6 +713,7 @@ export class RelayBridge {
         .then((result) => {
           reqLog.info({ event: "voice_acp_prompt_completed", stopReason: (result as any).stopReason });
           this.activeRequestSource = null;
+          this.poller?.resume(); // Resume polling after prompt completes
           this.forwardToVoiceAgent({
             jsonrpc: "2.0",
             id: msg.id,
@@ -638,6 +723,7 @@ export class RelayBridge {
         .catch((err: Error) => {
           reqLog.error({ event: "acp_error", error: err.message });
           this.activeRequestSource = null;
+          this.poller?.resume(); // Resume polling even on error
           const { errorCode, errorMessage } = classifyAcpError(err);
           this.forwardToVoiceAgent({
             jsonrpc: "2.0",
