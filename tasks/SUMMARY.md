@@ -1,12 +1,10 @@
 # Fletcher Project Roadmap
 
-Fletcher is a high-performance voice-first bridge for OpenClaw using LiveKit.
+Fletcher is an open-source mobile ACP (Agent Communication Protocol) client with voice and text support.
 
 ## Architecture
 
-Fletcher is a **standalone voice agent** that connects to the OpenClaw Gateway via its OpenAI-compatible completions API. It runs as an independent LiveKit worker, handling the complete audio pipeline (STT → LLM → TTS) outside the Gateway process.
-
-> We initially explored building Fletcher as an OpenClaw channel plugin (running inside the Gateway, like Telegram/WhatsApp channels) but opted for the standalone approach — simpler to develop, deploy, and debug. See [Architecture Comparison](../docs/architecture-comparison.md) for the full analysis.
+Fletcher connects a Flutter mobile app to any ACP-compatible agent — OpenClaw, Claude Code, or custom — via a relay that bridges ACP over stdio to LiveKit data channels. An optional voice agent adds real-time speech mode (STT → LLM → TTS) targeting sub-1.5s latency. The backend is a config flag (`ACP_COMMAND`); the client handles everything else.
 
 ## Epics
 
@@ -514,6 +512,38 @@ Replace the Relay's ACP backend from `openclaw acp` to Claude Code via the `@zed
 - [ ] T29.10: Update `.env.example`, relay docs, rollback procedure
 
 **Depends on:** Epic 24 (WebRTC ACP Relay), Epic 22 (Dual-Mode)
+
+### 30. [ACP Content Blocks](./30-acp-content-blocks) 📋
+Replace Fletcher's custom artifact model with ACP-native ContentBlock types. Collapse the dual artifact pipeline (Ganglia `ganglia-events` + relay `acp`) into a single path: relay forwards ACP tool-call content to mobile in both voice and text mode. MIME-type-dispatched rendering. Delete Ganglia artifact pipeline + Nanoclaw backend.
+
+**Tasks:**
+- [ ] T30.01: Relay Dual-Publish in Voice Mode — relay publishes session/update to mobile on acp topic during voice-mode sessions
+- [ ] T30.02: Derive Status from ACP Tool Call — StatusBar reads kind/title/status from ACP tool_call instead of Ganglia StatusEvent
+- [ ] T30.03: Mobile Relay-First in Both Modes — send typed text via relay always + subscribe to acp in both modes (merges T30.03+T30.04)
+- [ ] T30.05: ContentBlock Sealed Class — Dart sealed class hierarchy for all ACP content block types
+- [ ] T30.06: Widen ContentPart in acp-client — discriminated union for text, image, audio, resource, resource_link
+- [ ] T30.07: RendererRegistry with MIME Dispatch — Map<pattern, RendererFactory> replaces _ArtifactContent switch
+- [ ] T30.08: AcpUpdateParser Emits ContentBlock — widen parser to handle all ACP content types
+- [ ] T30.09: Port Renderers to ContentBlock — Diff, Code, Markdown renderers; drop SearchResultsViewer
+- [ ] T30.10: Delete Mobile Legacy Artifacts — ArtifactEvent, ArtifactType, ganglia-events content handlers
+- [ ] T30.11: Gut Ganglia — delete ToolInterceptor, EventInterceptor, Nanoclaw, custom events; keep RelayLLM + SessionKey
+- [ ] T30.12: Delete Deprecated Relay Stubs — scheduleRemoveRoom, cancelPendingTeardown, etc.
+- [ ] T30.13: Relay Payload Chunking — 14KB chunks for large ACP payloads (images, resources)
+- [ ] T30.14: ImageRenderer — base64 decode in isolate, 5MB cap, loading/error states
+- [ ] T30.15: AudioRenderer — metadata card with play button
+- [ ] T30.16: ResourceLinkCard — metadata display; fetch deferred to Epic 31
+- [ ] T30.17: Chart/Timeseries Renderer 📋 — deferred: no agent emits these yet
+- [ ] T30.18: PDF Renderer 📋 — deferred: no agent emits these yet
+- [ ] T30.19: Video Renderer 📋 — deferred: no agent emits these yet
+- [ ] T30.20: Text Input + Voice Output Mode 📋 — deferred: third mode, forward-compatible infra ready
+- [ ] T30.21: Voice Agent Unsolicited Response TTS 📋 — deferred: requires T30.20
+
+**Depends on:** Epic 22 (Dual-Mode), Epic 24 (WebRTC ACP Relay), ACP protocol spec
+
+### 31. [Resource Delivery](./31-resource-delivery) 📋
+Resource fetching and CDN delivery for `resource_link` content blocks. Enables downloading and viewing linked resources from ACP agents.
+
+**Depends on:** Epic 30 (ACP Content Blocks — ResourceLinkCard)
 
 ## Development Path
 
