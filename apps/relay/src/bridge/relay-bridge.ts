@@ -241,7 +241,10 @@ export class RelayBridge {
       }
 
       if (this.activeRequestSource === "voice-acp") {
+        // Dual-publish: voice-agent gets updates for TTS/LLM pipeline, mobile
+        // always gets the full conversation transcript regardless of request source.
         this.forwardToVoiceAgent({ jsonrpc: "2.0", method: "session/update", params });
+        this.forwardToMobile({ jsonrpc: "2.0", method: "session/update", params });
       } else {
         this.forwardToMobile({ jsonrpc: "2.0", method: "session/update", params });
       }
@@ -731,22 +734,20 @@ export class RelayBridge {
           reqLog.info({ event: "voice_acp_prompt_completed", stopReason: (result as any).stopReason });
           this.activeRequestSource = null;
           this.poller?.resume(); // Resume polling after prompt completes
-          this.forwardToVoiceAgent({
-            jsonrpc: "2.0",
-            id: msg.id,
-            result,
-          });
+          const resultMsg = { jsonrpc: "2.0", id: msg.id, result } as const;
+          // Dual-publish: voice-agent gets the result, mobile also gets the full result.
+          this.forwardToVoiceAgent(resultMsg);
+          this.forwardToMobile(resultMsg);
         })
         .catch((err: Error) => {
           reqLog.error({ event: "acp_error", error: err.message });
           this.activeRequestSource = null;
           this.poller?.resume(); // Resume polling even on error
           const { errorCode, errorMessage } = classifyAcpError(err);
-          this.forwardToVoiceAgent({
-            jsonrpc: "2.0",
-            id: msg.id,
-            error: { code: errorCode, message: errorMessage },
-          });
+          const errorMsg = { jsonrpc: "2.0", id: msg.id, error: { code: errorCode, message: errorMessage } } as const;
+          // Dual-publish: forward error to both voice-agent and mobile.
+          this.forwardToVoiceAgent(errorMsg);
+          this.forwardToMobile(errorMsg);
         });
     } else if (msg.method === "session/cancel") {
       reqLog.info({ event: "session_cancel" });
