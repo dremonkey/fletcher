@@ -180,7 +180,7 @@ The `ganglia-events` data channel carries voice-control events only — no conte
 
 #### Pondering
 
-While the LLM stream is open but no content tokens have arrived, the voice agent emits rotating fun phrases as status events:
+While the LLM stream is open but no content tokens have arrived (i.e., the ACP backend is processing), the voice agent emits rotating fun phrases as status events. This provides visual feedback during long thinking pauses — see [Voice Pipeline — Acknowledgment Sound](voice-pipeline.md#acknowledgment-sound-background-audio) for the full UX rationale.
 
 ```typescript
 interface PonderingEvent {
