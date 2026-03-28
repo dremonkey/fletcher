@@ -12,7 +12,7 @@ Fletcher is structured as three layers, each independently replaceable:
 | **Mobile Client** | `apps/mobile` | Flutter app: dual-mode input (voice + text), tool-call cards, artifacts, connection resilience |
 | **Voice Runtime** (optional) | `@livekit/agents` (framework) + `apps/voice-agent` + `@knittt/livekit-agent-ganglia` | STT/TTS orchestration, VAD, turn detection, interruption handling. Joins on demand. |
 
-Text mode works with just the relay and mobile app. Voice mode adds the agent runtime for real-time speech.
+Text mode works with just the relay and mobile app. Voice mode adds the agent runtime for real-time speech. In both modes, the relay is the single source of ACP content for mobile — the voice agent extracts text tokens for TTS but does not generate or publish content artifacts.
 
 ```mermaid
 flowchart TB
@@ -33,7 +33,7 @@ flowchart TB
         G["Ganglia LLM<br/><code>@knittt/livekit-agent-ganglia</code>"]
     end
 
-    APP <-->|"data channel<br/>(text mode)"| RL
+    APP <-->|"data channel<br/>(acp topic, both modes)"| RL
     RL <-->|"stdio JSON-RPC"| ACP_SUB
     VA --> AS
     AS --> STT
@@ -88,8 +88,8 @@ flowchart TD
 
 **Key relationships:**
 - `voice-agent` is the entry point — it imports Ganglia and the LiveKit agent plugins directly
-- `ganglia` depends on `@livekit/agents` as a **peer dependency** to avoid duplicate installs
-- `relay` is independent — it connects to LiveKit via `@livekit/rtc-node` (non-agent participant) and to OpenClaw via ACP over stdio
+- `ganglia` depends on `@livekit/agents` as a **peer dependency** to avoid duplicate installs. It is a focused package: `RelayLLM` + `SessionKey` routing + slim factory — no direct ACP backend or artifact generation
+- `relay` is independent — it connects to LiveKit via `@livekit/rtc-node` (non-agent participant) and to the ACP subprocess over stdio. It dual-publishes responses to both `voice-acp` and `acp` topics in voice mode
 - `tui` has no code dependencies on other packages — it orchestrates via `docker compose` and shell commands
 
 ## Voice Agent (`apps/voice-agent`)
@@ -160,7 +160,7 @@ The system is configured entirely through environment variables. See [Infrastruc
 |----------|---------|---------|
 | `LIVEKIT_URL` | Voice agent, relay, mobile | LiveKit WebSocket URL |
 | `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | Voice agent, relay, token gen | LiveKit authentication |
-| `GANGLIA_TYPE` | Voice agent | Backend selection: `relay` (default) or `nanoclaw` |
+| `GANGLIA_TYPE` | Voice agent | Backend selection (default: `relay`) |
 | `DEEPGRAM_API_KEY` | Voice agent | Speech-to-text provider |
 | `FLETCHER_OWNER_IDENTITY` | Voice agent | Owner detection for session routing |
 | `ACP_COMMAND` / `ACP_ARGS` | Relay | ACP subprocess command (default: `openclaw acp`) |
