@@ -212,39 +212,6 @@ describe("webhook handler", () => {
     });
   });
 
-  describe("participant_joined cancels pending teardown", () => {
-    test("calls cancelPendingTeardown when room already has bridge", async () => {
-      const bridgeManager = createMockBridgeManager(new Set(["room-abc"]));
-      const receiver = createMockWebhookReceiver({
-        event: "participant_joined",
-        room: { name: "room-abc" },
-        participant: { identity: "alice", kind: 0 },
-      });
-
-      const handler = createWebhookHandler(receiver as any, bridgeManager, silentLogger);
-      const res = await handler(makeWebhookRequest({}));
-
-      expect(res.status).toBe(200);
-      expect(bridgeManager.cancelledRooms).toEqual(["room-abc"]);
-      expect(bridgeManager.addedRooms).toEqual([]); // room already existed
-    });
-
-    test("calls cancelPendingTeardown even when room is new", async () => {
-      const bridgeManager = createMockBridgeManager();
-      const receiver = createMockWebhookReceiver({
-        event: "participant_joined",
-        room: { name: "room-new" },
-        participant: { identity: "alice", kind: 0 },
-      });
-
-      const handler = createWebhookHandler(receiver as any, bridgeManager, silentLogger);
-      const res = await handler(makeWebhookRequest({}));
-
-      expect(res.status).toBe(200);
-      expect(bridgeManager.cancelledRooms).toEqual(["room-new"]);
-      expect(bridgeManager.addedRooms).toEqual(["room-new"]);
-    });
-  });
 
   describe("addRoom failure", () => {
     test("returns 200 (webhook ack) even when addRoom throws", async () => {
@@ -275,7 +242,7 @@ describe("webhook handler", () => {
   });
 
   describe("participant_left from standard participant", () => {
-    test("calls removeRoom immediately when room has a bridge", async () => {
+    test("calls removeRoom when room has a bridge", async () => {
       const bridgeManager = createMockBridgeManager(new Set(["room-abc"]));
       const receiver = createMockWebhookReceiver({
         event: "participant_left",
@@ -288,10 +255,9 @@ describe("webhook handler", () => {
 
       expect(res.status).toBe(200);
       expect(bridgeManager.removedRooms).toEqual(["room-abc"]);
-      expect(bridgeManager.scheduledRooms).toEqual([]);
     });
 
-    test("does not schedule teardown when room has no bridge", async () => {
+    test("does not call removeRoom when room has no bridge", async () => {
       const bridgeManager = createMockBridgeManager();
       const receiver = createMockWebhookReceiver({
         event: "participant_left",
@@ -303,12 +269,12 @@ describe("webhook handler", () => {
       const res = await handler(makeWebhookRequest({}));
 
       expect(res.status).toBe(200);
-      expect(bridgeManager.scheduledRooms).toEqual([]);
+      expect(bridgeManager.removedRooms).toEqual([]);
     });
   });
 
   describe("participant_left from relay identity", () => {
-    test("does not schedule teardown", async () => {
+    test("does not call removeRoom", async () => {
       const bridgeManager = createMockBridgeManager(new Set(["room-abc"]));
       const receiver = createMockWebhookReceiver({
         event: "participant_left",
@@ -320,12 +286,12 @@ describe("webhook handler", () => {
       const res = await handler(makeWebhookRequest({}));
 
       expect(res.status).toBe(200);
-      expect(bridgeManager.scheduledRooms).toEqual([]);
+      expect(bridgeManager.removedRooms).toEqual([]);
     });
   });
 
   describe("participant_left from agent participant", () => {
-    test("does not schedule teardown", async () => {
+    test("does not call removeRoom", async () => {
       const bridgeManager = createMockBridgeManager(new Set(["room-abc"]));
       const receiver = createMockWebhookReceiver({
         event: "participant_left",
@@ -337,7 +303,7 @@ describe("webhook handler", () => {
       const res = await handler(makeWebhookRequest({}));
 
       expect(res.status).toBe(200);
-      expect(bridgeManager.scheduledRooms).toEqual([]);
+      expect(bridgeManager.removedRooms).toEqual([]);
     });
   });
 

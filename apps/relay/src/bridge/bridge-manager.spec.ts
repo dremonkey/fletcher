@@ -449,8 +449,6 @@ describe("BridgeManager", () => {
       mockRm as unknown as RoomManager,
       "bun",
       [MOCK_ACPX_PATH],
-      undefined,
-      { departureGraceMs: 500 },
     );
 
     await addRoomAndBind(manager, mockRm, "room-direct");

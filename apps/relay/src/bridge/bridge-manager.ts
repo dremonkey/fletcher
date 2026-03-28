@@ -21,7 +21,6 @@ import { rootLogger, type Logger } from "../utils/logger";
 // ---------------------------------------------------------------------------
 
 export interface BridgeManagerOptions {
-  departureGraceMs?: number;
   rejoinMaxRetries?: number;
   rejoinBaseDelayMs?: number;
   /** How long to wait for session/bind before cleaning up the room. Default: 30_000 ms. */
