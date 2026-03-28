@@ -12,7 +12,7 @@ A typical room has up to three participants:
 |-------------|----------|------|
 | **Mobile App** | `device-<hardwareId>` | The user — publishes audio, subscribes to data channels |
 | **Relay** | `relay-<roomName>` | The ACP bridge — joins when mobile connects, owns the ACP subprocess |
-| **Voice Agent** | `agent-<id>` | Optional — joins on demand for real-time speech, leaves on idle |
+| **Voice Agent** | `agent-<id>` | Optional — joins on demand for real-time speech, leaves when not in use |
 
 **Rooms are disposable transport; sessions are persistent state.** A user can disconnect, reconnect to a new room, and continue the same conversation — the relay resolves the same session key from the participant's stable device identity. Room names are ephemeral (`fletcher-<timestamp>`), generated per connection. Session keys are stable, tied to identity. See [Session Routing](session-routing.md) for the full resolution algorithm.
 
