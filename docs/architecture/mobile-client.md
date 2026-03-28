@@ -97,9 +97,13 @@ Runs diagnostic checks and reports overall system health:
 
 **Overall health:** `healthy` (all OK), `degraded` (has warnings), `unhealthy` (has errors).
 
+### RelayChatService
+
+Owns the relay data channel subscription on the `acp` topic. Active in both text and voice mode. Sends `session/prompt` for typed text, receives `session/update` notifications, and parses them via `AcpUpdateParser` into content blocks, tool-call status, and thought chunks. See [Data Channel Protocol](data-channel-protocol.md) for the wire format.
+
 ### AgentPresenceService
 
-Manages the agent lifecycle for on-demand dispatch (Epic 20). When the agent is absent, the service listens for speech via audio level monitoring and dispatches a fresh agent on detection.
+Manages the voice agent lifecycle for on-demand dispatch. The voice agent joins rooms on demand (see [Voice Pipeline](voice-pipeline.md#standalone-agent-appsvoice-agent) for the dispatch mechanism). When the agent is absent, this service listens for speech via audio level monitoring and dispatches a fresh agent on detection.
 
 **State machine:**
 ```

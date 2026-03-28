@@ -42,6 +42,8 @@ flowchart TB
     G <-->|"data channel<br/>(voice-acp topic)"| RL
 ```
 
+**Ganglia** (`@knittt/livekit-agent-ganglia`) is the LLM bridge that routes voice-agent requests to the ACP backend via the relay's data channel. It implements the LiveKit `llm.LLM` interface so the voice agent's `AgentSession` can treat it as a standard LLM. See [Brain Plugin](brain-plugin.md) for details.
+
 ## Monorepo Structure
 
 Fletcher is a Bun workspace monorepo. The Flutter mobile app is **not** part of the Bun workspace — it uses the Dart/pub ecosystem independently.
