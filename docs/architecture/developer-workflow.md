@@ -62,7 +62,7 @@ flowchart TD
 On first run (or when credentials are missing), the TUI prompts for:
 
 1. **LiveKit target** — local (Docker) or cloud. Cloud credentials are persisted as `LIVEKIT_CLOUD_*` env vars so switching doesn't lose them.
-2. **Ganglia backend** — OpenClaw (multi-user, requires API key) or Nanoclaw (single-user, localhost).
+2. **ACP backend** — configured via `ACP_COMMAND` (e.g., `openclaw acp`, `claude-agent-acp`).
 3. **OpenClaw API key** — attempts to read from `~/.openclaw/openclaw.json` before prompting.
 4. **Voice provider keys** — Deepgram (STT) and Cartesia (TTS) API keys.
 

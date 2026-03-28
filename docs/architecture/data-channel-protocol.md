@@ -114,7 +114,7 @@ Structural dispatch (by sealed class variant) takes priority over MIME glob matc
 
 ### Status from Tool Calls
 
-The StatusBar displays tool execution status from ACP `tool_call` events instead of custom status events. Each tool call carries:
+The StatusBar displays tool execution status from ACP `tool_call` events. Each tool call carries:
 
 - **`kind`**: `read`, `edit`, `delete`, `move`, `search`, `execute`, `think`, `fetch`, `other`
 - **`title`**: Human-readable description (e.g., "Reading configuration file")
