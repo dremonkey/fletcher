@@ -162,10 +162,6 @@ class LiveKitService extends ChangeNotifier {
   final List<double> _userWaveformBuffer = [];
   final List<double> _aiWaveformBuffer = [];
 
-  // Queued text messages sent while agent was absent (Epic 20).
-  // Flushed when the agent connects.
-  final List<String> _pendingTextMessages = [];
-
   // Relay chat service for chat-mode text conversations (Epic 22).
   // Created lazily when room connects; disposed on disconnect.
   RelayChatService? _relayChatService;
@@ -787,15 +783,7 @@ class LiveKitService extends ChangeNotifier {
       _holdModeActive = false; // Agent connected — clear any hold flag
       agentPresenceService.onAgentConnected();
       // Always re-sync TTS mode when a new agent joins (BUG-001, BUG-004).
-      // Send BEFORE flushing queued text messages so the agent processes
-      // tts-mode:off before the queued user message triggers a generateReply()
-      // pipeline.  SCTP reliable delivery guarantees ordering — tts-mode
-      // arrives at the agent before the text_message, so audioOutput is
-      // captured as null when the text message pipeline starts. (BUG-001)
       _sendTtsMode();
-      // Flush any text messages queued while agent was absent.
-      // Must come AFTER _sendTtsMode() — see comment above.
-      _flushPendingTextMessages();
       // Emit/update agent connected system event (task 020)
       _emitSystemEvent(SystemEvent(
         id: 'agent-boot',
@@ -1668,25 +1656,20 @@ class LiveKitService extends ChangeNotifier {
     // _voiceModeActive stays unchanged — histograms remain visible
   }
 
-  /// Send a text message through the appropriate channel.
+  /// Send a text message through the relay (both text and voice mode).
   ///
-  /// **Text mode** (`TextInputMode.textInput`): routes via relay JSON-RPC
-  /// (`session/prompt` on `"relay"` topic). Response streams back as
-  /// `session/update` chunks. Agent is terminated in this mode.
-  ///
-  /// **Voice mode** (`TextInputMode.voiceFirst`): routes via
-  /// `ganglia-events` to the voice agent, which injects it into the
-  /// AgentSession. Works even when soft-muted (mic silenced but agent alive).
-  ///
-  /// Routing is based on `inputMode`, not mute state. (BUG-027c, Epic 26)
+  /// In both modes, typed text is sent as `session/prompt` via the relay
+  /// data channel (`"relay"` topic). Response streams back as `session/update`
+  /// chunks and appears in the chat UI. In voice mode the response is shown
+  /// in the transcript but not spoken (TTS is driven by the STT pipeline).
   ///
   /// The user's message is added to the local transcript immediately
-  /// (optimistic update) regardless of mode.
+  /// (optimistic update) regardless of mode. (Epic 30, T30.03)
   Future<void> sendTextMessage(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
 
-    // Slash command intercept — route to registry, skip agent/relay
+    // Slash command intercept — route to registry, skip relay
     if (trimmed.startsWith('/') && trimmed.length > 1) {
       final result = await _commandRegistry.dispatch(trimmed);
       if (result != null) {
@@ -1695,8 +1678,7 @@ class LiveKitService extends ChangeNotifier {
       return;
     }
 
-    final isTextMode = _state.inputMode == TextInputMode.textInput;
-    debugPrint('[Fletcher] Sending text message: ${trimmed.length} chars (mode=${isTextMode ? "text" : "voice"})');
+    debugPrint('[Fletcher] Sending text message: ${trimmed.length} chars');
 
     // Optimistic: add user message to local transcript immediately
     final entry = TranscriptEntry(
@@ -1718,49 +1700,13 @@ class LiveKitService extends ChangeNotifier {
     }
     _updateState(transcript: updatedTranscript);
 
-    // --- Text mode: always route through relay (BUG-027c, Epic 26) ---
-    // Routing is based on inputMode, not mute state. In text mode the
-    // agent is terminated; relay is the only path. In voice mode, even
-    // if soft-muted, text goes to the agent (if present).
-    if (isTextMode) {
-      // Gate prompts behind bind completion (TASK-081).
-      if (!_sessionBound) {
-        debugPrint('[Fletcher] Prompt blocked — session not yet bound');
-        return;
-      }
-      await _sendViaRelay(trimmed);
+    // All text input routes through the relay (T30.03). Gate prompts behind
+    // bind completion so the relay has a valid ACP session (TASK-081).
+    if (!_sessionBound) {
+      debugPrint('[Fletcher] Prompt blocked — session not yet bound');
       return;
     }
-
-    // --- Voice mode: route through agent (existing path) ---
-    // Trigger agent dispatch if agent is absent (Epic 20)
-    agentPresenceService.onTextMessageSent();
-
-    final agentState = agentPresenceService.state;
-    if (agentPresenceService.enabled &&
-        (agentState == AgentPresenceState.agentAbsent ||
-         agentState == AgentPresenceState.dispatching)) {
-      debugPrint('[Fletcher] Agent absent — queuing text message for delivery');
-      _pendingTextMessages.add(trimmed);
-    } else {
-      await _sendEvent({
-        'type': 'text_message',
-        'text': trimmed,
-      });
-    }
-  }
-
-  /// Send any text messages that were queued while the agent was absent.
-  Future<void> _flushPendingTextMessages() async {
-    if (_pendingTextMessages.isEmpty) return;
-    debugPrint('[Fletcher] Flushing ${_pendingTextMessages.length} queued text message(s)');
-    for (final text in _pendingTextMessages) {
-      await _sendEvent({
-        'type': 'text_message',
-        'text': text,
-      });
-    }
-    _pendingTextMessages.clear();
+    await _sendViaRelay(trimmed);
   }
 
   // ---------------------------------------------------------------------------
