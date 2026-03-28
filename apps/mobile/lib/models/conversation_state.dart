@@ -26,9 +26,113 @@ enum MessageOrigin {
   text,
 }
 
-// Ganglia Event Types
+// ---------------------------------------------------------------------------
+// Tool Status — shared by both ACP (text mode) and Ganglia (voice mode)
+// ---------------------------------------------------------------------------
 
-/// Status actions from the agent
+/// The current agent tool status displayed in the StatusBar.
+///
+/// Populated from two sources:
+/// - **Text mode (ACP):** `tool_call` / `tool_call_update` events from the
+///   relay, parsed as [RelayToolCallEvent]. [kind] is the ACP operation kind
+///   (`read`, `edit`, `search`, `execute`, `think`, `fetch`, `delete`, `move`,
+///   `other`), and [displayText] is the ACP `title` or a kind-derived label.
+/// - **Voice mode (Ganglia):** `status` events from `ganglia-events`, mapped
+///   to a [ToolStatus] by [ToolStatus.fromGangliaStatusEvent].
+class ToolStatus {
+  /// ACP operation kind: `read`, `edit`, `search`, `execute`, `think`,
+  /// `fetch`, `delete`, `move`, `other`.
+  ///
+  /// Also used for voice-mode Ganglia status with mapped values:
+  /// - `thinking` → `think`
+  /// - `searching_files` → `search`
+  /// - `reading_file` → `read`
+  /// - `writing_file` / `editing_file` → `edit`
+  /// - `web_search` → `fetch`
+  /// - `executing_command` → `execute`
+  /// - `analyzing` → `other`
+  final String kind;
+
+  /// Human-readable text for the StatusBar (e.g., "Reading main.dart").
+  final String displayText;
+
+  const ToolStatus({required this.kind, required this.displayText});
+
+  /// Map an ACP [kind] and optional [title] to a [ToolStatus].
+  ///
+  /// Prefers [title] when available; falls back to a label derived from [kind].
+  factory ToolStatus.fromAcp({required String kind, String? title}) {
+    final text = title ?? _kindFallbackLabel(kind);
+    return ToolStatus(kind: kind, displayText: text);
+  }
+
+  /// Map a Ganglia [StatusEvent] to a [ToolStatus].
+  factory ToolStatus.fromGangliaStatusEvent(StatusEvent event) {
+    final mappedKind = _gangliaActionToKind(event.action);
+    return ToolStatus(kind: mappedKind, displayText: event.displayText);
+  }
+
+  static String _kindFallbackLabel(String kind) {
+    switch (kind) {
+      case 'read':
+        return 'Reading';
+      case 'edit':
+        return 'Editing';
+      case 'search':
+        return 'Searching';
+      case 'execute':
+        return 'Running';
+      case 'think':
+        return 'Thinking';
+      case 'fetch':
+        return 'Fetching';
+      case 'delete':
+        return 'Deleting';
+      case 'move':
+        return 'Moving';
+      default:
+        return 'Working';
+    }
+  }
+
+  static String _gangliaActionToKind(StatusAction action) {
+    switch (action) {
+      case StatusAction.thinking:
+        return 'think';
+      case StatusAction.searchingFiles:
+        return 'search';
+      case StatusAction.readingFile:
+        return 'read';
+      case StatusAction.writingFile:
+      case StatusAction.editingFile:
+        return 'edit';
+      case StatusAction.webSearch:
+        return 'fetch';
+      case StatusAction.executingCommand:
+        return 'execute';
+      case StatusAction.analyzing:
+        return 'other';
+    }
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is ToolStatus &&
+      other.kind == kind &&
+      other.displayText == displayText;
+
+  @override
+  int get hashCode => Object.hash(kind, displayText);
+
+  @override
+  String toString() => 'ToolStatus(kind: $kind, displayText: $displayText)';
+}
+
+// ---------------------------------------------------------------------------
+// Ganglia Event Types (voice mode — backward compat)
+// ---------------------------------------------------------------------------
+
+/// Status actions from the Ganglia voice agent.
 enum StatusAction {
   thinking,
   searchingFiles,
@@ -40,7 +144,10 @@ enum StatusAction {
   analyzing,
 }
 
-/// Status event - shows what the agent is currently doing
+/// Ganglia-emitted status event (voice mode only).
+///
+/// Parsed from `ganglia-events` data channel messages in [_processGangliaEvent].
+/// Converted to [ToolStatus] for display via [ToolStatus.fromGangliaStatusEvent].
 class StatusEvent {
   final StatusAction action;
   final String? detail;
@@ -406,8 +513,11 @@ class ConversationState {
   final String? errorMessage;
   final List<TranscriptEntry> transcript;
 
-  /// Current status event from ganglia (what the agent is doing)
-  final StatusEvent? currentStatus;
+  /// Current tool status shown in the StatusBar.
+  ///
+  /// Set from ACP `tool_call` events in text mode, or from Ganglia `status`
+  /// events in voice mode. Null when no tool is active.
+  final ToolStatus? currentStatus;
 
   /// List of artifacts received from ganglia (code, diffs, etc.)
   final List<ArtifactEvent> artifacts;
@@ -469,7 +579,7 @@ class ConversationState {
     double? aiAudioLevel,
     String? errorMessage,
     List<TranscriptEntry>? transcript,
-    StatusEvent? currentStatus,
+    ToolStatus? currentStatus,
     bool clearStatus = false,
     List<ArtifactEvent>? artifacts,
     List<double>? userWaveform,

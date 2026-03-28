@@ -65,13 +65,19 @@ class RelayLoadComplete extends RelayChatEvent {}
 /// A tool call event from a `tool_call` or `tool_call_update` ACP event.
 ///
 /// Emitted only when verbose mode is active (`verbose: true` in `session/new`).
-/// [status] is null when the tool call starts; non-null ("completed", "error")
-/// when it finishes.
+///
+/// On tool start (`tool_call`): [kind] and [title] are populated, [status] is null.
+/// On tool completion (`tool_call_update`): [status] is set ("completed", "failed",
+/// "error"), [kind] and [title] are null.
+///
+/// [kind] classifies the operation: `read`, `edit`, `delete`, `move`, `search`,
+/// `execute`, `think`, `fetch`, or `other`.
 class RelayToolCallEvent extends RelayChatEvent {
   final String id;
+  final String? kind;
   final String? title;
   final String? status;
-  RelayToolCallEvent({required this.id, this.title, this.status});
+  RelayToolCallEvent({required this.id, this.kind, this.title, this.status});
 }
 
 // ---------------------------------------------------------------------------
@@ -322,6 +328,7 @@ class RelayChatService {
       _resetPromptTimer();
       _activeStream?.add(RelayToolCallEvent(
         id: update.id,
+        kind: update.kind,
         title: update.title,
         status: update.status,
       ));

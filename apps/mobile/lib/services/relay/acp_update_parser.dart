@@ -85,23 +85,30 @@ final class AcpUsageUpdate extends AcpUpdate {
 ///
 /// On tool invocation:
 /// ```json
-/// { "sessionUpdate": "tool_call", "id": "tc_123", "title": "memory_search", "input": "{...}" }
+/// { "sessionUpdate": "tool_call", "id": "tc_123", "kind": "read", "title": "Reading main.dart", "input": "{...}" }
 /// ```
 /// On tool completion or error:
 /// ```json
 /// { "sessionUpdate": "tool_call_update", "id": "tc_123", "status": "completed" }
 /// ```
 ///
+/// [kind] classifies the operation type: `read`, `edit`, `delete`, `move`,
+/// `search`, `execute`, `think`, `fetch`, or `other`. Only present on
+/// `tool_call` events (not `tool_call_update`).
+///
 /// [status] is null when the tool call has just started (kind == `tool_call`),
-/// and non-null (`"completed"`, `"error"`, etc.) for `tool_call_update` events.
+/// and non-null (`"completed"`, `"failed"`, `"error"`, etc.) for
+/// `tool_call_update` events.
 final class AcpToolCallUpdate extends AcpUpdate {
   final String id;
-  final String? title;   // tool name (e.g., "memory_search")
-  final String? status;  // null=started, "completed", "error"
+  final String? kind;    // operation kind: read, edit, search, execute, think, fetch, delete, move, other
+  final String? title;   // human-readable description (e.g., "Reading main.dart")
+  final String? status;  // null=started, "completed", "failed", "error"
   final String? input;   // JSON string of tool arguments (optional)
 
   const AcpToolCallUpdate({
     required this.id,
+    this.kind,
     this.title,
     this.status,
     this.input,
@@ -111,15 +118,16 @@ final class AcpToolCallUpdate extends AcpUpdate {
   bool operator ==(Object other) =>
       other is AcpToolCallUpdate &&
       other.id == id &&
+      other.kind == kind &&
       other.title == title &&
       other.status == status &&
       other.input == input;
 
   @override
-  int get hashCode => Object.hash(id, title, status, input);
+  int get hashCode => Object.hash(id, kind, title, status, input);
 
   @override
-  String toString() => 'AcpToolCallUpdate(id: $id, title: $title, status: $status)';
+  String toString() => 'AcpToolCallUpdate(id: $id, kind: $kind, title: $title, status: $status)';
 }
 
 /// A user message replayed during `session/load`.
@@ -253,6 +261,7 @@ abstract final class AcpUpdateParser {
       if (id is! String) return null;
       return AcpToolCallUpdate(
         id: id,
+        kind: update['kind'] as String?,
         title: update['title'] as String?,
         status: null,
         input: update['input'] is String ? update['input'] as String : null,
