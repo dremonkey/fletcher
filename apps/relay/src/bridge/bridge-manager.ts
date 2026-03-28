@@ -21,7 +21,6 @@ import { rootLogger, type Logger } from "../utils/logger";
 // ---------------------------------------------------------------------------
 
 export interface BridgeManagerOptions {
-  departureGraceMs?: number;
   rejoinMaxRetries?: number;
   rejoinBaseDelayMs?: number;
   /** How long to wait for session/bind before cleaning up the room. Default: 30_000 ms. */
@@ -212,32 +211,6 @@ export class BridgeManager {
     this.roomManager.leaveRoom(roomName).catch((err) => {
       this.log.error({ event: "bind_timeout_cleanup_failed", roomName, err });
     });
-  }
-
-  // -------------------------------------------------------------------------
-  // DEPRECATED: Deferred teardown (BUG-036)
-  // -------------------------------------------------------------------------
-
-  /** @deprecated Removed in favor of immediate teardown. */
-  scheduleRemoveRoom(roomName: string): void {
-    this.removeRoom(roomName).catch((err) => {
-      this.log.error({ event: "immediate_teardown_failed", roomName, err }, "Immediate teardown failed");
-    });
-  }
-
-  /** @deprecated Always returns false. */
-  cancelPendingTeardown(_roomName: string): boolean {
-    return false;
-  }
-
-  /** @deprecated Always returns false. */
-  hasPendingTeardown(_roomName: string): boolean {
-    return false;
-  }
-
-  /** @deprecated Always returns empty array. */
-  getPendingTeardowns(): string[] {
-    return [];
   }
 
   /**

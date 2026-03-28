@@ -43,9 +43,6 @@ export function createWebhookHandler(
         return Response.json({ received: true });
       }
 
-      // Cancel any pending deferred teardown — participant reconnected
-      bridgeManager.cancelPendingTeardown(roomName);
-
       if (bridgeManager.hasRoom(roomName)) {
         log.debug("Room already joined, skipping");
         return Response.json({ received: true });
