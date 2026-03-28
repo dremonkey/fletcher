@@ -1114,8 +1114,9 @@ class LiveKitService extends ChangeNotifier {
 
     if (eventType == 'status') {
       final statusEvent = StatusEvent.fromJson(json);
-      _updateState(currentStatus: statusEvent);
-      debugPrint('[Ganglia] Status: ${statusEvent.displayText}');
+      final toolStatus = ToolStatus.fromGangliaStatusEvent(statusEvent);
+      _updateState(currentStatus: toolStatus);
+      debugPrint('[Ganglia] Status: ${toolStatus.displayText}');
 
       // Clear status after 5 seconds of inactivity
       _statusClearTimer?.cancel();
@@ -2035,14 +2036,24 @@ class LiveKitService extends ChangeNotifier {
             text: buildTranscriptText(),
             isFinal: true,
           );
-          _updateState(isAgentThinking: false, activeToolCalls: const []);
+          _statusClearTimer?.cancel();
+          _updateState(
+            isAgentThinking: false,
+            activeToolCalls: const [],
+            clearStatus: true,
+          );
 
           _relayAgentMessageText = '';
           _relayThinkingText = '';
 
         case RelayPromptError(:final code, :final message):
           debugPrint('[Relay] Prompt error: $code $message');
-          _updateState(isAgentThinking: false, activeToolCalls: const []);
+          _statusClearTimer?.cancel();
+          _updateState(
+            isAgentThinking: false,
+            activeToolCalls: const [],
+            clearStatus: true,
+          );
           _emitSystemEvent(SystemEvent(
             id: 'relay-error-${DateTime.now().millisecondsSinceEpoch}',
             type: SystemEventType.agent,
@@ -2064,20 +2075,27 @@ class LiveKitService extends ChangeNotifier {
           );
           notifyListeners();
 
-        case RelayToolCallEvent(:final id, :final title, :final status):
-          if (status == null && title != null) {
-            // Tool call started
+        case RelayToolCallEvent(:final id, :final kind, :final title, :final status):
+          if (status == null) {
+            // Tool call started — update activeToolCalls and StatusBar
             final toolCall = ToolCallInfo(
               id: id,
-              name: title,
+              name: title ?? kind ?? 'tool',
               startedAt: DateTime.now(),
+            );
+            final toolStatus = ToolStatus.fromAcp(
+              kind: kind ?? 'other',
+              title: title,
             );
             _state = _state.copyWith(
               activeToolCalls: [..._state.activeToolCalls, toolCall],
+              currentStatus: toolStatus,
             );
+            // Reset 5s auto-clear on each new tool call start
+            _statusClearTimer?.cancel();
             notifyListeners();
-          } else if (status != null) {
-            // Tool call completed or errored — update existing entry
+          } else {
+            // Tool call completed or errored — update activeToolCalls
             final updated = _state.activeToolCalls.map((tc) {
               if (tc.id != id) return tc;
               return tc.copyWith(
@@ -2086,6 +2104,13 @@ class LiveKitService extends ChangeNotifier {
               );
             }).toList();
             _state = _state.copyWith(activeToolCalls: updated);
+            // Auto-clear StatusBar after completed/failed with a short delay
+            if (status == 'completed' || status == 'failed' || status == 'error') {
+              _statusClearTimer?.cancel();
+              _statusClearTimer = Timer(const Duration(seconds: 5), () {
+                _updateState(clearStatus: true);
+              });
+            }
             notifyListeners();
           }
 
@@ -2120,7 +2145,7 @@ class LiveKitService extends ChangeNotifier {
     double? aiAudioLevel,
     String? errorMessage,
     List<TranscriptEntry>? transcript,
-    StatusEvent? currentStatus,
+    ToolStatus? currentStatus,
     bool clearStatus = false,
     List<ArtifactEvent>? artifacts,
     List<double>? userWaveform,

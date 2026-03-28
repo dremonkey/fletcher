@@ -621,6 +621,61 @@ void main() {
         expect(update.input, '{"query": "user preferences"}');
       });
 
+      test('extracts kind field when present', () {
+        // ACP tool_call events include a kind discriminator for the operation type.
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'tool_call',
+            'id': 'tc_read_1',
+            'kind': 'read',
+            'title': 'Reading src/main.dart',
+            'input': '{"path": "src/main.dart"}',
+          },
+        };
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpToolCallUpdate>());
+        final update = result! as AcpToolCallUpdate;
+        expect(update.id, 'tc_read_1');
+        expect(update.kind, 'read');
+        expect(update.title, 'Reading src/main.dart');
+        expect(update.status, isNull);
+      });
+
+      test('kind is null when not present (older ACP implementations)', () {
+        // tool_call events from agents that do not emit kind should still parse.
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'tool_call',
+            'id': 'tc_456',
+            'title': 'memory_search',
+            // no 'kind' field
+          },
+        };
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpToolCallUpdate>());
+        expect((result! as AcpToolCallUpdate).kind, isNull);
+      });
+
+      test('all ACP kind values parse correctly', () {
+        // Verify each expected kind value round-trips through the parser.
+        final kinds = ['read', 'edit', 'delete', 'move', 'search', 'execute', 'think', 'fetch', 'other'];
+        for (final k in kinds) {
+          final params = {
+            'update': {
+              'sessionUpdate': 'tool_call',
+              'id': 'tc_$k',
+              'kind': k,
+              'title': 'Performing $k',
+            },
+          };
+          final result = AcpUpdateParser.parse(params);
+          expect(result, isA<AcpToolCallUpdate>(), reason: 'kind=$k should parse');
+          expect((result! as AcpToolCallUpdate).kind, k);
+        }
+      });
+
       test('returns null when id is missing', () {
         final params = {
           'sessionId': 'sess_abc123',
@@ -675,7 +730,15 @@ void main() {
         expect((result! as AcpToolCallUpdate).input, isNull);
       });
 
-      test('AcpToolCallUpdate equality works', () {
+      test('AcpToolCallUpdate equality includes kind', () {
+        const a = AcpToolCallUpdate(id: 'tc_1', kind: 'read', title: 'Reading file', status: null);
+        const b = AcpToolCallUpdate(id: 'tc_1', kind: 'read', title: 'Reading file', status: null);
+        const c = AcpToolCallUpdate(id: 'tc_1', kind: 'edit', title: 'Reading file', status: null);
+        expect(a, equals(b));
+        expect(a, isNot(equals(c)));
+      });
+
+      test('AcpToolCallUpdate equality works without kind (backward compat)', () {
         const a = AcpToolCallUpdate(id: 'tc_1', title: 'search', status: null);
         const b = AcpToolCallUpdate(id: 'tc_1', title: 'search', status: null);
         const c = AcpToolCallUpdate(id: 'tc_2', title: 'search', status: null);
