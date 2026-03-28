@@ -7,7 +7,7 @@ describe('buildBootstrapMessage', () => {
 
     it('includes the TTS context preamble with the voice tag', () => {
       const msg = buildBootstrapMessage(ctx);
-      expect(msg).toContain('voice conversation');
+      expect(msg).toContain('dictated, not typed');
       expect(msg).toContain(VOICE_TAG);
     });
 
