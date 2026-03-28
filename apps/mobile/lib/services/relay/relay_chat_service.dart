@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../../models/content_block.dart';
 import 'acp_update_parser.dart';
 import 'chunk_reassembler.dart';
 import 'json_rpc.dart';
@@ -343,14 +344,27 @@ class RelayChatService {
 
     final update = AcpUpdateParser.parse(params);
 
-    if (update is AcpTextDelta && update.text.isNotEmpty) {
-      final event = RelayContentDelta(update.text);
-      if (_activeStream != null) {
-        _resetPromptTimer();
-        _activeStream!.add(event);
-      } else {
-        // BUG-022: Async/polled update — no prompt in flight
-        onAsyncUpdate?.call(event);
+    if (update is AcpContentDelta) {
+      final block = update.content;
+      // Only route non-empty text content as RelayContentDelta — other block
+      // types (image, audio, resource, diff, terminal) are passed through as
+      // RelayContentBlock for downstream rendering (T30.10).
+      if (block is TextContent && block.text.isNotEmpty) {
+        final event = RelayContentDelta(block.text);
+        if (_activeStream != null) {
+          _resetPromptTimer();
+          _activeStream!.add(event);
+        } else {
+          // BUG-022: Async/polled update — no prompt in flight
+          onAsyncUpdate?.call(event);
+        }
+      } else if (block is! TextContent) {
+        // Non-text content block — emit for downstream renderers once T30.10
+        // wires up the RendererRegistry. For now, just reset the timer so the
+        // prompt doesn't time out during rich content delivery.
+        if (_activeStream != null) {
+          _resetPromptTimer();
+        }
       }
     } else if (update is AcpThinkingDelta && update.text.isNotEmpty) {
       final event = RelayThinkingDelta(update.text);
