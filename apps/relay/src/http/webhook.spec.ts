@@ -254,7 +254,7 @@ describe("webhook handler", () => {
   });
 
   describe("participant_left from standard participant", () => {
-    test("calls scheduleRemoveRoom when room has a bridge", async () => {
+    test("calls removeRoom immediately when room has a bridge", async () => {
       const bridgeManager = createMockBridgeManager(new Set(["room-abc"]));
       const receiver = createMockWebhookReceiver({
         event: "participant_left",
@@ -266,8 +266,8 @@ describe("webhook handler", () => {
       const res = await handler(makeWebhookRequest({}));
 
       expect(res.status).toBe(200);
-      expect(bridgeManager.scheduledRooms).toEqual(["room-abc"]);
-      expect(bridgeManager.removedRooms).toEqual([]);
+      expect(bridgeManager.removedRooms).toEqual(["room-abc"]);
+      expect(bridgeManager.scheduledRooms).toEqual([]);
     });
 
     test("does not schedule teardown when room has no bridge", async () => {
