@@ -2,6 +2,22 @@
 
 Fletcher is an open-source mobile ACP (Agent Communication Protocol) client with voice and text support. It connects a Flutter mobile app to any ACP-compatible agent — OpenClaw, Claude Code, or custom — through LiveKit's WebRTC infrastructure. The relay bridges ACP over stdio to the mobile client via data channels. An optional voice agent adds real-time speech (STT → LLM → TTS), targeting sub-1.5-second voice-to-voice latency.
 
+## Room & Session Model
+
+Fletcher's real-time coordination happens inside **LiveKit Rooms**. A room is a WebRTC media and signaling space hosted by the LiveKit SFU — participants join it, data channels exist within it, and audio tracks flow through it. Every interaction in Fletcher happens inside a room.
+
+A typical room has up to three participants:
+
+| Participant | Identity | Role |
+|-------------|----------|------|
+| **Mobile App** | `device-<hardwareId>` | The user — publishes audio, subscribes to data channels |
+| **Relay** | `relay-<roomName>` | The ACP bridge — joins when mobile connects, owns the ACP subprocess |
+| **Voice Agent** | `agent-<id>` | Optional — joins on demand for real-time speech, leaves on idle |
+
+**Rooms are disposable transport; sessions are persistent state.** A user can disconnect, reconnect to a new room, and continue the same conversation — the relay resolves the same session key from the participant's stable device identity. Room names are ephemeral (`fletcher-<timestamp>`), generated per connection. Session keys are stable, tied to identity. See [Session Routing](session-routing.md) for the full resolution algorithm.
+
+Data channels within a room carry all communication: the `acp` topic for ACP messages (relay ↔ mobile), the `voice-acp` topic for voice-mode LLM requests (voice agent ↔ relay), and `ganglia-events` for voice control. See [Data Channel Protocol](data-channel-protocol.md) for the wire format.
+
 ## Three-Layer Architecture
 
 Fletcher is structured as three layers, each independently replaceable:
