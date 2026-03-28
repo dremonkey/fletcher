@@ -1,15 +1,17 @@
 # Fletcher Project - Static's Guide (⚡)
 
-This project (Fletcher) is a voice-first bridge for OpenClaw — a standalone voice agent using LiveKit for real-time conversations.
+Fletcher is an open-source mobile ACP (Agent Communication Protocol) client with voice and text support. It connects a Flutter mobile app to any ACP-compatible agent — OpenClaw, Claude Code, or custom — via a relay that bridges ACP over stdio to LiveKit data channels. An optional voice agent adds real-time speech.
 
 ## Core Directives
 - **Runtime:** This is a **Bun** project. Prefer native Bun tools over external ones (e.g., use `bun test` instead of Vitest/Jest).
-- **Architecture:** Fletcher is a standalone voice agent that talks to OpenClaw Gateway via its OpenAI-compatible completions API. (We considered the OpenClaw channel plugin approach but opted for standalone — see `docs/architecture-comparison.md`.)
-- **Latency Target:** Aim for sub-1.5s voice-to-voice latency.
+- **Architecture:** The relay (`apps/relay`) is the core — a transparent ACP bridge over LiveKit data channels. The mobile app (`apps/mobile`) is the ACP client. The voice agent (`apps/voice-agent`) is optional and adds real-time voice mode. Backends are pluggable via `ACP_COMMAND`.
+- **Latency Target:** Aim for sub-1.5s voice-to-voice latency (voice mode).
 
 ## Project Structure
-- `packages/livekit-agent-ganglia`: The unified Brain Plugin (bridges LiveKit to OpenClaw/Nanoclaw).
-- `apps/mobile`: Example Flutter app for testing.
+- `apps/relay`: The ACP bridge — core of Fletcher. Bridges mobile data channels to ACP subprocess over stdio.
+- `apps/mobile`: Flutter mobile ACP client with voice and text support.
+- `apps/voice-agent`: Optional voice agent for real-time speech mode.
+- `packages/livekit-agent-ganglia`: Brain plugin — bridges voice pipeline to ACP backends.
 
 ## Documentation & Specs
 - Technical specs and integration documents belong in `docs/specs/`.

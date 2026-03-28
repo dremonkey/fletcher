@@ -1,6 +1,6 @@
 # Data Channel Protocol
 
-Beyond the audio pipeline, Fletcher sends structured metadata from the voice agent to the mobile client via LiveKit's data transport. This includes real-time transcriptions, agent status updates, and visual artifacts (code diffs, search results, etc.).
+Fletcher uses LiveKit data channels as the transport layer between the mobile ACP client and the server-side components (relay and voice agent). This includes ACP message forwarding, real-time transcriptions, agent status updates, and visual artifacts (code diffs, search results, etc.).
 
 ## Transport Channels
 

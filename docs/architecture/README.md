@@ -1,6 +1,6 @@
 # Fletcher Architecture
 
-Architecture documentation for Fletcher, a standalone voice agent bridging LiveKit to OpenClaw for real-time voice conversations.
+Architecture documentation for Fletcher, an open-source mobile ACP (Agent Communication Protocol) client with voice and text support. Fletcher bridges any ACP-compatible agent to a mobile device via LiveKit's WebRTC infrastructure.
 
 ## Reading Order
 

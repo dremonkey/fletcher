@@ -1,6 +1,6 @@
 # Brain Plugin (Ganglia)
 
-The `@knittt/livekit-agent-ganglia` package implements the LiveKit Agents `llm.LLM` interface, bridging the voice pipeline to OpenClaw or Nanoclaw reasoning backends. The name references lobster ganglia — distributed nerve clusters connecting multiple "brains" to a single interface.
+The `@knittt/livekit-agent-ganglia` package implements the LiveKit Agents `llm.LLM` interface, bridging the voice pipeline to ACP backends via the relay. Used only in voice mode — text mode bypasses Ganglia entirely and routes through the relay directly. The name references lobster ganglia — distributed nerve clusters connecting multiple "brains" to a single interface.
 
 ## Architecture
 
