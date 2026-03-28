@@ -11,6 +11,7 @@ import type { SessionUpdateParams, SessionConfigOption, ConfigOptionValue, Confi
 import { INTERNAL_ERROR, RATE_LIMITED } from "../rpc/errors";
 import { rootLogger, type Logger } from "../utils/logger";
 import { SessionPoller } from "./session-poller";
+import { chunkPayload, MAX_CHUNK_SIZE } from "./chunk";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -758,30 +759,40 @@ export class RelayBridge {
 
   /**
    * Forward a JSON-RPC message to the voice-agent via the "voice-acp" data channel topic.
-   * Filters out payloads exceeding the ~15KB practical data channel limit.
+   * Large payloads are split into chunks that the receiver can reassemble.
    */
   private forwardToVoiceAgent(msg: object): void {
     if (!this.started) return;
 
     const json = JSON.stringify(msg);
+    const chunks = chunkPayload(json);
 
-    // Filter large payloads — data channel has ~15KB practical limit.
-    // Tool call results may exceed this. Log and drop rather than crash.
-    const MAX_PAYLOAD_BYTES = 15_000;
-    if (json.length > MAX_PAYLOAD_BYTES) {
-      this.log.warn(
+    this.log.debug({ event: "forward_to_voice_agent", msg }, "→ voice-acp");
+
+    if (chunks !== null) {
+      this.log.debug(
         {
-          event: "voice_acp_payload_too_large",
-          sizeBytes: json.length,
-          maxBytes: MAX_PAYLOAD_BYTES,
+          event: "voice_acp_chunking",
+          sizeBytes: new TextEncoder().encode(json).length,
+          totalChunks: chunks.length,
           method: (msg as any).method,
         },
-        `Dropping voice-acp message: ${json.length} bytes exceeds ${MAX_PAYLOAD_BYTES} limit`,
+        `Chunking voice-acp message into ${chunks.length} parts`,
+      );
+      this.sendQueue = chunks.reduce(
+        (q, chunk) =>
+          q.then(() =>
+            this.options.roomManager
+              .sendToRoomOnTopic(this.options.roomName, "voice-acp", chunk)
+              .then(() => {
+                this.forwardFailures = 0;
+              })
+              .catch((err: Error) => this.handleForwardError(err, (msg as any).method))
+          ),
+        this.sendQueue,
       );
       return;
     }
-
-    this.log.debug({ event: "forward_to_voice_agent", msg }, "→ voice-acp");
 
     this.sendQueue = this.sendQueue.then(() =>
       this.options.roomManager
@@ -789,40 +800,48 @@ export class RelayBridge {
         .then(() => {
           this.forwardFailures = 0;
         })
-        .catch((err: Error) => {
-          this.forwardFailures++;
-          this.log.error(
-            {
-              event: "forward_to_voice_agent_failed",
-              error: err.message,
-              consecutiveFailures: this.forwardFailures,
-              method: (msg as any).method,
-            },
-            "Failed to forward message to voice-agent",
-          );
-          if (this.forwardFailures >= RelayBridge.MAX_CONSECUTIVE_FAILURES) {
-            this.log.error(
-              { event: "forward_path_dead", consecutiveFailures: this.forwardFailures },
-              "Forward path appears dead — stopping bridge (BUG-045)",
-            );
-            this.stop().catch((stopErr) => {
-              this.log.error({ event: "bridge_stop_failed", error: (stopErr as Error).message }, "Failed to stop bridge after dead forward path");
-            });
-          }
-        })
+        .catch((err: Error) => this.handleForwardError(err, (msg as any).method))
     );
   }
 
   /**
    * Forward a JSON-RPC message to mobile via the data channel.
+   * Large payloads are split into chunks that the receiver can reassemble.
    */
   private forwardToMobile(msg: object): void {
     if (!this.started) return;
 
     const method = (msg as any).method ?? ("result" in (msg as any) ? "result" : "error");
-    const payloadSize = JSON.stringify(msg).length;
+    const json = JSON.stringify(msg);
+    const payloadSize = json.length;
+    const chunks = chunkPayload(json);
 
     this.log.debug({ event: "forward_to_mobile", msg }, "→ mobile");
+
+    if (chunks !== null) {
+      this.log.debug(
+        {
+          event: "mobile_chunking",
+          sizeBytes: new TextEncoder().encode(json).length,
+          totalChunks: chunks.length,
+          method,
+        },
+        `Chunking mobile message into ${chunks.length} parts`,
+      );
+      this.sendQueue = chunks.reduce(
+        (q, chunk) =>
+          q.then(() =>
+            this.options.roomManager
+              .sendToRoom(this.options.roomName, chunk)
+              .then(() => {
+                this.forwardFailures = 0;
+              })
+              .catch((err: Error) => this.handleForwardError(err, method))
+          ),
+        this.sendQueue,
+      );
+      return;
+    }
 
     this.sendQueue = this.sendQueue.then(() =>
       this.options.roomManager
@@ -857,5 +876,35 @@ export class RelayBridge {
           }
         })
     );
+  }
+
+  /**
+   * Handle a forward error — increment failure counter, log, and stop if
+   * the forward path appears dead. Shared by both forwardToMobile and
+   * forwardToVoiceAgent chunk-send paths.
+   */
+  private handleForwardError(err: Error, method?: string): void {
+    this.forwardFailures++;
+    this.log.error(
+      {
+        event: "forward_failed",
+        error: err.message,
+        consecutiveFailures: this.forwardFailures,
+        method,
+      },
+      "Failed to forward message",
+    );
+    if (this.forwardFailures >= RelayBridge.MAX_CONSECUTIVE_FAILURES) {
+      this.log.error(
+        { event: "forward_path_dead", consecutiveFailures: this.forwardFailures },
+        "Forward path appears dead — stopping bridge (BUG-045)",
+      );
+      this.stop().catch((stopErr) => {
+        this.log.error(
+          { event: "bridge_stop_failed", error: (stopErr as Error).message },
+          "Failed to stop bridge after dead forward path",
+        );
+      });
+    }
   }
 }
