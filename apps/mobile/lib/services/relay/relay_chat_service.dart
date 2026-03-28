@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
 import 'acp_update_parser.dart';
+import 'chunk_reassembler.dart';
 import 'json_rpc.dart';
 
 // ---------------------------------------------------------------------------
@@ -131,12 +133,17 @@ class RelayChatService {
   StreamController<RelayChatEvent>? _activeStream;
   int? _activeRequestId;
   Timer? _promptTimer;
+  late final ChunkReassembler _chunkReassembler;
 
   RelayChatService({
     required this.publish,
     this.promptTimeout = const Duration(seconds: 30),
     this.onAsyncUpdate,
-  });
+  }) {
+    _chunkReassembler = ChunkReassembler(
+      onComplete: _handleReassembledPayload,
+    );
+  }
 
   /// Whether a prompt is currently in-flight.
   bool get isBusy => _activeStream != null;
@@ -242,14 +249,67 @@ class RelayChatService {
   ///
   /// Accepts [List<int>] (what LiveKit data channel provides) — converts
   /// internally to [Uint8List] for the JSON-RPC codec.
+  ///
+  /// Large payloads arrive as a sequence of `{ "type": "chunk", ... }` messages
+  /// that are transparently reassembled before normal dispatch.
   void handleMessage(List<int> data) {
-    final msg = decodeJsonRpc(Uint8List.fromList(data));
+    // Peek at the raw bytes to check for a chunk message before attempting
+    // full JSON-RPC decode (chunks are not JSON-RPC 2.0 envelopes).
+    final bytes = Uint8List.fromList(data);
+    try {
+      final raw = jsonDecode(utf8.decode(bytes));
+      if (raw is Map<String, dynamic> && raw['type'] == 'chunk') {
+        _chunkReassembler.handleChunk(raw);
+        return;
+      }
+    } catch (_) {
+      // Not valid JSON — fall through to the normal codec which will produce
+      // a useful null + debugPrint below.
+    }
+
+    final msg = decodeJsonRpc(bytes);
     if (msg == null) {
       debugPrint('[RelayChatService] Dropped malformed JSON-RPC message '
           '(${data.length} bytes)');
       return;
     }
 
+    _dispatchMessage(msg);
+  }
+
+  /// Clean up on dispose (e.g., room disconnect).
+  void dispose() {
+    _promptTimer?.cancel();
+    _promptTimer = null;
+    _activeStream?.close();
+    _activeStream = null;
+    _activeRequestId = null;
+    _chunkReassembler.dispose();
+  }
+
+  // -------------------------------------------------------------------------
+  // Internal
+  // -------------------------------------------------------------------------
+
+  /// Called by [ChunkReassembler] when all chunks for a transfer have arrived.
+  /// Decodes the reassembled payload and dispatches it as a normal message.
+  void _handleReassembledPayload(String payload) {
+    try {
+      final bytes = Uint8List.fromList(utf8.encode(payload));
+      final msg = decodeJsonRpc(bytes);
+      if (msg == null) {
+        debugPrint('[RelayChatService] Reassembled payload is not valid '
+            'JSON-RPC 2.0 (${payload.length} chars)');
+        return;
+      }
+      _dispatchMessage(msg);
+    } catch (e) {
+      debugPrint('[RelayChatService] Error dispatching reassembled payload: $e');
+    }
+  }
+
+  /// Route a decoded JSON-RPC message to the appropriate handler.
+  void _dispatchMessage(JsonRpcMessage msg) {
     if (msg is JsonRpcServerNotification && msg.method == 'session/update') {
       _handleSessionUpdate(msg.params);
     } else if (msg is JsonRpcResponse && msg.id == _activeRequestId) {
@@ -262,19 +322,6 @@ class RelayChatService {
           '${msg.runtimeType}');
     }
   }
-
-  /// Clean up on dispose (e.g., room disconnect).
-  void dispose() {
-    _promptTimer?.cancel();
-    _promptTimer = null;
-    _activeStream?.close();
-    _activeStream = null;
-    _activeRequestId = null;
-  }
-
-  // -------------------------------------------------------------------------
-  // Internal
-  // -------------------------------------------------------------------------
 
   void _handleSessionUpdate(Map<String, dynamic> params) {
     // Handle relay error notifications (BUG-045).
