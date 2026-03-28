@@ -1,49 +1,66 @@
 # Fletcher
 
-A voice-first bridge for OpenClaw using LiveKit, targeting sub-1.5-second voice-to-voice latency.
+An open-source mobile [ACP](https://github.com/anthropics/acp) (Agent Communication Protocol) client with voice and text support.
 
 ## Overview
 
-Fletcher is a **standalone voice agent** that bridges a Flutter mobile client to the OpenClaw reasoning engine through a real-time audio pipeline built on the LiveKit Agents framework. It connects to the OpenClaw Gateway via its OpenAI-compatible completions API, handling the complete pipeline from speech-to-text through to text-to-speech.
+Fletcher is a **mobile frontend for any ACP-compatible agent**. Point it at an ACP server — OpenClaw, Claude Code, or your own — and you get a full mobile client with voice conversations, text chat, tool-call visibility, artifact rendering, and session management. The agent is a config flag (`ACP_COMMAND`); the client handles everything else.
 
-> **Note:** We initially explored building Fletcher as an OpenClaw channel plugin (similar to Telegram or WhatsApp channels), but opted for the standalone voice agent approach instead. The standalone model is simpler to develop and deploy, avoids coupling to the Gateway process lifecycle, and talks to OpenClaw through the same public API any other client would use. See [Architecture Comparison](./docs/architecture-comparison.md) for background.
+The core architecture has three pieces:
 
-This repository contains:
+1. **Relay** (`apps/relay`) — The ACP bridge. A lightweight LiveKit participant that forwards JSON-RPC 2.0 messages between the mobile client's data channel and an ACP subprocess over stdio. Backend-agnostic — any ACP server plugs in.
+2. **Mobile App** (`apps/mobile`) — Flutter client with dual-mode input (voice + text), inline tool-call cards, thinking blocks, artifact viewer, and connection resilience for real-world mobile use.
+3. **Voice Agent** (`apps/voice-agent`) — Optional. A LiveKit agent that adds real-time voice mode: Deepgram STT → LLM reasoning → TTS, targeting sub-1.5s voice-to-voice latency. Joins on demand, disconnects when idle.
 
-1. **Voice Agent** (`apps/voice-agent`) — A standalone LiveKit agent that runs as an independent worker
-2. **Brain Plugin** (`packages/livekit-agent-ganglia`) — LLM bridge to OpenClaw/Nanoclaw backends
-3. **Example Flutter App** (`apps/mobile`) — A minimal mobile client for testing
+The relay is the foundation. Text mode works without the voice agent. Voice mode adds a richer interaction path when you want to talk instead of type.
 
 ## Architecture
 
-### Voice Agent (`apps/voice-agent`)
+### Relay (`apps/relay`) — The Core
 
-The main entry point. A TypeScript LiveKit agent that:
+The relay joins LiveKit rooms as a non-agent participant and bridges ACP messages between mobile and an agent subprocess. It is a transparent passthrough — it does not parse or transform message content.
+
+- **Runtime:** Bun (TypeScript)
+- **Protocol:** JSON-RPC 2.0 over LiveKit data channels ↔ ACP over stdio
+- **Backend:** Configured via `ACP_COMMAND` / `ACP_ARGS` (default: `openclaw acp`)
+- **Features:** Auto-discovery of orphaned rooms, deferred teardown on network switches, lazy ACP recovery, idle timeout
+
+### Mobile App (`apps/mobile`)
+
+The mobile ACP client.
+
+- **Framework:** Flutter (Dart)
+- **Library:** `livekit_client`
+- **Features:**
+  - Dual-mode input: voice (via LiveKit agent) and text (via relay)
+  - Inline tool-call cards, thinking blocks, artifact viewer (diffs, code, search results)
+  - Connection resilience: survives WiFi↔5G, Bluetooth changes, backgrounding
+  - On-demand agent dispatch, hold mode, session resumption
+
+### Voice Agent (`apps/voice-agent`) — Optional
+
+Adds real-time voice conversations. A TypeScript LiveKit agent that:
 
 - **Runtime:** Bun (TypeScript)
 - **Framework:** `@livekit/agents`
 - **Function:**
-  - Runs as an independent LiveKit worker, accepting job dispatches
-  - Handles real-time audio streams (STT → OpenClaw → TTS)
+  - Joins rooms on demand, disconnects when idle (hold mode)
+  - Handles real-time audio: STT (Deepgram) → LLM (via relay ACP bridge) → TTS
   - Uses Ganglia (`@knittt/livekit-agent-ganglia`) as the LLM bridge
 
-### Example Mobile App (`apps/mobile`)
+### Brain Plugin (`packages/livekit-agent-ganglia`)
 
-A minimal Flutter application for testing the voice agent. Not intended as a production app.
+Bridges the voice pipeline to ACP backends. Pluggable — routes through the relay by default (`GANGLIA_TYPE=relay`), or directly to Nanoclaw for local development.
 
-- **Framework:** Flutter (Dart)
-- **Library:** `livekit_client`
-- **Purpose:** Test client for voice agent development
-- **Features:**
-  - One-button interface to join a LiveKit room
-  - "Amber Heartbeat" audio visualizer for voice intensity feedback
+## Supported ACP Backends
 
-## Audio Pipeline (Target: <1.5s)
+Any ACP-compatible agent works. Tested backends:
 
-1. **Mobile App:** Captures audio → Streams to LiveKit Server
-2. **Plugin:** Receives stream → Fast-STT (Deepgram/Groq) → OpenClaw Brain
-3. **Plugin:** Brain Response → Fast-TTS (Cartesia/ElevenLabs Turbo) → LiveKit Server
-4. **Mobile App:** Receives audio stream → Playback
+| Backend | `ACP_COMMAND` | Auth |
+|---------|---------------|------|
+| [OpenClaw](https://github.com/openclaw) | `openclaw acp` | `OPENCLAW_API_KEY` |
+| [Claude Code](https://github.com/anthropics/claude-code) (via `claude-agent-acp`) | `claude-agent-acp` | `ANTHROPIC_API_KEY` |
+| Custom | Any stdio ACP server | Varies |
 
 ## Setup Requirements
 
@@ -54,18 +71,17 @@ You have two options for running the LiveKit server:
 1. **Local Development:** Run LiveKit server locally using the provided `docker-compose` configuration
 2. **LiveKit Cloud:** Use the free tier of [LiveKit Cloud](https://livekit.io/) for development and testing
 
-### AI Service Keys (BYOK)
+### AI Service Keys (BYOK — voice mode only)
 
-Fletcher uses a bring-your-own-key (BYOK) model for AI services. You'll need to provide your own API keys for:
+Voice mode uses a bring-your-own-key model for STT/TTS providers. Text mode (via relay) only needs the ACP backend's credentials.
 
-- **Speech-to-Text:** Deepgram or Groq
-- **Text-to-Speech:** Cartesia or ElevenLabs Turbo
-- **OpenClaw Brain:** As required by your OpenClaw configuration
+- **Speech-to-Text:** Deepgram (required for voice mode)
+- **Text-to-Speech:** Google, ElevenLabs, or local Piper (required for voice mode)
+- **ACP Backend:** As required by your chosen agent (e.g., `ANTHROPIC_API_KEY` for Claude Code)
 
 ## Open Source
 
 - **License:** MIT
-- **Repository:** `dremonkey/openclaw-plugin-livekit`
 - **Contribution:** Docker Compose configuration provided for plug-and-play community setup
 
 ## Getting Started
@@ -179,6 +195,12 @@ git-crypt unlock ./git-crypt-key
 ```
 
 The curated bug logs (`docs/field-tests/*-buglog.md`) are **not** encrypted and are readable without unlocking.
+
+## Why Fletcher?
+
+ACP defines how agents communicate, but there's no mobile client for the protocol. If you build an ACP agent today, there's no way to use it from a phone. Fletcher fills that gap — any ACP agent gets a mobile app for free, with voice and text input, tool-call visibility, artifact rendering, and session management.
+
+The agent is just a config flag. The client handles everything else.
 
 ## Project Roadmap
 

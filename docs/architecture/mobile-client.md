@@ -1,6 +1,6 @@
 # Mobile Client
 
-The Flutter mobile app (`apps/mobile`) provides the voice interface for Fletcher. It connects to a LiveKit room, captures microphone audio, displays real-time transcriptions and artifacts, and handles network transitions including Tailscale VPN detection.
+The Flutter mobile app (`apps/mobile`) is Fletcher's ACP client — the mobile frontend for any ACP-compatible agent. It connects to a LiveKit room, supports dual-mode input (voice and text), renders tool-call cards, thinking blocks, and artifacts, and handles network transitions including Tailscale VPN detection.
 
 ## Service Architecture
 

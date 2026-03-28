@@ -36,13 +36,15 @@ The macro grid turns a 4-step, 5-second interaction into a 1-step, 200ms interac
 
 ## Positioning: Where This Fits in Fletcher's Product Story
 
-Fletcher's product arc is:
-1. **Voice** — talk to your AI (shipped)
-2. **Text** — type to your AI when voice is impractical (shipped)
+Fletcher is an open-source mobile ACP client. Its input modalities are:
+1. **Voice** — talk to your agent (shipped)
+2. **Text** — type to your agent when voice is impractical (shipped)
 3. **Macros** — tap to trigger known commands instantly (this)
 4. **Automation** — commands that fire without any human input (future)
 
 Macros fill the gap between "I know what I want to say" and "I don't want to say it." They are the third input modality, and the fastest one. They also serve as the foundation for automation — a macro that can be tapped can eventually be scheduled, chained, or triggered by events.
+
+Because Fletcher is backend-agnostic (any ACP agent plugs in via `ACP_COMMAND`), macros auto-populate from whatever commands the connected agent exposes via ACP's `available_commands_update`. The macro grid adapts to the agent, not the other way around.
 
 From the user's perspective, the macro grid is Fletcher's "toolbar." It is the first piece of persistent, always-visible UI beyond the mic button. It signals that Fletcher is not just a chatbot — it is a workstation.
 
