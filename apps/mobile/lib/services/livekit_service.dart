@@ -56,14 +56,8 @@ class LiveKitService extends ChangeNotifier {
   bool get isReplaying => _isReplaying;
 
   Timer? _audioLevelTimer;
-  Timer? _statusClearTimer;
   Timer? _userSubtitleClearTimer;
   Timer? _agentSubtitleClearTimer;
-
-  /// Tracks the most recent agent transcript segment ID so that artifacts
-  /// arriving via the data channel can be associated with the agent message
-  /// that produced them (BUG-012 / TASK-023).
-  String? _lastAgentSegmentId;
 
   // Background session timeout (task 019)
   static const _backgroundTimeout = Duration(minutes: 10);
@@ -154,9 +148,6 @@ class LiveKitService extends ChangeNotifier {
   // Diagnostics: round-trip latency measurement
   // Tracks when user stopped speaking so we can measure RT when agent starts
   DateTime? _userSpeechEndTime;
-
-  // Buffer for reassembling chunked messages
-  final Map<String, List<String?>> _chunks = {};
 
   // Rolling waveform buffers
   final List<double> _userWaveformBuffer = [];
@@ -839,9 +830,6 @@ class LiveKitService extends ChangeNotifier {
         _holdModeActive = false;
         // Don't clear _modeSwitchActive here — it stays true until text→voice
         // transition clears it in toggleInputMode().
-        // Reset segment ID so artifacts from the new session are not stamped
-        // with the stale ID from the previous session. (BUG-004)
-        _lastAgentSegmentId = null;
         // Emit agent disconnected system event (task 020)
         // Suppress duplicate raw disconnect during hold or mode switch —
         // the agent presence service already emits hold-specific events,
@@ -1059,12 +1047,6 @@ class LiveKitService extends ChangeNotifier {
     try {
       final jsonStr = utf8.decode(event.data);
       final json = jsonDecode(jsonStr) as Map<String, dynamic>;
-      final eventType = json['type'] as String?;
-
-      if (eventType == 'chunk') {
-        _handleChunk(json);
-        return;
-      }
 
       _processGangliaEvent(json);
     } catch (e) {
@@ -1072,60 +1054,12 @@ class LiveKitService extends ChangeNotifier {
     }
   }
 
-  void _handleChunk(Map<String, dynamic> chunk) {
-    final transferId = chunk['transfer_id'] as String;
-    final chunkIndex = chunk['chunk_index'] as int;
-    final totalChunks = chunk['total_chunks'] as int;
-    final data = chunk['data'] as String; // Base64 encoded
-
-    // Initialize buffer if needed
-    if (!_chunks.containsKey(transferId)) {
-      _chunks[transferId] = List<String?>.filled(totalChunks, null);
-    }
-
-    // Store chunk
-    _chunks[transferId]![chunkIndex] = data;
-
-    // Check if complete
-    if (_chunks[transferId]!.every((c) => c != null)) {
-      debugPrint('[Ganglia] Reassembling chunked message $transferId');
-
-      try {
-        final allBytes = <int>[];
-        for (final part in _chunks[transferId]!) {
-          allBytes.addAll(base64Decode(part!));
-        }
-
-        final reassembledJsonStr = utf8.decode(allBytes);
-        final reassembledJson = jsonDecode(reassembledJsonStr) as Map<String, dynamic>;
-
-        _processGangliaEvent(reassembledJson);
-      } catch (e) {
-        debugPrint('[Ganglia] Failed to reassemble chunks: $e');
-      } finally {
-        // Cleanup
-        _chunks.remove(transferId);
-      }
-    }
-  }
-
   void _processGangliaEvent(Map<String, dynamic> json) {
     final eventType = json['type'] as String?;
 
-    if (eventType == 'status') {
-      final statusEvent = StatusEvent.fromJson(json);
-      final toolStatus = ToolStatus.fromGangliaStatusEvent(statusEvent);
-      _updateState(currentStatus: toolStatus);
-      debugPrint('[Ganglia] Status: ${toolStatus.displayText}');
-
-      // Clear status after 5 seconds of inactivity
-      _statusClearTimer?.cancel();
-      _statusClearTimer = Timer(const Duration(seconds: 5), () {
-        _updateState(clearStatus: true);
-      });
-    } else if (eventType == 'system_event') {
+    if (eventType == 'system_event') {
       // Server-sent system events (Brain Timed Out, Voice Degraded, etc.)
-      // rendered as inline system messages, not artifacts.
+      // rendered as inline system messages.
       final severity = json['severity'] as String? ?? 'error';
       final title = json['title'] as String? ?? 'Error';
       final message = json['message'] as String? ?? '';
@@ -1139,20 +1073,6 @@ class LiveKitService extends ChangeNotifier {
         timestamp: DateTime.now(),
         prefix: severity == 'success' ? '\u26A1' : '\u2715',
       ));
-    } else if (eventType == 'artifact') {
-      final artifactEvent = ArtifactEvent.fromJson(json);
-      // Prefer server-stamped segmentId for correct attachment (BUG-012 fix),
-      // fall back to _lastAgentSegmentId for backward compatibility.
-      final serverSegmentId = json['segmentId'] as String?;
-      final targetId = serverSegmentId ?? _lastAgentSegmentId ?? 'orphan_${DateTime.now().millisecondsSinceEpoch}';
-      final stamped = artifactEvent.withMessageId(targetId);
-      final newArtifacts = [..._state.artifacts, stamped];
-      // Keep only last 10 artifacts
-      if (newArtifacts.length > 10) {
-        newArtifacts.removeAt(0);
-      }
-      _updateState(artifacts: newArtifacts);
-      debugPrint('[Ganglia] Artifact: ${stamped.displayTitle} (msg=${stamped.messageId})');
     } else if (eventType == 'agent_transcript') {
       // Agent transcript forwarded directly from Ganglia LLM content stream.
       // Bypasses the SDK's lk.transcription pipeline which breaks when the
@@ -1161,9 +1081,6 @@ class LiveKitService extends ChangeNotifier {
       final text = json['text'] as String? ?? '';
       final isFinal = json['final'] == true;
       if (text.isNotEmpty) {
-        // Track the latest agent segment ID for artifact association (TASK-023)
-        _lastAgentSegmentId = segmentId;
-
         // Stop thinking spinner once agent text starts streaming
         if (_state.isAgentThinking) {
           _updateState(isAgentThinking: false);
@@ -1207,11 +1124,6 @@ class LiveKitService extends ChangeNotifier {
       debugPrint('[Ganglia] Session hold (reason: ${json['reason']})');
       _holdModeActive = true;
     }
-  }
-
-  /// Clears all artifacts from the state
-  void clearArtifacts() {
-    _updateState(artifacts: []);
   }
 
   // ---------------------------------------------------------------------------
@@ -2147,7 +2059,6 @@ class LiveKitService extends ChangeNotifier {
     List<TranscriptEntry>? transcript,
     ToolStatus? currentStatus,
     bool clearStatus = false,
-    List<ArtifactEvent>? artifacts,
     List<double>? userWaveform,
     List<double>? aiWaveform,
     TranscriptEntry? currentUserTranscript,
@@ -2168,7 +2079,6 @@ class LiveKitService extends ChangeNotifier {
       transcript: transcript,
       currentStatus: currentStatus,
       clearStatus: clearStatus,
-      artifacts: artifacts,
       userWaveform: userWaveform,
       aiWaveform: aiWaveform,
       currentUserTranscript: currentUserTranscript,
@@ -2624,7 +2534,6 @@ class LiveKitService extends ChangeNotifier {
     await _reconnectBuffer?.reset();
     _reconnectBuffer = null;
     _audioLevelTimer?.cancel();
-    _statusClearTimer?.cancel();
     _userSubtitleClearTimer?.cancel();
     _agentSubtitleClearTimer?.cancel();
     _backgroundTimeoutTimer?.cancel();
@@ -2662,10 +2571,6 @@ class LiveKitService extends ChangeNotifier {
       );
     }
     _segmentContent.clear();
-
-    // Clear stale ganglia chunk buffers — partial messages from the
-    // old connection can't be reassembled.
-    _chunks.clear();
 
     // Clear waveform buffers — old audio levels are meaningless
     _userWaveformBuffer.clear();

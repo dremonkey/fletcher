@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../models/command_result.dart';
 import '../models/conversation_state.dart';
@@ -10,7 +9,6 @@ import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/tui_widgets.dart';
 import '../utils/agent_text_parser.dart';
-import 'artifact_viewer.dart';
 import 'command_result_card.dart';
 import 'system_event_card.dart';
 import 'thinking_block.dart';
@@ -103,63 +101,20 @@ class _ChatTranscriptState extends State<ChatTranscript> {
     }
   }
 
-  /// Group artifacts by their associated message ID.
-  ///
-  /// Artifacts with a [ArtifactEvent.messageId] are grouped under that ID.
-  /// Artifacts without a messageId are assigned to the last agent message
-  /// in the transcript as a fallback.
-  Map<String, List<ArtifactEvent>> _groupArtifactsByMessage(
-    List<ArtifactEvent> artifacts,
-    List<TranscriptEntry> transcript,
-  ) {
-    final groups = <String, List<ArtifactEvent>>{};
-    if (artifacts.isEmpty) return groups;
-
-    // Find the last agent message ID for fallback
-    String? lastAgentId;
-    for (int i = transcript.length - 1; i >= 0; i--) {
-      if (transcript[i].role == TranscriptRole.agent) {
-        lastAgentId = transcript[i].id;
-        break;
-      }
-    }
-
-    for (final artifact in artifacts) {
-      final targetId = artifact.messageId ?? lastAgentId;
-      if (targetId != null) {
-        groups.putIfAbsent(targetId, () => []);
-        groups[targetId]!.add(artifact);
-      }
-      // If targetId is still null (no agent messages at all), the artifact
-      // won't be shown inline. The artifacts list modal and counter still
-      // display it via state.artifacts.
-    }
-
-    return groups;
-  }
-
   @override
   Widget build(BuildContext context) {
     final state = widget.service.state;
     final transcript = state.transcript;
-    final artifacts = state.artifacts;
     final systemEvents = state.systemEvents;
-
-    // Group artifacts by their associated agent message ID (TASK-023)
-    final artifactsByMessage = _groupArtifactsByMessage(artifacts, transcript);
 
     // Build timestamped items from transcript entries
     final timestampedItems = <_TimestampedItem>[];
 
     for (int i = 0; i < transcript.length; i++) {
       final entry = transcript[i];
-      final messageArtifacts = artifactsByMessage[entry.id] ?? const [];
       timestampedItems.add(_TimestampedItem(
         timestamp: entry.timestamp,
-        item: _ChatItem.message(
-          entry,
-          artifacts: messageArtifacts,
-        ),
+        item: _ChatItem.message(entry),
       ));
     }
 
@@ -279,10 +234,7 @@ class _ChatTranscriptState extends State<ChatTranscript> {
         }
         return Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-          child: _TranscriptMessage(
-            entry: item.entry!,
-            artifacts: item.artifacts,
-          ),
+          child: _TranscriptMessage(entry: item.entry!),
         );
       },
     );
@@ -306,9 +258,8 @@ class _ChatItem {
   final CommandResult? commandResult;
   final bool isDivider;
   final bool isThinking;
-  final List<ArtifactEvent> artifacts;
 
-  const _ChatItem.message(this.entry, {this.artifacts = const []})
+  const _ChatItem.message(this.entry)
       : isDivider = false,
         isThinking = false,
         systemEvent = null,
@@ -320,37 +271,32 @@ class _ChatItem {
         isThinking = false,
         systemEvent = null,
         toolCall = null,
-        commandResult = null,
-        artifacts = const [];
+        commandResult = null;
   const _ChatItem.systemEvent(this.systemEvent)
       : entry = null,
         isDivider = false,
         isThinking = false,
         toolCall = null,
-        commandResult = null,
-        artifacts = const [];
+        commandResult = null;
   const _ChatItem.thinking()
       : entry = null,
         isDivider = false,
         isThinking = true,
         systemEvent = null,
         toolCall = null,
-        commandResult = null,
-        artifacts = const [];
+        commandResult = null;
   const _ChatItem.toolCall(this.toolCall)
       : entry = null,
         isDivider = false,
         isThinking = false,
         systemEvent = null,
-        commandResult = null,
-        artifacts = const [];
+        commandResult = null;
   const _ChatItem.commandResult(this.commandResult)
       : entry = null,
         isDivider = false,
         isThinking = false,
         systemEvent = null,
-        toolCall = null,
-        artifacts = const [];
+        toolCall = null;
 
   bool get isMessage => entry != null;
   bool get isSystemEvent => systemEvent != null;
@@ -361,12 +307,8 @@ class _ChatItem {
 /// A single transcript message rendered as a TuiCard.
 class _TranscriptMessage extends StatelessWidget {
   final TranscriptEntry entry;
-  final List<ArtifactEvent> artifacts;
 
-  const _TranscriptMessage({
-    required this.entry,
-    this.artifacts = const [],
-  });
+  const _TranscriptMessage({required this.entry});
 
   @override
   Widget build(BuildContext context) {
@@ -446,23 +388,6 @@ class _TranscriptMessage extends StatelessWidget {
                     ? AppColors.textPrimary
                     : AppColors.textSecondary,
               ),
-            ),
-          ],
-          // Inline artifact buttons
-          if (artifacts.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
-              children: artifacts
-                  .map((a) => ArtifactInlineButton(
-                        artifact: a,
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          showSingleArtifactDrawer(context, artifact: a);
-                        },
-                      ))
-                  .toList(),
             ),
           ],
         ],

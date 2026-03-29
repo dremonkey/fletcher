@@ -103,13 +103,6 @@ abstract final class NameGenerator {
     return '$pair-$date';
   }
 
-  /// The old generate() method — keep for backward compat during transition.
-  /// Equivalent to generateWordPair() (old format was just "adj-noun").
-  @Deprecated('Use generateRoomName() instead')
-  static String generate() {
-    return generateWordPair();
-  }
-
   static String _random4CharAlphanumeric() {
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
     return List.generate(4, (_) => chars[_random.nextInt(chars.length)]).join();
