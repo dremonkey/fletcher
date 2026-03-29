@@ -63,6 +63,12 @@ export async function discoverAndRejoinRooms({
         continue;
       }
 
+      // Skip rooms blacklisted from repeated bind timeouts (ghost rooms)
+      if (bridgeManager.isBindBlacklisted(roomName)) {
+        result.roomsSkipped.push(roomName);
+        continue;
+      }
+
       const participants = await roomService.listParticipants(roomName);
 
       if (hasRelay(participants)) {

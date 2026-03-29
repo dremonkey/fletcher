@@ -309,10 +309,10 @@ describe("BridgeManager", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Deferred teardown (departure grace period) — deprecated stubs
+  // Deferred teardown (departure grace period)
   // -------------------------------------------------------------------------
 
-  test("scheduleRemoveRoom() does not remove bridge immediately", async () => {
+  test("scheduleRemoveRoom() does NOT remove bridge immediately — it defers", async () => {
     manager = new BridgeManager(
       mockRm as unknown as RoomManager,
       "bun",
@@ -326,10 +326,10 @@ describe("BridgeManager", () => {
 
     manager.scheduleRemoveRoom("room-grace");
 
-    // scheduleRemoveRoom is now an immediate teardown (deprecated)
-    // hasRoom returns false after removal
+    // Bridge should still be present during the grace period
     await tick(100);
-    expect(manager.hasRoom("room-grace")).toBe(false);
+    expect(manager.hasRoom("room-grace")).toBe(true);
+    expect(manager.hasPendingTeardown("room-grace")).toBe(true);
   });
 
   test("scheduleRemoveRoom() removes bridge after grace period expires", async () => {
@@ -344,30 +344,54 @@ describe("BridgeManager", () => {
     await addRoomAndBind(manager, mockRm, "room-expire");
     manager.scheduleRemoveRoom("room-expire");
 
-    // Wait for the immediate removal to complete
+    // Should be present during grace period
+    await tick(50);
+    expect(manager.hasRoom("room-expire")).toBe(true);
+
+    // Wait for grace period to expire
     await new Promise((resolve) => setTimeout(resolve, 200));
 
     expect(manager.hasRoom("room-expire")).toBe(false);
     expect(mockRm.leaveRoom).toHaveBeenCalledWith("room-expire");
   });
 
-  test("cancelPendingTeardown() returns false (deprecated)", async () => {
+  test("cancelPendingTeardown() cancels scheduled teardown and returns true", async () => {
     manager = new BridgeManager(
       mockRm as unknown as RoomManager,
       "bun",
       [MOCK_ACPX_PATH],
       undefined,
-      { departureGraceMs: 100 },
+      { departureGraceMs: 500 },
     );
 
     await addRoomAndBind(manager, mockRm, "room-cancel");
     manager.scheduleRemoveRoom("room-cancel");
 
+    expect(manager.hasPendingTeardown("room-cancel")).toBe(true);
+
     const cancelled = manager.cancelPendingTeardown("room-cancel");
-    expect(cancelled).toBe(false);
+    expect(cancelled).toBe(true);
+    expect(manager.hasPendingTeardown("room-cancel")).toBe(false);
+
+    // Wait past where grace period would have fired — bridge should still be up
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(manager.getBridge("room-cancel")).toBeDefined();
+    expect(mockRm.leaveRoom).not.toHaveBeenCalled();
   });
 
-  test("duplicate scheduleRemoveRoom() is a no-op after first removes it", async () => {
+  test("cancelPendingTeardown() returns false when no teardown is pending", async () => {
+    manager = new BridgeManager(
+      mockRm as unknown as RoomManager,
+      "bun",
+      [MOCK_ACPX_PATH],
+    );
+
+    await addRoomAndBind(manager, mockRm, "room-no-teardown");
+    const result = manager.cancelPendingTeardown("room-no-teardown");
+    expect(result).toBe(false);
+  });
+
+  test("duplicate scheduleRemoveRoom() is idempotent — only one teardown scheduled", async () => {
     manager = new BridgeManager(
       mockRm as unknown as RoomManager,
       "bun",
@@ -378,11 +402,46 @@ describe("BridgeManager", () => {
 
     await addRoomAndBind(manager, mockRm, "room-dup");
     manager.scheduleRemoveRoom("room-dup");
-    await tick(100);
-    manager.scheduleRemoveRoom("room-dup"); // no-op on an already-removed room
+    manager.scheduleRemoveRoom("room-dup"); // second call should be no-op
 
-    // getPendingTeardowns always returns [] now
-    expect(manager.getPendingTeardowns()).toEqual([]);
+    expect(manager.getPendingTeardowns()).toEqual(["room-dup"]);
+  });
+
+  test("getPendingTeardowns() returns room names with pending teardowns", async () => {
+    manager = new BridgeManager(
+      mockRm as unknown as RoomManager,
+      "bun",
+      [MOCK_ACPX_PATH],
+      undefined,
+      { departureGraceMs: 500 },
+    );
+
+    await addRoomAndBind(manager, mockRm, "room-pt1");
+    await addRoomAndBind(manager, mockRm, "room-pt2");
+
+    manager.scheduleRemoveRoom("room-pt1");
+    manager.scheduleRemoveRoom("room-pt2");
+
+    const pending = manager.getPendingTeardowns();
+    expect(pending).toContain("room-pt1");
+    expect(pending).toContain("room-pt2");
+    expect(pending.length).toBe(2);
+  });
+
+  test("hasRoom() returns true for rooms with pending teardowns", async () => {
+    manager = new BridgeManager(
+      mockRm as unknown as RoomManager,
+      "bun",
+      [MOCK_ACPX_PATH],
+      undefined,
+      { departureGraceMs: 500 },
+    );
+
+    await addRoomAndBind(manager, mockRm, "room-hasroom-teardown");
+    manager.scheduleRemoveRoom("room-hasroom-teardown");
+
+    // Bridge is in grace period — hasRoom should still return true
+    expect(manager.hasRoom("room-hasroom-teardown")).toBe(true);
   });
 
   test("direct removeRoom() clears room", async () => {
@@ -413,10 +472,57 @@ describe("BridgeManager", () => {
     await addRoomAndBind(manager, mockRm, "room-sd1");
     await addRoomAndBind(manager, mockRm, "room-sd2");
 
+    manager.scheduleRemoveRoom("room-sd1");
+    manager.scheduleRemoveRoom("room-sd2");
+    expect(manager.getPendingTeardowns().length).toBe(2);
+
     await manager.shutdownAll();
 
     expect(manager.getPendingTeardowns()).toEqual([]);
     expect(manager.getActiveRooms()).toEqual([]);
+  });
+
+  // -------------------------------------------------------------------------
+  // validateOrReplaceBridge
+  // -------------------------------------------------------------------------
+
+  test("validateOrReplaceBridge() reuses healthy bridge and resets bind timeout", async () => {
+    manager = new BridgeManager(
+      mockRm as unknown as RoomManager,
+      "bun",
+      [MOCK_ACPX_PATH],
+      undefined,
+      { departureGraceMs: 500, bindTimeoutMs: 5_000 },
+    );
+
+    await addRoomAndBind(manager, mockRm, "room-validate");
+    const originalBridge = manager.getBridge("room-validate");
+    expect(originalBridge).toBeDefined();
+    expect(originalBridge!.isStarted).toBe(true);
+    expect(originalBridge!.isAcpDead).toBe(false);
+
+    const joinCallsBefore = mockRm.joinRoom.mock.calls.length;
+
+    await manager.validateOrReplaceBridge("room-validate");
+
+    // Should not have joined a new room — same bridge reused
+    expect(mockRm.joinRoom.mock.calls.length).toBe(joinCallsBefore);
+    expect(manager.getBridge("room-validate")).toBe(originalBridge);
+  });
+
+  test("validateOrReplaceBridge() creates new room if no bridge exists", async () => {
+    manager = new BridgeManager(
+      mockRm as unknown as RoomManager,
+      "bun",
+      [MOCK_ACPX_PATH],
+    );
+
+    // Room not yet joined
+    await manager.validateOrReplaceBridge("room-new-validate");
+
+    // Should have joined and be in pending-bind state
+    expect(mockRm.joinRoom).toHaveBeenCalledWith("room-new-validate");
+    expect(manager.hasRoom("room-new-validate")).toBe(true);
   });
 
   test("stopIdleTimer() prevents idle removal", async () => {
@@ -897,6 +1003,142 @@ describe("BridgeManager", () => {
         return msg.id === 200 && "result" in msg;
       });
       expect(promptResponses.length).toBe(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Bind-failed blacklist (ghost room suppression)
+  // -------------------------------------------------------------------------
+
+  describe("bind-failed blacklist", () => {
+    test("handleBindTimeout tracks consecutive timeout count", async () => {
+      manager = new BridgeManager(
+        mockRm as unknown as RoomManager,
+        "bun",
+        [MOCK_ACPX_PATH],
+        undefined,
+        { bindTimeoutMs: 50 },
+      );
+
+      // First timeout
+      await manager.addRoom("room-ghost");
+      await tick(100); // let timeout fire
+
+      // Not yet blacklisted (only 1 timeout)
+      expect(manager.isBindBlacklisted("room-ghost")).toBe(false);
+    });
+
+    test("isBindBlacklisted returns true after 2 consecutive timeouts", async () => {
+      manager = new BridgeManager(
+        mockRm as unknown as RoomManager,
+        "bun",
+        [MOCK_ACPX_PATH],
+        undefined,
+        { bindTimeoutMs: 50, rejoinMaxRetries: 0 },
+      );
+
+      // First timeout
+      await manager.addRoom("room-ghost2");
+      await tick(100);
+
+      expect(manager.isBindBlacklisted("room-ghost2")).toBe(false);
+
+      // Second timeout — re-add the room manually (simulating discovery re-add)
+      await manager.addRoom("room-ghost2");
+      await tick(100);
+
+      expect(manager.isBindBlacklisted("room-ghost2")).toBe(true);
+    });
+
+    test("isBindBlacklisted returns false after clearBindBlacklist", async () => {
+      manager = new BridgeManager(
+        mockRm as unknown as RoomManager,
+        "bun",
+        [MOCK_ACPX_PATH],
+        undefined,
+        { bindTimeoutMs: 50, rejoinMaxRetries: 0 },
+      );
+
+      // Trigger two timeouts to blacklist the room
+      await manager.addRoom("room-ghost3");
+      await tick(100);
+      await manager.addRoom("room-ghost3");
+      await tick(100);
+
+      expect(manager.isBindBlacklisted("room-ghost3")).toBe(true);
+
+      // Clear it (simulating participant_joined webhook)
+      manager.clearBindBlacklist("room-ghost3");
+
+      expect(manager.isBindBlacklisted("room-ghost3")).toBe(false);
+    });
+
+    test("clearBindBlacklist is a no-op for unknown rooms", async () => {
+      manager = new BridgeManager(
+        mockRm as unknown as RoomManager,
+        "bun",
+        [MOCK_ACPX_PATH],
+      );
+
+      // Should not throw
+      expect(() => manager.clearBindBlacklist("nonexistent-room")).not.toThrow();
+      expect(manager.isBindBlacklisted("nonexistent-room")).toBe(false);
+    });
+
+    test("shutdownAll clears bind blacklist", async () => {
+      manager = new BridgeManager(
+        mockRm as unknown as RoomManager,
+        "bun",
+        [MOCK_ACPX_PATH],
+        undefined,
+        { bindTimeoutMs: 50, rejoinMaxRetries: 0 },
+      );
+
+      // Trigger two timeouts to blacklist the room
+      await manager.addRoom("room-ghost4");
+      await tick(100);
+      await manager.addRoom("room-ghost4");
+      await tick(100);
+
+      expect(manager.isBindBlacklisted("room-ghost4")).toBe(true);
+
+      await manager.shutdownAll();
+
+      // Blacklist cleared after shutdown
+      expect(manager.isBindBlacklisted("room-ghost4")).toBe(false);
+    });
+
+    test("successful bind clears the bind-failed counter for the room", async () => {
+      manager = new BridgeManager(
+        mockRm as unknown as RoomManager,
+        "bun",
+        [MOCK_ACPX_PATH],
+        undefined,
+        { bindTimeoutMs: 50, rejoinMaxRetries: 0 },
+      );
+
+      // Trigger one timeout (not yet blacklisted)
+      await manager.addRoom("room-ghost5");
+      await tick(100);
+
+      expect(manager.isBindBlacklisted("room-ghost5")).toBe(false);
+
+      // Now add again and actually bind — simulates mobile coming back in time
+      await manager.addRoom("room-ghost5");
+      mockRm.simulateData(
+        "room-ghost5",
+        {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "session/bind",
+          params: { sessionKey: "user:alice:session:abc" },
+        },
+        "mobile-user",
+      );
+      await tick(200);
+
+      // Bridge exists, which means bind succeeded and timer was cancelled
+      expect(manager.getBridge("room-ghost5")).toBeDefined();
     });
   });
 });
