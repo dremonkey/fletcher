@@ -2377,7 +2377,10 @@ class LiveKitService extends ChangeNotifier {
         // Instead of showing an error, create a new room for seamless recovery.
         // The old room's departure_timeout has expired, so a new room gets
         // a fresh agent dispatch from LiveKit.
-        await disconnect(preserveTranscripts: true);
+        // Skip disconnect if already disconnected — avoids firing redundant participant_left webhook
+        if (_room?.connectionState != ConnectionState.disconnected) {
+          await disconnect(preserveTranscripts: true);
+        }
         await _connectToNewRoom();
         // If new room also failed, retry once after delay (BUG-046)
         if (_state.status == ConversationStatus.error) {
@@ -2412,7 +2415,10 @@ class LiveKitService extends ChangeNotifier {
     }
 
     // Clean up old room/listeners but keep credentials
-    await disconnect(preserveTranscripts: true);
+    // Skip disconnect if already disconnected — avoids firing redundant participant_left webhook
+    if (_room?.connectionState != ConnectionState.disconnected) {
+      await disconnect(preserveTranscripts: true);
+    }
 
     // Re-resolve URL (network may have changed, e.g. WiFi→cellular)
     final resolved = await resolveLivekitUrl(urls: _allUrls);
