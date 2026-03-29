@@ -526,7 +526,7 @@ Replace Fletcher's custom artifact model with ACP-native ContentBlock types. Col
 - [ ] T30.07: RendererRegistry with MIME Dispatch — Map<pattern, RendererFactory> replaces _ArtifactContent switch
 - [ ] T30.08: AcpUpdateParser Emits ContentBlock — widen parser to handle all ACP content types
 - [ ] T30.09: Port Renderers to ContentBlock — Diff, Code, Markdown renderers; drop SearchResultsViewer
-- [ ] T30.10: Delete Mobile Legacy Artifacts — ArtifactEvent, ArtifactType, ganglia-events content handlers
+- [x] T30.10: Delete Mobile Legacy Artifacts — ArtifactEvent, ArtifactType, ganglia-events content handlers
 - [ ] T30.11: Gut Ganglia — delete ToolInterceptor, EventInterceptor, Nanoclaw, custom events; keep RelayLLM + SessionKey
 - [ ] T30.12: Delete Deprecated Relay Stubs — scheduleRemoveRoom, cancelPendingTeardown, etc.
 - [ ] T30.13: Relay Payload Chunking — 14KB chunks for large ACP payloads (images, resources)
