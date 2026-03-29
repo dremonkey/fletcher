@@ -649,31 +649,45 @@ export class RelayBridge {
         });
     } else if (msg.method === "session/load") {
       reqLog.info({ event: "session_load_requested" });
-      this.ensureAcp()
-        .then(() =>
-          this.acpClient.sessionLoad({
-            sessionId: this.sessionId!,
-            cwd: process.cwd(),
-            mcpServers: [],
-          }),
-        )
-        .then(() => {
-          reqLog.info({ event: "session_load_complete" });
-          this.forwardToMobile({
-            jsonrpc: "2.0",
-            id: msg.id,
-            result: { loaded: true },
-          });
-        })
-        .catch((err: Error) => {
-          reqLog.error({ event: "session_load_error", error: err.message });
-          const { errorCode, errorMessage } = classifyAcpError(err);
-          this.forwardToMobile({
-            jsonrpc: "2.0",
-            id: msg.id,
-            error: { code: errorCode, message: errorMessage },
-          });
+
+      // Fire-and-forget retry loop — up to 3 attempts with 1s, 2s backoff
+      (async () => {
+        let lastErr: Error | undefined;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            await this.ensureAcp();
+            await this.acpClient.sessionLoad({
+              sessionId: this.sessionId!,
+              cwd: process.cwd(),
+              mcpServers: [],
+            });
+            reqLog.info({ event: "session_load_complete", attempt: attempt + 1 });
+            this.forwardToMobile({
+              jsonrpc: "2.0",
+              id: msg.id,
+              result: { loaded: true },
+            });
+            return; // success
+          } catch (err) {
+            lastErr = err instanceof Error ? err : new Error(String(err));
+            if (attempt < 2) {
+              reqLog.warn(
+                { event: "session_load_retry", attempt: attempt + 1, error: lastErr.message },
+                "session/load failed — retrying",
+              );
+              await Bun.sleep(1000 * (attempt + 1)); // 1s, 2s backoff
+            }
+          }
+        }
+        // All retries exhausted
+        reqLog.error({ event: "session_load_error", error: lastErr?.message, attempts: 3 });
+        const { errorCode, errorMessage } = classifyAcpError(lastErr!);
+        this.forwardToMobile({
+          jsonrpc: "2.0",
+          id: msg.id,
+          error: { code: errorCode, message: errorMessage },
         });
+      })();
     } else if (msg.method === "session/cancel") {
       reqLog.info({ event: "session_cancel" });
       this.acpClient.sessionCancel(msg.params as any);
