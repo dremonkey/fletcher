@@ -163,16 +163,12 @@ final class AcpUsageUpdate extends AcpUpdate {
 /// `tool_call` events (not `tool_call_update`).
 ///
 /// [status] is null when the tool call has just started (kind == `tool_call`),
-<<<<<<< HEAD
 /// and non-null (`"completed"`, `"failed"`, `"error"`, etc.) for
 /// `tool_call_update` events.
-=======
-/// and non-null (`"completed"`, `"error"`, etc.) for `tool_call_update` events.
 ///
 /// [content] carries the parsed tool result content blocks (for
 /// `tool_call_update` events that include a `content` array). Empty list when
 /// absent.
->>>>>>> worktree-agent-a8ee0261
 final class AcpToolCallUpdate extends AcpUpdate {
   final String id;
   final String? kind;    // operation kind: read, edit, search, execute, think, fetch, delete, move, other
@@ -215,19 +211,12 @@ final class AcpToolCallUpdate extends AcpUpdate {
   }
 
   @override
-<<<<<<< HEAD
-  int get hashCode => Object.hash(id, kind, title, status, input);
-
-  @override
-  String toString() => 'AcpToolCallUpdate(id: $id, kind: $kind, title: $title, status: $status)';
-=======
-  int get hashCode => Object.hash(id, title, status, input, content.length);
+  int get hashCode => Object.hash(id, kind, title, status, input, content.length);
 
   @override
   String toString() =>
-      'AcpToolCallUpdate(id: $id, title: $title, status: $status, '
+      'AcpToolCallUpdate(id: $id, kind: $kind, title: $title, status: $status, '
       'content: ${content.length} blocks)';
->>>>>>> worktree-agent-a8ee0261
 }
 
 /// A user message replayed during `session/load`.
