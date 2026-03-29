@@ -54,7 +54,7 @@ RendererRegistry: Map<pattern, RendererFactory>
 
 ## Status
 
-**Epic Status:** [ ]
+**Epic Status:** [x]
 
 ## Tasks
 
@@ -63,21 +63,21 @@ RendererRegistry: Map<pattern, RendererFactory>
 ### T30.01: Relay Dual-Publish in Voice Mode
 Make relay publish ACP session/update to mobile on acp topic during voice-mode sessions (not just text mode). Uses participant check to detect voice mode.
 
-**Status:** [ ]
+**Status:** [x]
 
 ---
 
 ### T30.02: Derive Status from ACP Tool Call
 StatusBar reads kind/title/status from ACP tool_call events instead of Ganglia StatusEvent.
 
-**Status:** [ ]
+**Status:** [x]
 
 ---
 
 ### T30.03: Mobile Relay-First in Both Modes
 Mobile sends typed text via relay (session/prompt) in both modes. RelayChatService subscribes to acp topic in both modes. Removes text_message from ganglia-events. (Merges original T30.03 + T30.04.)
 
-**Status:** [ ]
+**Status:** [x]
 
 ---
 
@@ -86,14 +86,14 @@ Mobile sends typed text via relay (session/prompt) in both modes. RelayChatServi
 ### T30.05: ContentBlock Sealed Class
 Dart sealed class hierarchy for all ACP content block types — replaces ArtifactEvent/ArtifactType.
 
-**Status:** [ ]
+**Status:** [x]
 
 ---
 
 ### T30.06: Widen ContentPart in acp-client
 ContentPart becomes a discriminated union supporting text, image, audio, resource, resource_link. Adds ToolCallContent types.
 
-**Status:** [ ]
+**Status:** [x]
 
 ---
 
@@ -102,7 +102,7 @@ Map<pattern, RendererFactory> with MIME-pattern matching. Replaces _ArtifactCont
 
 **Depends on:** T30.05
 
-**Status:** [ ]
+**Status:** [x]
 
 ---
 
@@ -111,7 +111,7 @@ Widen parser to emit ContentBlock for all ACP content types (not just text). Han
 
 **Depends on:** T30.05, T30.06
 
-**Status:** [ ]
+**Status:** [x]
 
 ---
 
@@ -122,7 +122,7 @@ Port Diff, Code, Markdown renderers to ContentBlock input. Drop SearchResultsVie
 
 **Depends on:** T30.05, T30.07
 
-**Status:** [ ]
+**Status:** [x]
 
 ---
 
@@ -131,7 +131,7 @@ Delete ArtifactEvent, ArtifactType, ganglia-events content handlers (artifact, s
 
 **Depends on:** T30.02, T30.03, T30.08, T30.09
 
-**Status:** [ ]
+**Status:** [x]
 
 ---
 
@@ -140,14 +140,14 @@ Delete ToolInterceptor, EventInterceptor, custom artifact types, Nanoclaw backen
 
 **Depends on:** T30.10
 
-**Status:** [ ]
+**Status:** [x]
 
 ---
 
 ### T30.12: Delete Deprecated Relay Stubs
 Remove scheduleRemoveRoom(), cancelPendingTeardown(), hasPendingTeardown(), getPendingTeardowns() from BridgeManager.
 
-**Status:** [ ]
+**Status:** [x]
 
 ---
 
@@ -158,7 +158,7 @@ Port EventInterceptor's chunking pattern to relay forwardToMobile/forwardToVoice
 
 **Depends on:** T30.01
 
-**Status:** [ ]
+**Status:** [x]
 
 ---
 
@@ -167,7 +167,7 @@ Image.memory() with isolate-based base64 decode, 5MB size cap, loading/error sta
 
 **Depends on:** T30.07, T30.08, T30.13
 
-**Status:** [ ]
+**Status:** [x]
 
 ---
 
@@ -176,7 +176,7 @@ Metadata card with play button for audio content blocks. Registered for audio/*.
 
 **Depends on:** T30.07, T30.08, T30.13
 
-**Status:** [ ]
+**Status:** [x]
 
 ---
 
@@ -185,7 +185,7 @@ Metadata display (name, mimeType, size). Fetch deferred to Epic 31. Registered v
 
 **Depends on:** T30.07, T30.08
 
-**Status:** [ ]
+**Status:** [x]
 
 ---
 
