@@ -212,6 +212,7 @@ Bulletproof connection handling: survive network switches, Bluetooth changes, ai
 - [ ] 101: Fix Bind Timeout on Ghost Rooms ⚠️ — RCA complete: discovery re-adds abandoned rooms; 2 bind timeouts + 9 session_load_error; fix: blacklist after 2 timeouts, retry session/load ([BUG-053](../docs/field-tests/20260317-buglog.md))
 - [x] 093: Ghost Data Channel After Reconnect ⚠️ — `RoomReconnectedEvent` never re-validates relay binding; `_sessionBound` stays true from pre-reconnect; relay waits for bind that never comes; no prompt timeout on `RelayChatService` ([BUG-045](../docs/field-tests/20260316-buglog.md))
 - [x] 094: Network Switch Mic Grab + Stuck Room ⚠️ — `PreConnectAudioBuffer.startRecording()` unconditionally grabs mic in chat mode; `_connectToNewRoom()` failure is terminal (no retry); error banner not tappable; `ConnectivityService` blind to WiFi→cellular interface switches ([BUG-046](../docs/field-tests/20260316-buglog.md))
+- [ ] 102: URL Resolver Fallback & Doc Sync 📋 — TCP race falls back to LAN URL when all candidates fail; should return explicit failure + surface to UI; architecture doc drifted from implementation (room names, URL caching, token racing)
 
 **Depends on:** Epic 3 (Flutter App)
 
