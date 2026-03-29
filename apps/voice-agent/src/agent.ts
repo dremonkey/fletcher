@@ -2,8 +2,8 @@
 /**
  * Voice agent using @livekit/agents with ganglia LLM backend.
  *
- * A pure STT/TTS + Ganglia bridge — the LLM backend (ACP/Nanoclaw)
- * handles all conversation logic, tools, and prompting.
+ * A pure STT/TTS + Ganglia bridge — the relay backend handles all
+ * conversation logic, tools, and prompting via the LiveKit data channel.
  *
  * Usage:
  *   bun run apps/voice-agent/src/agent.ts dev          # register as worker, accept dispatches
@@ -13,7 +13,7 @@
  *   LIVEKIT_URL - LiveKit server URL
  *   LIVEKIT_API_KEY - LiveKit API key
  *   LIVEKIT_API_SECRET - LiveKit API secret
- *   GANGLIA_TYPE - Backend type: 'acp' (default), 'relay', or 'nanoclaw'
+ *   GANGLIA_TYPE - Backend type: 'relay' (default, only supported value)
  *   FLETCHER_OWNER_IDENTITY - Participant identity of the owner (for session routing)
  *   DEEPGRAM_API_KEY - Deepgram API key for STT
  *   TTS_PROVIDER - TTS backend: 'elevenlabs' | 'google' | 'piper' (default)
@@ -26,18 +26,6 @@
  *   FLETCHER_STT_WATCHDOG_MS - STT liveness timeout in ms (default: 30000, 0 to disable) (BUG-027)
  *   PIPER_URL - Piper TTS sidecar URL for local fallback (e.g. 'http://localhost:5000')
  *   PIPER_VOICE - Piper voice name (default: sidecar default)
- *
- * ACP backend env vars (when GANGLIA_TYPE=acp, which is the default):
- *   ACP_COMMAND - Command to spawn as ACP subprocess (default: 'openclaw')
- *   ACP_ARGS - Comma-separated arguments to pass to ACP subprocess (default: 'acp')
- *   ACP_PROMPT_TIMEOUT_MS - Timeout in ms waiting for ACP response (default: 120000)
- *
- * Relay backend env vars (when GANGLIA_TYPE=relay):
- *   (No additional env vars required — uses the LiveKit room connection directly.)
- *
- * Nanoclaw backend env vars (when GANGLIA_TYPE=nanoclaw):
- *   NANOCLAW_URL - Nanoclaw server URL (default: 'http://localhost:18789')
- *   NANOCLAW_CHANNEL_PREFIX - Channel prefix (default: 'lk')
  */
 
 import {
@@ -68,7 +56,7 @@ import { buildBootstrapMessage, VOICE_TAG } from "./bootstrap";
 import { attachFallbackMonitor } from "./tts-fallback-monitor";
 import { guardTTSInputStream } from "./tts-chunk-guard";
 import { createSttWatchdog } from "./stt-watchdog";
-import { RelayRoom } from "@knittt/livekit-agent-ganglia/dist/ganglia-types";
+import type { GangliaRelayRoom as RelayRoom } from "@knittt/livekit-agent-ganglia";
 
 // ---------------------------------------------------------------------------
 // Logger setup — pretty-print when running locally, JSON in production
@@ -123,9 +111,7 @@ if (!process.argv.includes("download-files")) {
     process.exit(1);
   }
 
-  // ACP is the default backend — no API key required from the voice agent.
-  // The ACP subprocess (e.g. openclaw) handles its own authentication.
-  const gangliaType = process.env.GANGLIA_TYPE ?? "acp";
+  const gangliaType = process.env.GANGLIA_TYPE ?? "relay";
 
   logger.info(
     {
@@ -211,12 +197,6 @@ export default defineAgent({
     const publishEvent = (event: Record<string, unknown>) => {
       const localParticipant = ctx.room.localParticipant;
       if (!localParticipant) return;
-      // Auto-stamp artifact events with current segment ID for correct
-      // client-side attachment (BUG-012 fix).  The client prefers this
-      // server-provided segmentId over its own _lastAgentSegmentId.
-      if (event.type === 'artifact' && !event.segmentId) {
-        event.segmentId = transcriptMgr.activeSegmentId;
-      }
       localParticipant.publishData(
         new TextEncoder().encode(JSON.stringify(event)),
         { topic: "ganglia-events", reliable: true },

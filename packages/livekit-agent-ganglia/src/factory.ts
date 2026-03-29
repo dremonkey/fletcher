@@ -2,7 +2,7 @@
  * Ganglia Factory
  *
  * Creates LLM instances based on configuration.
- * Relay (data channel) and Nanoclaw backends are included in this package.
+ * Relay (data channel) is the only supported backend.
  */
 
 import type { llm } from '@livekit/agents';
@@ -100,12 +100,11 @@ export function isGangliaAvailable(type: string): boolean {
  *
  * Reads:
  * - GANGLIA_TYPE (default: 'relay')
- * - NANOCLAW_URL (for nanoclaw)
  */
 export async function createGangliaFromEnv(opts?: {
   logger?: Logger;
   /**
-   * LiveKit Room reference — required when GANGLIA_TYPE=relay.
+   * LiveKit Room reference — required for the relay backend.
    * Pass `ctx.room` from your voice-agent prewarm/entrypoint.
    */
   room?: RelayRoom;
@@ -115,11 +114,10 @@ export async function createGangliaFromEnv(opts?: {
   onContent?: (delta: string, fullText: string, streamId: string) => void;
 }): Promise<GangliaLLM> {
   const logger = opts?.logger || noopLogger;
-  const type = (process.env.GANGLIA_TYPE || process.env.BRAIN_TYPE || 'relay') as GangliaConfig['type'];
+  const type = (process.env.GANGLIA_TYPE || 'relay') as GangliaConfig['type'];
   dbg.factory(
-    'createGangliaFromEnv: GANGLIA_TYPE=%s BRAIN_TYPE=%s resolved=%s',
+    'createGangliaFromEnv: GANGLIA_TYPE=%s resolved=%s',
     process.env.GANGLIA_TYPE,
-    process.env.BRAIN_TYPE,
     type,
   );
   dbg.factory('registered types: %s', Array.from(registry.keys()).join(', ') || 'none');
@@ -140,21 +138,6 @@ export async function createGangliaFromEnv(opts?: {
         logger,
         onPondering: opts?.onPondering,
         onContent: opts?.onContent,
-      },
-    });
-  }
-
-  if (type === 'nanoclaw') {
-    const url = process.env.NANOCLAW_URL || 'http://localhost:18789';
-    const prefix = process.env.NANOCLAW_CHANNEL_PREFIX || 'lk';
-    dbg.factory('creating nanoclaw: url=%s channelPrefix=%s', url, prefix);
-    logger.info(`Creating ganglia backend: nanoclaw (${url})`);
-    return createGanglia({
-      type: 'nanoclaw',
-      nanoclaw: {
-        url,
-        channelPrefix: prefix,
-        logger,
       },
     });
   }
