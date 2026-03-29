@@ -6,7 +6,6 @@ import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/tui_widgets.dart';
-import '../widgets/artifact_viewer.dart';
 import '../widgets/chat_transcript.dart';
 import '../widgets/diagnostics_bar.dart';
 import '../widgets/voice_control_bar.dart';
@@ -99,15 +98,6 @@ class _ConversationScreenState extends State<ConversationScreen>
               vadConfidence: state.userAudioLevel,
               errorMessage: state.errorMessage,
               diagnostics: state.diagnostics,
-              trailing: state.artifacts.isNotEmpty
-                  ? TuiButton(
-                      label: 'ARTIFACTS: ${state.artifacts.length}',
-                      onPressed: () => showArtifactsListModal(
-                        context,
-                        artifacts: state.artifacts,
-                      ),
-                    )
-                  : null,
             ),
 
             // Error/reconnecting inline banner

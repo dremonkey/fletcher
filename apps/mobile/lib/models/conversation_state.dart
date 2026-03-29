@@ -229,180 +229,6 @@ class StatusEvent {
   }
 }
 
-/// Artifact types
-enum ArtifactType {
-  diff,
-  code,
-  markdown,
-  file,
-  searchResults,
-  error,
-  unknown,
-}
-
-/// Search result entry
-class SearchResult {
-  final String file;
-  final int line;
-  final String content;
-
-  const SearchResult({
-    required this.file,
-    required this.line,
-    required this.content,
-  });
-
-  factory SearchResult.fromJson(Map<String, dynamic> json) {
-    return SearchResult(
-      file: json['file'] as String,
-      line: json['line'] as int,
-      content: json['content'] as String,
-    );
-  }
-}
-
-/// Artifact event - visual content from tool execution
-class ArtifactEvent {
-  final ArtifactType artifactType;
-  final String? title;
-
-  // Diff artifact fields
-  final String? file;
-  final String? diff;
-
-  // Code artifact fields
-  final String? language;
-  final String? content;
-  final int? startLine;
-
-  // File artifact fields
-  final String? path;
-
-  // Search results artifact fields
-  final String? query;
-  final List<SearchResult>? results;
-
-  // Error artifact fields
-  final String? message;
-  final String? stack;
-
-  // Raw JSON for unknown types
-  final Map<String, dynamic>? rawJson;
-
-  /// The ID of the agent transcript message this artifact is associated with.
-  /// Used to render the artifact inline below its originating message.
-  final String? messageId;
-
-  /// When this artifact was created (received by the client).
-  final DateTime createdAt;
-
-  ArtifactEvent({
-    required this.artifactType,
-    this.title,
-    this.file,
-    this.diff,
-    this.language,
-    this.content,
-    this.startLine,
-    this.path,
-    this.query,
-    this.results,
-    this.message,
-    this.stack,
-    this.rawJson,
-    this.messageId,
-    DateTime? createdAt,
-  }) : createdAt = createdAt ?? DateTime.now();
-
-  factory ArtifactEvent.fromJson(Map<String, dynamic> json) {
-    final typeStr = json['artifact_type'] as String? ?? 'unknown';
-    final artifactType = _parseArtifactType(typeStr);
-
-    List<SearchResult>? results;
-    if (json['results'] != null) {
-      results = (json['results'] as List)
-          .map((r) => SearchResult.fromJson(r as Map<String, dynamic>))
-          .toList();
-    }
-
-    return ArtifactEvent(
-      artifactType: artifactType,
-      title: json['title'] as String?,
-      file: json['file'] as String?,
-      diff: json['diff'] as String?,
-      language: json['language'] as String?,
-      content: json['content'] as String?,
-      startLine: json['startLine'] as int?,
-      path: json['path'] as String?,
-      query: json['query'] as String?,
-      results: results,
-      message: json['message'] as String?,
-      stack: json['stack'] as String?,
-      rawJson: artifactType == ArtifactType.unknown ? json : null,
-    );
-  }
-
-  static ArtifactType _parseArtifactType(String type) {
-    switch (type) {
-      case 'markdown':
-        return ArtifactType.markdown;
-      case 'diff':
-        return ArtifactType.diff;
-      case 'code':
-        return ArtifactType.code;
-      case 'file':
-        return ArtifactType.file;
-      case 'search_results':
-        return ArtifactType.searchResults;
-      case 'error':
-        return ArtifactType.error;
-      default:
-        return ArtifactType.unknown;
-    }
-  }
-
-  /// Returns a copy of this artifact with the given [messageId].
-  ArtifactEvent withMessageId(String? messageId) {
-    return ArtifactEvent(
-      artifactType: artifactType,
-      title: title,
-      file: file,
-      diff: diff,
-      language: language,
-      content: content,
-      startLine: startLine,
-      path: path,
-      query: query,
-      results: results,
-      message: message,
-      stack: stack,
-      rawJson: rawJson,
-      messageId: messageId,
-      createdAt: createdAt,
-    );
-  }
-
-  String get displayTitle {
-    if (title != null) return title!;
-    switch (artifactType) {
-      case ArtifactType.diff:
-        return file ?? 'Changes';
-      case ArtifactType.markdown:
-        return path ?? 'Document';
-      case ArtifactType.code:
-        return file ?? 'Code';
-      case ArtifactType.file:
-        return path ?? 'File';
-      case ArtifactType.searchResults:
-        return query != null ? 'Search: $query' : 'Search Results';
-      case ArtifactType.error:
-        return 'Error';
-      case ArtifactType.unknown:
-        return 'Unknown Artifact';
-    }
-  }
-}
-
 /// Diagnostics data for the diagnostics panel.
 ///
 /// Holds live pipeline values such as round-trip latency, session/room name,
@@ -519,9 +345,6 @@ class ConversationState {
   /// events in voice mode. Null when no tool is active.
   final ToolStatus? currentStatus;
 
-  /// List of artifacts received from ganglia (code, diffs, etc.)
-  final List<ArtifactEvent> artifacts;
-
   /// Rolling waveform buffers for visualization (~30 samples = 3s at 100ms)
   final List<double> userWaveform;
   final List<double> aiWaveform;
@@ -560,7 +383,6 @@ class ConversationState {
     this.errorMessage,
     this.transcript = const [],
     this.currentStatus,
-    this.artifacts = const [],
     this.userWaveform = const [],
     this.aiWaveform = const [],
     this.currentUserTranscript,
@@ -581,7 +403,6 @@ class ConversationState {
     List<TranscriptEntry>? transcript,
     ToolStatus? currentStatus,
     bool clearStatus = false,
-    List<ArtifactEvent>? artifacts,
     List<double>? userWaveform,
     List<double>? aiWaveform,
     TranscriptEntry? currentUserTranscript,
@@ -602,7 +423,6 @@ class ConversationState {
       errorMessage: errorMessage ?? this.errorMessage,
       transcript: transcript ?? this.transcript,
       currentStatus: clearStatus ? null : (currentStatus ?? this.currentStatus),
-      artifacts: artifacts ?? this.artifacts,
       userWaveform: userWaveform ?? this.userWaveform,
       aiWaveform: aiWaveform ?? this.aiWaveform,
       currentUserTranscript: clearCurrentUserTranscript
