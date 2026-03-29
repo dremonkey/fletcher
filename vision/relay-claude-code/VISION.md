@@ -2,7 +2,7 @@
 
 ## Problem Statement
 
-Fletcher's Relay bridges mobile text-mode chat to an ACP agent over stdio. The current backend is OpenClaw's `openclaw acp` subprocess. This works but has three reliability problems:
+Fletcher is an open-source mobile ACP client — any ACP-compatible agent plugs in via `ACP_COMMAND`. The Relay bridges mobile chat to the ACP agent over stdio. The initial backend was OpenClaw's `openclaw acp` subprocess. This works but has three reliability problems:
 
 1. **Reasoning tag streaming is inconsistent.** OpenClaw's ACP implementation emits `<think>` tags in ways that break downstream parsing — sometimes mid-chunk, sometimes as separate fragments, sometimes not at all. The mobile app receives malformed content blocks.
 2. **Tool-call update events are unreliable.** BUG-051 documented missing or delayed `tool_call` and `tool_call_update` session updates. The patch landed but the underlying event-emission code is fragile — it depends on OpenClaw's internal LLM-response parser correctly identifying tool boundaries in real time.

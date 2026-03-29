@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../../models/content_block.dart';
+
 /// Parser for ACP `session/update` notification params.
 ///
 /// ACP spec: https://agentclientprotocol.com/protocol/prompt-turn.md
@@ -21,8 +23,9 @@ import 'package:flutter/foundation.dart';
 /// Usage:
 /// ```dart
 /// final update = AcpUpdateParser.parse(params);
-/// if (update is AcpTextDelta) {
-///   print(update.text);
+/// if (update is AcpContentDelta) {
+///   final block = update.content;
+///   if (block is TextContent) print(block.text);
 /// }
 /// ```
 
@@ -35,22 +38,77 @@ sealed class AcpUpdate {
   const AcpUpdate();
 }
 
-/// A text chunk from an `agent_message_chunk` update.
-/// This is the only update kind that contributes to the rendered response.
-final class AcpTextDelta extends AcpUpdate {
-  final String text;
+/// A content chunk from an `agent_message_chunk` (or `user_message_chunk`)
+/// update, carrying a typed [ContentBlock].
+///
+/// Replaces the old `AcpTextDelta(String text)` — text content is now
+/// represented as `AcpContentDelta(TextContent(text: "..."), "agent_message_chunk")`.
+/// All other content types (image, audio, resource, diff, terminal, etc.) are
+/// carried as their respective [ContentBlock] subclass.
+///
+/// [updateKind] is the raw `sessionUpdate` discriminator string (e.g.
+/// `"agent_message_chunk"`), preserved so callers can distinguish message
+/// chunks from replay chunks without a parallel type hierarchy.
+final class AcpContentDelta extends AcpUpdate {
+  final ContentBlock content;
+  final String updateKind;
 
-  const AcpTextDelta(this.text);
+  const AcpContentDelta(this.content, this.updateKind);
 
   @override
-  bool operator ==(Object other) => other is AcpTextDelta && other.text == text;
+  bool operator ==(Object other) =>
+      other is AcpContentDelta &&
+      other.updateKind == updateKind &&
+      _contentEqual(content, other.content);
+
+  // Value equality for ContentBlock subtypes (sealed, so we cover all cases).
+  static bool _contentEqual(ContentBlock a, ContentBlock b) {
+    if (a.runtimeType != b.runtimeType) return false;
+    if (a is TextContent && b is TextContent) {
+      return a.text == b.text && a.mimeType == b.mimeType;
+    }
+    if (a is ImageContent && b is ImageContent) {
+      return a.data == b.data && a.mimeType == b.mimeType && a.uri == b.uri;
+    }
+    if (a is AudioContent && b is AudioContent) {
+      return a.data == b.data && a.mimeType == b.mimeType;
+    }
+    if (a is ResourceContent && b is ResourceContent) {
+      return a.uri == b.uri &&
+          a.mimeType == b.mimeType &&
+          a.text == b.text &&
+          a.blob == b.blob;
+    }
+    if (a is ResourceLinkContent && b is ResourceLinkContent) {
+      return a.uri == b.uri &&
+          a.name == b.name &&
+          a.mimeType == b.mimeType &&
+          a.title == b.title &&
+          a.description == b.description &&
+          a.size == b.size;
+    }
+    if (a is DiffContent && b is DiffContent) {
+      return a.path == b.path &&
+          a.oldText == b.oldText &&
+          a.newText == b.newText;
+    }
+    if (a is TerminalContent && b is TerminalContent) {
+      return a.terminalId == b.terminalId;
+    }
+    if (a is RawContent && b is RawContent) {
+      // Map deep equality via toString as a simple approximation.
+      return a.json.toString() == b.json.toString();
+    }
+    return false;
+  }
 
   @override
-  int get hashCode => text.hashCode;
+  int get hashCode => Object.hash(updateKind, content.runtimeType);
 
   @override
-  String toString() => 'AcpTextDelta(${text.length} chars)';
+  String toString() => 'AcpContentDelta(${content.runtimeType}, $updateKind)';
 }
+
 
 /// A `usage_update` event carrying token usage for the current session.
 ///
@@ -85,41 +143,91 @@ final class AcpUsageUpdate extends AcpUpdate {
 ///
 /// On tool invocation:
 /// ```json
-/// { "sessionUpdate": "tool_call", "id": "tc_123", "title": "memory_search", "input": "{...}" }
+/// { "sessionUpdate": "tool_call", "id": "tc_123", "kind": "read", "title": "Reading main.dart", "input": "{...}" }
 /// ```
 /// On tool completion or error:
 /// ```json
-/// { "sessionUpdate": "tool_call_update", "id": "tc_123", "status": "completed" }
+/// {
+///   "sessionUpdate": "tool_call_update",
+///   "id": "tc_123",
+///   "status": "completed",
+///   "content": [
+///     { "type": "content", "content": { "type": "text", "text": "result" } },
+///     { "type": "diff", "path": "/foo", "newText": "bar" }
+///   ]
+/// }
 /// ```
 ///
+/// [kind] classifies the operation type: `read`, `edit`, `delete`, `move`,
+/// `search`, `execute`, `think`, `fetch`, or `other`. Only present on
+/// `tool_call` events (not `tool_call_update`).
+///
 /// [status] is null when the tool call has just started (kind == `tool_call`),
+<<<<<<< HEAD
+/// and non-null (`"completed"`, `"failed"`, `"error"`, etc.) for
+/// `tool_call_update` events.
+=======
 /// and non-null (`"completed"`, `"error"`, etc.) for `tool_call_update` events.
+///
+/// [content] carries the parsed tool result content blocks (for
+/// `tool_call_update` events that include a `content` array). Empty list when
+/// absent.
+>>>>>>> worktree-agent-a8ee0261
 final class AcpToolCallUpdate extends AcpUpdate {
   final String id;
-  final String? title;   // tool name (e.g., "memory_search")
-  final String? status;  // null=started, "completed", "error"
+  final String? kind;    // operation kind: read, edit, search, execute, think, fetch, delete, move, other
+  final String? title;   // human-readable description (e.g., "Reading main.dart")
+  final String? status;  // null=started, "completed", "failed", "error"
   final String? input;   // JSON string of tool arguments (optional)
+
+  /// Parsed content blocks from `tool_call_update.content[]`.
+  /// Empty when the update carries no content (e.g. plain status-only updates).
+  final List<ContentBlock> content;
 
   const AcpToolCallUpdate({
     required this.id,
+    this.kind,
     this.title,
     this.status,
     this.input,
+    this.content = const [],
   });
 
   @override
   bool operator ==(Object other) =>
       other is AcpToolCallUpdate &&
       other.id == id &&
+      other.kind == kind &&
       other.title == title &&
       other.status == status &&
-      other.input == input;
+      other.input == input &&
+      _contentListEqual(content, other.content);
+
+  static bool _contentListEqual(
+    List<ContentBlock> a,
+    List<ContentBlock> b,
+  ) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!AcpContentDelta._contentEqual(a[i], b[i])) return false;
+    }
+    return true;
+  }
 
   @override
-  int get hashCode => Object.hash(id, title, status, input);
+<<<<<<< HEAD
+  int get hashCode => Object.hash(id, kind, title, status, input);
 
   @override
-  String toString() => 'AcpToolCallUpdate(id: $id, title: $title, status: $status)';
+  String toString() => 'AcpToolCallUpdate(id: $id, kind: $kind, title: $title, status: $status)';
+=======
+  int get hashCode => Object.hash(id, title, status, input, content.length);
+
+  @override
+  String toString() =>
+      'AcpToolCallUpdate(id: $id, title: $title, status: $status, '
+      'content: ${content.length} blocks)';
+>>>>>>> worktree-agent-a8ee0261
 }
 
 /// A user message replayed during `session/load`.
@@ -180,8 +288,7 @@ final class AcpThinkingDelta extends AcpUpdate {
 
 /// A recognized but non-renderable update.
 ///
-/// Covers: `available_commands_update`, `plan`, unknown future kinds, and
-/// `agent_message_chunk` carrying non-text content (image, resource, etc.).
+/// Covers: `available_commands_update`, `plan`, and unknown future kinds.
 ///
 /// [kind] is the raw `sessionUpdate` string — callers can inspect it
 /// for future feature handling or logging.
@@ -208,12 +315,12 @@ final class AcpNonContentUpdate extends AcpUpdate {
 /// Parses the `params` map from a `session/update` JSON-RPC notification.
 ///
 /// Returns:
-/// - [AcpTextDelta] for `agent_message_chunk` with `{ type: "text", text }`
+/// - [AcpContentDelta] for `agent_message_chunk` — all content types parsed
+///   into typed [ContentBlock] instances (text, image, audio, resource, etc.)
 /// - [AcpThinkingDelta] for `agent_thought_chunk` with `{ type: "text", text }`
 /// - [AcpUsageUpdate] for `usage_update` with `used` and `size` fields
 /// - [AcpToolCallUpdate] for `tool_call` and `tool_call_update` kinds
-/// - [AcpNonContentUpdate] for all other recognized or unknown kinds,
-///   and for `agent_message_chunk` with non-text content
+/// - [AcpNonContentUpdate] for all other recognized or unknown kinds
 /// - `null` for malformed input (missing required fields, wrong types)
 abstract final class AcpUpdateParser {
   const AcpUpdateParser._();
@@ -253,6 +360,7 @@ abstract final class AcpUpdateParser {
       if (id is! String) return null;
       return AcpToolCallUpdate(
         id: id,
+        kind: update['kind'] as String?,
         title: update['title'] as String?,
         status: null,
         input: update['input'] is String ? update['input'] as String : null,
@@ -262,10 +370,12 @@ abstract final class AcpUpdateParser {
     if (kind == 'tool_call_update') {
       final id = update['id'];
       if (id is! String) return null;
+      final contentBlocks = _parseToolCallContent(update['content']);
       return AcpToolCallUpdate(
         id: id,
         title: null,
         status: update['status'] as String?,
+        content: contentBlocks,
       );
     }
 
@@ -310,6 +420,32 @@ abstract final class AcpUpdateParser {
     return AcpThinkingDelta(text);
   }
 
+  /// Parse the `content[]` array from a `tool_call_update` event.
+  ///
+  /// Each item is a ToolCallContent object:
+  /// - `{ type: "content", content: ContentBlock }` — wrapped block, unwrapped
+  ///   via [ContentBlock.fromJson] which handles the `"content"` wrapper type.
+  /// - `{ type: "diff", path, oldText?, newText }` — [DiffContent]
+  /// - `{ type: "terminal", terminalId }` — [TerminalContent]
+  /// - anything else — [RawContent] via [ContentBlock.fromJson] fallback
+  ///
+  /// Returns an empty list when [raw] is null, not a list, or empty.
+  static List<ContentBlock> _parseToolCallContent(dynamic raw) {
+    if (raw is! List) return const [];
+    final blocks = <ContentBlock>[];
+    for (final item in raw) {
+      if (item is! Map<String, dynamic>) continue;
+      try {
+        blocks.add(ContentBlock.fromJson(item));
+      } catch (_) {
+        // Malformed item — skip silently to avoid dropping the entire update.
+        debugPrint('[AcpUpdateParser] Skipped malformed tool_call_update '
+            'content item: $item');
+      }
+    }
+    return blocks;
+  }
+
   static AcpUpdate? _parseAgentMessageChunk(
     String kind,
     Map<String, dynamic> update,
@@ -320,15 +456,14 @@ abstract final class AcpUpdateParser {
       return null;
     }
 
-    final contentType = content['type'];
-
-    if (contentType != 'text') {
-      return AcpNonContentUpdate(kind);
+    // Validate text blocks eagerly — a text content with a non-string `text`
+    // field is malformed and we return null rather than a RawContent.
+    if (content['type'] == 'text') {
+      final text = content['text'];
+      if (text is! String) return null;
     }
 
-    final text = content['text'];
-    if (text is! String) return null;
-
-    return AcpTextDelta(text);
+    final block = ContentBlock.fromJson(content);
+    return AcpContentDelta(block, kind);
   }
 }

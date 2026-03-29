@@ -233,6 +233,68 @@ void main() {
       expect(events[3], isA<RelayPromptComplete>());
     });
 
+    test('RelayToolCallEvent carries kind field from ACP tool_call', () async {
+      // T30.02: kind field is passed through from ACP to RelayToolCallEvent.
+      final events = <RelayChatEvent>[];
+      final stream = service.sendPrompt('Hi');
+      stream.listen(events.add);
+
+      service.handleMessage(encode({
+        'jsonrpc': '2.0',
+        'method': 'session/update',
+        'params': {
+          'sessionId': 'sess_abc',
+          'update': {
+            'sessionUpdate': 'tool_call',
+            'id': 'tc_search',
+            'kind': 'search',
+            'title': 'Searching for imports in src/',
+            'input': '{}',
+          },
+        },
+      }));
+      service.handleMessage(encode(promptResult(1)));
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(events, hasLength(2));
+      expect(events[0], isA<RelayToolCallEvent>());
+      final toolEvent = events[0] as RelayToolCallEvent;
+      expect(toolEvent.id, 'tc_search');
+      expect(toolEvent.kind, 'search');
+      expect(toolEvent.title, 'Searching for imports in src/');
+      expect(toolEvent.status, isNull);
+    });
+
+    test('RelayToolCallEvent kind is null when not present in ACP event', () async {
+      // Backward compat: older backends may not send the kind field.
+      final events = <RelayChatEvent>[];
+      final stream = service.sendPrompt('Hi');
+      stream.listen(events.add);
+
+      service.handleMessage(encode({
+        'jsonrpc': '2.0',
+        'method': 'session/update',
+        'params': {
+          'sessionId': 'sess_abc',
+          'update': {
+            'sessionUpdate': 'tool_call',
+            'id': 'tc_no_kind',
+            'title': 'memory_search',
+            // no 'kind' field
+          },
+        },
+      }));
+      service.handleMessage(encode(promptResult(1)));
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(events, hasLength(2));
+      final toolEvent = events[0] as RelayToolCallEvent;
+      expect(toolEvent.kind, isNull);
+      expect(toolEvent.title, 'memory_search');
+    });
+
     test('tool_call with missing id emits nothing (malformed)', () async {
       final events = <RelayChatEvent>[];
       final stream = service.sendPrompt('Hi');

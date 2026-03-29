@@ -1,6 +1,6 @@
 # Relay Lifecycle
 
-The relay manages the bridge between the mobile client and the ACP (Agent Control Protocol) subprocess. This document describes the relay's room lifecycle — how bridges are created, maintained, recovered after network disruptions, and torn down. It covers both the current behavior and the target state after task 100 (deferred teardown with health-gated re-bind).
+The relay is Fletcher's core component — the ACP bridge between the mobile client and any ACP-compatible agent subprocess. This document describes the relay's room lifecycle — how bridges are created, maintained, recovered after network disruptions, and torn down. It covers both the current behavior and the target state after task 100 (deferred teardown with health-gated re-bind).
 
 The relay is the critical path for network resilience: its teardown decisions determine whether a network switch costs the user 0 seconds (bridge reuse) or 3-5 seconds (full ACP restart).
 
@@ -8,10 +8,10 @@ The relay is the critical path for network resilience: its teardown decisions de
 
 | Actor | Identity in LiveKit | Role |
 |-------|-------------------|------|
-| **Mobile App** | `device-<uuid>` | Flutter client — sends `session/bind`, `session/prompt`, `session/load` on `relay` topic |
+| **Mobile App** | `device-<uuid>` | Flutter client — sends `session/bind`, `session/prompt`, `session/load` on `acp` topic |
 | **LiveKit Server** | — | SFU — fires `participant_joined` / `participant_left` webhooks to relay |
 | **Relay** (`BridgeManager` + `RoomManager`) | `relay-<roomName>` | Joins rooms, manages per-room `RelayBridge` instances, routes data channel messages to ACP |
-| **ACP Subprocess** | — | OpenClaw/Nanoclaw process spawned by the relay — owns the conversation session |
+| **ACP Subprocess** | — | Any ACP-compatible agent (OpenClaw, Claude Code, custom) spawned by the relay — owns the conversation session |
 
 Key source files:
 
@@ -360,7 +360,7 @@ These principles guide the relay's lifecycle decisions:
 
 - [Voice Pipeline](voice-pipeline.md) — end-to-end audio flow through the voice agent
 - [Network Connectivity](network-connectivity.md) — URL resolution, reconnection strategy, timeout coordination
-- [Data Channel Protocol](data-channel-protocol.md) — message formats on `relay` and `voice-acp` topics
+- [Data Channel Protocol](data-channel-protocol.md) — message formats on `acp` and `voice-acp` topics
 - [Brain Plugin](brain-plugin.md) — Ganglia LLM bridge and ACP backend details
 - [Session Routing](session-routing.md) — how session keys are resolved and used
 - [Mobile Client](mobile-client.md) — client-side connection lifecycle and reconnection

@@ -1,42 +1,64 @@
 # System Overview
 
-Fletcher is a standalone voice agent that bridges a Flutter mobile client to the OpenClaw reasoning engine through a real-time audio pipeline built on the LiveKit Agents framework, targeting sub-1.5-second voice-to-voice latency. It connects to the OpenClaw Gateway via its OpenAI-compatible completions API.
+Fletcher is an open-source mobile ACP (Agent Communication Protocol) client with voice and text support. It connects a Flutter mobile app to any ACP-compatible agent — OpenClaw, Claude Code, or custom — through LiveKit's WebRTC infrastructure. The relay bridges ACP over stdio to the mobile client via data channels. An optional voice agent adds real-time speech (STT → LLM → TTS), targeting sub-1.5-second voice-to-voice latency.
 
-> **Design note:** We initially explored building Fletcher as an OpenClaw channel plugin (running inside the Gateway process, like Telegram or WhatsApp channels). We opted for the standalone agent approach instead — it's simpler to develop, deploy, and debug, and talks to OpenClaw through the same public API any other client would use. See `docs/architecture-comparison.md` for the full analysis.
+## Room & Session Model
 
-## Two-Layer Architecture
+Fletcher's real-time coordination happens inside **LiveKit Rooms**. A room is a WebRTC media and signaling space hosted by the LiveKit SFU — participants join it, data channels exist within it, and audio tracks flow through it. Every interaction in Fletcher happens inside a room.
 
-Fletcher is structured as two layers, each independently replaceable:
+A typical room has up to three participants:
+
+| Participant | Identity | Role |
+|-------------|----------|------|
+| **Mobile App** | `device-<hardwareId>` | The user — publishes audio, subscribes to data channels |
+| **Relay** | `relay-<roomName>` | The ACP bridge — joins when mobile connects, owns the ACP subprocess |
+| **Voice Agent** | `agent-<id>` | Optional — joins on demand for real-time speech, leaves when not in use |
+
+**Rooms are disposable transport; sessions are persistent state.** A user can disconnect, reconnect to a new room, and continue the same conversation — the relay resolves the same session key from the participant's stable device identity. Room names are ephemeral (`fletcher-<timestamp>`), generated per connection. Session keys are stable, tied to identity. See [Session Routing](session-routing.md) for the full resolution algorithm.
+
+Data channels within a room carry all communication: the `acp` topic for ACP messages (relay ↔ mobile), the `voice-acp` topic for voice-mode LLM requests (voice agent ↔ relay), and `ganglia-events` for voice control. See [Data Channel Protocol](data-channel-protocol.md) for the wire format.
+
+## Three-Layer Architecture
+
+Fletcher is structured as three layers, each independently replaceable:
 
 | Layer | Package | Role |
 |-------|---------|------|
-| **Agent Runtime** | `@livekit/agents` (framework) + `apps/voice-agent` | STT/TTS orchestration, VAD, turn detection, interruption handling |
-| **Brain** | `@knittt/livekit-agent-ganglia` | LLM bridge to OpenClaw (multi-user) or Nanoclaw (single-user) backends |
+| **ACP Bridge** | `apps/relay` | Transparent JSON-RPC 2.0 bridge: mobile data channel ↔ ACP subprocess over stdio. The core of Fletcher. |
+| **Mobile Client** | `apps/mobile` | Flutter app: dual-mode input (voice + text), tool-call cards, artifacts, connection resilience |
+| **Voice Runtime** (optional) | `@livekit/agents` (framework) + `apps/voice-agent` + `@knittt/livekit-agent-ganglia` | STT/TTS orchestration, VAD, turn detection, interruption handling. Joins on demand. |
 
-The Brain layer can be used with any LiveKit agent project — it has no dependency on the voice agent entry point.
+Text mode works with just the relay and mobile app. Voice mode adds the agent runtime for real-time speech. In both modes, the relay is the single source of ACP content for mobile — the voice agent extracts text tokens for TTS but does not generate or publish content artifacts.
 
 ```mermaid
 flowchart TB
-    subgraph "Layer 1 — Agent Runtime"
+    subgraph "Layer 1 — ACP Bridge (relay)"
+        RL["Relay<br/><code>apps/relay</code>"]
+        ACP_SUB["ACP Subprocess<br/>(any ACP server)"]
+    end
+
+    subgraph "Layer 2 — Mobile Client"
+        APP["Flutter App<br/><code>apps/mobile</code>"]
+    end
+
+    subgraph "Layer 3 — Voice Runtime (optional)"
         VA["Voice Agent<br/><code>apps/voice-agent</code>"]
         AS["AgentSession<br/><code>@livekit/agents</code>"]
         STT["Deepgram STT"]
-        TTS["Cartesia TTS"]
-    end
-
-    subgraph "Layer 2 — Brain"
+        TTS["TTS (Google/Piper)"]
         G["Ganglia LLM<br/><code>@knittt/livekit-agent-ganglia</code>"]
-        OC["OpenClaw Gateway"]
-        NC["Nanoclaw"]
     end
 
+    APP <-->|"data channel<br/>(acp topic, both modes)"| RL
+    RL <-->|"stdio JSON-RPC"| ACP_SUB
     VA --> AS
     AS --> STT
     AS --> TTS
     AS --> G
-    G -->|"GANGLIA_TYPE=openclaw"| OC
-    G -->|"GANGLIA_TYPE=nanoclaw"| NC
+    G <-->|"data channel<br/>(voice-acp topic)"| RL
 ```
+
+**Ganglia** (`@knittt/livekit-agent-ganglia`) is the LLM bridge that routes voice-agent requests to the ACP backend via the relay's data channel. It implements the LiveKit `llm.LLM` interface so the voice agent's `AgentSession` can treat it as a standard LLM. See [Brain Plugin](brain-plugin.md) for details.
 
 ## Monorepo Structure
 
@@ -84,8 +106,8 @@ flowchart TD
 
 **Key relationships:**
 - `voice-agent` is the entry point — it imports Ganglia and the LiveKit agent plugins directly
-- `ganglia` depends on `@livekit/agents` as a **peer dependency** to avoid duplicate installs
-- `relay` is independent — it connects to LiveKit via `@livekit/rtc-node` (non-agent participant) and to OpenClaw via ACP over stdio
+- `ganglia` depends on `@livekit/agents` as a **peer dependency** to avoid duplicate installs. It is a focused package: `RelayLLM` + `SessionKey` routing + slim factory — no direct ACP backend or artifact generation
+- `relay` is independent — it connects to LiveKit via `@livekit/rtc-node` (non-agent participant) and to the ACP subprocess over stdio. It dual-publishes responses to both `voice-acp` and `acp` topics in voice mode
 - `tui` has no code dependencies on other packages — it orchestrates via `docker compose` and shell commands
 
 ## Voice Agent (`apps/voice-agent`)
@@ -99,13 +121,15 @@ bun run apps/voice-agent/src/agent.ts connect   # Direct mode (joins specific ro
 
 The agent is packaged as a Docker container via `apps/voice-agent/Dockerfile`.
 
-## Relay (`apps/relay`)
+## Relay (`apps/relay`) — The Core
 
-The relay is a **text-mode ACP bridge**: it joins LiveKit rooms as a non-agent participant, forwards ACP JSON-RPC 2.0 messages between the mobile client's data channel and an OpenClaw subprocess over stdio. This enables text conversations that bypass the voice agent's STT/TTS pipeline entirely, at ~60x lower cost per interaction.
+The relay is Fletcher's foundation — a **generic ACP bridge** that joins LiveKit rooms as a non-agent participant and forwards JSON-RPC 2.0 messages between the mobile client's data channel and an ACP subprocess over stdio. The backend is configured via `ACP_COMMAND` / `ACP_ARGS` — any ACP-compatible server plugs in.
 
-The relay is a transparent passthrough — it does not parse or transform message content. It handles ACP lifecycle (`initialize`, `session/new`) internally and forwards `session/prompt`, `session/update`, and `session/cancel` between mobile and OpenClaw.
+The relay is a transparent passthrough — it does not parse or transform message content. It handles ACP lifecycle (`initialize`, `session/new`) internally and forwards `session/prompt`, `session/update`, and `session/cancel` between mobile and the agent.
 
 On startup, the relay auto-discovers LiveKit rooms with active human participants (via `RoomServiceClient`) and rejoins any that lack a relay — recovering from restarts without user intervention.
+
+**Tested backends:** `openclaw acp` (OpenClaw), `claude-agent-acp` (Claude Code via Zed adapter), custom ACP servers.
 
 See `apps/relay/docs/architecture.md` for full design rationale, economics, and protocol details.
 
@@ -116,29 +140,29 @@ A typical development deployment runs four services on the same host using Docke
 ```mermaid
 flowchart LR
     subgraph "Mobile Device"
-        APP["Flutter App"]
+        APP["Flutter App<br/>(ACP client)"]
     end
 
     subgraph "Dev Machine (host network)"
         LK["LiveKit Server<br/>:7880 WS / :7881 RTC<br/>:50000-60000 UDP"]
-        VA["Voice Agent<br/>(Docker container)"]
-        RL["Relay<br/>:7890 (localhost)"]
-        GW["OpenClaw Gateway<br/>:18789"]
+        VA["Voice Agent<br/>(optional, Docker)"]
+        RL["Relay<br/>(ACP bridge)"]
+        ACP["ACP Agent<br/>(subprocess)"]
     end
 
-    subgraph "External APIs"
+    subgraph "External APIs (voice mode only)"
         DG["Deepgram<br/>(STT)"]
-        CT["Cartesia<br/>(TTS)"]
+        TTS["TTS Provider"]
     end
 
-    APP <-->|"WebRTC audio"| LK
-    APP <-->|"WebRTC data channel"| LK
-    LK <-->|"Agent SDK"| VA
+    APP <-->|"WebRTC data channel<br/>(text mode)"| LK
+    APP <-->|"WebRTC audio<br/>(voice mode)"| LK
     LK <-->|"rtc-node participant"| RL
-    VA -->|"HTTP SSE"| GW
-    RL -->|"ACP stdio"| GW
+    LK <-->|"Agent SDK"| VA
+    RL <-->|"ACP stdio"| ACP
+    VA <-->|"data channel<br/>(voice-acp)"| RL
     VA -->|"Streaming"| DG
-    VA -->|"Streaming"| CT
+    VA -->|"Streaming"| TTS
 ```
 
 **Networking notes:**
@@ -154,7 +178,7 @@ The system is configured entirely through environment variables. See [Infrastruc
 |----------|---------|---------|
 | `LIVEKIT_URL` | Voice agent, relay, mobile | LiveKit WebSocket URL |
 | `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | Voice agent, relay, token gen | LiveKit authentication |
-| `GANGLIA_TYPE` | Voice agent | Backend selection: `relay` (default) or `nanoclaw` |
+| `GANGLIA_TYPE` | Voice agent | Backend selection (default: `relay`) |
 | `DEEPGRAM_API_KEY` | Voice agent | Speech-to-text provider |
 | `FLETCHER_OWNER_IDENTITY` | Voice agent | Owner detection for session routing |
 | `ACP_COMMAND` / `ACP_ARGS` | Relay | ACP subprocess command (default: `openclaw acp`) |
