@@ -139,18 +139,14 @@ LiveKitService.sendTextMessage("run the test suite")
   |                           -> local handler
   |                           -> CommandResult in transcript
   |
-  +-- text mode? ----------> RelayChatService.sendPrompt()
-  |                           -> relay -> ACP -> agent
-  |                           -> response streams back
-  |
-  +-- voice mode? ---------> _sendEvent({type: 'text_message', text: ...})
-                              -> voice agent injects as user message
-                              -> response via TTS + transcript
+  +-- always -------------> RelayChatService.sendPrompt()
+                              -> relay -> ACP -> agent
+                              -> response streams back via acp topic
 ```
 
-**Key insight:** The macro system does not need its own dispatch logic. `LiveKitService.sendTextMessage()` already handles all routing (slash commands, relay, voice agent). Macros are simply a tap-driven text input, identical to typing in the text field and pressing enter.
+**Key insight:** The macro system does not need its own dispatch logic. `LiveKitService.sendTextMessage()` already handles all routing (slash commands, relay). Macros are simply a tap-driven text input, identical to typing in the text field and pressing enter. All text — in both voice and text mode — routes through the relay via `session/prompt`.
 
-**Busy state:** Before dispatch, check `RelayChatService.isBusy`. If busy, the tap is dropped with a brief visual flash (no queuing). This matches the PRD recommendation. The check is only relevant in text mode — in voice mode, `sendTextMessage` queues via `_pendingTextMessages` when the agent is absent.
+**Busy state:** Before dispatch, check `RelayChatService.isBusy`. If busy, the tap is dropped with a brief visual flash (no queuing).
 
 ## Data Flow: ACP Command Discovery
 
@@ -430,7 +426,7 @@ Layout change: wrap existing `Column` in a `Stack`. Add `MacroRegistry` as a fie
 
 **Scenario:** User taps a macro while the agent is absent (hold mode, between dispatches).
 
-**Handling:** Same as typing text. In voice mode, `AgentPresenceService.onTextMessageSent()` triggers dispatch. The text is queued in `_pendingTextMessages` and flushed when the agent connects. In text mode, the relay handles it (relay has its own ACP connection). The macro grid does not need to know about agent presence.
+**Handling:** Same as typing text. All text routes through the relay via `session/prompt` in both modes. In voice mode, `AgentPresenceService.onTextMessageSent()` triggers dispatch if the voice agent is absent. The relay always has its own ACP connection. The macro grid does not need to know about agent presence.
 
 ### Grid Overlaps Mic Button
 
@@ -442,7 +438,7 @@ Layout change: wrap existing `Column` in a `Stack`. Add `MacroRegistry` as a fie
 
 **Scenario:** User rapidly taps the same macro multiple times.
 
-**Handling:** `RelayChatService.isBusy` check prevents duplicate in-flight prompts in text mode. In voice mode, `sendTextMessage` sends immediately (text_message events are fire-and-forget on the data channel). A 300ms debounce on the button tap handler prevents accidental double-taps. This debounce is purely UI-side — it does not affect the dispatch path.
+**Handling:** `RelayChatService.isBusy` check prevents duplicate in-flight prompts. A 300ms debounce on the button tap handler prevents accidental double-taps. This debounce is purely UI-side — it does not affect the dispatch path.
 
 ### Command Pool Update During Picker
 

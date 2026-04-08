@@ -1,186 +1,60 @@
 # Fletcher
 
-A voice-first bridge for OpenClaw using LiveKit, targeting sub-1.5-second voice-to-voice latency.
+A mobile [ACP](https://github.com/anthropics/acp) (Agent Communication Protocol) client with voice and text support. Point it at any ACP-compatible agent — OpenClaw, Claude Code, or your own — and get a full mobile frontend with voice conversations, text chat, tool-call visibility, artifact rendering, and session management. The agent is a config flag (`ACP_COMMAND`); the client handles everything else.
 
-## Overview
+## Repository Map
 
-Fletcher is a **standalone voice agent** that bridges a Flutter mobile client to the OpenClaw reasoning engine through a real-time audio pipeline built on the LiveKit Agents framework. It connects to the OpenClaw Gateway via its OpenAI-compatible completions API, handling the complete pipeline from speech-to-text through to text-to-speech.
-
-> **Note:** We initially explored building Fletcher as an OpenClaw channel plugin (similar to Telegram or WhatsApp channels), but opted for the standalone voice agent approach instead. The standalone model is simpler to develop and deploy, avoids coupling to the Gateway process lifecycle, and talks to OpenClaw through the same public API any other client would use. See [Architecture Comparison](./docs/architecture-comparison.md) for background.
-
-This repository contains:
-
-1. **Voice Agent** (`apps/voice-agent`) — A standalone LiveKit agent that runs as an independent worker
-2. **Brain Plugin** (`packages/livekit-agent-ganglia`) — LLM bridge to OpenClaw/Nanoclaw backends
-3. **Example Flutter App** (`apps/mobile`) — A minimal mobile client for testing
-
-## Architecture
-
-### Voice Agent (`apps/voice-agent`)
-
-The main entry point. A TypeScript LiveKit agent that:
-
-- **Runtime:** Bun (TypeScript)
-- **Framework:** `@livekit/agents`
-- **Function:**
-  - Runs as an independent LiveKit worker, accepting job dispatches
-  - Handles real-time audio streams (STT → OpenClaw → TTS)
-  - Uses Ganglia (`@knittt/livekit-agent-ganglia`) as the LLM bridge
-
-### Example Mobile App (`apps/mobile`)
-
-A minimal Flutter application for testing the voice agent. Not intended as a production app.
-
-- **Framework:** Flutter (Dart)
-- **Library:** `livekit_client`
-- **Purpose:** Test client for voice agent development
-- **Features:**
-  - One-button interface to join a LiveKit room
-  - "Amber Heartbeat" audio visualizer for voice intensity feedback
-
-## Audio Pipeline (Target: <1.5s)
-
-1. **Mobile App:** Captures audio → Streams to LiveKit Server
-2. **Plugin:** Receives stream → Fast-STT (Deepgram/Groq) → OpenClaw Brain
-3. **Plugin:** Brain Response → Fast-TTS (Cartesia/ElevenLabs Turbo) → LiveKit Server
-4. **Mobile App:** Receives audio stream → Playback
-
-## Setup Requirements
-
-### LiveKit Server
-
-You have two options for running the LiveKit server:
-
-1. **Local Development:** Run LiveKit server locally using the provided `docker-compose` configuration
-2. **LiveKit Cloud:** Use the free tier of [LiveKit Cloud](https://livekit.io/) for development and testing
-
-### AI Service Keys (BYOK)
-
-Fletcher uses a bring-your-own-key (BYOK) model for AI services. You'll need to provide your own API keys for:
-
-- **Speech-to-Text:** Deepgram or Groq
-- **Text-to-Speech:** Cartesia or ElevenLabs Turbo
-- **OpenClaw Brain:** As required by your OpenClaw configuration
-
-## Open Source
-
-- **License:** MIT
-- **Repository:** `dremonkey/openclaw-plugin-livekit`
-- **Contribution:** Docker Compose configuration provided for plug-and-play community setup
-
-## Getting Started
-
-### Prerequisites
-
-#### System-Level (install once)
-
-**Docker & Docker Compose** — Required for running the local LiveKit server.
-
-- **NixOS:** See the [NixOS Setup Guide](./docs/nixos-setup.md) for complete instructions (Docker, KVM for emulator acceleration, etc.).
-- **macOS:** Install [Colima](https://github.com/abiosoft/colima) (recommended) or [Docker Desktop](https://docker.com/products/docker-desktop):
-  ```bash
-  brew install colima docker docker-compose
-  colima start
-  ```
-
-**Nix (recommended)** — Provides all other development dependencies automatically.
-
-- **NixOS:** Already installed.
-- **macOS:** Install via the [Determinate Nix Installer](https://github.com/DeterminateSystems/nix-installer):
-  ```bash
-  curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
-  ```
-
-#### Repo-Level (provided by `nix develop`)
-
-If you have Nix installed, all other dependencies are provided automatically:
-
-- **Bun** — JavaScript runtime for the plugin (required)
-- **Flutter** — For the example mobile app only (optional)
-- **Android SDK & Studio** — For Android development (optional)
-
-#### Without Nix
-
-If you prefer not to use Nix, install these manually:
-
-- **Bun:** https://bun.sh (required for plugin development)
-- **Flutter:** https://flutter.dev/docs/get-started/install (only if testing with the example app)
-
-### Quick Setup
-
-If you use **Nix**, entering the development shell will automatically provide all necessary dependencies (Flutter, Android Studio, Bun, etc.):
-
-```bash
-nix develop
+```
+fletcher/
+├── apps/
+│   ├── relay/                      # ACP bridge (the core) — data channel ↔ ACP subprocess over stdio
+│   ├── mobile/                     # Flutter mobile client — voice + text, artifacts, reconnection
+│   └── voice-agent/                # Optional voice runtime — STT → LLM → TTS via LiveKit
+├── packages/
+│   ├── livekit-agent-ganglia/      # LLM bridge plugin — connects voice pipeline to ACP via relay
+│   └── tui/                        # Developer TUI launcher
+├── docs/
+│   ├── architecture/               # Canonical technical docs (start here for depth)
+│   └── specs/                      # Planning artifacts (may be outdated)
+├── tasks/                          # Project roadmap and progress tracking
+├── docker-compose.yml              # LiveKit + voice-agent + token-server + Piper TTS
+├── livekit.yaml                    # LiveKit server config
+├── flake.nix                       # Nix development environment
+└── package.json                    # Bun workspace root
 ```
 
-*Note: The first run will take some time to download Flutter, Android SDK, and other dependencies. Subsequent runs are nearly instant thanks to Nix store caching and nix-direnv's environment cache.*
+## Components
 
-#### Automatic Environment (Recommended)
-To automatically load the environment when you `cd` into this directory, we **highly recommend** using `nix-direnv`. It provides instant environment switching and prevents your dependencies from being garbage collected.
+| Component | Path | Role |
+|-----------|------|------|
+| **Relay** | `apps/relay` | Transparent JSON-RPC 2.0 bridge: mobile data channel ↔ ACP subprocess over stdio. The foundation — text mode works with just this and the mobile app. |
+| **Mobile App** | `apps/mobile` | Flutter client with dual-mode input (voice + text), inline tool-call cards, thinking blocks, artifact viewer, and connection resilience. |
+| **Voice Agent** | `apps/voice-agent` | Optional. Joins LiveKit rooms on demand, adds real-time speech: Deepgram STT → LLM → TTS, targeting sub-1.5s latency. |
+| **Ganglia** | `packages/livekit-agent-ganglia` | LLM bridge plugin for the voice pipeline. Routes through the relay by default. |
 
-**NixOS Installation:**
-Add `direnv` and `nix-direnv` to your configuration or home-manager, then:
-```bash
-echo "use flake" > .envrc
-direnv allow
-```
+## Documentation
 
-#### Start Development
+For technical depth, start with [`docs/architecture/`](./docs/architecture/README.md) — the canonical reference for how the system works. The [reading order table](./docs/architecture/README.md#reading-order) covers the full stack from system overview through deployment.
 
-The quickest way to get everything running is the TUI dev launcher:
+For project status and next steps, see [`tasks/`](./tasks/README.md).
 
-```bash
-bun dev
-```
-
-This will audit your environment, prompt for any missing API keys (saving them to `.env`), start the local LiveKit server, generate a token, and launch the voice agent — all in one command.
-
-If `adb` and `flutter` are on your PATH and a device is connected, it will also offer to build and install the debug APK to your phone.
-
-#### Manual Setup
-
-If you prefer to run services individually:
+## Quick Start
 
 ```bash
-./scripts/setup.sh          # Start LiveKit + health check
-bun run token:generate      # Generate a LiveKit token
-bun run voice:dev           # Start the voice agent
+nix develop        # Provides Bun, Flutter, Android SDK — all dependencies
+bun dev            # TUI launcher: audits env, starts LiveKit, generates tokens, launches agent
 ```
 
-## Local Infrastructure
-
-Fletcher uses LiveKit for real-time audio. You can start a local LiveKit instance using Docker:
-
-```bash
-docker compose up -d
-```
-
-This starts four services:
-
-| Service | Port | Purpose |
-|---------|------|---------|
-| `livekit` | 7880 (TCP) | WebSocket signaling + WebRTC media (UDP 50000-60000) |
-| `token-server` | 7882 (TCP) | HTTP endpoint for JWT tokens (dynamic room support) |
-| `piper` | 5000 (TCP) | Local TTS engine |
-| `voice-agent` | — | LiveKit agent worker (connects to LiveKit internally) |
-
-Use the default keys provided in `livekit.yaml` for development.
-
-**NixOS firewall:** Ports 7880, 7881, 7882 (TCP) and 50000-60000 (UDP) must be open for LAN clients. Tailscale traffic bypasses the firewall. See [Networking Guide](./docs/troubleshooting/networking.md).
+Without Nix, install [Bun](https://bun.sh) manually. See [`docs/architecture/developer-workflow.md`](./docs/architecture/developer-workflow.md) for the full manual workflow.
 
 ## Encrypted Files
 
-Field-test raw logs (`docs/field-tests/*.txt`) are encrypted with [git-crypt](https://github.com/AGWA/git-crypt) because they may contain PII (names, IP addresses, full conversation transcripts). To read them:
+Field-test raw logs (`docs/field-tests/*.txt`) are encrypted with [git-crypt](https://github.com/AGWA/git-crypt) because they may contain PII. The curated bug logs (`docs/field-tests/*-buglog.md`) are plaintext and readable without unlocking.
 
 ```bash
-# Obtain the symmetric key file from a project maintainer, then:
-git-crypt unlock ./git-crypt-key
+git-crypt unlock ./git-crypt-key   # Obtain the key from a project maintainer
 ```
 
-The curated bug logs (`docs/field-tests/*-buglog.md`) are **not** encrypted and are readable without unlocking.
+## License
 
-## Project Roadmap
-
-See the [tasks roadmap](./tasks/README.md) for development progress and next steps.
-
+MIT

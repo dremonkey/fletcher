@@ -249,20 +249,5 @@ void main() {
       });
     });
 
-    group('deprecated generate()', () {
-      test('still returns a string (backward compat)', () {
-        // ignore: deprecated_member_use
-        final name = NameGenerator.generate();
-        expect(name.isNotEmpty, isTrue);
-      });
-
-      test('returns adj-noun format (two parts)', () {
-        // ignore: deprecated_member_use
-        final name = NameGenerator.generate();
-        final parts = name.split('-');
-        expect(parts.length, equals(2),
-            reason: 'Expected format adj-noun, got "$name"');
-      });
-    });
   });
 }

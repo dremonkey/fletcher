@@ -11,7 +11,7 @@ sequenceDiagram
     participant STT as Deepgram STT
     participant Agent as AgentSession
     participant LLM as Ganglia LLM
-    participant Brain as OpenClaw/Nanoclaw
+    participant Brain as ACP Agent (via Relay)
     participant TTS as TTS (ElevenLabs/Gemini → Piper fallback)
 
     Phone->>LK: WebRTC audio track
@@ -107,16 +107,19 @@ The mobile app's `StatusBar` widget displays the phrase text via the existing `S
 - `packages/livekit-agent-ganglia/src/pondering.ts` — phrase list and shuffle
 - `packages/livekit-agent-ganglia/src/relay-stream.ts` — pondering timer in RelayChatStream
 
+Note: Pondering events are published on the `ganglia-events` data channel for voice-mode UX only. ACP content (tool calls, messages, diffs) flows through the `acp` topic via the relay's dual-publish — the voice agent does not generate or publish content artifacts.
+
 ### LLM Bridge (Ganglia)
 
-Ganglia converts between the LiveKit `llm.LLM` interface and the OpenClaw backend. See [Brain Plugin](brain-plugin.md) for details.
+Ganglia converts between the LiveKit `llm.LLM` interface and the ACP backend via the relay. See [Brain Plugin](brain-plugin.md) for details.
 
-**Transport:** `GANGLIA_TYPE=relay` (default) — routes requests through the Fletcher Relay via the LiveKit data channel (`voice-acp` topic). The relay handles ACP subprocess management, allowing the voice-agent to be a thin container with just the audio pipeline.
+**Transport:** Routes requests through the Fletcher Relay via the LiveKit data channel (`voice-acp` topic). The relay handles ACP subprocess management, allowing the voice-agent to be a thin container with just the audio pipeline. The relay is the only Ganglia backend.
 
 **Key behavior during streaming:**
-- Response chunks arrive as streaming events (ACP notifications or data channel messages)
+- Response chunks arrive as `session/update` JSON-RPC notifications on the `voice-acp` data channel
 - Each chunk may contain `content` (text) or `tool_calls` (function invocations)
 - Ganglia emits these as `ChatChunk` events that AgentSession forwards to TTS
+- In parallel, the relay dual-publishes the same updates to mobile on the `acp` topic for UI rendering
 
 ### Text-to-Speech (Tiered Provider)
 
@@ -263,9 +266,10 @@ The agent registers as a LiveKit worker. When a client joins a room, LiveKit dis
 In addition to the audio pipeline, the system sends metadata to the client via LiveKit's text streams and data channels:
 
 - **`lk.transcription` text stream** — real-time transcription of user speech (STT output)
-- **`ganglia-events` data channel** — agent transcripts, status updates, and artifacts
+- **`acp` data channel** — all ACP content (messages, tool calls, diffs, images) — dual-published by the relay in voice mode
+- **`ganglia-events` data channel** — voice control only: agent transcripts, pondering, session hold, TTS mode, pipeline info
 
-See [Data Channel Protocol](data-channel-protocol.md) for the message format and chunking protocol.
+See [Data Channel Protocol](data-channel-protocol.md) for the message format, one-pipeline principle, and chunking protocol.
 
 ### Agent Transcript Bypass
 
@@ -296,8 +300,8 @@ User transcription (STT) still uses the SDK's `lk.transcription` text stream —
 
 **Implementation files:**
 - `packages/livekit-agent-ganglia/src/relay-stream.ts` — `onContent` callback in `RelayChatStream`
-- `apps/voice-agent/src/agent.ts` — publishes `agent_transcript` events, disables SDK transcription
-- `apps/mobile/lib/services/livekit_service.dart` — handles `agent_transcript` in `_processGangliaEvent()`
+- `apps/voice-agent/src/agent.ts` — publishes `agent_transcript` events on `ganglia-events`, disables SDK transcription
+- `apps/mobile/lib/services/livekit_service.dart` — handles `agent_transcript` in voice-control event handler
 
 ## Metrics & Observability
 
@@ -320,14 +324,14 @@ The `@livekit/agents` SDK emits `MetricsCollected` events for each pipeline stag
 
 Individual component metrics are logged at `debug` level; the correlated per-turn summary is logged at `info` level. The agent also logs `AgentStateChanged` (idle → thinking → speaking) and final user transcripts.
 
-### Tier 2: HTTP-Layer Timing (DEBUG=ganglia:*)
+### Tier 2: Data Channel Timing (DEBUG=ganglia:*)
 
-When `DEBUG=ganglia:*` is enabled, Ganglia logs internal HTTP timing for each request to the OpenClaw/Nanoclaw backend:
+When `DEBUG=ganglia:*` is enabled, Ganglia logs internal timing for each request routed through the relay:
 
-- **`ganglia:openclaw:client`** — fetch latency, time from fetch start to first SSE chunk, total stream duration, chunk count
-- **`ganglia:openclaw:stream`** — time from `OpenClawChatStream.run()` start to first `ChatChunk`, total stream duration
+- **`ganglia:relay:stream`** — time from `RelayChatStream` start to first `ChatChunk`, total stream duration, chunk count
+- **`ganglia:relay:client`** — data channel transport latency, connection state
 
-This is useful for distinguishing network latency from backend processing time.
+This is useful for distinguishing relay latency from ACP backend processing time.
 
 ### Tier 3: OpenTelemetry Distributed Tracing (opt-in)
 

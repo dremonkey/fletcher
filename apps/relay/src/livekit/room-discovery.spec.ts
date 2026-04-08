@@ -14,10 +14,11 @@ function createMockLogger() {
 }
 
 /** Minimal mock BridgeManager */
-function createMockBridgeManager(existingRooms: string[] = []) {
+function createMockBridgeManager(existingRooms: string[] = [], blacklistedRooms: string[] = []) {
   const added: string[] = [];
   return {
     hasRoom: (name: string) => existingRooms.includes(name),
+    isBindBlacklisted: (name: string) => blacklistedRooms.includes(name),
     addRoom: mock(async (name: string) => {
       added.push(name);
     }),
@@ -170,5 +171,31 @@ describe("discoverAndRejoinRooms", () => {
 
     expect(result.roomsSkipped).toEqual(["empty-room"]);
     expect(result.roomsRejoined).toEqual([]);
+  });
+
+  it("skips bind-blacklisted rooms (ghost room suppression)", async () => {
+    const roomService = {
+      listRooms: mock(async () => [{ name: "ghost-room" }, { name: "live-room" }]),
+      listParticipants: mock(async () => [{ identity: "user-a", kind: 0 }]),
+    };
+    // "ghost-room" is blacklisted, "live-room" is not
+    const bridgeManager = createMockBridgeManager([], ["ghost-room"]);
+    const logger = createMockLogger();
+
+    const result = await discoverAndRejoinRooms({
+      roomService: roomService as any,
+      bridgeManager: bridgeManager as any,
+      logger: logger as any,
+    });
+
+    // ghost-room should be skipped without calling listParticipants
+    expect(result.roomsSkipped).toContain("ghost-room");
+    // live-room has humans and is not blacklisted — should be rejoined
+    expect(result.roomsRejoined).toEqual(["live-room"]);
+    expect(bridgeManager.addRoom).toHaveBeenCalledTimes(1);
+    expect(bridgeManager.addRoom).toHaveBeenCalledWith("live-room");
+    // listParticipants should only be called for live-room (ghost-room was skipped early)
+    expect(roomService.listParticipants).toHaveBeenCalledTimes(1);
+    expect(roomService.listParticipants).toHaveBeenCalledWith("live-room");
   });
 });

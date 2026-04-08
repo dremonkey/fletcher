@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../../models/content_block.dart';
 import 'acp_update_parser.dart';
+import 'chunk_reassembler.dart';
 import 'json_rpc.dart';
 
 // ---------------------------------------------------------------------------
@@ -65,13 +68,19 @@ class RelayLoadComplete extends RelayChatEvent {}
 /// A tool call event from a `tool_call` or `tool_call_update` ACP event.
 ///
 /// Emitted only when verbose mode is active (`verbose: true` in `session/new`).
-/// [status] is null when the tool call starts; non-null ("completed", "error")
-/// when it finishes.
+///
+/// On tool start (`tool_call`): [kind] and [title] are populated, [status] is null.
+/// On tool completion (`tool_call_update`): [status] is set ("completed", "failed",
+/// "error"), [kind] and [title] are null.
+///
+/// [kind] classifies the operation: `read`, `edit`, `delete`, `move`, `search`,
+/// `execute`, `think`, `fetch`, or `other`.
 class RelayToolCallEvent extends RelayChatEvent {
   final String id;
+  final String? kind;
   final String? title;
   final String? status;
-  RelayToolCallEvent({required this.id, this.title, this.status});
+  RelayToolCallEvent({required this.id, this.kind, this.title, this.status});
 }
 
 // ---------------------------------------------------------------------------
@@ -125,12 +134,17 @@ class RelayChatService {
   StreamController<RelayChatEvent>? _activeStream;
   int? _activeRequestId;
   Timer? _promptTimer;
+  late final ChunkReassembler _chunkReassembler;
 
   RelayChatService({
     required this.publish,
     this.promptTimeout = const Duration(seconds: 30),
     this.onAsyncUpdate,
-  });
+  }) {
+    _chunkReassembler = ChunkReassembler(
+      onComplete: _handleReassembledPayload,
+    );
+  }
 
   /// Whether a prompt is currently in-flight.
   bool get isBusy => _activeStream != null;
@@ -236,14 +250,67 @@ class RelayChatService {
   ///
   /// Accepts [List<int>] (what LiveKit data channel provides) — converts
   /// internally to [Uint8List] for the JSON-RPC codec.
+  ///
+  /// Large payloads arrive as a sequence of `{ "type": "chunk", ... }` messages
+  /// that are transparently reassembled before normal dispatch.
   void handleMessage(List<int> data) {
-    final msg = decodeJsonRpc(Uint8List.fromList(data));
+    // Peek at the raw bytes to check for a chunk message before attempting
+    // full JSON-RPC decode (chunks are not JSON-RPC 2.0 envelopes).
+    final bytes = Uint8List.fromList(data);
+    try {
+      final raw = jsonDecode(utf8.decode(bytes));
+      if (raw is Map<String, dynamic> && raw['type'] == 'chunk') {
+        _chunkReassembler.handleChunk(raw);
+        return;
+      }
+    } catch (_) {
+      // Not valid JSON — fall through to the normal codec which will produce
+      // a useful null + debugPrint below.
+    }
+
+    final msg = decodeJsonRpc(bytes);
     if (msg == null) {
       debugPrint('[RelayChatService] Dropped malformed JSON-RPC message '
           '(${data.length} bytes)');
       return;
     }
 
+    _dispatchMessage(msg);
+  }
+
+  /// Clean up on dispose (e.g., room disconnect).
+  void dispose() {
+    _promptTimer?.cancel();
+    _promptTimer = null;
+    _activeStream?.close();
+    _activeStream = null;
+    _activeRequestId = null;
+    _chunkReassembler.dispose();
+  }
+
+  // -------------------------------------------------------------------------
+  // Internal
+  // -------------------------------------------------------------------------
+
+  /// Called by [ChunkReassembler] when all chunks for a transfer have arrived.
+  /// Decodes the reassembled payload and dispatches it as a normal message.
+  void _handleReassembledPayload(String payload) {
+    try {
+      final bytes = Uint8List.fromList(utf8.encode(payload));
+      final msg = decodeJsonRpc(bytes);
+      if (msg == null) {
+        debugPrint('[RelayChatService] Reassembled payload is not valid '
+            'JSON-RPC 2.0 (${payload.length} chars)');
+        return;
+      }
+      _dispatchMessage(msg);
+    } catch (e) {
+      debugPrint('[RelayChatService] Error dispatching reassembled payload: $e');
+    }
+  }
+
+  /// Route a decoded JSON-RPC message to the appropriate handler.
+  void _dispatchMessage(JsonRpcMessage msg) {
     if (msg is JsonRpcServerNotification && msg.method == 'session/update') {
       _handleSessionUpdate(msg.params);
     } else if (msg is JsonRpcResponse && msg.id == _activeRequestId) {
@@ -256,19 +323,6 @@ class RelayChatService {
           '${msg.runtimeType}');
     }
   }
-
-  /// Clean up on dispose (e.g., room disconnect).
-  void dispose() {
-    _promptTimer?.cancel();
-    _promptTimer = null;
-    _activeStream?.close();
-    _activeStream = null;
-    _activeRequestId = null;
-  }
-
-  // -------------------------------------------------------------------------
-  // Internal
-  // -------------------------------------------------------------------------
 
   void _handleSessionUpdate(Map<String, dynamic> params) {
     // Handle relay error notifications (BUG-045).
@@ -290,14 +344,27 @@ class RelayChatService {
 
     final update = AcpUpdateParser.parse(params);
 
-    if (update is AcpTextDelta && update.text.isNotEmpty) {
-      final event = RelayContentDelta(update.text);
-      if (_activeStream != null) {
-        _resetPromptTimer();
-        _activeStream!.add(event);
-      } else {
-        // BUG-022: Async/polled update — no prompt in flight
-        onAsyncUpdate?.call(event);
+    if (update is AcpContentDelta) {
+      final block = update.content;
+      // Only route non-empty text content as RelayContentDelta — other block
+      // types (image, audio, resource, diff, terminal) are passed through as
+      // RelayContentBlock for downstream rendering (T30.10).
+      if (block is TextContent && block.text.isNotEmpty) {
+        final event = RelayContentDelta(block.text);
+        if (_activeStream != null) {
+          _resetPromptTimer();
+          _activeStream!.add(event);
+        } else {
+          // BUG-022: Async/polled update — no prompt in flight
+          onAsyncUpdate?.call(event);
+        }
+      } else if (block is! TextContent) {
+        // Non-text content block — emit for downstream renderers once T30.10
+        // wires up the RendererRegistry. For now, just reset the timer so the
+        // prompt doesn't time out during rich content delivery.
+        if (_activeStream != null) {
+          _resetPromptTimer();
+        }
       }
     } else if (update is AcpThinkingDelta && update.text.isNotEmpty) {
       final event = RelayThinkingDelta(update.text);
@@ -322,6 +389,7 @@ class RelayChatService {
       _resetPromptTimer();
       _activeStream?.add(RelayToolCallEvent(
         id: update.id,
+        kind: update.kind,
         title: update.title,
         status: update.status,
       ));

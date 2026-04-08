@@ -66,9 +66,9 @@ describe("AcpClient", () => {
 
     // The update notification should have arrived before the response
     expect(updates.length).toBeGreaterThanOrEqual(1);
-    const firstUpdate = updates[0] as { updates: { kind: string; content: { text: string } }[] };
-    expect(firstUpdate.updates[0].kind).toBe("content_chunk");
-    expect(firstUpdate.updates[0].content.text).toBe("Echo: Hello");
+    const firstUpdate = updates[0] as { sessionId: string; update: { sessionUpdate: string; content: { type: string; text: string } } };
+    expect(firstUpdate.update.sessionUpdate).toBe("agent_message_chunk");
+    expect(firstUpdate.update.content.text).toBe("Echo: Hello");
   });
 
   test("sessionCancel() sends notification without error", async () => {

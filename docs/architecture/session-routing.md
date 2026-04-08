@@ -92,18 +92,6 @@ Legacy headers are also sent for backward compatibility:
 - `X-OpenClaw-Participant-Identity` — participant identity
 - `X-OpenClaw-Participant-SID` — participant session ID
 
-### Nanoclaw Channel
-
-Nanoclaw uses a single `X-Nanoclaw-Channel` header. The SessionKey maps to channel names:
-
-| SessionKey | Channel |
-|------------|---------|
-| `owner` | `"main"` |
-| `guest` | `"guest:{identity}"` |
-| `room` | `"room:{roomName}"` |
-
-Without a SessionKey, the channel falls back to JID format: `{prefix}:{participantIdentity}` (e.g., `lk:device-abc123`).
-
 ## Agent Wiring
 
 When a participant joins a LiveKit room, the voice agent wires up session routing before conversation begins.

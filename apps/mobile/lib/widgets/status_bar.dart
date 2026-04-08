@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import '../models/conversation_state.dart';
 
 /// Displays the current agent status (what the agent is doing).
-/// Shows actions like "Reading file...", "Searching...", etc.
+///
+/// Shows tool execution status from ACP `tool_call` events (text mode) or
+/// Ganglia `status` events (voice mode). Both produce a [ToolStatus] with
+/// a [ToolStatus.kind] for icon/color selection and a [ToolStatus.displayText]
+/// for the human-readable label.
 class StatusBar extends StatelessWidget {
-  final StatusEvent? status;
+  final ToolStatus? status;
 
   const StatusBar({
     super.key,
@@ -26,11 +30,11 @@ class StatusBar extends StatelessWidget {
           color: const Color(0xFF1F1F1F),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: _getStatusColor(status!.action).withOpacity(0.3),
+            color: _getStatusColor(status!.kind).withOpacity(0.3),
           ),
           boxShadow: [
             BoxShadow(
-              color: _getStatusColor(status!.action).withOpacity(0.1),
+              color: _getStatusColor(status!.kind).withOpacity(0.1),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -39,13 +43,13 @@ class StatusBar extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _StatusIcon(action: status!.action),
+            _StatusIcon(kind: status!.kind),
             const SizedBox(width: 10),
             Flexible(
               child: Text(
                 status!.displayText,
                 style: TextStyle(
-                  color: _getStatusColor(status!.action),
+                  color: _getStatusColor(status!.kind),
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
                 ),
@@ -58,32 +62,35 @@ class StatusBar extends StatelessWidget {
     );
   }
 
-  Color _getStatusColor(StatusAction action) {
-    switch (action) {
-      case StatusAction.thinking:
+  Color _getStatusColor(String kind) {
+    switch (kind) {
+      case 'think':
         return const Color(0xFFF59E0B); // Amber
-      case StatusAction.searchingFiles:
+      case 'search':
         return const Color(0xFF3B82F6); // Blue
-      case StatusAction.readingFile:
+      case 'read':
         return const Color(0xFF10B981); // Green
-      case StatusAction.writingFile:
-      case StatusAction.editingFile:
+      case 'edit':
         return const Color(0xFFF97316); // Orange
-      case StatusAction.webSearch:
+      case 'fetch':
         return const Color(0xFF8B5CF6); // Purple
-      case StatusAction.executingCommand:
+      case 'execute':
         return const Color(0xFFEF4444); // Red
-      case StatusAction.analyzing:
+      case 'delete':
+        return const Color(0xFFEF4444); // Red
+      case 'move':
+        return const Color(0xFFF97316); // Orange
+      default: // 'other' and anything unknown
         return const Color(0xFF06B6D4); // Cyan
     }
   }
 }
 
-/// Animated icon for status actions
+/// Animated icon for tool status kinds.
 class _StatusIcon extends StatefulWidget {
-  final StatusAction action;
+  final String kind;
 
-  const _StatusIcon({required this.action});
+  const _StatusIcon({required this.kind});
 
   @override
   State<_StatusIcon> createState() => _StatusIconState();
@@ -121,49 +128,54 @@ class _StatusIconState extends State<_StatusIcon>
   }
 
   bool get _shouldSpin {
-    return widget.action == StatusAction.thinking ||
-        widget.action == StatusAction.analyzing ||
-        widget.action == StatusAction.searchingFiles;
+    return widget.kind == 'think' ||
+        widget.kind == 'search' ||
+        widget.kind == 'other';
   }
 
   IconData _getIcon() {
-    switch (widget.action) {
-      case StatusAction.thinking:
+    switch (widget.kind) {
+      case 'think':
         return Icons.psychology_outlined;
-      case StatusAction.searchingFiles:
+      case 'search':
         return Icons.search_rounded;
-      case StatusAction.readingFile:
+      case 'read':
         return Icons.description_outlined;
-      case StatusAction.writingFile:
-        return Icons.edit_note_rounded;
-      case StatusAction.editingFile:
+      case 'edit':
         return Icons.edit_rounded;
-      case StatusAction.webSearch:
+      case 'fetch':
         return Icons.language_rounded;
-      case StatusAction.executingCommand:
+      case 'execute':
         return Icons.terminal_rounded;
-      case StatusAction.analyzing:
+      case 'delete':
+        return Icons.delete_outline_rounded;
+      case 'move':
+        return Icons.drive_file_move_outline_rounded;
+      default: // 'other' and anything unknown
         return Icons.analytics_outlined;
     }
   }
 
   Color _getColor() {
-    switch (widget.action) {
-      case StatusAction.thinking:
-        return const Color(0xFFF59E0B);
-      case StatusAction.searchingFiles:
-        return const Color(0xFF3B82F6);
-      case StatusAction.readingFile:
-        return const Color(0xFF10B981);
-      case StatusAction.writingFile:
-      case StatusAction.editingFile:
-        return const Color(0xFFF97316);
-      case StatusAction.webSearch:
-        return const Color(0xFF8B5CF6);
-      case StatusAction.executingCommand:
-        return const Color(0xFFEF4444);
-      case StatusAction.analyzing:
-        return const Color(0xFF06B6D4);
+    switch (widget.kind) {
+      case 'think':
+        return const Color(0xFFF59E0B); // Amber
+      case 'search':
+        return const Color(0xFF3B82F6); // Blue
+      case 'read':
+        return const Color(0xFF10B981); // Green
+      case 'edit':
+        return const Color(0xFFF97316); // Orange
+      case 'fetch':
+        return const Color(0xFF8B5CF6); // Purple
+      case 'execute':
+        return const Color(0xFFEF4444); // Red
+      case 'delete':
+        return const Color(0xFFEF4444); // Red
+      case 'move':
+        return const Color(0xFFF97316); // Orange
+      default: // 'other' and anything unknown
+        return const Color(0xFF06B6D4); // Cyan
     }
   }
 }

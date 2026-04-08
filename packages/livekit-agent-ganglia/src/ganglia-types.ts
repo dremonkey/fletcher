@@ -63,26 +63,11 @@ export interface RelayConfig {
 }
 
 /**
- * Nanoclaw backend configuration.
- */
-export interface NanoclawConfig {
-  /** API endpoint URL */
-  url: string;
-  /** Channel prefix for JID (default: lk) */
-  channelPrefix?: string;
-  /** Optional logger for production-level logging (defaults to silent) */
-  logger?: import('./logger.js').Logger;
-  /** Controls how much conversation history to send. Default: 'full' */
-  historyMode?: 'full' | 'latest';
-}
-
-/**
  * Discriminated union for backend configuration.
  * Use `type` to determine which backend to instantiate.
  */
 export type GangliaConfig =
-  | { type: 'relay'; relay: RelayConfig; logger?: import('./logger.js').Logger }
-  | { type: 'nanoclaw'; nanoclaw: NanoclawConfig; logger?: import('./logger.js').Logger };
+  | { type: 'relay'; relay: RelayConfig; logger?: import('./logger.js').Logger };
 
 /**
  * Backend type identifier.

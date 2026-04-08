@@ -11,6 +11,7 @@
 /// — singular `update` object, NOT an `updates[]` array.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fletcher/models/content_block.dart';
 import 'package:fletcher/services/relay/acp_update_parser.dart';
 
 void main() {
@@ -20,7 +21,9 @@ void main() {
     // -------------------------------------------------------------------------
 
     group('agent_message_chunk', () {
-      test('returns AcpTextDelta for text content', () {
+      // --- Text content (regression tests) ---
+
+      test('returns AcpContentDelta(TextContent) for text content', () {
         final params = {
           'sessionId': 'sess_abc123',
           'update': {
@@ -28,10 +31,15 @@ void main() {
             'content': {'type': 'text', 'text': 'Hello, world!'},
           },
         };
-        expect(AcpUpdateParser.parse(params), AcpTextDelta('Hello, world!'));
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpContentDelta>());
+        final delta = result! as AcpContentDelta;
+        expect(delta.updateKind, 'agent_message_chunk');
+        expect(delta.content, isA<TextContent>());
+        expect((delta.content as TextContent).text, 'Hello, world!');
       });
 
-      test('returns AcpTextDelta for empty string (caller filters)', () {
+      test('returns AcpContentDelta(TextContent) for empty string (caller filters)', () {
         // The spec does not prohibit empty text chunks. Caller decides
         // whether to render — the parser passes through faithfully.
         final params = {
@@ -41,10 +49,13 @@ void main() {
             'content': {'type': 'text', 'text': ''},
           },
         };
-        expect(AcpUpdateParser.parse(params), AcpTextDelta(''));
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpContentDelta>());
+        expect((result! as AcpContentDelta).content, isA<TextContent>());
+        expect(((result as AcpContentDelta).content as TextContent).text, '');
       });
 
-      test('returns AcpTextDelta for multi-line text', () {
+      test('returns AcpContentDelta(TextContent) for multi-line text', () {
         final params = {
           'sessionId': 'sess_abc123',
           'update': {
@@ -52,13 +63,15 @@ void main() {
             'content': {'type': 'text', 'text': 'Line 1\nLine 2\nLine 3'},
           },
         };
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpContentDelta>());
         expect(
-          AcpUpdateParser.parse(params),
-          AcpTextDelta('Line 1\nLine 2\nLine 3'),
+          ((result! as AcpContentDelta).content as TextContent).text,
+          'Line 1\nLine 2\nLine 3',
         );
       });
 
-      test('returns AcpTextDelta for text with unicode', () {
+      test('returns AcpContentDelta(TextContent) for text with unicode', () {
         final params = {
           'sessionId': 'sess_abc123',
           'update': {
@@ -66,15 +79,18 @@ void main() {
             'content': {'type': 'text', 'text': '温度は72°F ☀️'},
           },
         };
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpContentDelta>());
         expect(
-          AcpUpdateParser.parse(params),
-          AcpTextDelta('温度は72°F ☀️'),
+          ((result! as AcpContentDelta).content as TextContent).text,
+          '温度は72°F ☀️',
         );
       });
 
-      test('returns AcpNonContentUpdate for image content (non-text)', () {
+      // --- Non-text content types ---
+
+      test('returns AcpContentDelta(ImageContent) for image content', () {
         // ACP allows agent_message_chunk to carry image ContentBlocks.
-        // Mobile does not render these as text — treat as non-content.
         final params = {
           'sessionId': 'sess_abc123',
           'update': {
@@ -86,14 +102,38 @@ void main() {
             },
           },
         };
-        expect(
-          AcpUpdateParser.parse(params),
-          AcpNonContentUpdate('agent_message_chunk'),
-        );
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpContentDelta>());
+        final delta = result! as AcpContentDelta;
+        expect(delta.updateKind, 'agent_message_chunk');
+        expect(delta.content, isA<ImageContent>());
+        final img = delta.content as ImageContent;
+        expect(img.data, 'iVBORw0KGgo=');
+        expect(img.mimeType, 'image/png');
       });
 
-      test('returns AcpNonContentUpdate for resource content', () {
-        // Embedded resource — non-renderable as text
+      test('returns AcpContentDelta(AudioContent) for audio content', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'agent_message_chunk',
+            'content': {
+              'type': 'audio',
+              'data': 'UklGRiQAAABXQVZF',
+              'mimeType': 'audio/wav',
+            },
+          },
+        };
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpContentDelta>());
+        final delta = result! as AcpContentDelta;
+        expect(delta.content, isA<AudioContent>());
+        final audio = delta.content as AudioContent;
+        expect(audio.data, 'UklGRiQAAABXQVZF');
+        expect(audio.mimeType, 'audio/wav');
+      });
+
+      test('returns AcpContentDelta(ResourceContent) for resource content', () {
         final params = {
           'sessionId': 'sess_abc123',
           'update': {
@@ -108,11 +148,59 @@ void main() {
             },
           },
         };
-        expect(
-          AcpUpdateParser.parse(params),
-          AcpNonContentUpdate('agent_message_chunk'),
-        );
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpContentDelta>());
+        final delta = result! as AcpContentDelta;
+        expect(delta.content, isA<ResourceContent>());
+        final res = delta.content as ResourceContent;
+        expect(res.uri, 'file:///home/user/file.dart');
+        expect(res.mimeType, 'text/x-dart');
+        expect(res.text, 'void main() {}');
       });
+
+      test('returns AcpContentDelta(ResourceLinkContent) for resource_link', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'agent_message_chunk',
+            'content': {
+              'type': 'resource_link',
+              'uri': 'file:///home/user/report.pdf',
+              'name': 'report.pdf',
+              'mimeType': 'application/pdf',
+            },
+          },
+        };
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpContentDelta>());
+        final delta = result! as AcpContentDelta;
+        expect(delta.content, isA<ResourceLinkContent>());
+        final rl = delta.content as ResourceLinkContent;
+        expect(rl.uri, 'file:///home/user/report.pdf');
+        expect(rl.name, 'report.pdf');
+        expect(rl.mimeType, 'application/pdf');
+      });
+
+      test('returns AcpContentDelta(RawContent) for unknown content type', () {
+        // Unknown types fall back to RawContent (forward compatibility).
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'agent_message_chunk',
+            'content': {
+              'type': 'future_block_type',
+              'payload': 'some data',
+            },
+          },
+        };
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpContentDelta>());
+        final delta = result! as AcpContentDelta;
+        expect(delta.content, isA<RawContent>());
+        expect((delta.content as RawContent).json['type'], 'future_block_type');
+      });
+
+      // --- Malformed input ---
 
       test('returns null when content field is absent', () {
         final params = {
@@ -167,6 +255,16 @@ void main() {
           },
         };
         expect(AcpUpdateParser.parse(params), isNull);
+      });
+
+      // --- Value equality ---
+
+      test('AcpContentDelta equality is based on content and updateKind', () {
+        const a = AcpContentDelta(TextContent(text: 'hi'), 'agent_message_chunk');
+        const b = AcpContentDelta(TextContent(text: 'hi'), 'agent_message_chunk');
+        const c = AcpContentDelta(TextContent(text: 'bye'), 'agent_message_chunk');
+        expect(a, equals(b));
+        expect(a, isNot(equals(c)));
       });
     });
 
@@ -517,12 +615,15 @@ void main() {
         expect(a, isNot(equals(c)));
       });
 
-      test('AcpThinkingDelta is distinct from AcpTextDelta', () {
-        // Same text content, different update kind — must be distinguishable
+      test('AcpThinkingDelta is distinct from AcpContentDelta(TextContent)', () {
+        // Same text content, different update type — must be distinguishable
         const thinking = AcpThinkingDelta('hello');
-        const text = AcpTextDelta('hello');
-        expect(thinking, isNot(equals(text)));
-        expect(thinking.runtimeType, isNot(text.runtimeType));
+        const textDelta = AcpContentDelta(
+          TextContent(text: 'hello'),
+          'agent_message_chunk',
+        );
+        expect(thinking, isNot(equals(textDelta)));
+        expect(thinking.runtimeType, isNot(textDelta.runtimeType));
       });
     });
 
@@ -621,6 +722,61 @@ void main() {
         expect(update.input, '{"query": "user preferences"}');
       });
 
+      test('extracts kind field when present', () {
+        // ACP tool_call events include a kind discriminator for the operation type.
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'tool_call',
+            'id': 'tc_read_1',
+            'kind': 'read',
+            'title': 'Reading src/main.dart',
+            'input': '{"path": "src/main.dart"}',
+          },
+        };
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpToolCallUpdate>());
+        final update = result! as AcpToolCallUpdate;
+        expect(update.id, 'tc_read_1');
+        expect(update.kind, 'read');
+        expect(update.title, 'Reading src/main.dart');
+        expect(update.status, isNull);
+      });
+
+      test('kind is null when not present (older ACP implementations)', () {
+        // tool_call events from agents that do not emit kind should still parse.
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'tool_call',
+            'id': 'tc_456',
+            'title': 'memory_search',
+            // no 'kind' field
+          },
+        };
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpToolCallUpdate>());
+        expect((result! as AcpToolCallUpdate).kind, isNull);
+      });
+
+      test('all ACP kind values parse correctly', () {
+        // Verify each expected kind value round-trips through the parser.
+        final kinds = ['read', 'edit', 'delete', 'move', 'search', 'execute', 'think', 'fetch', 'other'];
+        for (final k in kinds) {
+          final params = {
+            'update': {
+              'sessionUpdate': 'tool_call',
+              'id': 'tc_$k',
+              'kind': k,
+              'title': 'Performing $k',
+            },
+          };
+          final result = AcpUpdateParser.parse(params);
+          expect(result, isA<AcpToolCallUpdate>(), reason: 'kind=$k should parse');
+          expect((result! as AcpToolCallUpdate).kind, k);
+        }
+      });
+
       test('returns null when id is missing', () {
         final params = {
           'sessionId': 'sess_abc123',
@@ -675,7 +831,15 @@ void main() {
         expect((result! as AcpToolCallUpdate).input, isNull);
       });
 
-      test('AcpToolCallUpdate equality works', () {
+      test('AcpToolCallUpdate equality includes kind', () {
+        const a = AcpToolCallUpdate(id: 'tc_1', kind: 'read', title: 'Reading file', status: null);
+        const b = AcpToolCallUpdate(id: 'tc_1', kind: 'read', title: 'Reading file', status: null);
+        const c = AcpToolCallUpdate(id: 'tc_1', kind: 'edit', title: 'Reading file', status: null);
+        expect(a, equals(b));
+        expect(a, isNot(equals(c)));
+      });
+
+      test('AcpToolCallUpdate equality works without kind (backward compat)', () {
         const a = AcpToolCallUpdate(id: 'tc_1', title: 'search', status: null);
         const b = AcpToolCallUpdate(id: 'tc_1', title: 'search', status: null);
         const c = AcpToolCallUpdate(id: 'tc_2', title: 'search', status: null);
@@ -696,9 +860,6 @@ void main() {
             'sessionUpdate': 'tool_call_update',
             'id': 'tc_123',
             'status': 'completed',
-            'content': [
-              {'type': 'text', 'text': 'File contents: void main() {}'},
-            ],
           },
         };
         final result = AcpUpdateParser.parse(params);
@@ -707,6 +868,7 @@ void main() {
         expect(update.id, 'tc_123');
         expect(update.status, 'completed');
         expect(update.title, isNull); // tool_call_update does not carry title
+        expect(update.content, isEmpty);
       });
 
       test('returns AcpToolCallUpdate for error status', () {
@@ -722,6 +884,166 @@ void main() {
         expect(result, isA<AcpToolCallUpdate>());
         expect((result! as AcpToolCallUpdate).status, 'error');
       });
+
+      // --- Content array parsing (T30.08) ---
+
+      test('parses content array with wrapped text ContentBlock', () {
+        // { type: "content", content: { type: "text", ... } } — unwrapped to TextContent
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'tool_call_update',
+            'id': 'tc_123',
+            'status': 'completed',
+            'content': [
+              {
+                'type': 'content',
+                'content': {'type': 'text', 'text': 'File contents: void main() {}'},
+              },
+            ],
+          },
+        };
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpToolCallUpdate>());
+        final update = result! as AcpToolCallUpdate;
+        expect(update.content, hasLength(1));
+        expect(update.content.first, isA<TextContent>());
+        expect((update.content.first as TextContent).text, 'File contents: void main() {}');
+      });
+
+      test('parses content array with direct text block (no wrapper)', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'tool_call_update',
+            'id': 'tc_123',
+            'status': 'completed',
+            'content': [
+              {'type': 'text', 'text': 'Direct text result'},
+            ],
+          },
+        };
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpToolCallUpdate>());
+        final update = result! as AcpToolCallUpdate;
+        expect(update.content, hasLength(1));
+        expect(update.content.first, isA<TextContent>());
+      });
+
+      test('parses content array with DiffContent', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'tool_call_update',
+            'id': 'tc_789',
+            'status': 'completed',
+            'content': [
+              {
+                'type': 'diff',
+                'path': '/home/user/project/src/main.dart',
+                'oldText': 'void main() {}',
+                'newText': 'void main() { print("hello"); }',
+              },
+            ],
+          },
+        };
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpToolCallUpdate>());
+        final update = result! as AcpToolCallUpdate;
+        expect(update.content, hasLength(1));
+        expect(update.content.first, isA<DiffContent>());
+        final diff = update.content.first as DiffContent;
+        expect(diff.path, '/home/user/project/src/main.dart');
+        expect(diff.oldText, 'void main() {}');
+        expect(diff.newText, 'void main() { print("hello"); }');
+      });
+
+      test('parses content array with TerminalContent', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'tool_call_update',
+            'id': 'tc_900',
+            'status': 'completed',
+            'content': [
+              {'type': 'terminal', 'terminalId': 'term_abc123'},
+            ],
+          },
+        };
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpToolCallUpdate>());
+        final update = result! as AcpToolCallUpdate;
+        expect(update.content, hasLength(1));
+        expect(update.content.first, isA<TerminalContent>());
+        expect((update.content.first as TerminalContent).terminalId, 'term_abc123');
+      });
+
+      test('parses content array with mixed content types', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'tool_call_update',
+            'id': 'tc_mixed',
+            'status': 'completed',
+            'content': [
+              {
+                'type': 'content',
+                'content': {'type': 'text', 'text': 'Summary: modified 1 file.'},
+              },
+              {
+                'type': 'diff',
+                'path': '/home/user/config.json',
+                'newText': '{"debug": true}',
+              },
+            ],
+          },
+        };
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpToolCallUpdate>());
+        final update = result! as AcpToolCallUpdate;
+        expect(update.content, hasLength(2));
+        expect(update.content[0], isA<TextContent>());
+        expect(update.content[1], isA<DiffContent>());
+      });
+
+      test('content array absent — content is empty list', () {
+        // Status-only tool_call_update (no content field)
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'tool_call_update',
+            'id': 'tc_no_content',
+            'status': 'in_progress',
+          },
+        };
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpToolCallUpdate>());
+        expect((result! as AcpToolCallUpdate).content, isEmpty);
+      });
+
+      test('content array with non-object items are skipped', () {
+        final params = {
+          'sessionId': 'sess_abc123',
+          'update': {
+            'sessionUpdate': 'tool_call_update',
+            'id': 'tc_junk',
+            'status': 'completed',
+            'content': [
+              'not an object',
+              42,
+              {'type': 'text', 'text': 'valid item'},
+            ],
+          },
+        };
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpToolCallUpdate>());
+        // Only the valid object item is parsed; strings/ints are skipped.
+        final update = result! as AcpToolCallUpdate;
+        expect(update.content, hasLength(1));
+        expect(update.content.first, isA<TextContent>());
+      });
+
+      // --- Malformed input ---
 
       test('returns null when id is missing', () {
         final params = {
@@ -941,9 +1263,11 @@ void main() {
             'content': {'type': 'text', 'text': 'Works without sessionId'},
           },
         };
+        final result = AcpUpdateParser.parse(params);
+        expect(result, isA<AcpContentDelta>());
         expect(
-          AcpUpdateParser.parse(params),
-          AcpTextDelta('Works without sessionId'),
+          ((result! as AcpContentDelta).content as TextContent).text,
+          'Works without sessionId',
         );
       });
     });

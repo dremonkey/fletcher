@@ -189,14 +189,11 @@ See [Network Connectivity](network-connectivity.md) for the full URL resolution 
 | `LIVEKIT_CLOUD_API_KEY` | No | — | Cloud API key |
 | `LIVEKIT_CLOUD_API_SECRET` | No | — | Cloud API secret |
 
-### Ganglia / Brain
+### Ganglia
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `GANGLIA_TYPE` | No | `relay` | Backend: `relay` (default) or `nanoclaw` |
-| `BRAIN_TYPE` | No | — | Alias for `GANGLIA_TYPE` |
-| `NANOCLAW_URL` | No | `http://localhost:18789` | Nanoclaw HTTP endpoint |
-| `NANOCLAW_CHANNEL_PREFIX` | No | `lk` | JID channel prefix |
+| `GANGLIA_TYPE` | No | `relay` | Backend selection (relay is the only backend) |
 
 ### Voice Providers
 
@@ -235,7 +232,7 @@ See [Network Connectivity](network-connectivity.md) for the full URL resolution 
 | 50000-60000 | UDP | LiveKit | WebRTC media streams |
 | 5000 | TCP | Piper | TTS sidecar HTTP API |
 | 7882 | TCP | Token Server | JWT token generation endpoint |
-| 18789 | TCP | OpenClaw/Nanoclaw | Gateway HTTP API |
+| 18789 | TCP | OpenClaw Gateway | Gateway HTTP API (if using OpenClaw backend) |
 
 ## Related Documents
 

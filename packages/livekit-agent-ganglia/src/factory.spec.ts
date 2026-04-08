@@ -78,41 +78,43 @@ describe('isGangliaAvailable', () => {
 });
 
 describe('Backend Registration', () => {
-  it('nanoclaw backend is registered after import', async () => {
-    await import('./nanoclaw.js');
-    expect(isGangliaAvailable('nanoclaw')).toBe(true);
-  });
-
   it('relay backend is registered after import', async () => {
     await import('./relay-llm.js');
     expect(isGangliaAvailable('relay')).toBe(true);
   });
 
-  it('both backends are available via index', async () => {
+  it('relay is available via index', async () => {
     const ganglia = await import('./index.js');
 
     expect(ganglia.isGangliaAvailable('relay')).toBe(true);
-    expect(ganglia.isGangliaAvailable('nanoclaw')).toBe(true);
     expect(ganglia.getRegisteredTypes()).toContain('relay');
-    expect(ganglia.getRegisteredTypes()).toContain('nanoclaw');
   });
 
-  it('acp type is no longer available', async () => {
+  it('nanoclaw is no longer available', async () => {
+    await import('./index.js');
+    expect(isGangliaAvailable('nanoclaw')).toBe(false);
+  });
+
+  it('acp type is not available', async () => {
     await import('./index.js');
     expect(isGangliaAvailable('acp')).toBe(false);
   });
 
-  it('createGanglia works for nanoclaw', async () => {
-    await import('./nanoclaw.js');
+  it('createGanglia works for relay', async () => {
+    await import('./relay-llm.js');
+    const mockRoom = {
+      localParticipant: { publishData: async () => {} },
+      remoteParticipants: new Map(),
+      on: () => ({} as any),
+      off: () => ({} as any),
+    };
     const llm = await createGanglia({
-      type: 'nanoclaw',
-      nanoclaw: {
-        url: 'http://localhost:18789',
-      },
+      type: 'relay',
+      relay: { room: mockRoom as any },
     });
 
-    expect(llm.gangliaType()).toBe('nanoclaw');
-    expect(llm.label()).toBe('nanoclaw');
+    expect(llm.gangliaType()).toBe('relay');
+    expect(llm.label()).toBe('relay');
   });
 });
 
@@ -120,9 +122,7 @@ describe('createGangliaFromEnv', () => {
   it('defaults to relay when GANGLIA_TYPE not set', async () => {
     await import('./relay-llm.js');
     const origType = process.env.GANGLIA_TYPE;
-    const origBrainType = process.env.BRAIN_TYPE;
     delete process.env.GANGLIA_TYPE;
-    delete process.env.BRAIN_TYPE;
 
     const { createGangliaFromEnv } = await import('./factory.js');
 
@@ -133,30 +133,15 @@ describe('createGangliaFromEnv', () => {
 
     // Restore env
     if (origType !== undefined) process.env.GANGLIA_TYPE = origType;
-    if (origBrainType !== undefined) process.env.BRAIN_TYPE = origBrainType;
   });
 
-  it('creates nanoclaw when GANGLIA_TYPE=nanoclaw', async () => {
-    await import('./nanoclaw.js');
-    const origType = process.env.GANGLIA_TYPE;
-    process.env.GANGLIA_TYPE = 'nanoclaw';
-
-    const { createGangliaFromEnv } = await import('./factory.js');
-    const llm = await createGangliaFromEnv();
-
-    expect(llm.gangliaType()).toBe('nanoclaw');
-
-    if (origType !== undefined) process.env.GANGLIA_TYPE = origType;
-    else delete process.env.GANGLIA_TYPE;
-  });
-
-  it('throws for GANGLIA_TYPE=acp', async () => {
+  it('throws for unknown GANGLIA_TYPE', async () => {
     await import('./index.js');
     const origType = process.env.GANGLIA_TYPE;
-    process.env.GANGLIA_TYPE = 'acp';
+    process.env.GANGLIA_TYPE = 'unknown-backend';
 
     const { createGangliaFromEnv } = await import('./factory.js');
-    await expect(createGangliaFromEnv()).rejects.toThrow('Unknown GANGLIA_TYPE: acp');
+    await expect(createGangliaFromEnv()).rejects.toThrow('Unknown GANGLIA_TYPE: unknown-backend');
 
     if (origType !== undefined) process.env.GANGLIA_TYPE = origType;
     else delete process.env.GANGLIA_TYPE;

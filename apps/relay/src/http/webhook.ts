@@ -8,6 +8,11 @@ import { isHumanParticipant } from "../livekit/participant-filter";
  *
  * On `participant_joined` events from standard (non-relay, non-agent)
  * participants, automatically joins the relay to that room via bridgeManager.
+ *
+ * On `participant_left` events, schedules a deferred teardown after the
+ * departure grace period. If the participant rejoins within the grace period
+ * (e.g. network switch), the teardown is cancelled and the existing bridge
+ * is validated for health before reuse.
  */
 export function createWebhookHandler(
   webhookReceiver: WebhookReceiver,
@@ -43,11 +48,25 @@ export function createWebhookHandler(
         return Response.json({ received: true });
       }
 
+      // Clear any bind-failed blacklist — participant is back
+      bridgeManager.clearBindBlacklist(roomName);
+
       // Cancel any pending deferred teardown — participant reconnected
-      bridgeManager.cancelPendingTeardown(roomName);
+      const wasPendingTeardown = bridgeManager.cancelPendingTeardown(roomName);
 
       if (bridgeManager.hasRoom(roomName)) {
-        log.debug("Room already joined, skipping");
+        if (wasPendingTeardown) {
+          // Bridge survived the grace period — validate health before reuse (BUG-036 safety)
+          try {
+            await bridgeManager.validateOrReplaceBridge(roomName);
+            log.info({ roomName }, "Validated bridge after reconnect");
+          } catch (err) {
+            const message = err instanceof Error ? err.message : "Unknown error";
+            log.error({ roomName, error: message }, "Failed to validate bridge after reconnect");
+          }
+        } else {
+          log.debug("Room already joined, skipping");
+        }
         return Response.json({ received: true });
       }
 
@@ -74,18 +93,11 @@ export function createWebhookHandler(
         return Response.json({ received: true });
       }
 
-      // BUG-036: Remove room immediately instead of scheduling a deferred teardown.
-      // This ensures that if the human rejoins, they get a fresh relay bridge
-      // and ACP session, which helps recover from state issues (like BUG-027c).
-      // Once Epic 25 (Session Restoration) is implemented, the relay will
-      // be able to restore the previous session state automatically.
-      try {
-        await bridgeManager.removeRoom(roomName);
-        log.info({ roomName, identity: participant?.identity }, "Removed room immediately after participant left");
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Unknown error";
-        log.error({ roomName, error: message }, "Failed to remove room after participant left");
-      }
+      // Schedule deferred teardown — relay stays in the room during the grace period.
+      // If the participant rejoins (e.g. network switch), the teardown is cancelled
+      // and the bridge is validated before reuse.
+      bridgeManager.scheduleRemoveRoom(roomName);
+      log.info({ roomName, identity: participant?.identity }, "Scheduled deferred teardown after participant left");
     }
 
     return Response.json({ received: true });

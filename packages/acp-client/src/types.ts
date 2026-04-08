@@ -155,13 +155,105 @@ export interface SetConfigOptionResult {
 }
 
 // ---------------------------------------------------------------------------
-// Prompt
+// Content blocks
+//
+// ACP spec: https://agentclientprotocol.com/protocol/content
+//
+// Uses the same ContentBlock structure as MCP, allowing agents to forward
+// MCP tool output without transformation.
 // ---------------------------------------------------------------------------
 
-export interface ContentPart {
-  type: string;
+export interface TextContentPart {
+  type: "text";
   text: string;
+  annotations?: Record<string, unknown>;
 }
+
+export interface ImageContentPart {
+  type: "image";
+  /** Base64-encoded image data. */
+  data: string;
+  mimeType: string;
+  uri?: string;
+  annotations?: Record<string, unknown>;
+}
+
+export interface AudioContentPart {
+  type: "audio";
+  /** Base64-encoded audio data. */
+  data: string;
+  mimeType: string;
+  annotations?: Record<string, unknown>;
+}
+
+export interface ResourceContentPart {
+  type: "resource";
+  resource: {
+    uri: string;
+    mimeType?: string;
+    /** Text resource content. */
+    text?: string;
+    /** Base64-encoded binary resource content. */
+    blob?: string;
+  };
+  annotations?: Record<string, unknown>;
+}
+
+export interface ResourceLinkContentPart {
+  type: "resource_link";
+  uri: string;
+  name: string;
+  mimeType?: string;
+  title?: string;
+  description?: string;
+  /** Size of the resource in bytes. */
+  size?: number;
+  annotations?: Record<string, unknown>;
+}
+
+export type ContentPart =
+  | TextContentPart
+  | ImageContentPart
+  | AudioContentPart
+  | ResourceContentPart
+  | ResourceLinkContentPart;
+
+// ---------------------------------------------------------------------------
+// Tool call content types
+//
+// ACP spec: https://agentclientprotocol.com/protocol/tool-calls
+//
+// These appear in tool_call / tool_call_update session updates.
+// ---------------------------------------------------------------------------
+
+export interface ToolCallContentItem {
+  type: "content";
+  content: ContentPart;
+}
+
+export interface ToolCallDiffItem {
+  type: "diff";
+  /** Absolute file path being modified. */
+  path: string;
+  /** Original content (absent for new files). */
+  oldText?: string;
+  /** New content after modification. */
+  newText: string;
+}
+
+export interface ToolCallTerminalItem {
+  type: "terminal";
+  terminalId: string;
+}
+
+export type ToolCallContent =
+  | ToolCallContentItem
+  | ToolCallDiffItem
+  | ToolCallTerminalItem;
+
+// ---------------------------------------------------------------------------
+// Prompt
+// ---------------------------------------------------------------------------
 
 export interface SessionPromptParams {
   sessionId: string;

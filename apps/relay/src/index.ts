@@ -66,7 +66,7 @@ process.on("unhandledRejection", (reason) => {
 });
 
 // Graceful shutdown
-for (const signal of ["SIGINT", "SIGTERM"] as const) {
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
   process.on(signal, async () => {
     log.info("Shutting down...");
     bridgeManager.stopIdleTimer();

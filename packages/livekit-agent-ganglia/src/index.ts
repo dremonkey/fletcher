@@ -1,18 +1,17 @@
 /**
  * Livekit Agent Ganglia
  *
- * A unified LiveKit Agents LLM plugin supporting Relay and Nanoclaw backends.
+ * A LiveKit Agents LLM plugin for the Relay backend (data channel bridge).
  *
  * @example
  * ```typescript
- * import { createGangliaFromEnv, RelayLLM, NanoclawLLM } from '@knittt/livekit-agent-ganglia';
+ * import { createGangliaFromEnv, RelayLLM } from '@knittt/livekit-agent-ganglia';
  *
- * // From environment variables (GANGLIA_TYPE=relay|nanoclaw)
+ * // From environment variables (GANGLIA_TYPE=relay, the only option)
  * const llm = await createGangliaFromEnv({ room: ctx.room });
  *
  * // Direct instantiation
  * const relayLlm = new RelayLLM({ room, logger });
- * const nanoclawLlm = new NanoclawLLM({ url: 'http://localhost:18789' });
  * ```
  */
 
@@ -24,7 +23,6 @@ export type {
   GangliaConfig,
   GangliaSessionInfo,
   GangliaType,
-  NanoclawConfig as GangliaNanoclawConfig,
   RelayConfig as GangliaRelayConfig,
   RelayRoom as GangliaRelayRoom,
   ConfigFor,
@@ -40,51 +38,6 @@ export {
   type GangliaLLM,
 } from './factory.js';
 
-// Events
-export type {
-  GangliaEvent,
-  StatusEvent,
-  StatusAction,
-  ArtifactEvent,
-  ArtifactType,
-  ContentEvent,
-  DiffArtifact,
-  CodeArtifact,
-  FileArtifact,
-  SearchResultsArtifact,
-  ErrorArtifact,
-} from './events.js';
-
-export {
-  isStatusEvent,
-  isArtifactEvent,
-  isContentEvent,
-  statusFromToolCall,
-  toolToStatusAction,
-} from './events.js';
-
-// Tool Interception
-export {
-  ToolInterceptor,
-  createToolInterceptor,
-  createReadFileArtifact,
-  createEditArtifact,
-  createSearchArtifact,
-  createErrorArtifact,
-  createArtifactFromToolResult,
-} from './tool-interceptor.js';
-
-export type {
-  ToolCall,
-  ToolResult,
-  ToolExecutor,
-  EventEmitter,
-  ToolInterceptorConfig,
-} from './tool-interceptor.js';
-
-// Event Interception (Protocol)
-export { EventInterceptor, type EventInterceptorConfig } from './event-interceptor.js';
-
 // Session Routing
 export {
   resolveSessionKey,
@@ -94,25 +47,14 @@ export {
   type SessionRoutingConfig,
 } from './session-routing.js';
 
-// Nanoclaw Implementation
-import { NanoclawLLM } from './nanoclaw.js';
-export { NanoclawLLM };
-export { extractNanoclawSession } from './nanoclaw.js';
-export { NanoclawClient, generateChannelJid, sessionKeyToChannel } from './nanoclaw-client.js';
-export type { NanoclawChatOptions } from './nanoclaw-client.js';
-
 // Relay Implementation
 import { RelayLLM } from './relay-llm.js';
 export { RelayLLM };
 export type { RelayConfig } from './ganglia-types.js';
 export { DataChannelTransport, VOICE_ACP_TOPIC, type StreamTransport } from './relay-transport.js';
 
-/**
- * Nanoclaw LLM namespace
- */
-export const nanoclaw = {
-  LLM: NanoclawLLM,
-};
+// Pondering utilities
+export { getShuffledPhrases } from './pondering.js';
 
 /**
  * Relay LLM namespace (default backend)

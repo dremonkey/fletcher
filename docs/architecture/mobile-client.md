@@ -1,6 +1,6 @@
 # Mobile Client
 
-The Flutter mobile app (`apps/mobile`) provides the voice interface for Fletcher. It connects to a LiveKit room, captures microphone audio, displays real-time transcriptions and artifacts, and handles network transitions including Tailscale VPN detection.
+The Flutter mobile app (`apps/mobile`) is Fletcher's ACP client — the mobile frontend for any ACP-compatible agent. It connects to a LiveKit room, supports dual-mode input (voice and text), renders tool-call cards, thinking blocks, and artifacts, and handles network transitions including Tailscale VPN detection.
 
 ## Service Architecture
 
@@ -57,8 +57,10 @@ The central service managing the entire LiveKit lifecycle:
 
 - **Room connection** — connects to LiveKit with resolved URL and token
 - **Audio capture** — enables microphone, tracks audio levels at 100ms intervals
+- **RelayChatService** — active in both text and voice mode; subscribes to the `acp` topic, sends `session/prompt` via relay for typed text in both modes
+- **ACP content pipeline** — parses `session/update` events into ContentBlock instances via `AcpUpdateParser`, dispatches to RendererRegistry
 - **Transcription processing** — handles text streams with per-segment state
-- **Ganglia events** — processes status updates and artifacts from the data channel
+- **Voice control events** — processes pondering, session hold, TTS mode, and agent transcripts from `ganglia-events` (voice mode only, no content)
 - **Reconnection** — automatic recovery from network changes and disconnects
 - **Background timeout** — 10-minute countdown when app is backgrounded (not screen-locked), updates foreground notification with countdown, disconnects on expiry
 - **Mute state** — persists across reconnects
@@ -95,9 +97,13 @@ Runs diagnostic checks and reports overall system health:
 
 **Overall health:** `healthy` (all OK), `degraded` (has warnings), `unhealthy` (has errors).
 
+### RelayChatService
+
+Owns the relay data channel subscription on the `acp` topic. Active in both text and voice mode. Sends `session/prompt` for typed text, receives `session/update` notifications, and parses them via `AcpUpdateParser` into content blocks, tool-call status, and thought chunks. See [Data Channel Protocol](data-channel-protocol.md) for the wire format.
+
 ### AgentPresenceService
 
-Manages the agent lifecycle for on-demand dispatch (Epic 20). When the agent is absent, the service listens for speech via audio level monitoring and dispatches a fresh agent on detection.
+Manages the voice agent lifecycle for on-demand dispatch. The voice agent joins rooms on demand (see [Voice Pipeline](voice-pipeline.md#standalone-agent-appsvoice-agent) for the dispatch mechanism). When the agent is absent, this service listens for speech via audio level monitoring and dispatches a fresh agent on detection.
 
 **State machine:**
 ```
@@ -149,8 +155,8 @@ ConversationState {
   aiAudioLevel: double             // 0.0 - 1.0 (remote participant)
   errorMessage: String?
   transcript: List<TranscriptEntry>    // Full history (max 100)
-  currentStatus: StatusEvent?          // Agent activity (auto-clears 5s)
-  artifacts: List<ArtifactEvent>       // Recent artifacts (max 10)
+  currentStatus: ToolCallStatus?       // Tool execution status from ACP tool_call (auto-clears 5s)
+  contentBlocks: List<ContentBlock>    // ACP content blocks (rendered via RendererRegistry)
   userWaveform: List<double>           // Rolling buffer (~30 samples)
   aiWaveform: List<double>             // Rolling buffer (~30 samples)
   currentUserTranscript: TranscriptEntry?   // Subtitle display
@@ -341,14 +347,19 @@ Shows the most recent transcription text near the bottom of the screen. Prefers 
 
 Bottom sheet (70% screen height) showing the complete conversation as chat-style bubbles. Amber for user, gray for agent. Auto-scrolls to latest entry.
 
-### ArtifactViewer
+### ContentBlockViewer
 
-Tabbed bottom sheet (70% screen height) displaying artifacts:
-- **Diff:** Color-coded lines (green for additions, red for removals)
-- **Code:** Line numbers with language badge
-- **Markdown:** Rendered with `flutter_markdown`
-- **Search results:** File path, line number, and content snippets
-- **Error:** Message with optional stack trace
+Renders ACP content blocks via the `RendererRegistry`. Each ContentBlock is dispatched to a registered renderer by type and MIME pattern:
+
+- **DiffContent** → DiffRenderer: color-coded lines (green additions, red removals)
+- **text/markdown** → MarkdownRenderer: rendered with `flutter_markdown`
+- **text/*** → CodeRenderer: line numbers with language badge
+- **image/*** → ImageRenderer: base64 decode with loading/error states
+- **audio/*** → AudioRenderer: metadata card with play button
+- **ResourceLinkContent** → ResourceLinkCard: name, MIME type, size display
+- **RawContent** → RawJsonRenderer: fallback for unknown types
+
+See [Data Channel Protocol](data-channel-protocol.md#rendererregistry) for the dispatch logic.
 
 ### HealthPanel
 

@@ -7,11 +7,16 @@ import pino from "pino";
 // Mock factories
 // ---------------------------------------------------------------------------
 
-function createMockBridgeManager(existingRooms: Set<string> = new Set()) {
+function createMockBridgeManager(
+  existingRooms: Set<string> = new Set(),
+  pendingTeardownRooms: Set<string> = new Set(),
+) {
   const addedRooms: string[] = [];
   const removedRooms: string[] = [];
   const scheduledRooms: string[] = [];
   const cancelledRooms: string[] = [];
+  const validatedRooms: string[] = [];
+  const blacklistCleared: string[] = [];
 
   return {
     hasRoom(roomName: string): boolean {
@@ -30,17 +35,31 @@ function createMockBridgeManager(existingRooms: Set<string> = new Set()) {
     },
     cancelPendingTeardown(roomName: string): boolean {
       cancelledRooms.push(roomName);
+      if (pendingTeardownRooms.has(roomName)) {
+        pendingTeardownRooms.delete(roomName);
+        return true;
+      }
       return false;
+    },
+    async validateOrReplaceBridge(roomName: string): Promise<void> {
+      validatedRooms.push(roomName);
+    },
+    clearBindBlacklist(roomName: string): void {
+      blacklistCleared.push(roomName);
     },
     addedRooms,
     removedRooms,
     scheduledRooms,
     cancelledRooms,
+    validatedRooms,
+    blacklistCleared,
   } as unknown as BridgeManager & {
     addedRooms: string[];
     removedRooms: string[];
     scheduledRooms: string[];
     cancelledRooms: string[];
+    validatedRooms: string[];
+    blacklistCleared: string[];
   };
 }
 
@@ -193,39 +212,6 @@ describe("webhook handler", () => {
     });
   });
 
-  describe("participant_joined cancels pending teardown", () => {
-    test("calls cancelPendingTeardown when room already has bridge", async () => {
-      const bridgeManager = createMockBridgeManager(new Set(["room-abc"]));
-      const receiver = createMockWebhookReceiver({
-        event: "participant_joined",
-        room: { name: "room-abc" },
-        participant: { identity: "alice", kind: 0 },
-      });
-
-      const handler = createWebhookHandler(receiver as any, bridgeManager, silentLogger);
-      const res = await handler(makeWebhookRequest({}));
-
-      expect(res.status).toBe(200);
-      expect(bridgeManager.cancelledRooms).toEqual(["room-abc"]);
-      expect(bridgeManager.addedRooms).toEqual([]); // room already existed
-    });
-
-    test("calls cancelPendingTeardown even when room is new", async () => {
-      const bridgeManager = createMockBridgeManager();
-      const receiver = createMockWebhookReceiver({
-        event: "participant_joined",
-        room: { name: "room-new" },
-        participant: { identity: "alice", kind: 0 },
-      });
-
-      const handler = createWebhookHandler(receiver as any, bridgeManager, silentLogger);
-      const res = await handler(makeWebhookRequest({}));
-
-      expect(res.status).toBe(200);
-      expect(bridgeManager.cancelledRooms).toEqual(["room-new"]);
-      expect(bridgeManager.addedRooms).toEqual(["room-new"]);
-    });
-  });
 
   describe("addRoom failure", () => {
     test("returns 200 (webhook ack) even when addRoom throws", async () => {
@@ -241,6 +227,8 @@ describe("webhook handler", () => {
           throw new Error("connection refused");
         },
         cancelPendingTeardown: () => false,
+        validateOrReplaceBridge: async () => {},
+        clearBindBlacklist: () => {},
       } as unknown as BridgeManager & { addedRooms: string[] };
 
       const handler = createWebhookHandler(receiver as any, failingBridgeManager, silentLogger);
@@ -254,7 +242,7 @@ describe("webhook handler", () => {
   });
 
   describe("participant_left from standard participant", () => {
-    test("calls scheduleRemoveRoom when room has a bridge", async () => {
+    test("calls removeRoom when room has a bridge", async () => {
       const bridgeManager = createMockBridgeManager(new Set(["room-abc"]));
       const receiver = createMockWebhookReceiver({
         event: "participant_left",
@@ -266,11 +254,10 @@ describe("webhook handler", () => {
       const res = await handler(makeWebhookRequest({}));
 
       expect(res.status).toBe(200);
-      expect(bridgeManager.scheduledRooms).toEqual(["room-abc"]);
-      expect(bridgeManager.removedRooms).toEqual([]);
+      expect(bridgeManager.removedRooms).toEqual(["room-abc"]);
     });
 
-    test("does not schedule teardown when room has no bridge", async () => {
+    test("does not call removeRoom when room has no bridge", async () => {
       const bridgeManager = createMockBridgeManager();
       const receiver = createMockWebhookReceiver({
         event: "participant_left",
@@ -282,12 +269,12 @@ describe("webhook handler", () => {
       const res = await handler(makeWebhookRequest({}));
 
       expect(res.status).toBe(200);
-      expect(bridgeManager.scheduledRooms).toEqual([]);
+      expect(bridgeManager.removedRooms).toEqual([]);
     });
   });
 
   describe("participant_left from relay identity", () => {
-    test("does not schedule teardown", async () => {
+    test("does not call removeRoom", async () => {
       const bridgeManager = createMockBridgeManager(new Set(["room-abc"]));
       const receiver = createMockWebhookReceiver({
         event: "participant_left",
@@ -299,12 +286,12 @@ describe("webhook handler", () => {
       const res = await handler(makeWebhookRequest({}));
 
       expect(res.status).toBe(200);
-      expect(bridgeManager.scheduledRooms).toEqual([]);
+      expect(bridgeManager.removedRooms).toEqual([]);
     });
   });
 
   describe("participant_left from agent participant", () => {
-    test("does not schedule teardown", async () => {
+    test("does not call removeRoom", async () => {
       const bridgeManager = createMockBridgeManager(new Set(["room-abc"]));
       const receiver = createMockWebhookReceiver({
         event: "participant_left",
@@ -316,7 +303,7 @@ describe("webhook handler", () => {
       const res = await handler(makeWebhookRequest({}));
 
       expect(res.status).toBe(200);
-      expect(bridgeManager.scheduledRooms).toEqual([]);
+      expect(bridgeManager.removedRooms).toEqual([]);
     });
   });
 
@@ -334,6 +321,102 @@ describe("webhook handler", () => {
 
       expect(res.status).toBe(200);
       expect(bridgeManager.addedRooms).toEqual([]);
+    });
+  });
+
+  describe("participant_joined after deferred teardown (network switch scenario)", () => {
+    test("cancels teardown and validates bridge when participant rejoins during grace period", async () => {
+      // Room exists AND has a pending teardown (participant is reconnecting)
+      const existingRooms = new Set(["room-reconnect"]);
+      const pendingTeardowns = new Set(["room-reconnect"]);
+      const bridgeManager = createMockBridgeManager(existingRooms, pendingTeardowns);
+
+      const receiver = createMockWebhookReceiver({
+        event: "participant_joined",
+        room: { name: "room-reconnect" },
+        participant: { identity: "alice", kind: 0 },
+      });
+
+      const handler = createWebhookHandler(receiver as any, bridgeManager, silentLogger);
+      const res = await handler(makeWebhookRequest({}));
+
+      expect(res.status).toBe(200);
+      // Should have cancelled the teardown
+      expect(bridgeManager.cancelledRooms).toEqual(["room-reconnect"]);
+      // Should have validated the bridge (not added a new room)
+      expect(bridgeManager.validatedRooms).toEqual(["room-reconnect"]);
+      expect(bridgeManager.addedRooms).toEqual([]);
+    });
+
+    test("does not validate when room already joined without pending teardown", async () => {
+      // Room exists but NO pending teardown (normal duplicate join)
+      const existingRooms = new Set(["room-dup"]);
+      const bridgeManager = createMockBridgeManager(existingRooms);
+
+      const receiver = createMockWebhookReceiver({
+        event: "participant_joined",
+        room: { name: "room-dup" },
+        participant: { identity: "alice", kind: 0 },
+      });
+
+      const handler = createWebhookHandler(receiver as any, bridgeManager, silentLogger);
+      const res = await handler(makeWebhookRequest({}));
+
+      expect(res.status).toBe(200);
+      // cancelPendingTeardown was called but returned false
+      expect(bridgeManager.cancelledRooms).toEqual(["room-dup"]);
+      // Should NOT validate — just skip (room already joined normally)
+      expect(bridgeManager.validatedRooms).toEqual([]);
+      expect(bridgeManager.addedRooms).toEqual([]);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Bind blacklist (ghost room suppression)
+  // -------------------------------------------------------------------------
+
+  describe("participant_joined clears bind blacklist", () => {
+    test("clearBindBlacklist is called before cancelPendingTeardown for human participants", async () => {
+      const calls: string[] = [];
+      const bridgeManager = {
+        hasRoom: () => false,
+        addRoom: mock(async () => {}),
+        cancelPendingTeardown: mock(() => {
+          calls.push("cancelPendingTeardown");
+          return false;
+        }),
+        clearBindBlacklist: mock((_roomName: string) => {
+          calls.push("clearBindBlacklist");
+        }),
+        validateOrReplaceBridge: mock(async () => {}),
+      } as unknown as BridgeManager & { addedRooms: string[] };
+
+      const receiver = createMockWebhookReceiver({
+        event: "participant_joined",
+        room: { name: "room-ghost" },
+        participant: { identity: "user-alice", kind: 0 },
+      });
+
+      const handler = createWebhookHandler(receiver as any, bridgeManager, silentLogger);
+      const res = await handler(makeWebhookRequest({}));
+
+      expect(res.status).toBe(200);
+      // clearBindBlacklist must be first, then cancelPendingTeardown
+      expect(calls).toEqual(["clearBindBlacklist", "cancelPendingTeardown"]);
+    });
+
+    test("clearBindBlacklist is called with the room name", async () => {
+      const bridgeManager = createMockBridgeManager();
+      const receiver = createMockWebhookReceiver({
+        event: "participant_joined",
+        room: { name: "room-comeback" },
+        participant: { identity: "user-bob", kind: 0 },
+      });
+
+      const handler = createWebhookHandler(receiver as any, bridgeManager, silentLogger);
+      await handler(makeWebhookRequest({}));
+
+      expect(bridgeManager.blacklistCleared).toEqual(["room-comeback"]);
     });
   });
 });

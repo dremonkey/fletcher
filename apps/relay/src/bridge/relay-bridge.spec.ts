@@ -381,9 +381,9 @@ describe("RelayBridge", () => {
   });
 
   // -------------------------------------------------------------------------
-  // T4: voice-acp session/prompt → sessionPrompt() called
+  // T4: voice-acp session/prompt → result dual-published to voice-acp AND mobile
   // -------------------------------------------------------------------------
-  test("T4: voice-acp session/prompt is forwarded to ACP with sessionId injected", async () => {
+  test("T4: voice-acp session/prompt result is dual-published to voice-acp AND mobile", async () => {
     bridge = createBridge(mockRm);
     await bridge.start();
 
@@ -408,21 +408,32 @@ describe("RelayBridge", () => {
     // The result should be forwarded back via sendToRoomOnTopic on "voice-acp"
     expect(mockRm.sendToRoomOnTopic).toHaveBeenCalled();
 
-    const calls = mockRm.sendToRoomOnTopic.mock.calls;
-    const responseCalls = calls.filter(
+    const topicCalls = mockRm.sendToRoomOnTopic.mock.calls;
+    const voiceResultCalls = topicCalls.filter(
       (c: unknown[]) => {
         const msg = c[2] as Record<string, unknown>;
         return msg.id === 10 && "result" in msg;
       },
     );
-    expect(responseCalls.length).toBe(1);
+    expect(voiceResultCalls.length).toBe(1);
 
-    const [roomName, topic, response] = responseCalls[0] as [string, string, Record<string, unknown>];
+    const [roomName, topic, response] = voiceResultCalls[0] as [string, string, Record<string, unknown>];
     expect(roomName).toBe(ROOM_NAME);
     expect(topic).toBe("voice-acp");
     expect(response.jsonrpc).toBe("2.0");
     expect(response.id).toBe(10);
     expect(response.result).toEqual({ stopReason: "completed" });
+
+    // Dual-publish: mobile should also receive the result
+    const mobileCalls = mockRm.sendToRoom.mock.calls;
+    const mobileResultCalls = mobileCalls.filter(
+      (c: unknown[]) => {
+        const msg = c[1] as Record<string, unknown>;
+        return msg.id === 10 && "result" in msg;
+      },
+    );
+    expect(mobileResultCalls.length).toBe(1);
+    expect((mobileResultCalls[0][1] as any).result).toEqual({ stopReason: "completed" });
   });
 
   // -------------------------------------------------------------------------
@@ -454,9 +465,9 @@ describe("RelayBridge", () => {
   });
 
   // -------------------------------------------------------------------------
-  // T6: ACP update during voice-acp request → sent on voice-acp topic (not relay)
+  // T6: ACP update during voice-acp request → dual-published to voice-acp AND mobile
   // -------------------------------------------------------------------------
-  test("T6: ACP session/update notifications are routed to voice-acp topic when voice-acp initiated the request", async () => {
+  test("T6: ACP session/update notifications are dual-published to voice-acp AND mobile when voice-acp initiated the request", async () => {
     bridge = createBridge(mockRm);
     await bridge.start();
 
@@ -492,7 +503,7 @@ describe("RelayBridge", () => {
     expect(notification.jsonrpc).toBe("2.0");
     expect(notification.method).toBe("session/update");
 
-    // Updates should NOT have been sent on the relay topic (sendToRoom)
+    // Dual-publish: updates must ALSO go to mobile via sendToRoom
     const relayCalls = mockRm.sendToRoom.mock.calls;
     const relayUpdateCalls = relayCalls.filter(
       (c: unknown[]) => {
@@ -500,7 +511,11 @@ describe("RelayBridge", () => {
         return msg.method === "session/update";
       },
     );
-    expect(relayUpdateCalls.length).toBe(0);
+    expect(relayUpdateCalls.length).toBeGreaterThanOrEqual(1);
+
+    const [, mobileNotification] = relayUpdateCalls[0] as [string, Record<string, unknown>];
+    expect(mobileNotification.jsonrpc).toBe("2.0");
+    expect(mobileNotification.method).toBe("session/update");
   });
 
   // -------------------------------------------------------------------------
@@ -1064,5 +1079,186 @@ describe("RelayBridge", () => {
       },
     );
     expect(resultCalls.length).toBe(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // T30.01: Dual-publish in voice mode
+  // -------------------------------------------------------------------------
+
+  test("T30.01: voice-acp prompt updates are published to BOTH voice-acp AND mobile (acp) topics", async () => {
+    bridge = createBridge(mockRm);
+    await bridge.start();
+
+    mockRm.simulateData(
+      ROOM_NAME,
+      {
+        jsonrpc: "2.0",
+        id: 500,
+        method: "session/prompt",
+        params: { prompt: [{ type: "text", text: "Dual publish update test" }] },
+      },
+      "voice-agent",
+      "voice-acp",
+    );
+
+    await tick(200);
+
+    // voice-acp topic should have received the session/update
+    const voiceUpdateCalls = mockRm.sendToRoomOnTopic.mock.calls.filter(
+      (c: unknown[]) => {
+        const topic = c[1] as string;
+        const msg = c[2] as Record<string, unknown>;
+        return topic === "voice-acp" && msg.method === "session/update";
+      },
+    );
+    expect(voiceUpdateCalls.length).toBeGreaterThanOrEqual(1);
+
+    // mobile (acp) topic should ALSO have received the session/update
+    const mobileUpdateCalls = mockRm.sendToRoom.mock.calls.filter(
+      (c: unknown[]) => {
+        const msg = c[1] as Record<string, unknown>;
+        return msg.method === "session/update";
+      },
+    );
+    expect(mobileUpdateCalls.length).toBeGreaterThanOrEqual(1);
+
+    // Both updates should have the same content
+    const voiceParams = (voiceUpdateCalls[0][2] as any).params;
+    const mobileParams = (mobileUpdateCalls[0][1] as any).params;
+    expect(voiceParams.update.sessionUpdate).toBe("agent_message_chunk");
+    expect(mobileParams.update.sessionUpdate).toBe("agent_message_chunk");
+    expect(voiceParams.update.content.text).toBe("Echo: Dual publish update test");
+    expect(mobileParams.update.content.text).toBe("Echo: Dual publish update test");
+  });
+
+  test("T30.01: voice-acp prompt results are published to BOTH voice-acp AND mobile (acp) topics", async () => {
+    bridge = createBridge(mockRm);
+    await bridge.start();
+
+    mockRm.simulateData(
+      ROOM_NAME,
+      {
+        jsonrpc: "2.0",
+        id: 501,
+        method: "session/prompt",
+        params: { prompt: [{ type: "text", text: "Dual publish result test" }] },
+      },
+      "voice-agent",
+      "voice-acp",
+    );
+
+    await tick(200);
+
+    // voice-acp topic should have the result
+    const voiceResultCalls = mockRm.sendToRoomOnTopic.mock.calls.filter(
+      (c: unknown[]) => {
+        const msg = c[2] as Record<string, unknown>;
+        return msg.id === 501 && "result" in msg;
+      },
+    );
+    expect(voiceResultCalls.length).toBe(1);
+    expect((voiceResultCalls[0][2] as any).result).toEqual({ stopReason: "completed" });
+
+    // mobile (acp) topic should ALSO have the result
+    const mobileResultCalls = mockRm.sendToRoom.mock.calls.filter(
+      (c: unknown[]) => {
+        const msg = c[1] as Record<string, unknown>;
+        return msg.id === 501 && "result" in msg;
+      },
+    );
+    expect(mobileResultCalls.length).toBe(1);
+    expect((mobileResultCalls[0][1] as any).result).toEqual({ stopReason: "completed" });
+  });
+
+  test("T30.01: text-mode (relay) prompts only publish to mobile topic — no voice-acp", async () => {
+    bridge = createBridge(mockRm);
+    await bridge.start();
+
+    mockRm.simulateData(
+      ROOM_NAME,
+      {
+        jsonrpc: "2.0",
+        id: 502,
+        method: "session/prompt",
+        params: { prompt: [{ type: "text", text: "Text mode only" }] },
+      },
+      "mobile-user",
+      "relay",
+    );
+
+    await tick(200);
+
+    // mobile should have the update and result
+    const mobileUpdateCalls = mockRm.sendToRoom.mock.calls.filter(
+      (c: unknown[]) => {
+        const msg = c[1] as Record<string, unknown>;
+        return msg.method === "session/update";
+      },
+    );
+    expect(mobileUpdateCalls.length).toBeGreaterThanOrEqual(1);
+
+    const mobileResultCalls = mockRm.sendToRoom.mock.calls.filter(
+      (c: unknown[]) => {
+        const msg = c[1] as Record<string, unknown>;
+        return msg.id === 502 && "result" in msg;
+      },
+    );
+    expect(mobileResultCalls.length).toBe(1);
+
+    // voice-acp should have received NOTHING
+    const voiceAcpCalls = mockRm.sendToRoomOnTopic.mock.calls.filter(
+      (c: unknown[]) => {
+        const topic = c[1] as string;
+        return topic === "voice-acp";
+      },
+    );
+    expect(voiceAcpCalls.length).toBe(0);
+  });
+
+  test("T30.01: dual-publish degrades gracefully when sendToRoom rejects (no crash)", async () => {
+    // Simulate sendToRoom always failing (e.g., no mobile participant)
+    // The bridge should not crash; voice-acp still receives its messages.
+    mockRm.sendToRoom = mock(async () => {
+      throw new Error("no mobile participant");
+    });
+
+    bridge = createBridge(mockRm);
+    await bridge.start();
+
+    // Send a voice-acp prompt
+    mockRm.simulateData(
+      ROOM_NAME,
+      {
+        jsonrpc: "2.0",
+        id: 503,
+        method: "session/prompt",
+        params: { prompt: [{ type: "text", text: "Graceful degrade test" }] },
+      },
+      "voice-agent",
+      "voice-acp",
+    );
+
+    await tick(300);
+
+    // voice-acp should still have received the update and result despite sendToRoom failures
+    const voiceUpdateCalls = mockRm.sendToRoomOnTopic.mock.calls.filter(
+      (c: unknown[]) => {
+        const topic = c[1] as string;
+        const msg = c[2] as Record<string, unknown>;
+        return topic === "voice-acp" && msg.method === "session/update";
+      },
+    );
+    expect(voiceUpdateCalls.length).toBeGreaterThanOrEqual(1);
+
+    const voiceResultCalls = mockRm.sendToRoomOnTopic.mock.calls.filter(
+      (c: unknown[]) => {
+        const msg = c[2] as Record<string, unknown>;
+        return msg.id === 503 && "result" in msg;
+      },
+    );
+    expect(voiceResultCalls.length).toBe(1);
+
+    // sendToRoom was called (and failed) — no crash
+    expect(mockRm.sendToRoom).toHaveBeenCalled();
   });
 });
